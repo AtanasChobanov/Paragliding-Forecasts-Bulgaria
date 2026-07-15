@@ -1,0 +1,16 @@
+# Generated or locally acquired data. Keep only the directory markers.
+raw/*
+!raw/.gitkeep
+external/*
+!external/.gitkeep
+interim/*
+!interim/.gitkeep
+processed/*
+!processed/.gitkeep
+models/*
+!models/.gitkeep
+local/*
+!local/.gitkeep
+
+# Small, sanitized fixtures under samples/ are intentionally reviewable and
+# may be committed when a test needs them.

@@ -1,0 +1,17 @@
+* text=auto eol=lf
+
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+*.7z binary
+*.gif binary
+*.gz binary
+*.ico binary
+*.jpg binary
+*.jpeg binary
+*.parquet binary
+*.pdf binary
+*.png binary
+*.sqlite binary
+*.sqlite3 binary
+*.zip binary
