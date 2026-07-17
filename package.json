@@ -8,13 +8,15 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build --workspace @paragliding-forecasts/contracts",
+    "build": "npm run build --workspace @paragliding-forecasts/contracts && npm run build --workspace @paragliding-forecasts/api",
+    "dev:api": "npm run dev --workspace @paragliding-forecasts/api",
     "format": "prettier --write \"{apps/api,packages/contracts}/**/*.{ts,json}\" \"eslint.config.mjs\" \"package.json\" \"tsconfig.base.json\" \".prettierrc.json\"",
     "format:check": "prettier --check \"{apps/api,packages/contracts}/**/*.{ts,json}\" \"eslint.config.mjs\" \"package.json\" \"tsconfig.base.json\" \".prettierrc.json\"",
     "lint": "eslint \"{apps/api,packages/contracts}/**/*.ts\"",
     "repo:check": "node ./scripts/check-structure.mjs",
-    "test": "npm run test --workspace @paragliding-forecasts/contracts",
-    "typecheck": "npm run typecheck --workspace @paragliding-forecasts/contracts"
+    "start:api": "npm run build && npm run start --workspace @paragliding-forecasts/api",
+    "test": "npm run test --workspace @paragliding-forecasts/contracts && npm run test --workspace @paragliding-forecasts/api",
+    "typecheck": "npm run typecheck --workspace @paragliding-forecasts/contracts && npm run typecheck --workspace @paragliding-forecasts/api"
   },
   "engines": {
     "node": ">=24 <25",
@@ -29,5 +31,8 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.64.0",
     "vitest": "^4.1.10"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true
   }
 }
