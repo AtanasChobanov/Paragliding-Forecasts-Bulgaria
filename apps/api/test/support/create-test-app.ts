@@ -3,6 +3,9 @@ import pino from "pino";
 
 import { createApp } from "../../src/app.js";
 import { createRootRouter } from "../../src/http/router.js";
+import { createForecastRouter } from "../../src/modules/forecasts/forecast.routes.js";
+import { ForecastService } from "../../src/modules/forecasts/forecast.service.js";
+import { MockForecastRepository } from "../../src/modules/forecasts/mock-forecast.repository.js";
 import { createHealthRouter } from "../../src/modules/health/health.routes.js";
 import { InMemorySiteRepository } from "../../src/modules/sites/in-memory-site.repository.js";
 import { createSiteRouter } from "../../src/modules/sites/site.routes.js";
@@ -29,7 +32,10 @@ export const createTestApp = ({
   const siteRepository = new InMemorySiteRepository();
   const siteService = new SiteService(siteRepository);
   const siteRouter = createSiteRouter({ siteService });
-  const router = createRootRouter([healthRouter, siteRouter, ...additionalRouters]);
+  const forecastRepository = new MockForecastRepository({ now: () => FIXED_NOW });
+  const forecastService = new ForecastService(forecastRepository, siteService);
+  const forecastRouter = createForecastRouter({ forecastService });
+  const router = createRootRouter([healthRouter, siteRouter, forecastRouter, ...additionalRouters]);
 
   return createApp({
     corsOrigin,

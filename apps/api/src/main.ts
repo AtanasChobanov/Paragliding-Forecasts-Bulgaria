@@ -3,6 +3,9 @@ import type { Logger } from "pino";
 import { createApp } from "./app.js";
 import { loadRootEnvFile, parseConfig } from "./config/env.js";
 import { createRootRouter } from "./http/router.js";
+import { createForecastRouter } from "./modules/forecasts/forecast.routes.js";
+import { ForecastService } from "./modules/forecasts/forecast.service.js";
+import { MockForecastRepository } from "./modules/forecasts/mock-forecast.repository.js";
 import { createHealthRouter } from "./modules/health/health.routes.js";
 import { InMemorySiteRepository } from "./modules/sites/in-memory-site.repository.js";
 import { createSiteRouter } from "./modules/sites/site.routes.js";
@@ -29,7 +32,10 @@ const run = async (): Promise<void> => {
   const siteRepository = new InMemorySiteRepository();
   const siteService = new SiteService(siteRepository);
   const siteRouter = createSiteRouter({ siteService });
-  const router = createRootRouter([healthRouter, siteRouter]);
+  const forecastRepository = new MockForecastRepository({ now: () => new Date() });
+  const forecastService = new ForecastService(forecastRepository, siteService);
+  const forecastRouter = createForecastRouter({ forecastService });
+  const router = createRootRouter([healthRouter, siteRouter, forecastRouter]);
   const app = createApp({
     corsOrigin: config.corsOrigin,
     logger,
