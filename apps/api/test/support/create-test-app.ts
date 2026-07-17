@@ -4,6 +4,9 @@ import pino from "pino";
 import { createApp } from "../../src/app.js";
 import { createRootRouter } from "../../src/http/router.js";
 import { createHealthRouter } from "../../src/modules/health/health.routes.js";
+import { InMemorySiteRepository } from "../../src/modules/sites/in-memory-site.repository.js";
+import { createSiteRouter } from "../../src/modules/sites/site.routes.js";
+import { SiteService } from "../../src/modules/sites/site.service.js";
 import { API_VERSION } from "../../src/observability/logger.js";
 
 export const FIXED_NOW = new Date("2026-07-17T12:00:00.000Z");
@@ -23,7 +26,10 @@ export const createTestApp = ({
     now: () => FIXED_NOW,
     version,
   });
-  const router = createRootRouter([healthRouter, ...additionalRouters]);
+  const siteRepository = new InMemorySiteRepository();
+  const siteService = new SiteService(siteRepository);
+  const siteRouter = createSiteRouter({ siteService });
+  const router = createRootRouter([healthRouter, siteRouter, ...additionalRouters]);
 
   return createApp({
     corsOrigin,

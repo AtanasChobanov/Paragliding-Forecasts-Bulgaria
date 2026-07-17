@@ -4,6 +4,9 @@ import { createApp } from "./app.js";
 import { loadRootEnvFile, parseConfig } from "./config/env.js";
 import { createRootRouter } from "./http/router.js";
 import { createHealthRouter } from "./modules/health/health.routes.js";
+import { InMemorySiteRepository } from "./modules/sites/in-memory-site.repository.js";
+import { createSiteRouter } from "./modules/sites/site.routes.js";
+import { SiteService } from "./modules/sites/site.service.js";
 import { API_VERSION, createBootstrapLogger, createLogger } from "./observability/logger.js";
 import { startServer } from "./server.js";
 
@@ -23,7 +26,10 @@ const run = async (): Promise<void> => {
     now: () => new Date(),
     version: API_VERSION,
   });
-  const router = createRootRouter([healthRouter]);
+  const siteRepository = new InMemorySiteRepository();
+  const siteService = new SiteService(siteRepository);
+  const siteRouter = createSiteRouter({ siteService });
+  const router = createRootRouter([healthRouter, siteRouter]);
   const app = createApp({
     corsOrigin: config.corsOrigin,
     logger,
