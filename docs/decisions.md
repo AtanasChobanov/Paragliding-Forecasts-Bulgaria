@@ -22,6 +22,10 @@ consequences. Temporary progress and Git state belong in
 | DEC-007 | Preserve explicit forecast status, provenance, units, and safety semantics | Accepted | 2026-07-15 |
 | DEC-008 | Keep generated/local data out of Git with a controlled fixture exception | Accepted | 2026-07-15 |
 | DEC-009 | Use short-lived ticket branches and pull-request review | Accepted | 2026-07-15 |
+| DEC-010 | Organize the API by feature with manual dependency injection | Accepted | 2026-07-17 |
+| DEC-011 | Use Zod as the runtime browser/API contract validator | Accepted | 2026-07-17 |
+| DEC-012 | Use TSX and Vitest for the initial API development loop | Accepted | 2026-07-17 |
+| DEC-013 | Use Pino logging and Problem Details HTTP errors | Accepted | 2026-07-17 |
 
 ## Individual decisions
 
@@ -155,7 +159,7 @@ directly coupling Python to TypeScript implementation details would make the ML
 pipeline fragile.
 
 **Decision:** Use `@paragliding-forecasts/contracts` as the source of truth for
-browser/API payload types and future runtime schemas. Exchange data with Python
+browser/API runtime schemas and inferred payload types. Exchange data with Python
 through documented JSON, records, files, or storage schemas rather than imports
 or Python-specific serialized objects.
 
@@ -294,12 +298,136 @@ and validation rather than coding completion alone.
 **Related files:** [`../CONTRIBUTING.md`](../CONTRIBUTING.md),
 [`development.md`](development.md), [`tasks.md`](tasks.md).
 
+### DEC-010 — Organize the API by feature with manual dependency injection
+
+**Status:** Accepted
+
+**Date:** 2026-07-17
+
+**Context:** The API needs clear controller, application/service, and storage
+boundaries, but T-002 has only three small HTTP features and no database or
+complex object lifetimes.
+
+**Decision:** Group HTTP behavior under feature modules and keep cross-cutting
+configuration, HTTP middleware, and observability separate. Each data-backed
+feature defines a repository port; `main.ts` manually composes concrete
+adapters and services. Keep `app.ts` free of process startup and socket binding.
+
+**Rationale:** Feature cohesion avoids a growing set of repository-wide layer
+folders while repository ports preserve testability and future SQLite adapter
+replacement. Manual composition provides dependency injection without adding
+a container that the current application does not need.
+
+**Alternatives considered:** A repository-wide layered structure and a DI
+container were considered. Both add navigation or abstraction cost before the
+project has enough features, lifetimes, or bindings to justify them.
+
+**Consequences:** Controllers do not query storage directly. A DI container may
+be reconsidered only when concrete composition complexity appears. The mock
+adapters are replaceable and do not imply a database implementation.
+
+**Related files:** [`architecture.md`](architecture.md),
+[`../apps/api/README.md`](../apps/api/README.md),
+[`../apps/api/src/main.ts`](../apps/api/src/main.ts).
+
+### DEC-011 — Use Zod as the runtime browser/API contract validator
+
+**Status:** Accepted
+
+**Date:** 2026-07-17
+
+**Context:** TypeScript types disappear at runtime, while both request inputs
+and browser-facing payloads must preserve strict units, missing states,
+provenance, and quality semantics.
+
+**Decision:** Define strict Zod schemas in `@paragliding-forecasts/contracts`
+and infer their TypeScript types. Use them to validate API requests and outgoing
+payloads. Use Zod independently at API startup to validate only environment
+variables the API currently consumes.
+
+**Rationale:** One executable contract prevents static interfaces and runtime
+validation from drifting and gives the future web workspace the same payload
+semantics as the API.
+
+**Alternatives considered:** Hand-written guards and type-only interfaces were
+rejected because they duplicate logic or provide no runtime guarantee. Other
+schema libraries were viable but offered no project-specific advantage.
+
+**Consequences:** Contract changes require schema tests and compatibility
+review. Database schemas remain a separate language-neutral boundary and must
+not import TypeScript implementation details.
+
+**Related files:** [`../packages/contracts/README.md`](../packages/contracts/README.md),
+[`../packages/contracts/src/index.ts`](../packages/contracts/src/index.ts),
+[`../apps/api/src/config/env.ts`](../apps/api/src/config/env.ts).
+
+### DEC-012 — Use TSX and Vitest for the initial API development loop
+
+**Status:** Accepted
+
+**Date:** 2026-07-17
+
+**Context:** T-002 needs a real TypeScript watch command, production-oriented
+compiled output, and fast automated coverage at unit, HTTP integration, and
+real-socket levels.
+
+**Decision:** Use TSX for local TypeScript watch execution, `tsc` with NodeNext
+ESM for build/type checking, Vitest as the shared test runner, and Supertest for
+in-memory Express integration tests. Use shared ESLint and Prettier tooling at
+the npm workspace root.
+
+**Rationale:** This provides a small, Node.js 24-compatible toolchain with
+honest root commands and no test-only server architecture.
+
+**Alternatives considered:** Node's built-in test runner was viable but would
+require more local test ergonomics and setup for the same current coverage.
+Running TypeScript directly in production was rejected in favor of verifying
+compiled output.
+
+**Consequences:** Root scripts must propagate child failures and contracts must
+build before the API consumes them. Future web tooling may reuse the shared
+quality tools but owns its own runtime/build dependencies.
+
+**Related files:** [`development.md`](development.md),
+[`../package.json`](../package.json),
+[`../apps/api/package.json`](../apps/api/package.json).
+
+### DEC-013 — Use Pino logging and Problem Details HTTP errors
+
+**Status:** Accepted
+
+**Date:** 2026-07-17
+
+**Context:** The local API needs request correlation and useful diagnostics
+without `console.log`, secret leakage, ad hoc status bodies, or exposing
+unexpected exceptions.
+
+**Decision:** Use Pino and `pino-http` for structured application/request logs,
+redact credential-bearing headers, and correlate logs with `X-Request-Id`.
+Return globally handled `application/problem+json` errors with stable project
+codes and safe details.
+
+**Rationale:** Structured logs remain machine-readable outside development,
+while one documented error shape gives the future dashboard reliable behavior
+for validation, not-found, and internal failures.
+
+**Alternatives considered:** Console logging and route-local error bodies were
+rejected because they drift and are difficult to query or sanitize.
+
+**Consequences:** New routes use the shared error path and must not serialize
+raw exceptions. Sensitive logging fields require redaction tests when added.
+
+**Related files:** [`../apps/api/README.md`](../apps/api/README.md),
+[`../apps/api/src/observability/logger.ts`](../apps/api/src/observability/logger.ts),
+[`../packages/contracts/src/problem-details.ts`](../packages/contracts/src/problem-details.ts).
+
 ## Open decisions
 
 | Question | Options / constraints | Resolve by |
 | --- | --- | --- |
-| Which API dev runner, test runner, and runtime configuration/schema validator should be used? | Must support Node.js 24, strict TypeScript, real watch/start behavior, clean shutdown, and honest automated validation. Avoid adding libraries not needed by the owning ticket. | T-002 for runner/test/config choices; runtime payload validation no later than the first endpoint that needs it. |
 | Which SQLite access layer and migration approach should be used? | Direct driver, query builder, or ORM are possible; keep persistence behind repositories and do not add storage solely for a health endpoint. | The first persistence/schema ticket, expected by T-012/T-018. |
+| Which task owns the persisted prediction schema and SQLite forecast adapter? | The backlog has flight and weather schema tasks but no explicit owner for storing T-022-T-024 outputs and replacing the T-002 mock adapter. Public units/status/provenance must be mapped deliberately. | Backlog planning before real predictions are connected to the API. |
+| Which task owns the underlying forecast-input panel and high/medium/low signal semantics? | Both appear in the project brief, but T-003-T-007 cover the initial screen/selectors/cards/status and T-025 covers confidence/top drivers only. | Backlog planning before claiming the full dashboard requirement. |
 | What are the final coordinates, aliases, and catchment radii for each site? | Pastrona and the Dobrich regional model need particular confirmation. | T-009. |
 | What access methods, permissions, attribution, caching, and rate limits apply to flight sources? | XCContest and SkyNomad must be researched without assuming scraping permission. | T-010 and T-011. |
 | Which historical forecast/archive or reanalysis sources will be used? | Exact archived forecasts are preferred; reanalysis is the documented fallback. | T-016, with units refined in T-017. |

@@ -33,31 +33,33 @@ sufficient.
 
 ## Repository structure
 
-- `apps/api/` - scaffold for the Node.js, Express, and TypeScript HTTP API.
+- `apps/api/` - runnable Node.js, Express, and TypeScript HTTP API.
 - `apps/web/` - scaffold for the React, Vite, and TypeScript dashboard.
-- `packages/contracts/` - scaffold for shared browser/API TypeScript contracts.
+- `packages/contracts/` - shared Zod runtime schemas and browser/API TypeScript
+  contracts.
 - `services/ml/` - uv-managed Python project for ingestion, data/feature work,
   modeling, backtesting, and batch prediction.
 - `data/` - local data zones; only small sanitized fixtures under `samples/`
   may be committed.
 - `docs/` - project brief, architecture, tasks, development notes, decisions,
   and the session handoff.
-- `scripts/` - repository-level automation; currently the scaffold check.
+- `scripts/` - repository-level structure/workspace validation.
 
 ## Technology and tooling rules
 
 - Use Node.js 24.x and npm 11.x. The root is a private npm monorepo with
   workspaces `apps/*` and `packages/*`; commit `package-lock.json`.
 - TypeScript strict mode is the default for product-facing code. React/Vite is
-  the selected web direction; Node.js/Express is the selected browser-facing
-  API direction. These applications are currently scaffolds, not running apps.
+  the selected web direction; the web application is still a scaffold.
+  Node.js/Express is the implemented browser-facing API direction.
 - Use Python 3.12 and uv only for `services/ml`; commit `services/ml/uv.lock`.
   Python initially produces language-neutral batch outputs and is not a second
   public HTTP service.
 - `packages/contracts` owns browser/API payload shapes. Keep the Python boundary
   language-neutral through documented JSON, records, or storage schemas.
 - SQLite is the MVP storage direction; database schema and access tooling are
-  not implemented yet. Do not silently choose an ORM or validator.
+  not implemented yet. Do not silently choose an ORM. Zod is the accepted
+  runtime validator for browser/API contracts and API startup configuration.
 - Preserve units, provenance, confidence, and the explicit data states `mock`,
   `manual`, `baseline`, `real`, and `missing` across system boundaries.
 - Consult `docs/decisions.md` before changing these choices and record any
@@ -81,13 +83,18 @@ Currently supported repository commands:
 
 - `npm install` / `npm.cmd install` - install/link npm workspaces.
 - `uv sync --project services/ml` - sync the Python project environment.
-- `npm run repo:check` / `npm.cmd run repo:check` - validate the scaffold and
-  workspace metadata.
+- `npm run dev:api` / `npm.cmd run dev:api` - build shared contracts and start
+  the API in watch mode.
+- `npm run start:api` / `npm.cmd run start:api` - build and start the compiled
+  API.
+- `npm run build`, `typecheck`, `lint`, `format:check`, and `test` - validate
+  the implemented TypeScript contracts and API.
+- `npm run repo:check` / `npm.cmd run repo:check` - validate repository and
+  runnable workspace structure.
 
-There are currently no runnable dev, build, lint, formatting, type-check, test,
-API, web, ingestion, training, or prediction scripts. Add and document a command
-in the same ticket that implements its real behavior; never simulate success
-with placeholder logic.
+There are currently no runnable web, ingestion, training, prediction, or
+browser-test scripts. Add and document a command in the same ticket that
+implements its real behavior; never simulate success with placeholder logic.
 
 ## Engineering conventions
 

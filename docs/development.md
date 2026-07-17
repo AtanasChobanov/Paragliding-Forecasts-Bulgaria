@@ -18,7 +18,8 @@ npm.cmd run repo:check
 ```
 
 PowerShell may block `npm.ps1`; `npm.cmd` avoids that wrapper. On macOS/Linux,
-use `npm` and `cp`.
+use `npm` and `cp`. CI and clean-verification runs should use `npm ci` to
+install exactly the committed JavaScript lockfile.
 
 ## Adding dependencies
 
@@ -43,10 +44,22 @@ workspaces.
 
 ## Command contract
 
-At T-001 only `npm run repo:check`, `npm install`, and `uv sync --project
-services/ml` are expected to work. T-002 must add `dev:api`; T-003 must add
-`dev:web` and the combined `dev` command. Each new executable command must be
-tested and documented in the same change that introduces it.
+T-002 implements these root commands:
+
+| Command | Contract |
+| --- | --- |
+| `npm run dev:api` | Build contracts and start the TypeScript API watcher |
+| `npm run start:api` | Build contracts/API and start compiled JavaScript |
+| `npm run build` | Emit ESM plus declarations for contracts, then API runtime ESM |
+| `npm run typecheck` | Strictly type-check contracts/API without emitting |
+| `npm run lint` | Lint TypeScript source and tests |
+| `npm run format:check` | Verify maintained TypeScript/config formatting |
+| `npm test` | Run contract and API unit/integration/smoke suites |
+| `npm run repo:check` | Validate repository and runnable workspace structure |
+
+T-003 must add `dev:web` and the combined `dev` command. Each executable
+command must perform real work, fail when its child check fails, and be tested
+and documented in the change that introduces it.
 
 ## Environment variables
 
@@ -58,6 +71,10 @@ ignored and local. When adding a variable:
 3. document it in that subproject's README;
 4. never expose secrets through a `VITE_` variable.
 
+An application validates only configuration it currently consumes. Reserved
+future settings may remain documented without forcing an unrelated service to
+own their semantics.
+
 ## Branch and review flow
 
 Use short-lived ticket branches and pull requests, including for scaffolding.
@@ -67,14 +84,14 @@ the backlog item in commits and pull requests.
 
 ## Checks by area
 
-As implementation arrives, the repository should grow toward these commands:
+Current and planned checks by area are:
 
 | Area | Expected checks |
 | --- | --- |
-| Repository | scaffold/config validation |
+| Repository | structure/workspace validation and clean-lockfile install |
 | Web | typecheck, unit/component tests, production build, browser smoke test |
-| API | typecheck, unit/integration tests, clean shutdown and health check |
-| Contracts | schema/type tests and compatibility checks |
+| API | build, lint, format, typecheck, unit/integration tests, real-socket smoke test |
+| Contracts | build, schema/type tests, invariant and compatibility checks |
 | ML | Ruff, pytest, schema/data-quality checks, reproducible backtests |
 
 Do not make the root command report success by swallowing failed child checks.
