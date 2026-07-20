@@ -1,4 +1,4 @@
-import type { Site, SiteId } from "@paragliding-forecasts/contracts";
+import type { Site, SiteSlug } from "@paragliding-forecasts/contracts";
 
 import type { SiteRepository } from "./site.repository.js";
 
@@ -13,7 +13,7 @@ export class SiteService {
     return this.#repository.list();
   }
 
-  findSite(siteId: SiteId): Promise<Site | undefined> {
-    return this.#repository.findById(siteId);
+  findSiteBySlug(siteSlug: SiteSlug): Promise<Site | undefined> {
+    return this.#repository.findBySlug(siteSlug);
   }
 }

@@ -27,19 +27,26 @@ npm.cmd run start:api
 | Method and path | Result |
 | --- | --- |
 | `GET /health` | Service status, version, and current timestamp |
-| `GET /api/v1/sites` | Stable IDs and display names for the seven initial areas |
-| `GET /api/v1/forecasts?siteId=sopot&date=2026-07-18` | Contract-validated forecast with deterministic per-site mock values |
+| `GET /api/v1/sites` | Numeric IDs, unique public slugs, and display names for the seven initial areas |
+| `GET /api/v1/forecasts?siteSlug=sopot&date=2026-07-18` | Contract-validated forecast selected by slug with deterministic per-site mock values |
 
-The forecast query requires one syntactically valid site ID and one real
-calendar date in `YYYY-MM-DD` format. A valid but unknown site returns `404`;
-malformed or missing query data returns `400`.
+The forecast query requires one syntactically valid `siteSlug` and one real
+calendar date in `YYYY-MM-DD` format. A valid but unknown slug returns `404`;
+malformed or missing query data returns `400`. Site IDs are positive safe
+integers reserved for internal identity and future persistence relationships;
+slugs are the stable human-readable API lookup key.
 
 Every forecast output is a value/status object. Present values include
 `dataStatus` and confidence; units are explicit in field names. Forecast-level
 provenance identifies the source/version, and missing values are represented
 explicitly rather than coerced to zero. The T-002 repository always returns
-`mock` values and quality notes that identify the payload as non-operational
-development data.
+`mock` values; `dataStatus` and `confidence.note` identify the payload as
+non-operational development data.
+
+The shared contract defines one canonical five-state `dataStatusSchema` and
+derives its non-missing subset for metrics that contain a value. A `missing`
+metric cannot contain a numeric/category value or confidence and must provide a
+reason; the current mock adapter only emits the non-missing `mock` branch.
 
 Errors use `application/problem+json` and a stable problem-details contract.
 Responses include an `X-Request-Id`, accepting a safe incoming value or
@@ -121,22 +128,25 @@ until their owning persistence and dashboard tickets exist.
 
 ## Storage compatibility and limits
 
-The mock repository uses a storage-shaped internal record aligned with the
-initial `predictions` proposal in `docs/project-brief.md`: site/date, generation
-time, cloudbase, three probability bands, overdevelopment risk, confidence,
-and top drivers. The public mapper adds explicit units, status, provenance, and
-quality notes required at the browser boundary.
+The mock repository returns an internal `ForecastPrediction` domain model
+aligned with the initial `predictions` proposal in `docs/project-brief.md`:
+numeric site identity, date, generation time, cloudbase, three probability
+bands, overdevelopment risk, confidence, and top drivers. It is deliberately
+not a database row or the public HTTP DTO. The service mapper adds the public
+site slug and explicit units/status structure required at the browser boundary.
 
 No database, migrations, ORM/query builder, or persistence adapter is part of
 T-002. Before a real prediction schema is implemented, its owning ticket must
 make probability scale, cloudbase reference (`MSL` versus `AGL`), per-output
-missing/status semantics, provenance, and quality metadata explicit rather
-than inferring them from the current draft table.
+missing/status semantics, provenance, and source/model version explicit rather
+than inferring them from the current draft table. A future `sites` table should
+use the numeric ID as its primary key and enforce a unique slug; forecast lookup
+continues to use the slug at the HTTP boundary.
 
-The current internal mock record requires every output and its repository port
-always returns a record. A future real adapter must refine that boundary for a
-missing site/date record and mixed per-output missing states; the public
-contract already represents missing metrics explicitly.
+The current internal mock prediction requires every output and its repository
+port always returns a prediction. A future real adapter must refine that
+boundary for a missing site/date record and mixed per-output missing states;
+the public contract already represents missing metrics explicitly.
 
 ## Responsibilities
 

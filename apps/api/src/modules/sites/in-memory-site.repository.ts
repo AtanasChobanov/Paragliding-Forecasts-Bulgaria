@@ -1,40 +1,46 @@
-import type { Site, SiteId } from "@paragliding-forecasts/contracts";
+import type { Site, SiteId, SiteSlug } from "@paragliding-forecasts/contracts";
 
 import type { SiteRepository } from "./site.repository.js";
 
 export const initialSiteCatalog = [
-  { id: "sofia-vitosha-kominite", name: "Sofia - Vitosha (Kominite)" },
-  { id: "zlatitsa", name: "Zlatitsa" },
-  { id: "sopot", name: "Sopot" },
-  { id: "nevsha", name: "Nevsha" },
-  { id: "shumen", name: "Shumen" },
-  { id: "pastrona", name: "Pastrona" },
-  { id: "dobrich-region", name: "Dobrich region" },
+  { id: 1, slug: "sofia-vitosha-kominite", name: "Sofia - Vitosha (Kominite)" },
+  { id: 2, slug: "zlatitsa", name: "Zlatitsa" },
+  { id: 3, slug: "sopot", name: "Sopot" },
+  { id: 4, slug: "nevsha", name: "Nevsha" },
+  { id: 5, slug: "shumen", name: "Shumen" },
+  { id: 6, slug: "pastrona", name: "Pastrona" },
+  { id: 7, slug: "dobrich-region", name: "Dobrich region" },
 ] as const satisfies readonly Site[];
 
 export class InMemorySiteRepository implements SiteRepository {
-  readonly #sitesById: ReadonlyMap<SiteId, Site>;
+  readonly #sitesBySlug: ReadonlyMap<SiteSlug, Site>;
 
   constructor(sites: readonly Site[] = initialSiteCatalog) {
-    const sitesById = new Map<SiteId, Site>();
+    const siteIds = new Set<SiteId>();
+    const sitesBySlug = new Map<SiteSlug, Site>();
 
     for (const site of sites) {
-      if (sitesById.has(site.id)) {
-        throw new Error(`Duplicate site ID: ${site.id}`);
+      if (siteIds.has(site.id)) {
+        throw new Error(`Duplicate site ID: ${String(site.id)}`);
       }
 
-      sitesById.set(site.id, { ...site });
+      if (sitesBySlug.has(site.slug)) {
+        throw new Error(`Duplicate site slug: ${site.slug}`);
+      }
+
+      siteIds.add(site.id);
+      sitesBySlug.set(site.slug, { ...site });
     }
 
-    this.#sitesById = sitesById;
+    this.#sitesBySlug = sitesBySlug;
   }
 
   list(): Promise<readonly Site[]> {
-    return Promise.resolve([...this.#sitesById.values()].map((site) => ({ ...site })));
+    return Promise.resolve([...this.#sitesBySlug.values()].map((site) => ({ ...site })));
   }
 
-  findById(siteId: SiteId): Promise<Site | undefined> {
-    const site = this.#sitesById.get(siteId);
+  findBySlug(siteSlug: SiteSlug): Promise<Site | undefined> {
+    const site = this.#sitesBySlug.get(siteSlug);
     return Promise.resolve(site === undefined ? undefined : { ...site });
   }
 }

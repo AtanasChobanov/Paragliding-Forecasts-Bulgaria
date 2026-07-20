@@ -5,6 +5,7 @@ export {
   createForecastMetricSchema,
   dataStatusSchema,
   provenanceSchema,
+  type AvailableDataStatus,
   type Confidence,
   type DataStatus,
   type Provenance,
@@ -32,8 +33,10 @@ export {
 export {
   siteIdSchema,
   siteSchema,
+  siteSlugSchema,
   sitesResponseSchema,
   type Site,
   type SiteId,
+  type SiteSlug,
   type SitesResponse,
 } from "./sites.js";

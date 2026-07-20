@@ -8,10 +8,11 @@ describe("GET /api/v1/forecasts", () => {
   it("returns a deterministic contract-valid mock forecast", async () => {
     const response = await request(createTestApp())
       .get("/api/v1/forecasts")
-      .query({ siteId: "sopot", date: "2026-07-18" })
+      .query({ siteSlug: "sopot", date: "2026-07-18" })
       .expect(200);
     const forecast = forecastResponseSchema.parse(response.body);
 
+    expect(forecast).toMatchObject({ siteId: 3, siteSlug: "sopot" });
     expect(forecast.generatedAt).toBe(FIXED_NOW.toISOString());
     expect(forecast.provenance).toEqual({
       source: "t-002-mock-provider",
@@ -25,16 +26,16 @@ describe("GET /api/v1/forecasts", () => {
       overdevelopmentRisk: { value: "medium", dataStatus: "mock" },
     });
     expect(forecast.topDrivers.length).toBeGreaterThan(0);
-    expect(forecast.qualityNotes.join(" ")).toContain("not aviation weather");
+    expect(forecast).not.toHaveProperty("qualityNotes");
   });
 
   it.each([
-    { query: { date: "2026-07-18" }, issuePath: "siteId" },
-    { query: { siteId: "sopot" }, issuePath: "date" },
-    { query: { siteId: "Sopot", date: "2026-07-18" }, issuePath: "siteId" },
-    { query: { siteId: "sopot", date: "2026-02-30" }, issuePath: "date" },
+    { query: { date: "2026-07-18" }, issuePath: "siteSlug" },
+    { query: { siteSlug: "sopot" }, issuePath: "date" },
+    { query: { siteSlug: "Sopot", date: "2026-07-18" }, issuePath: "siteSlug" },
+    { query: { siteSlug: "sopot", date: "2026-02-30" }, issuePath: "date" },
     {
-      query: { siteId: "sopot", date: "2026-07-18", unsupported: "value" },
+      query: { siteSlug: "sopot", date: "2026-07-18", unsupported: "value" },
       issuePath: "$",
     },
   ])("returns validation details for $query", async ({ query, issuePath }) => {
@@ -48,17 +49,17 @@ describe("GET /api/v1/forecasts", () => {
     expect(problem.issues?.some((issue) => issue.path === issuePath)).toBe(true);
   });
 
-  it("distinguishes a valid unknown site from an invalid site ID", async () => {
+  it("distinguishes a valid unknown site slug from an invalid slug", async () => {
     const response = await request(createTestApp())
       .get("/api/v1/forecasts")
-      .query({ siteId: "unknown-site", date: "2026-07-18" })
+      .query({ siteSlug: "unknown-site", date: "2026-07-18" })
       .expect(404);
     const problem = problemDetailsSchema.parse(response.body);
 
     expect(problem).toMatchObject({
       status: 404,
       code: "SITE_NOT_FOUND",
-      detail: "No forecast site exists for siteId 'unknown-site'.",
+      detail: "No forecast site exists for slug 'unknown-site'.",
     });
   });
 });

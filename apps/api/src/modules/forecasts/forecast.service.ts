@@ -2,38 +2,41 @@ import type {
   ForecastQuery,
   ForecastResponse,
   Site,
-  SiteId,
+  SiteSlug,
 } from "@paragliding-forecasts/contracts";
 
 import { AppError } from "../../http/errors/app-error.js";
-import type { ForecastRecord } from "./forecast-record.js";
+import type { ForecastPrediction } from "./forecast-prediction.js";
 import type { ForecastRepository } from "./forecast.repository.js";
 
 export interface SiteLookup {
-  findSite(siteId: SiteId): Promise<Site | undefined>;
+  findSiteBySlug(siteSlug: SiteSlug): Promise<Site | undefined>;
 }
 
-const mapRecordToResponse = (record: ForecastRecord): ForecastResponse => {
+const mapPredictionToResponse = (
+  prediction: ForecastPrediction,
+  siteSlug: SiteSlug,
+): ForecastResponse => {
   const metric = <Value>(value: Value) => ({
     value,
-    dataStatus: record.dataStatus,
-    confidence: { ...record.confidence },
+    dataStatus: prediction.dataStatus,
+    confidence: { ...prediction.confidence },
   });
 
   return {
-    siteId: record.siteId,
-    forecastDate: record.date,
-    generatedAt: record.generatedAt,
-    provenance: { ...record.provenance },
+    siteId: prediction.siteId,
+    siteSlug,
+    forecastDate: prediction.forecastDate,
+    generatedAt: prediction.generatedAt,
+    provenance: { ...prediction.provenance },
     outputs: {
-      cloudbaseMslM: metric(record.cloudbasePredictionMslM),
-      chance100KmPct: metric(record.probability100KmPct),
-      chance200KmPct: metric(record.probability200KmPct),
-      chance300KmPct: metric(record.probability300KmPct),
-      overdevelopmentRisk: metric(record.overdevelopmentRisk),
+      cloudbaseMslM: metric(prediction.cloudbasePredictionMslM),
+      chance100KmPct: metric(prediction.probability100KmPct),
+      chance200KmPct: metric(prediction.probability200KmPct),
+      chance300KmPct: metric(prediction.probability300KmPct),
+      overdevelopmentRisk: metric(prediction.overdevelopmentRisk),
     },
-    topDrivers: [...record.topDrivers],
-    qualityNotes: [...record.qualityNotes],
+    topDrivers: [...prediction.topDrivers],
   };
 };
 
@@ -47,16 +50,16 @@ export class ForecastService {
   }
 
   async getForecast(query: ForecastQuery): Promise<ForecastResponse> {
-    const site = await this.#siteLookup.findSite(query.siteId);
+    const site = await this.#siteLookup.findSiteBySlug(query.siteSlug);
 
     if (site === undefined) {
       throw new AppError({
         code: "SITE_NOT_FOUND",
-        detail: `No forecast site exists for siteId '${query.siteId}'.`,
+        detail: `No forecast site exists for slug '${query.siteSlug}'.`,
       });
     }
 
-    const record = await this.#forecastRepository.get(query.siteId, query.date);
-    return mapRecordToResponse(record);
+    const prediction = await this.#forecastRepository.get(site.id, query.date);
+    return mapPredictionToResponse(prediction, site.slug);
   }
 }

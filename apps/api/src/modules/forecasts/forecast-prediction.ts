@@ -1,4 +1,5 @@
 import type {
+  AvailableDataStatus,
   Confidence,
   ForecastDate,
   Provenance,
@@ -7,12 +8,12 @@ import type {
 
 export type OverdevelopmentRisk = "low" | "medium" | "high";
 
-export interface ForecastRecord {
+export interface ForecastPrediction {
   readonly siteId: SiteId;
-  readonly date: ForecastDate;
+  readonly forecastDate: ForecastDate;
   readonly generatedAt: string;
   readonly provenance: Provenance;
-  readonly dataStatus: "mock";
+  readonly dataStatus: AvailableDataStatus;
   readonly confidence: Confidence;
   readonly cloudbasePredictionMslM: number;
   readonly probability100KmPct: number;
@@ -20,5 +21,4 @@ export interface ForecastRecord {
   readonly probability300KmPct: number;
   readonly overdevelopmentRisk: OverdevelopmentRisk;
   readonly topDrivers: readonly string[];
-  readonly qualityNotes: readonly string[];
 }

@@ -10,7 +10,8 @@ describe("GET /api/v1/sites", () => {
     const body = sitesResponseSchema.parse(response.body);
 
     expect(body.sites).toHaveLength(7);
-    expect(body.sites.map((site) => site.id)).toEqual([
+    expect(body.sites.map((site) => site.id)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(body.sites.map((site) => site.slug)).toEqual([
       "sofia-vitosha-kominite",
       "zlatitsa",
       "sopot",
@@ -19,6 +20,6 @@ describe("GET /api/v1/sites", () => {
       "pastrona",
       "dobrich-region",
     ]);
-    expect(body.sites.every((site) => Object.keys(site).length === 2)).toBe(true);
+    expect(body.sites.every((site) => Object.keys(site).length === 3)).toBe(true);
   });
 });

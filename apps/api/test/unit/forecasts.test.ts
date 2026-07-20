@@ -1,5 +1,5 @@
 import { forecastResponseSchema } from "@paragliding-forecasts/contracts";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { ForecastService } from "../../src/modules/forecasts/forecast.service.js";
 import { MockForecastRepository } from "../../src/modules/forecasts/mock-forecast.repository.js";
@@ -14,15 +14,16 @@ const createService = (): ForecastService => {
 };
 
 describe("mock forecasts", () => {
-  it("maps a storage-shaped record to a contract-valid API response", async () => {
+  it("maps a domain prediction to a contract-valid API response", async () => {
     const forecast = await createService().getForecast({
-      siteId: "sopot",
+      siteSlug: "sopot",
       date: "2026-07-18",
     });
 
     expect(forecastResponseSchema.safeParse(forecast).success).toBe(true);
     expect(forecast).toMatchObject({
-      siteId: "sopot",
+      siteId: 3,
+      siteSlug: "sopot",
       forecastDate: "2026-07-18",
       generatedAt: FIXED_NOW.toISOString(),
       provenance: {
@@ -36,15 +37,26 @@ describe("mock forecasts", () => {
         chance300KmPct: { value: 12, dataStatus: "mock" },
         overdevelopmentRisk: { value: "medium", dataStatus: "mock" },
       },
+      topDrivers: ["Synthetic thermal strength", "Synthetic boundary-layer depth"],
     });
-    expect(forecast.qualityNotes.join(" ")).toContain("not a safety guarantee");
   });
 
   it("is deterministic for the same site, date, and clock", async () => {
     const service = createService();
-    const query = { siteId: "zlatitsa", date: "2026-07-19" } as const;
+    const query = { siteSlug: "zlatitsa", date: "2026-07-19" } as const;
 
     await expect(service.getForecast(query)).resolves.toEqual(await service.getForecast(query));
+  });
+
+  it("resolves the public slug before querying forecasts by numeric site ID", async () => {
+    const siteService = new SiteService(new InMemorySiteRepository());
+    const forecastRepository = new MockForecastRepository({ now: () => FIXED_NOW });
+    const getPrediction = vi.spyOn(forecastRepository, "get");
+    const service = new ForecastService(forecastRepository, siteService);
+
+    await service.getForecast({ siteSlug: "sopot", date: "2026-07-18" });
+
+    expect(getPrediction).toHaveBeenCalledWith(3, "2026-07-18");
   });
 
   it("produces valid nested probabilities for every initial site", async () => {
@@ -52,7 +64,7 @@ describe("mock forecasts", () => {
     const sites = await new InMemorySiteRepository().list();
 
     for (const site of sites) {
-      const forecast = await service.getForecast({ siteId: site.id, date: "2026-07-20" });
+      const forecast = await service.getForecast({ siteSlug: site.slug, date: "2026-07-20" });
       const parsed = forecastResponseSchema.parse(forecast);
       const chance100 = parsed.outputs.chance100KmPct;
       const chance200 = parsed.outputs.chance200KmPct;
@@ -66,7 +78,7 @@ describe("mock forecasts", () => {
 
   it("returns a typed site-not-found error before consulting forecast storage", async () => {
     await expect(
-      createService().getForecast({ siteId: "unknown-site", date: "2026-07-18" }),
+      createService().getForecast({ siteSlug: "unknown-site", date: "2026-07-18" }),
     ).rejects.toMatchObject({
       status: 404,
       code: "SITE_NOT_FOUND",

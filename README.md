@@ -107,7 +107,7 @@ The default address is `http://127.0.0.1:3000`. Available endpoints are:
 ```text
 GET /health
 GET /api/v1/sites
-GET /api/v1/forecasts?siteId=sopot&date=2026-07-18
+GET /api/v1/forecasts?siteSlug=sopot&date=2026-07-18
 ```
 
 Build and run the compiled server with:

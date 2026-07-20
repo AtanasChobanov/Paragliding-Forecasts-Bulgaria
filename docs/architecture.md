@@ -80,12 +80,19 @@ API prevent storage details from leaking into HTTP handlers. The first owning
 schema/persistence ticket must select an access and migration approach with
 evidence; no ORM has been chosen implicitly.
 
-The initial project-brief prediction fields map to the T-002 internal forecast
-record: site/date, generation timestamp, cloudbase, three XC probability
-bands, overdevelopment risk, confidence, and top drivers. A persisted schema
-must additionally define probability scale, cloudbase MSL/AGL semantics,
-per-output missing/status behavior, provenance, and quality metadata before it
-can be considered compatible with the public contract.
+The initial project-brief prediction fields map to the T-002 internal
+`ForecastPrediction` domain model: numeric site identity/date, generation
+timestamp, cloudbase, three XC probability bands, overdevelopment risk,
+confidence, and top drivers. This model is neither an ORM/database row nor the
+public HTTP DTO. A persisted schema must additionally define probability scale,
+cloudbase MSL/AGL semantics, per-output missing/status behavior, provenance,
+and source/model version before it can be considered compatible with the
+public contract.
+
+Site identity has two explicit forms. A positive integer is the internal ID and
+future persistence relationship key; a unique lowercase slug is the public API
+lookup key. Slug changes must not require rewriting prediction, weather, or
+alert relationships.
 
 ## Forecast record principles
 
@@ -96,12 +103,18 @@ Every displayed forecast must preserve:
 - cloudbase with explicit MSL/AGL unit semantics;
 - 100+ km, 200+ km, and 300+ km outputs with an explicit probability scale;
 - overdevelopment risk and its main drivers;
-- confidence and quality notes;
+- confidence and top forecast drivers;
 - one explicit data status: `mock`, `manual`, `baseline`, `real`, or `missing`.
 
 Missing values are not zero. Mock or baseline values are not real observations.
 Those distinctions must survive ingestion, storage, API serialization, and UI
 rendering.
+
+The contract models these states from one canonical five-state Zod enum. Its
+available-value subset is derived by excluding `missing` and is used only for
+the discriminated-union branch that also requires a value and confidence. The
+`missing` branch instead requires `null` value/confidence and an explicit
+reason, preventing contradictory combinations at the HTTP boundary.
 
 ## Deferred decisions
 

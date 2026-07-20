@@ -6,6 +6,7 @@ import {
   healthResponseSchema,
   problemDetailsSchema,
   siteIdSchema,
+  siteSlugSchema,
   sitesResponseSchema,
   type ForecastResponse,
 } from "../src/index.js";
@@ -22,7 +23,8 @@ const availableMetric = <Value>(value: Value) => ({
 });
 
 const createForecast = (): ForecastResponse => ({
-  siteId: "sopot",
+  siteId: 3,
+  siteSlug: "sopot",
   forecastDate: "2026-07-18",
   generatedAt: "2026-07-17T12:00:00.000Z",
   provenance: {
@@ -37,7 +39,6 @@ const createForecast = (): ForecastResponse => ({
     overdevelopmentRisk: availableMetric("medium" as const),
   },
   topDrivers: ["Synthetic mock driver"],
-  qualityNotes: ["Mock decision-support data; not aviation weather."],
 });
 
 describe("shared HTTP contracts", () => {
@@ -53,7 +54,7 @@ describe("shared HTTP contracts", () => {
 
     expect(
       sitesResponseSchema.parse({
-        sites: [{ id: "sofia-vitosha-kominite", name: "Sofia - Vitosha (Kominite)" }],
+        sites: [{ id: 1, slug: "sofia-vitosha-kominite", name: "Sofia - Vitosha (Kominite)" }],
       }),
     ).toBeDefined();
 
@@ -72,9 +73,12 @@ describe("shared HTTP contracts", () => {
     ).toBeDefined();
   });
 
-  it("distinguishes invalid site identifiers from valid unknown slugs", () => {
-    expect(siteIdSchema.safeParse("new-site").success).toBe(true);
-    expect(siteIdSchema.safeParse("New Site").success).toBe(false);
+  it("keeps numeric site IDs distinct from public site slugs", () => {
+    expect(siteIdSchema.safeParse(1).success).toBe(true);
+    expect(siteIdSchema.safeParse("1").success).toBe(false);
+    expect(siteIdSchema.safeParse(0).success).toBe(false);
+    expect(siteSlugSchema.safeParse("new-site").success).toBe(true);
+    expect(siteSlugSchema.safeParse("New Site").success).toBe(false);
   });
 
   it("rejects dates that match the shape but are not real calendar dates", () => {
@@ -145,7 +149,7 @@ describe("shared HTTP contracts", () => {
     ).toBe(false);
   });
 
-  it("rejects unknown response fields", () => {
+  it("rejects unknown response fields and empty top drivers", () => {
     expect(
       healthResponseSchema.safeParse({
         status: "ok",
@@ -153,6 +157,20 @@ describe("shared HTTP contracts", () => {
         version: "0.1.0",
         timestamp: "2026-07-17T12:00:00.000Z",
         database: "not-checked",
+      }).success,
+    ).toBe(false);
+
+    expect(
+      forecastResponseSchema.safeParse({
+        ...createForecast(),
+        qualityNotes: ["This field is not part of the forecast contract."],
+      }).success,
+    ).toBe(false);
+
+    expect(
+      forecastResponseSchema.safeParse({
+        ...createForecast(),
+        topDrivers: [],
       }).success,
     ).toBe(false);
   });

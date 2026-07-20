@@ -14,6 +14,7 @@ const requiredPaths = [
   "apps/api/src/config/env.ts",
   "apps/api/src/http/middleware/error-handler.ts",
   "apps/api/src/main.ts",
+  "apps/api/src/modules/forecasts/forecast-prediction.ts",
   "apps/api/src/modules/forecasts/forecast.routes.ts",
   "apps/api/src/modules/health/health.routes.ts",
   "apps/api/src/modules/sites/site.routes.ts",

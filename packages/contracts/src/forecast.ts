@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { createForecastMetricSchema, provenanceSchema } from "./data-status.js";
-import { siteIdSchema } from "./sites.js";
+import { siteIdSchema, siteSlugSchema } from "./sites.js";
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -30,7 +30,7 @@ export const forecastDateSchema = z
   .refine(isCalendarDate, "Expected a real calendar date.");
 
 export const forecastQuerySchema = z.strictObject({
-  siteId: siteIdSchema,
+  siteSlug: siteSlugSchema,
   date: forecastDateSchema,
 });
 
@@ -43,6 +43,7 @@ const overdevelopmentRiskMetricSchema = createForecastMetricSchema(
 export const forecastResponseSchema = z
   .strictObject({
     siteId: siteIdSchema,
+    siteSlug: siteSlugSchema,
     forecastDate: forecastDateSchema,
     generatedAt: z.iso.datetime(),
     provenance: provenanceSchema,
@@ -53,8 +54,7 @@ export const forecastResponseSchema = z
       chance300KmPct: chancePctMetricSchema,
       overdevelopmentRisk: overdevelopmentRiskMetricSchema,
     }),
-    topDrivers: z.array(z.string().trim().min(1)),
-    qualityNotes: z.array(z.string().trim().min(1)).min(1),
+    topDrivers: z.array(z.string().trim().min(1)).min(1),
   })
   .superRefine((forecast, context) => {
     const chance100 = forecast.outputs.chance100KmPct;

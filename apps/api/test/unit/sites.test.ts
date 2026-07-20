@@ -8,50 +8,65 @@ describe("site catalog", () => {
     const repository = new InMemorySiteRepository();
 
     await expect(repository.list()).resolves.toEqual([
-      { id: "sofia-vitosha-kominite", name: "Sofia - Vitosha (Kominite)" },
-      { id: "zlatitsa", name: "Zlatitsa" },
-      { id: "sopot", name: "Sopot" },
-      { id: "nevsha", name: "Nevsha" },
-      { id: "shumen", name: "Shumen" },
-      { id: "pastrona", name: "Pastrona" },
-      { id: "dobrich-region", name: "Dobrich region" },
+      { id: 1, slug: "sofia-vitosha-kominite", name: "Sofia - Vitosha (Kominite)" },
+      { id: 2, slug: "zlatitsa", name: "Zlatitsa" },
+      { id: 3, slug: "sopot", name: "Sopot" },
+      { id: 4, slug: "nevsha", name: "Nevsha" },
+      { id: 5, slug: "shumen", name: "Shumen" },
+      { id: 6, slug: "pastrona", name: "Pastrona" },
+      { id: 7, slug: "dobrich-region", name: "Dobrich region" },
     ]);
   });
 
   it("looks up a known site without exposing mutable repository state", async () => {
     const repository = new InMemorySiteRepository();
-    const first = await repository.findById("sopot");
+    const first = await repository.findBySlug("sopot");
 
-    expect(first).toEqual({ id: "sopot", name: "Sopot" });
+    expect(first).toEqual({ id: 3, slug: "sopot", name: "Sopot" });
     if (first !== undefined) {
       first.name = "Changed outside the repository";
     }
 
-    await expect(repository.findById("sopot")).resolves.toEqual({ id: "sopot", name: "Sopot" });
+    await expect(repository.findBySlug("sopot")).resolves.toEqual({
+      id: 3,
+      slug: "sopot",
+      name: "Sopot",
+    });
   });
 
-  it("rejects duplicate site identifiers", () => {
+  it("rejects duplicate numeric site identifiers", () => {
     expect(
       () =>
         new InMemorySiteRepository([
-          { id: "sopot", name: "Sopot" },
-          { id: "sopot", name: "Duplicate Sopot" },
+          { id: 3, slug: "sopot", name: "Sopot" },
+          { id: 3, slug: "other-sopot", name: "Duplicate Sopot" },
         ]),
-    ).toThrow("Duplicate site ID: sopot");
+    ).toThrow("Duplicate site ID: 3");
+  });
+
+  it("rejects duplicate site slugs", () => {
+    expect(
+      () =>
+        new InMemorySiteRepository([
+          { id: 3, slug: "sopot", name: "Sopot" },
+          { id: 8, slug: "sopot", name: "Duplicate Sopot" },
+        ]),
+    ).toThrow("Duplicate site slug: sopot");
   });
 
   it("keeps the service dependent on the repository port", async () => {
-    const list = vi.fn().mockResolvedValue([{ id: "sopot", name: "Sopot" }]);
-    const findById = vi.fn().mockResolvedValue({ id: "sopot", name: "Sopot" });
+    const site = { id: 3, slug: "sopot", name: "Sopot" };
+    const list = vi.fn().mockResolvedValue([site]);
+    const findBySlug = vi.fn().mockResolvedValue(site);
     const repository: SiteRepository = {
       list,
-      findById,
+      findBySlug,
     };
     const service = new SiteService(repository);
 
-    await expect(service.listSites()).resolves.toEqual([{ id: "sopot", name: "Sopot" }]);
-    await expect(service.findSite("sopot")).resolves.toEqual({ id: "sopot", name: "Sopot" });
+    await expect(service.listSites()).resolves.toEqual([site]);
+    await expect(service.findSiteBySlug("sopot")).resolves.toEqual(site);
     expect(list).toHaveBeenCalledOnce();
-    expect(findById).toHaveBeenCalledWith("sopot");
+    expect(findBySlug).toHaveBeenCalledWith("sopot");
   });
 });

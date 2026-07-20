@@ -10,7 +10,7 @@ of truth rather than copying interfaces.
 ## Owned contracts
 
 - `HealthResponse`
-- site IDs, site records, and `SitesResponse`
+- numeric site IDs, public site slugs, site records, and `SitesResponse`
 - forecast query/date validation and `ForecastResponse`
 - available-versus-missing forecast metrics
 - data status, confidence, provenance, and units
@@ -18,7 +18,16 @@ of truth rather than copying interfaces.
 
 The forecast schema validates real calendar dates, percentage ranges, ISO
 timestamps, and the invariant that the 100+ km chance is not below the 200+ km
-chance and the 200+ km chance is not below the 300+ km chance.
+chance and the 200+ km chance is not below the 300+ km chance. A forecast must
+also expose at least one top driver; the richer explainability shape remains
+owned by the later model/UI ticket.
+
+`dataStatusSchema` is the canonical five-state schema: `mock`, `manual`,
+`baseline`, `real`, or `missing`. `availableDataStatusSchema` is derived from it
+with `dataStatusSchema.exclude(["missing"])`; it is not a second independent
+status definition. Forecast metrics use a discriminated union so a non-missing
+status requires a value and confidence, while `missing` requires `null` for
+both plus an explicit `missingReason`.
 
 ## Contract rules
 
@@ -27,8 +36,8 @@ chance and the 200+ km chance is not below the 300+ km chance.
 - Make breaking HTTP changes through an explicit API-version decision.
 - Include units in field names and metric metadata where ambiguity is possible.
 - Represent missing values deliberately; never silently convert them to zero.
-- Preserve provenance, generation time, confidence, quality information, and
-  one of `mock`, `manual`, `baseline`, `real`, or `missing`.
+- Preserve provenance, generation time, confidence, top drivers, and one of
+  `mock`, `manual`, `baseline`, `real`, or `missing`.
 - Keep Python integration language-neutral through JSON, SQLite records, or
   documented files; Python must not import this TypeScript package.
 

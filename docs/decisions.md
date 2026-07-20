@@ -26,6 +26,7 @@ consequences. Temporary progress and Git state belong in
 | DEC-011 | Use Zod as the runtime browser/API contract validator | Accepted | 2026-07-17 |
 | DEC-012 | Use TSX and Vitest for the initial API development loop | Accepted | 2026-07-17 |
 | DEC-013 | Use Pino logging and Problem Details HTTP errors | Accepted | 2026-07-17 |
+| DEC-014 | Separate internal numeric site IDs from public slugs | Accepted | 2026-07-20 |
 
 ## Individual decisions
 
@@ -216,10 +217,11 @@ persistence.
 be limited, and paragliding decisions are safety-sensitive.
 
 **Decision:** Every displayed forecast must preserve explicit units, source or
-model version, generation time, confidence/quality information, and one data
+model version, generation time, confidence and known limitations, and one data
 status: `mock`, `manual`, `baseline`, `real`, or `missing`. Missing is not zero,
 and the product must always be framed as decision support rather than a safety
-guarantee.
+guarantee. This does not require a dedicated `qualityNotes` field in every
+forecast payload.
 
 **Rationale:** Users and reviewers must be able to distinguish evidence quality
 and avoid treating incomplete or experimental values as observations or safe-
@@ -338,7 +340,7 @@ adapters are replaceable and do not imply a database implementation.
 
 **Context:** TypeScript types disappear at runtime, while both request inputs
 and browser-facing payloads must preserve strict units, missing states,
-provenance, and quality semantics.
+provenance, and explicit data-status semantics.
 
 **Decision:** Define strict Zod schemas in `@paragliding-forecasts/contracts`
 and infer their TypeScript types. Use them to validate API requests and outgoing
@@ -355,7 +357,10 @@ schema libraries were viable but offered no project-specific advantage.
 
 **Consequences:** Contract changes require schema tests and compatibility
 review. Database schemas remain a separate language-neutral boundary and must
-not import TypeScript implementation details.
+not import TypeScript implementation details. `dataStatusSchema` is the
+canonical five-state definition; the available-value schema is derived by
+excluding `missing` and is used in a discriminated union whose missing branch
+requires null value/confidence and an explicit reason.
 
 **Related files:** [`../packages/contracts/README.md`](../packages/contracts/README.md),
 [`../packages/contracts/src/index.ts`](../packages/contracts/src/index.ts),
@@ -425,6 +430,45 @@ require tests through the real `pino-http` serializer when added.
 **Related files:** [`../apps/api/README.md`](../apps/api/README.md),
 [`../apps/api/src/observability/logger.ts`](../apps/api/src/observability/logger.ts),
 [`../packages/contracts/src/problem-details.ts`](../packages/contracts/src/problem-details.ts).
+
+### DEC-014 — Separate internal numeric site IDs from public slugs
+
+**Status:** Accepted
+
+**Date:** 2026-07-20
+
+**Context:** The initial T-002 contract used lowercase location slugs as
+`siteId`. The project brief refers to `site_id` relationships across weather,
+predictions, and alerts, while site names, aliases, launch clusters, and region
+definitions can evolve. The browser also needs a readable and stable lookup
+value before persistence is implemented.
+
+**Decision:** Represent site identity with a positive safe-integer `id` and a
+separate unique lowercase `slug`. Return both from the sites API, select
+forecasts with the `siteSlug` query parameter, and pass the numeric ID through
+the forecast repository boundary. Keep the current deterministic IDs in the
+in-memory catalog; the future persistence owner must define a `sites` table and
+preserve or deliberately migrate that seed mapping.
+
+**Rationale:** Numeric IDs are suitable relationship keys and do not change
+when a public slug is renamed. Slugs remain readable API lookup keys and avoid
+exposing database navigation as the user-facing selector contract.
+
+**Alternatives considered:** Keeping the slug as both natural primary key and
+public identifier is valid for a small immutable catalog, but it couples every
+future foreign key to naming changes. Looking forecasts up by numeric ID alone
+was rejected because it gives the browser an opaque location selector and
+unnecessarily exposes persistence identity at the HTTP boundary.
+
+**Consequences:** T-003 and later frontend work consume `site.slug` for lookup
+and may retain `site.id` for identity. T-009 may refine names, aliases, and
+region definitions without rewriting prediction relationships. T-002 still
+does not select a SQLite access layer or implement schema/migrations.
+
+**Related files:** [`architecture.md`](architecture.md),
+[`../packages/contracts/src/sites.ts`](../packages/contracts/src/sites.ts),
+[`../packages/contracts/src/forecast.ts`](../packages/contracts/src/forecast.ts),
+[`../apps/api/src/modules/sites/in-memory-site.repository.ts`](../apps/api/src/modules/sites/in-memory-site.repository.ts).
 
 ## Open decisions
 
