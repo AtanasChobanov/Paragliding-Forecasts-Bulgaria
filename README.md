@@ -130,6 +130,7 @@ error, and data limitations.
 | `npm run lint` | Lint TypeScript sources and tests |
 | `npm run format:check` | Check maintained TypeScript/config formatting |
 | `npm test` | Run contract and API unit/integration/smoke tests |
+| `npm run test:coverage` | Run the same suites with V8 coverage and enforced thresholds |
 | `npm run repo:check` | Validate repository structure and runnable workspace metadata |
 | `uv sync --project services/ml` | Sync the Python ML environment |
 
@@ -141,6 +142,8 @@ they are not reported as runnable yet.
 Copy `.env.example` to `.env` for local overrides. The API currently consumes
 only `NODE_ENV`, `LOG_LEVEL`, `API_HOST`, `API_PORT`, `CORS_ORIGIN`, and
 `FORECAST_DATA_MODE=mock`. It starts with safe defaults when `.env` is absent.
+The logger defaults to `info`; `.env.example` opts local development into
+`debug` explicitly.
 `DATABASE_URL` and `MODEL_ARTIFACT_DIR` are reserved for future persistence and
 model work and are not read by T-002.
 

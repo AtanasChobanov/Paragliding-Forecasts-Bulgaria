@@ -55,6 +55,7 @@ T-002 implements these root commands:
 | `npm run lint` | Lint TypeScript source and tests |
 | `npm run format:check` | Verify maintained TypeScript/config formatting |
 | `npm test` | Run contract and API unit/integration/smoke suites |
+| `npm run test:coverage` | Run V8 coverage for contracts/API and enforce thresholds |
 | `npm run repo:check` | Validate repository and runnable workspace structure |
 
 T-003 must add `dev:web` and the combined `dev` command. Each executable

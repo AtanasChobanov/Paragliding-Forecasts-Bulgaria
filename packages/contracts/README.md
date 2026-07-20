@@ -43,8 +43,11 @@ Run from the repository root:
 npm.cmd run build --workspace @paragliding-forecasts/contracts
 npm.cmd run typecheck --workspace @paragliding-forecasts/contracts
 npm.cmd run test --workspace @paragliding-forecasts/contracts
+npm.cmd run test:coverage --workspace @paragliding-forecasts/contracts
 npm.cmd run test:watch --workspace @paragliding-forecasts/contracts
 ```
 
 The API package builds contracts before its own build, type-check, tests, or
 watch startup. The root build and test commands also preserve this ordering.
+V8 coverage includes every contract source file and enforces minimum global
+thresholds of 95% statements/lines, 90% branches, and 100% functions.

@@ -87,8 +87,8 @@ Currently supported repository commands:
   the API in watch mode.
 - `npm run start:api` / `npm.cmd run start:api` - build and start the compiled
   API.
-- `npm run build`, `typecheck`, `lint`, `format:check`, and `test` - validate
-  the implemented TypeScript contracts and API.
+- `npm run build`, `typecheck`, `lint`, `format:check`, `test`, and
+  `test:coverage` - validate the implemented TypeScript contracts and API.
 - `npm run repo:check` / `npm.cmd run repo:check` - validate repository and
   runnable workspace structure.
 

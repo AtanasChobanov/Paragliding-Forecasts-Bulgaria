@@ -372,9 +372,10 @@ compiled output, and fast automated coverage at unit, HTTP integration, and
 real-socket levels.
 
 **Decision:** Use TSX for local TypeScript watch execution, `tsc` with NodeNext
-ESM for build/type checking, Vitest as the shared test runner, and Supertest for
-in-memory Express integration tests. Use shared ESLint and Prettier tooling at
-the npm workspace root.
+ESM for build/type checking, Vitest as the shared test runner, Supertest for
+in-memory Express integration tests, and Vitest's V8 provider for source-wide
+coverage with enforced workspace thresholds. Use shared ESLint and Prettier
+tooling at the npm workspace root.
 
 **Rationale:** This provides a small, Node.js 24-compatible toolchain with
 honest root commands and no test-only server architecture.
@@ -385,8 +386,10 @@ Running TypeScript directly in production was rejected in favor of verifying
 compiled output.
 
 **Consequences:** Root scripts must propagate child failures and contracts must
-build before the API consumes them. Future web tooling may reuse the shared
-quality tools but owns its own runtime/build dependencies.
+build exactly once before an API build consumes them. Coverage configuration
+must include unimported source files and fail below the recorded thresholds.
+Future web tooling may reuse the shared quality tools but owns its own
+runtime/build dependencies.
 
 **Related files:** [`development.md`](development.md),
 [`../package.json`](../package.json),
@@ -415,7 +418,9 @@ for validation, not-found, and internal failures.
 rejected because they drift and are difficult to query or sanitize.
 
 **Consequences:** New routes use the shared error path and must not serialize
-raw exceptions. Sensitive logging fields require redaction tests when added.
+raw exceptions. Stable problem type/status/title metadata is centralized by
+problem code and validated as a one-to-one contract. Sensitive logging fields
+require tests through the real `pino-http` serializer when added.
 
 **Related files:** [`../apps/api/README.md`](../apps/api/README.md),
 [`../apps/api/src/observability/logger.ts`](../apps/api/src/observability/logger.ts),

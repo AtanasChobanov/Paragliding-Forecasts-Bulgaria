@@ -4,12 +4,12 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated | 2026-07-17 |
+| Last updated | 2026-07-20 |
 | Current Git branch | `feature/T-002-local-server-skeleton` |
 | Branch relationship | Deliberately stacked on unmerged `feature/t-001-repository-scaffold`; `main` was not changed |
 | Current/recent task | `T-002 - Create local server skeleton` - status `Review` |
 | Next intended task | `T-003 - Create initial dashboard route` - status `To Do` |
-| Latest implementation commit | `75387d4 T-002 add mock forecast endpoint` |
+| Latest implementation commit | `85af55f T-002 add coverage and refine runtime tooling` |
 | Expected working tree after handoff commit | Clean; verify before starting new work |
 
 ## Current outcome
@@ -58,9 +58,14 @@ GET /api/v1/forecasts?siteId=...&date=YYYY-MM-DD
 - `server.ts` owns real TCP startup, idempotent shutdown, and a bounded graceful
   close period.
 - Pino/`pino-http` provide structured logs, request IDs, and credential-header
-  redaction; no application `console.log` calls were introduced.
+  redaction verified through the real HTTP serializer; no application
+  `console.log` calls were introduced.
 - Zod schemas in `@paragliding-forecasts/contracts` are the runtime payload
   source of truth and emit both ESM JavaScript and declarations.
+- Problem type/status/title metadata is centralized by problem code, and the
+  shared schema rejects mismatched Problem Details combinations.
+- Service identity/version live in application metadata rather than logger or
+  environment configuration.
 
 Accepted T-002 choices are recorded as DEC-010 through DEC-013 in
 [`decisions.md`](decisions.md).
@@ -77,6 +82,7 @@ npm.cmd run typecheck
 npm.cmd run lint
 npm.cmd run format:check
 npm.cmd test
+npm.cmd run test:coverage
 npm.cmd run repo:check
 ```
 
@@ -84,6 +90,8 @@ The API reads the root `.env` when present and validates only `NODE_ENV`,
 `LOG_LEVEL`, `API_HOST`, `API_PORT`, `CORS_ORIGIN`, and
 `FORECAST_DATA_MODE=mock`. It has safe local defaults. `DATABASE_URL` and
 `MODEL_ARTIFACT_DIR` are reserved and unused by T-002.
+The schema defaults logging to `info`; the reviewed `.env.example` explicitly
+opts local development into `debug`.
 
 ## Test strategy and validation
 
@@ -94,8 +102,9 @@ The selected levels are proportionate to this API ticket:
 - unit tests for configuration, logging/redaction, request IDs, site service,
   and forecast mapping;
 - in-memory HTTP integration tests for health, CORS, errors, request/response
-  contracts, sites, forecasts, and validation;
+  contracts, sites, forecasts, validation, and real pino-http redaction;
 - a real ephemeral-port server smoke test for listen/fetch/close behavior;
+- source-wide V8 coverage with enforced per-workspace global thresholds;
 - manual probes of both documented process commands through the real
   composition root.
 
@@ -103,9 +112,9 @@ Component/browser E2E tests are not applicable to T-002. Browser smoke coverage
 is owned by T-008 after the dashboard exists. Database component tests are
 deferred with the database implementation.
 
-Final verification on 2026-07-17:
+Final review-fix verification on 2026-07-20:
 
-- **Passed:** `npm.cmd ci` - lockfile-exact install, 273 packages audited, zero
+- **Passed:** `npm.cmd ci` - lockfile-exact install, 291 packages audited, zero
   reported vulnerabilities.
 - **Passed:** `npm.cmd ls --depth=0` - workspace and direct dependency tree;
   the API resolves `@types/node@24.13.3` for its Node.js 24 runtime contract.
@@ -113,11 +122,15 @@ Final verification on 2026-07-17:
 - **Passed:** `npm.cmd run typecheck`.
 - **Passed:** `npm.cmd run lint`.
 - **Passed:** `npm.cmd run format:check`.
-- **Passed:** `npm.cmd test` - contracts: 1 file/6 tests; API: 9 files/42 tests.
+- **Passed:** `npm.cmd test` - contracts: 1 file/7 tests; API: 10 files/43 tests.
+- **Passed:** `npm.cmd run test:coverage` - contracts: 97.77% lines, 96.15%
+  branches, 100% functions; API: 72.39% lines, 76.11% branches, 74.24%
+  functions. All configured thresholds passed.
 - **Passed:** `npm.cmd run repo:check`.
-- **Passed:** real `npm.cmd run dev:api` probe - health `ok`, 7 sites, Sopot
-  forecast status `mock`, 100+ km value `65`.
-- **Passed:** real `npm.cmd run start:api` probe - compiled service health `ok`.
+- **Passed:** real `npm.cmd run dev:api` probe - service/version health `ok` and
+  Sopot forecast status `mock`.
+- **Passed:** real `npm.cmd run start:api` probe - compiled service/version
+  health `ok`.
 - Both probe processes were stopped and their listening ports checked for
   cleanup.
 
@@ -134,8 +147,10 @@ explicitly requested. T-002 work was split into reviewable commits:
 - `43421bb T-002 add API server foundation`
 - `0f475ea T-002 add site catalog endpoint`
 - `75387d4 T-002 add mock forecast endpoint`
-- final operation/decision/handoff documentation checkpoint (the commit that
-  contains this file)
+- `3e71bc5 T-002 document API operation and decisions`
+- `04adafe T-002 tighten forecast and error invariants`
+- `85af55f T-002 add coverage and refine runtime tooling`
+- final review-fix documentation checkpoint (the commit that contains this file)
 
 No branch was pushed and no pull request or merge was created in this session.
 

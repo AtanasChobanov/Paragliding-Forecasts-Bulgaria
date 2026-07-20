@@ -79,7 +79,7 @@ and otherwise uses safe local defaults.
 | Variable | Default | Constraint |
 | --- | --- | --- |
 | `NODE_ENV` | `development` | `development`, `test`, or `production` |
-| `LOG_LEVEL` | `debug` | Pino level or `silent` |
+| `LOG_LEVEL` | `info` | Pino level or `silent`; `.env.example` explicitly uses local `debug` |
 | `API_HOST` | `127.0.0.1` | Non-empty bind host |
 | `API_PORT` | `3000` | Integer from 1 through 65535 |
 | `CORS_ORIGIN` | `http://localhost:5173` | Exact HTTP(S) origin, without path or trailing slash |
@@ -108,13 +108,16 @@ From the repository root:
 npm.cmd run build --workspace @paragliding-forecasts/api
 npm.cmd run typecheck --workspace @paragliding-forecasts/api
 npm.cmd run test --workspace @paragliding-forecasts/api
+npm.cmd run test:coverage --workspace @paragliding-forecasts/api
 npm.cmd run test:watch --workspace @paragliding-forecasts/api
 ```
 
 The suite includes focused unit tests, in-memory HTTP integration tests, shared
-response-contract checks, log-redaction checks, and a real ephemeral-port
-server smoke test. Database component tests and end-to-end browser tests are
-deferred until their owning persistence and dashboard tickets exist.
+response-contract checks, a real `pino-http` credential-redaction test, and an
+ephemeral-port server smoke test. V8 coverage includes every `src/**/*.ts` file
+and enforces minimum global thresholds of 70% statements/lines/functions and
+75% branches. Database component tests and end-to-end browser tests are deferred
+until their owning persistence and dashboard tickets exist.
 
 ## Storage compatibility and limits
 
