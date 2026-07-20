@@ -2,6 +2,7 @@ import { Router, type Express, type Router as ExpressRouter } from "express";
 import pino from "pino";
 
 import { createApp } from "../../src/app.js";
+import { API_VERSION } from "../../src/app-metadata.js";
 import { createRootRouter } from "../../src/http/router.js";
 import { createForecastRouter } from "../../src/modules/forecasts/forecast.routes.js";
 import { ForecastService } from "../../src/modules/forecasts/forecast.service.js";
@@ -10,7 +11,6 @@ import { createHealthRouter } from "../../src/modules/health/health.routes.js";
 import { InMemorySiteRepository } from "../../src/modules/sites/in-memory-site.repository.js";
 import { createSiteRouter } from "../../src/modules/sites/site.routes.js";
 import { SiteService } from "../../src/modules/sites/site.service.js";
-import { API_VERSION } from "../../src/observability/logger.js";
 
 export const FIXED_NOW = new Date("2026-07-17T12:00:00.000Z");
 

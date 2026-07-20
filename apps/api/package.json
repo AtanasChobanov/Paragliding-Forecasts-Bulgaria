@@ -12,11 +12,13 @@
     "prebuild": "npm run contracts:build",
     "predev": "npm run contracts:build",
     "pretest": "npm run contracts:build",
+    "pretest:coverage": "npm run contracts:build",
     "pretest:watch": "npm run contracts:build",
     "pretypecheck": "npm run contracts:build",
     "start": "node dist/main.js",
     "test": "vitest run",
-    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest watch",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {

@@ -1,8 +1,8 @@
 import { healthResponseSchema } from "@paragliding-forecasts/contracts";
 import type { RequestHandler } from "express";
 
+import { API_SERVICE_NAME } from "../../app-metadata.js";
 import { parseResponse } from "../../http/validation.js";
-import { API_SERVICE_NAME } from "../../observability/logger.js";
 
 export interface HealthControllerDependencies {
   readonly now: () => Date;

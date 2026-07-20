@@ -1,6 +1,7 @@
 import type { Logger } from "pino";
 
 import { createApp } from "./app.js";
+import { API_VERSION } from "./app-metadata.js";
 import { loadRootEnvFile, parseConfig } from "./config/env.js";
 import { createRootRouter } from "./http/router.js";
 import { createForecastRouter } from "./modules/forecasts/forecast.routes.js";
@@ -10,7 +11,7 @@ import { createHealthRouter } from "./modules/health/health.routes.js";
 import { InMemorySiteRepository } from "./modules/sites/in-memory-site.repository.js";
 import { createSiteRouter } from "./modules/sites/site.routes.js";
 import { SiteService } from "./modules/sites/site.service.js";
-import { API_VERSION, createBootstrapLogger, createLogger } from "./observability/logger.js";
+import { createBootstrapLogger, createLogger } from "./observability/logger.js";
 import { startServer } from "./server.js";
 
 let activeLogger: Logger = createBootstrapLogger();

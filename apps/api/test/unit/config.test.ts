@@ -6,7 +6,7 @@ describe("API configuration", () => {
   it("uses safe local defaults", () => {
     expect(parseConfig({})).toEqual({
       nodeEnv: "development",
-      logLevel: "debug",
+      logLevel: "info",
       host: "127.0.0.1",
       port: 3_000,
       corsOrigin: "http://localhost:5173",

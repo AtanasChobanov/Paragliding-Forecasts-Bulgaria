@@ -1,9 +1,7 @@
 import pino, { type DestinationStream, type Logger, type LoggerOptions } from "pino";
 
+import { API_SERVICE_NAME, API_VERSION } from "../app-metadata.js";
 import type { ApiConfig } from "../config/env.js";
-
-export const API_SERVICE_NAME = "paragliding-forecasts-api";
-export const API_VERSION = "0.1.0";
 
 const redactedPaths = [
   "req.headers.authorization",

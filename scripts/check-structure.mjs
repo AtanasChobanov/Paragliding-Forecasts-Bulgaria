@@ -10,6 +10,7 @@ const requiredPaths = [
   "apps/api/README.md",
   "apps/api/package.json",
   "apps/api/src/app.ts",
+  "apps/api/src/app-metadata.ts",
   "apps/api/src/config/env.ts",
   "apps/api/src/http/middleware/error-handler.ts",
   "apps/api/src/main.ts",
@@ -50,10 +51,20 @@ const expectedWorkspaceNames = new Map([
 const requiredScripts = new Map([
   [
     "package.json",
-    ["build", "dev:api", "format:check", "lint", "repo:check", "start:api", "test", "typecheck"],
+    [
+      "build",
+      "dev:api",
+      "format:check",
+      "lint",
+      "repo:check",
+      "start:api",
+      "test",
+      "test:coverage",
+      "typecheck",
+    ],
   ],
-  ["apps/api/package.json", ["build", "dev", "start", "test", "typecheck"]],
-  ["packages/contracts/package.json", ["build", "test", "typecheck"]],
+  ["apps/api/package.json", ["build", "dev", "start", "test", "test:coverage", "typecheck"]],
+  ["packages/contracts/package.json", ["build", "test", "test:coverage", "typecheck"]],
 ]);
 
 const requiredDependencies = new Map([
@@ -63,6 +74,8 @@ const requiredDependencies = new Map([
   ],
   ["packages/contracts/package.json", ["zod"]],
 ]);
+
+const requiredDevDependencies = new Map([["package.json", ["@vitest/coverage-v8"]]]);
 
 const missing = [];
 
@@ -108,6 +121,17 @@ for (const [path, dependencies] of requiredDependencies) {
   for (const dependency of dependencies) {
     if (typeof manifest.dependencies?.[dependency] !== "string") {
       console.error(`${path} is missing runtime dependency: ${dependency}`);
+      process.exit(1);
+    }
+  }
+}
+
+for (const [path, dependencies] of requiredDevDependencies) {
+  const manifest = JSON.parse(await readFile(path, "utf8"));
+
+  for (const dependency of dependencies) {
+    if (typeof manifest.devDependencies?.[dependency] !== "string") {
+      console.error(`${path} is missing development dependency: ${dependency}`);
       process.exit(1);
     }
   }
