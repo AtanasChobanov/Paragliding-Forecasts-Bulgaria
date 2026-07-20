@@ -20,9 +20,11 @@ export {
 export { healthResponseSchema, type HealthResponse } from "./health.js";
 export {
   problemCodeSchema,
+  problemDefinitionByCode,
   problemDetailsSchema,
   requestIdSchema,
   validationIssueSchema,
+  type ProblemDefinition,
   type ProblemCode,
   type ProblemDetails,
   type ValidationIssue,

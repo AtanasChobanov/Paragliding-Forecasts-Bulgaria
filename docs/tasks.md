@@ -16,7 +16,7 @@
 | ID | Type | Summary | Epic | Takt | Status | Priority | Owner | Start Date | Due Date | Labels | Description | Est. Hours (Junior) | Est. Cost @ €15/h |
 |----|----|----|----|----|----|----|----|----|----|----|----|----|----|
 | T-001 | Task | Create project repository and README skeleton | Documentation / Handover | Takt 1 | Review | Highest |  | 46218.0 | 46219.0 | setup,repo,readme | Create the initial repository structure, README, setup notes, and clear run commands for local development. | 6.0 | 90.0 |
-| T-002 | Task | Create local server skeleton | Local UI / Dashboard | Takt 1 | Review | Highest |  | 46218.0 | 46221.0 | local-server,backend,setup | Set up a local backend or frontend dev server that starts with a documented command. | 12.0 | 180.0 |
+| T-002 | Task | Create local server skeleton | Local UI / Dashboard | Takt 1 | In Progress | Highest |  | 46218.0 | 46221.0 | local-server,backend,setup | Set up a local backend or frontend dev server that starts with a documented command. | 12.0 | 180.0 |
 | T-003 | Task | Create initial dashboard route | Local UI / Dashboard | Takt 1 | To Do | Highest |  | 46220.0 | 46224.0 | ui,dashboard | Build the first screen for the forecast dashboard rather than a landing page. | 10.0 | 150.0 |
 | T-004 | Task | Add site selector for initial Bulgarian locations | Local UI / Dashboard | Takt 1 | To Do | Highest |  | 46223.0 | 46226.0 | ui,locations | Include Sofia - Vitosha (Kominite), Zlatitsa, Sopot, Nevsha, Shumen, Pastrona, and Dobrich region. | 6.0 | 90.0 |
 | T-005 | Task | Add forecast date selector | Local UI / Dashboard | Takt 1 | To Do | High |  | 46225.0 | 46227.0 | ui,date-selector | Allow the user to select the forecast date or review upcoming forecast days. | 4.0 | 60.0 |

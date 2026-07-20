@@ -17,9 +17,7 @@ export const parseRequest = <Schema extends z.ZodType>(
 
   if (!result.success) {
     throw new AppError({
-      status: 400,
       code: "VALIDATION_ERROR",
-      title: "Invalid request",
       detail: "The request parameters are invalid.",
       issues: toValidationIssues(result.error),
       cause: result.error,
@@ -37,9 +35,7 @@ export const parseResponse = <Schema extends z.ZodType>(
 
   if (!result.success) {
     throw new AppError({
-      status: 500,
       code: "RESPONSE_CONTRACT_ERROR",
-      title: "Response contract failure",
       detail: "The server could not produce a valid response.",
       cause: result.error,
     });

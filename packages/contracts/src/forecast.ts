@@ -84,6 +84,19 @@ export const forecastResponseSchema = z
         path: ["outputs", "chance200KmPct", "value"],
       });
     }
+
+    if (
+      chance200.dataStatus === "missing" &&
+      chance100.dataStatus !== "missing" &&
+      chance300.dataStatus !== "missing" &&
+      chance100.value < chance300.value
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "The 100+ km chance cannot be lower than the 300+ km chance.",
+        path: ["outputs", "chance100KmPct", "value"],
+      });
+    }
   });
 
 export type ForecastDate = z.infer<typeof forecastDateSchema>;

@@ -116,6 +116,33 @@ describe("shared HTTP contracts", () => {
     const inconsistent = createForecast();
     inconsistent.outputs.chance200KmPct = availableMetric(70);
     expect(forecastResponseSchema.safeParse(inconsistent).success).toBe(false);
+
+    const inconsistentLongerDistance = createForecast();
+    inconsistentLongerDistance.outputs.chance300KmPct = availableMetric(40);
+    expect(forecastResponseSchema.safeParse(inconsistentLongerDistance).success).toBe(false);
+
+    const inconsistentAcrossMissingMiddle = createForecast();
+    inconsistentAcrossMissingMiddle.outputs.chance100KmPct = availableMetric(5);
+    inconsistentAcrossMissingMiddle.outputs.chance200KmPct = {
+      value: null,
+      dataStatus: "missing",
+      confidence: null,
+      missingReason: "No 200+ km estimate is available.",
+    };
+    expect(forecastResponseSchema.safeParse(inconsistentAcrossMissingMiddle).success).toBe(false);
+  });
+
+  it("requires the problem type, title, and status to match the problem code", () => {
+    expect(
+      problemDetailsSchema.safeParse({
+        type: "urn:paragliding-forecasts:problem:site-not-found",
+        title: "Invalid request",
+        status: 400,
+        detail: "The forecast query is invalid.",
+        code: "VALIDATION_ERROR",
+        requestId: "request-1",
+      }).success,
+    ).toBe(false);
   });
 
   it("rejects unknown response fields", () => {

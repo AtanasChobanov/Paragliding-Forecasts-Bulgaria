@@ -51,9 +51,7 @@ export class ForecastService {
 
     if (site === undefined) {
       throw new AppError({
-        status: 404,
         code: "SITE_NOT_FOUND",
-        title: "Site not found",
         detail: `No forecast site exists for siteId '${query.siteId}'.`,
       });
     }

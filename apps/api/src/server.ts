@@ -61,8 +61,21 @@ export const startServer = ({
       const address = server.address();
 
       if (address === null || typeof address === "string") {
-        void createClose(server, gracePeriodMs)();
-        reject(new Error("The API server did not bind to a TCP address."));
+        const addressError = new Error("The API server did not bind to a TCP address.");
+
+        void createClose(server, gracePeriodMs)().then(
+          () => {
+            reject(addressError);
+          },
+          (closeError: unknown) => {
+            reject(
+              new AggregateError(
+                [addressError, closeError],
+                "The API server bound to an invalid address and could not close cleanly.",
+              ),
+            );
+          },
+        );
         return;
       }
 
