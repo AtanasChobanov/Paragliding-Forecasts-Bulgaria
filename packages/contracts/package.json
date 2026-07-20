@@ -1,0 +1,7 @@
+{
+  "name": "@paragliding-forecasts/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared TypeScript HTTP contracts for the forecast dashboard and API."
+}

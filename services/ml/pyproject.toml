@@ -1,0 +1,10 @@
+[project]
+name = "paragliding-forecasts-ml"
+version = "0.1.0"
+description = "Data ingestion, feature engineering, and ML workflows for Paragliding Forecasts Bulgaria."
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = []
+
+[tool.uv]
+package = false
