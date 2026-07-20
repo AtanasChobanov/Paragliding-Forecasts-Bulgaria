@@ -55,6 +55,7 @@ const requiredScripts = new Map([
       "build",
       "dev:api",
       "format:check",
+      "prelint",
       "lint",
       "repo:check",
       "start:api",
