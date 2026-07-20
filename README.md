@@ -127,7 +127,7 @@ error, and data limitations.
 | `npm run start:api` | Build contracts/API and start compiled JavaScript |
 | `npm run build` | Build shared contracts, then the API |
 | `npm run typecheck` | Type-check contracts and API |
-| `npm run lint` | Lint TypeScript sources and tests |
+| `npm run lint` | Build shared contract declarations, then lint TypeScript sources and tests |
 | `npm run format:check` | Check maintained TypeScript/config formatting |
 | `npm test` | Run contract and API unit/integration/smoke tests |
 | `npm run test:coverage` | Run the same suites with V8 coverage and enforced thresholds |

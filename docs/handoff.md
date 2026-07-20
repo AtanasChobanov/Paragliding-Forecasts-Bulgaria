@@ -9,7 +9,7 @@
 | Branch relationship | Deliberately stacked on unmerged `feature/t-001-repository-scaffold`; `main` was not changed |
 | Current/recent task | `T-002 - Create local server skeleton` - status `Review` |
 | Next intended task | `T-003 - Create initial dashboard route` - status `To Do` |
-| Latest implementation commit | `85af55f T-002 add coverage and refine runtime tooling` |
+| Latest implementation commit | `892f943 T-002 rebuild contracts before lint` |
 | Expected working tree after handoff commit | Clean; verify before starting new work |
 
 ## Current outcome
@@ -92,6 +92,8 @@ The API reads the root `.env` when present and validates only `NODE_ENV`,
 `MODEL_ARTIFACT_DIR` are reserved and unused by T-002.
 The schema defaults logging to `info`; the reviewed `.env.example` explicitly
 opts local development into `debug`.
+The root lint lifecycle rebuilds the contracts workspace first so type-aware
+ESLint never depends on stale generated declarations from an earlier command.
 
 ## Test strategy and validation
 
@@ -134,6 +136,13 @@ Final review-fix verification on 2026-07-20:
 - Both probe processes were stopped and their listening ports checked for
   cleanup.
 
+Follow-up lint lifecycle verification on 2026-07-20:
+
+- **Passed:** `npm.cmd run lint` - `prelint` rebuilt contracts before ESLint;
+  `app-error.ts` produced no unsafe-access or unsafe-return diagnostics.
+- **Passed:** API typecheck and all 43 API tests.
+- **Passed:** `npm.cmd run format:check` and `npm.cmd run repo:check`.
+
 Run `git diff --check` and a clean-tree/status check again after the handoff
 commit; their final result cannot be recorded before that commit exists.
 
@@ -150,7 +159,9 @@ explicitly requested. T-002 work was split into reviewable commits:
 - `3e71bc5 T-002 document API operation and decisions`
 - `04adafe T-002 tighten forecast and error invariants`
 - `85af55f T-002 add coverage and refine runtime tooling`
-- final review-fix documentation checkpoint (the commit that contains this file)
+- `3379e80 T-002 document review hardening`
+- `892f943 T-002 rebuild contracts before lint`
+- final lint-fix documentation checkpoint (the commit that contains this file)
 
 No branch was pushed and no pull request or merge was created in this session.
 
