@@ -2,6 +2,9 @@ import type {
   ForecastOutputs,
   ForecastQuery,
   ForecastResponse,
+  ForecastSummariesQuery,
+  ForecastSummariesResponse,
+  ForecastSummary,
   Site,
   SiteSlug,
 } from "@paragliding-forecasts/contracts";
@@ -62,6 +65,44 @@ export class ForecastService {
     }
 
     return mapPredictionToResponse(prediction, site.slug);
+  }
+
+  async getForecastSummaries(query: ForecastSummariesQuery): Promise<ForecastSummariesResponse> {
+    const sites = await Promise.all(query.siteSlugs.map((siteSlug) => this.#getSite(siteSlug)));
+    sites.sort((left, right) => left.id - right.id);
+
+    const predictions = await this.#forecastRepository.listBySiteIdsAndDate(
+      sites.map((site) => site.id),
+      query.date,
+    );
+    const predictionsBySiteId = new Map(
+      predictions.map((prediction) => [prediction.siteId, prediction]),
+    );
+    const summaries: ForecastSummary[] = sites.map((site) => {
+      const prediction = predictionsBySiteId.get(site.id);
+
+      if (prediction === undefined) {
+        return {
+          availability: "missing",
+          siteId: site.id,
+          siteSlug: site.slug,
+          forecastDate: query.date,
+          missingReason: `No forecast exists for site '${site.slug}' on ${query.date}.`,
+        };
+      }
+
+      return {
+        availability: "available",
+        siteId: site.id,
+        siteSlug: site.slug,
+        forecastDate: prediction.forecastDate,
+        generatedAt: prediction.generatedAt,
+        provenance: { ...prediction.provenance },
+        outputs: mapPredictionOutputs(prediction),
+      };
+    });
+
+    return { forecastDate: query.date, summaries };
   }
 
   async #getSite(siteSlug: SiteSlug): Promise<Site> {
