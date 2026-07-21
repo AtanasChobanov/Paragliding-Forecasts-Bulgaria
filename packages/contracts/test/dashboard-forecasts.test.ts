@@ -29,6 +29,16 @@ const missingMetric = {
   missingReason: "No forecast run is available for this site and date.",
 };
 
+const requireItem = <Value>(values: readonly Value[], index: number): Value => {
+  const value = values[index];
+
+  if (value === undefined) {
+    throw new Error(`Expected an item at index ${String(index)}.`);
+  }
+
+  return value;
+};
+
 const createOutputs = (): ForecastOutputs => ({
   cloudbaseMslM: availableMetric(2_400),
   chance100KmPct: availableMetric(65),
@@ -120,7 +130,7 @@ describe("dashboard forecast contracts", () => {
 
   it("requires summaries to match the envelope date and ascending unique sites", () => {
     const mismatchedDate = createSummariesResponse();
-    mismatchedDate.summaries[0]!.forecastDate = "2026-07-20";
+    requireItem(mismatchedDate.summaries, 0).forecastDate = "2026-07-20";
     expect(forecastSummariesResponseSchema.safeParse(mismatchedDate).success).toBe(false);
 
     const descending = createSummariesResponse();
@@ -128,11 +138,11 @@ describe("dashboard forecast contracts", () => {
     expect(forecastSummariesResponseSchema.safeParse(descending).success).toBe(false);
 
     const duplicateSlug = createSummariesResponse();
-    duplicateSlug.summaries[1]!.siteSlug = "sofia-vitosha-kominite";
+    requireItem(duplicateSlug.summaries, 1).siteSlug = "sofia-vitosha-kominite";
     expect(forecastSummariesResponseSchema.safeParse(duplicateSlug).success).toBe(false);
 
     const duplicateId = createSummariesResponse();
-    duplicateId.summaries[1]!.siteId = 1;
+    requireItem(duplicateId.summaries, 1).siteId = 1;
     expect(forecastSummariesResponseSchema.safeParse(duplicateId).success).toBe(false);
   });
 
@@ -179,7 +189,7 @@ describe("dashboard forecast contracts", () => {
     expect(forecastDaysResponseSchema.safeParse(incomplete).success).toBe(false);
 
     const shifted = createDaysResponse();
-    shifted.days[0]!.forecastDate = "2026-07-18";
+    requireItem(shifted.days, 0).forecastDate = "2026-07-18";
     expect(forecastDaysResponseSchema.safeParse(shifted).success).toBe(false);
 
     expect(forecastDaysQuerySchema.safeParse({ siteSlug: "sopot", limit: "5" }).success).toBe(

@@ -47,10 +47,7 @@ describe("mock forecast repository", () => {
   });
 
   it("lists requested sites on one date in requested order", async () => {
-    const predictions = await createRepository().listBySiteIdsAndDate(
-      [3, 1, 7],
-      "2026-07-17",
-    );
+    const predictions = await createRepository().listBySiteIdsAndDate([3, 1, 7], "2026-07-17");
 
     expect(predictions.map((prediction) => prediction.siteId)).toEqual([3, 1, 7]);
   });

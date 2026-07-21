@@ -15,13 +15,22 @@ const createDependencies = () => {
   return { forecastRepository, forecastService };
 };
 
+const requirePrediction = <Value>(value: Value | undefined): Value => {
+  if (value === undefined) {
+    throw new Error("Expected the mock forecast prediction to exist.");
+  }
+
+  return value;
+};
+
 describe("forecast summary service", () => {
   it("sorts requested sites by ID and preserves a missing item", async () => {
     const { forecastRepository, forecastService } = createDependencies();
     const sopotPrediction = await forecastRepository.find(3, "2026-07-18");
 
-    expect(sopotPrediction).toBeDefined();
-    vi.spyOn(forecastRepository, "listBySiteIdsAndDate").mockResolvedValue([sopotPrediction!]);
+    const listPredictions = vi
+      .spyOn(forecastRepository, "listBySiteIdsAndDate")
+      .mockResolvedValue([requirePrediction(sopotPrediction)]);
 
     const summaries = await forecastService.getForecastSummaries({
       date: "2026-07-18",
@@ -44,7 +53,7 @@ describe("forecast summary service", () => {
         forecastDate: "2026-07-18",
       }),
     ]);
-    expect(forecastRepository.listBySiteIdsAndDate).toHaveBeenCalledWith([1, 3], "2026-07-18");
+    expect(listPredictions).toHaveBeenCalledWith([1, 3], "2026-07-18");
   });
 
   it("does not depend on repository result order", async () => {
@@ -52,9 +61,10 @@ describe("forecast summary service", () => {
     const sofia = await forecastRepository.find(1, "2026-07-18");
     const sopot = await forecastRepository.find(3, "2026-07-18");
 
-    expect(sofia).toBeDefined();
-    expect(sopot).toBeDefined();
-    vi.spyOn(forecastRepository, "listBySiteIdsAndDate").mockResolvedValue([sopot!, sofia!]);
+    vi.spyOn(forecastRepository, "listBySiteIdsAndDate").mockResolvedValue([
+      requirePrediction(sopot),
+      requirePrediction(sofia),
+    ]);
 
     const response = await forecastService.getForecastSummaries({
       date: "2026-07-18",

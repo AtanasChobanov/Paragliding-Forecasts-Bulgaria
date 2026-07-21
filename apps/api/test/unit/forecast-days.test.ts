@@ -16,6 +16,14 @@ const createDependencies = () => {
   return { forecastRepository, forecastService, now };
 };
 
+const requirePrediction = <Value>(value: Value | undefined): Value => {
+  if (value === undefined) {
+    throw new Error("Expected the mock forecast prediction to exist.");
+  }
+
+  return value;
+};
+
 describe("forecast day preview service", () => {
   it("returns exactly Sofia today minus two through today plus two with p100 metrics", async () => {
     const { forecastService, now } = createDependencies();
@@ -44,8 +52,9 @@ describe("forecast day preview service", () => {
     const { forecastRepository, forecastService } = createDependencies();
     const todayPrediction = await forecastRepository.find(3, "2026-07-17");
 
-    expect(todayPrediction).toBeDefined();
-    vi.spyOn(forecastRepository, "listBySiteAndDateRange").mockResolvedValue([todayPrediction!]);
+    vi.spyOn(forecastRepository, "listBySiteAndDateRange").mockResolvedValue([
+      requirePrediction(todayPrediction),
+    ]);
 
     const response = await forecastService.getForecastDays({ siteSlug: "sopot" });
 
@@ -68,9 +77,10 @@ describe("forecast day preview service", () => {
     const earlier = await forecastRepository.find(3, "2026-07-16");
     const later = await forecastRepository.find(3, "2026-07-18");
 
-    expect(earlier).toBeDefined();
-    expect(later).toBeDefined();
-    vi.spyOn(forecastRepository, "listBySiteAndDateRange").mockResolvedValue([later!, earlier!]);
+    vi.spyOn(forecastRepository, "listBySiteAndDateRange").mockResolvedValue([
+      requirePrediction(later),
+      requirePrediction(earlier),
+    ]);
 
     const response = await forecastService.getForecastDays({ siteSlug: "sopot" });
 

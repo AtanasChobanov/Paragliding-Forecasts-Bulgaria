@@ -187,20 +187,10 @@ export class MockForecastRepository implements ForecastRepository {
             level: "low",
             note: "Synthetic demonstration value; not a model output.",
           },
-          cloudbasePredictionMslM:
-            profile.cloudbasePredictionMslM + adjustment.cloudbaseMslM,
-          probability100KmPct: metric(
-            profile.probability100KmPct,
-            adjustment.probability100KmPct,
-          ),
-          probability200KmPct: metric(
-            profile.probability200KmPct,
-            adjustment.probability200KmPct,
-          ),
-          probability300KmPct: metric(
-            profile.probability300KmPct,
-            adjustment.probability300KmPct,
-          ),
+          cloudbasePredictionMslM: profile.cloudbasePredictionMslM + adjustment.cloudbaseMslM,
+          probability100KmPct: metric(profile.probability100KmPct, adjustment.probability100KmPct),
+          probability200KmPct: metric(profile.probability200KmPct, adjustment.probability200KmPct),
+          probability300KmPct: metric(profile.probability300KmPct, adjustment.probability300KmPct),
           overdevelopmentRisk: profile.overdevelopmentRisk,
           topDrivers: [...profile.topDrivers],
         };
