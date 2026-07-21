@@ -3,6 +3,7 @@ import { z } from "zod";
 export const problemCodeSchema = z.enum([
   "VALIDATION_ERROR",
   "SITE_NOT_FOUND",
+  "FORECAST_NOT_FOUND",
   "ROUTE_NOT_FOUND",
   "RESPONSE_CONTRACT_ERROR",
   "INTERNAL_SERVER_ERROR",
@@ -25,6 +26,11 @@ export const problemDefinitionByCode = {
   SITE_NOT_FOUND: {
     type: "urn:paragliding-forecasts:problem:site-not-found",
     title: "Site not found",
+    status: 404,
+  },
+  FORECAST_NOT_FOUND: {
+    type: "urn:paragliding-forecasts:problem:forecast-not-found",
+    title: "Forecast not found",
     status: 404,
   },
   ROUTE_NOT_FOUND: {

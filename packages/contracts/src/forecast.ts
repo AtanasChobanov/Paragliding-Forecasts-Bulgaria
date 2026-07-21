@@ -34,32 +34,24 @@ export const forecastQuerySchema = z.strictObject({
   date: forecastDateSchema,
 });
 
-const cloudbaseMslMMetricSchema = createForecastMetricSchema(z.number().nonnegative());
-const chancePctMetricSchema = createForecastMetricSchema(z.number().min(0).max(100));
-const overdevelopmentRiskMetricSchema = createForecastMetricSchema(
+export const cloudbaseMslMMetricSchema = createForecastMetricSchema(z.number().nonnegative());
+export const chancePctMetricSchema = createForecastMetricSchema(z.number().min(0).max(100));
+export const overdevelopmentRiskMetricSchema = createForecastMetricSchema(
   z.enum(["low", "medium", "high"]),
 );
 
-export const forecastResponseSchema = z
+export const forecastOutputsSchema = z
   .strictObject({
-    siteId: siteIdSchema,
-    siteSlug: siteSlugSchema,
-    forecastDate: forecastDateSchema,
-    generatedAt: z.iso.datetime(),
-    provenance: provenanceSchema,
-    outputs: z.strictObject({
-      cloudbaseMslM: cloudbaseMslMMetricSchema,
-      chance100KmPct: chancePctMetricSchema,
-      chance200KmPct: chancePctMetricSchema,
-      chance300KmPct: chancePctMetricSchema,
-      overdevelopmentRisk: overdevelopmentRiskMetricSchema,
-    }),
-    topDrivers: z.array(z.string().trim().min(1)).min(1),
+    cloudbaseMslM: cloudbaseMslMMetricSchema,
+    chance100KmPct: chancePctMetricSchema,
+    chance200KmPct: chancePctMetricSchema,
+    chance300KmPct: chancePctMetricSchema,
+    overdevelopmentRisk: overdevelopmentRiskMetricSchema,
   })
-  .superRefine((forecast, context) => {
-    const chance100 = forecast.outputs.chance100KmPct;
-    const chance200 = forecast.outputs.chance200KmPct;
-    const chance300 = forecast.outputs.chance300KmPct;
+  .superRefine((outputs, context) => {
+    const chance100 = outputs.chance100KmPct;
+    const chance200 = outputs.chance200KmPct;
+    const chance300 = outputs.chance300KmPct;
 
     if (
       chance100.dataStatus !== "missing" &&
@@ -69,7 +61,7 @@ export const forecastResponseSchema = z
       context.addIssue({
         code: "custom",
         message: "The 100+ km chance cannot be lower than the 200+ km chance.",
-        path: ["outputs", "chance100KmPct", "value"],
+        path: ["chance100KmPct", "value"],
       });
     }
 
@@ -81,7 +73,7 @@ export const forecastResponseSchema = z
       context.addIssue({
         code: "custom",
         message: "The 200+ km chance cannot be lower than the 300+ km chance.",
-        path: ["outputs", "chance200KmPct", "value"],
+        path: ["chance200KmPct", "value"],
       });
     }
 
@@ -94,11 +86,22 @@ export const forecastResponseSchema = z
       context.addIssue({
         code: "custom",
         message: "The 100+ km chance cannot be lower than the 300+ km chance.",
-        path: ["outputs", "chance100KmPct", "value"],
+        path: ["chance100KmPct", "value"],
       });
     }
   });
 
+export const forecastResponseSchema = z.strictObject({
+  siteId: siteIdSchema,
+  siteSlug: siteSlugSchema,
+  forecastDate: forecastDateSchema,
+  generatedAt: z.iso.datetime(),
+  provenance: provenanceSchema,
+  outputs: forecastOutputsSchema,
+  topDrivers: z.array(z.string().trim().min(1)).min(1),
+});
+
 export type ForecastDate = z.infer<typeof forecastDateSchema>;
 export type ForecastQuery = z.infer<typeof forecastQuerySchema>;
+export type ForecastOutputs = z.infer<typeof forecastOutputsSchema>;
 export type ForecastResponse = z.infer<typeof forecastResponseSchema>;

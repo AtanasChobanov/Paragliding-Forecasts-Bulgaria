@@ -11,13 +11,32 @@ export {
   type Provenance,
 } from "./data-status.js";
 export {
+  chancePctMetricSchema,
+  cloudbaseMslMMetricSchema,
   forecastDateSchema,
+  forecastOutputsSchema,
   forecastQuerySchema,
   forecastResponseSchema,
+  overdevelopmentRiskMetricSchema,
   type ForecastDate,
+  type ForecastOutputs,
   type ForecastQuery,
   type ForecastResponse,
 } from "./forecast.js";
+export {
+  forecastDaySchema,
+  forecastDaysQuerySchema,
+  forecastDaysResponseSchema,
+  forecastSummariesQuerySchema,
+  forecastSummariesResponseSchema,
+  forecastSummarySchema,
+  type ForecastDay,
+  type ForecastDaysQuery,
+  type ForecastDaysResponse,
+  type ForecastSummariesQuery,
+  type ForecastSummariesResponse,
+  type ForecastSummary,
+} from "./dashboard-forecasts.js";
 export { healthResponseSchema, type HealthResponse } from "./health.js";
 export {
   problemCodeSchema,
