@@ -1,5 +1,6 @@
 import type { ForecastDate, SiteId } from "@paragliding-forecasts/contracts";
 
+import { addForecastDays, toForecastDate } from "./forecast-date.js";
 import type { ForecastPrediction, OverdevelopmentRisk } from "./forecast-prediction.js";
 import type { ForecastRepository } from "./forecast.repository.js";
 
@@ -10,6 +11,13 @@ interface MockForecastProfile {
   readonly probability300KmPct: number;
   readonly overdevelopmentRisk: OverdevelopmentRisk;
   readonly topDrivers: readonly string[];
+}
+
+interface DayAdjustment {
+  readonly cloudbaseMslM: number;
+  readonly probability100KmPct: number;
+  readonly probability200KmPct: number;
+  readonly probability300KmPct: number;
 }
 
 const mockProfiles = new Map<SiteId, MockForecastProfile>([
@@ -92,43 +100,150 @@ const mockProfiles = new Map<SiteId, MockForecastProfile>([
   ],
 ]);
 
+const dayAdjustments = new Map<number, DayAdjustment>([
+  [
+    -2,
+    {
+      cloudbaseMslM: -150,
+      probability100KmPct: -10,
+      probability200KmPct: -5,
+      probability300KmPct: -2,
+    },
+  ],
+  [
+    -1,
+    {
+      cloudbaseMslM: -75,
+      probability100KmPct: -5,
+      probability200KmPct: -2,
+      probability300KmPct: -1,
+    },
+  ],
+  [
+    0,
+    {
+      cloudbaseMslM: 0,
+      probability100KmPct: 0,
+      probability200KmPct: 0,
+      probability300KmPct: 0,
+    },
+  ],
+  [
+    1,
+    {
+      cloudbaseMslM: 100,
+      probability100KmPct: 8,
+      probability200KmPct: 4,
+      probability300KmPct: 1,
+    },
+  ],
+  [
+    2,
+    {
+      cloudbaseMslM: 50,
+      probability100KmPct: -3,
+      probability200KmPct: -1,
+      probability300KmPct: 0,
+    },
+  ],
+]);
+
+const metric = (value: number, delta: number): number => Math.max(0, Math.min(100, value + delta));
+
+const clonePrediction = (prediction: ForecastPrediction): ForecastPrediction => ({
+  ...prediction,
+  confidence: { ...prediction.confidence },
+  provenance: { ...prediction.provenance },
+  topDrivers: [...prediction.topDrivers],
+});
+
+const predictionKey = (siteId: SiteId, date: ForecastDate): string => `${String(siteId)}:${date}`;
+
 export interface MockForecastRepositoryDependencies {
   readonly now: () => Date;
 }
 
 export class MockForecastRepository implements ForecastRepository {
-  readonly #now: () => Date;
+  readonly #predictions: ReadonlyMap<string, ForecastPrediction>;
 
   constructor({ now }: MockForecastRepositoryDependencies) {
-    this.#now = now;
-  }
+    const generatedAt = now().toISOString();
+    const today = toForecastDate(new Date(generatedAt));
+    const predictions = new Map<string, ForecastPrediction>();
 
-  get(siteId: SiteId, date: ForecastDate): Promise<ForecastPrediction> {
-    const profile = mockProfiles.get(siteId);
+    for (const [siteId, profile] of mockProfiles) {
+      for (const [dayOffset, adjustment] of dayAdjustments) {
+        const forecastDate = addForecastDays(today, dayOffset);
+        const prediction: ForecastPrediction = {
+          siteId,
+          forecastDate,
+          generatedAt,
+          provenance: {
+            source: "t-003-t-005-mock-provider",
+            version: "mock-v2",
+          },
+          dataStatus: "mock",
+          confidence: {
+            level: "low",
+            note: "Synthetic demonstration value; not a model output.",
+          },
+          cloudbasePredictionMslM:
+            profile.cloudbasePredictionMslM + adjustment.cloudbaseMslM,
+          probability100KmPct: metric(
+            profile.probability100KmPct,
+            adjustment.probability100KmPct,
+          ),
+          probability200KmPct: metric(
+            profile.probability200KmPct,
+            adjustment.probability200KmPct,
+          ),
+          probability300KmPct: metric(
+            profile.probability300KmPct,
+            adjustment.probability300KmPct,
+          ),
+          overdevelopmentRisk: profile.overdevelopmentRisk,
+          topDrivers: [...profile.topDrivers],
+        };
 
-    if (profile === undefined) {
-      throw new Error(`The mock forecast catalog has no profile for site: ${String(siteId)}`);
+        predictions.set(predictionKey(siteId, forecastDate), prediction);
+      }
     }
 
-    return Promise.resolve({
-      siteId,
-      forecastDate: date,
-      generatedAt: this.#now().toISOString(),
-      provenance: {
-        source: "t-002-mock-provider",
-        version: "mock-v1",
-      },
-      dataStatus: "mock",
-      confidence: {
-        level: "low",
-        note: "Synthetic demonstration value; not a model output.",
-      },
-      cloudbasePredictionMslM: profile.cloudbasePredictionMslM,
-      probability100KmPct: profile.probability100KmPct,
-      probability200KmPct: profile.probability200KmPct,
-      probability300KmPct: profile.probability300KmPct,
-      overdevelopmentRisk: profile.overdevelopmentRisk,
-      topDrivers: [...profile.topDrivers],
-    });
+    this.#predictions = predictions;
+  }
+
+  find(siteId: SiteId, date: ForecastDate): Promise<ForecastPrediction | undefined> {
+    const prediction = this.#predictions.get(predictionKey(siteId, date));
+    return Promise.resolve(prediction === undefined ? undefined : clonePrediction(prediction));
+  }
+
+  listBySiteIdsAndDate(
+    siteIds: readonly SiteId[],
+    date: ForecastDate,
+  ): Promise<readonly ForecastPrediction[]> {
+    const predictions = siteIds
+      .map((siteId) => this.#predictions.get(predictionKey(siteId, date)))
+      .filter((prediction): prediction is ForecastPrediction => prediction !== undefined)
+      .map(clonePrediction);
+
+    return Promise.resolve(predictions);
+  }
+
+  listBySiteAndDateRange(
+    siteId: SiteId,
+    fromDate: ForecastDate,
+    throughDate: ForecastDate,
+  ): Promise<readonly ForecastPrediction[]> {
+    const predictions = [...this.#predictions.values()]
+      .filter(
+        (prediction) =>
+          prediction.siteId === siteId &&
+          prediction.forecastDate >= fromDate &&
+          prediction.forecastDate <= throughDate,
+      )
+      .sort((left, right) => left.forecastDate.localeCompare(right.forecastDate))
+      .map(clonePrediction);
+
+    return Promise.resolve(predictions);
   }
 }
