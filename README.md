@@ -13,10 +13,12 @@ result as an inspectable daily dashboard.
 ## Project status
 
 - Delivery phase: **Takt 1**
-- Current ticket: **T-002 - Create local server skeleton** (`Review`)
+- Current tickets: **T-003-T-005 - Dashboard, site selector, and date selector**
+  (`In Progress`)
 - Implemented: a runnable Node.js/Express/TypeScript API, shared runtime
-  contracts, structured logging and errors, seven-site catalog, and
-  deterministic per-site mock forecast values
+  contracts, structured logging and errors, a map-ready seven-site catalog,
+  deterministic date-aware mock forecasts, and dashboard summary/day-preview
+  read endpoints
 - Not implemented: the React dashboard, SQLite schema or access layer, data
   ingestion, real forecasts, models, and alerts
 
@@ -27,7 +29,7 @@ fixtures for the upcoming dashboard, not forecasts or flying advice.
 
 The first dashboard will let a user choose a forecast date and one of the
 initial Bulgarian areas: Sofia - Vitosha (Kominite), Zlatitsa, Sopot, Nevsha,
-Shumen, Pastrona, or the Dobrich region. It will show cloudbase, chances for
+Shumen, Pastrina, or the Dobrich region. It will show cloudbase, chances for
 100+ km, 200+ km, and 300+ km flights, and overdevelopment risk. Every value
 must be labelled as `mock`, `manual`, `baseline`, `real`, or `missing`.
 
@@ -57,8 +59,8 @@ test notes in its README. Cross-project information belongs here or in `docs/`.
 
 | Area | Choice | Current state |
 | --- | --- | --- |
-| Web | React + Vite + TypeScript | Planned from T-003 |
-| API | Node.js + Express + TypeScript | Runnable in T-002 |
+| Web | React + Vite + TypeScript | Scaffold present; dashboard implementation pending |
+| API | Node.js + Express + TypeScript | Runnable with dashboard read endpoints |
 | Shared contracts | TypeScript + Zod | Runtime schemas and inferred types implemented |
 | Data and ML | Python managed by `uv` | Project boundary only |
 | MVP storage | SQLite | Direction accepted; schema and access layer deferred |
@@ -107,8 +109,18 @@ The default address is `http://127.0.0.1:3000`. Available endpoints are:
 ```text
 GET /health
 GET /api/v1/sites
-GET /api/v1/forecasts?siteSlug=sopot&date=2026-07-18
+GET /api/v1/forecasts?siteSlug=sopot&date=YYYY-MM-DD
+GET /api/v1/forecasts/summaries?date=YYYY-MM-DD&siteSlugs=sopot,zlatitsa
+GET /api/v1/forecasts/days?siteSlug=sopot
 ```
+
+The summary route supplies one or several dashboard cards for a selected date.
+The days route always supplies the five Sofia-calendar slots from today minus
+two days through today plus two days; it has no pagination or date-navigation
+parameters. During mock development, use one of its returned `forecastDate`
+values for an available detailed/summary example. See
+[`apps/api/README.md`](apps/api/README.md) for the exact missing-data and
+mock-snapshot behavior.
 
 Build and run the compiled server with:
 
@@ -134,8 +146,8 @@ error, and data limitations.
 | `npm run repo:check` | Validate repository structure and runnable workspace metadata |
 | `uv sync --project services/ml` | Sync the Python ML environment |
 
-`npm run dev:web` and the combined `npm run dev` remain reserved for T-003;
-they are not reported as runnable yet.
+`npm run dev:web` and the combined `npm run dev` are not runnable yet; the
+React portion of T-003-T-005 must add and document their real behavior.
 
 ## Configuration and data
 
@@ -145,7 +157,7 @@ only `NODE_ENV`, `LOG_LEVEL`, `API_HOST`, `API_PORT`, `CORS_ORIGIN`, and
 The logger defaults to `info`; `.env.example` opts local development into
 `debug` explicitly.
 `DATABASE_URL` and `MODEL_ARTIFACT_DIR` are reserved for future persistence and
-model work and are not read by T-002.
+model work and are not read by the current API.
 
 Never commit `.env`, credentials, private pilot data, large weather files,
 trained model artifacts, generated output, or local databases. See

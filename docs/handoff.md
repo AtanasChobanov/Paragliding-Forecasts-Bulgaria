@@ -4,224 +4,178 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated | 2026-07-20 |
-| Current Git branch | `feature/T-002-local-server-skeleton` |
-| Branch relationship | Deliberately stacked on unmerged `feature/t-001-repository-scaffold`; `main` was not changed |
-| Current/recent task | `T-002 - Create local server skeleton` - status `Review` |
-| Next intended task | `T-003 - Create initial dashboard route` - status `To Do` |
-| Latest implementation commit | Final T-002 contract-refinement commit containing this handoff |
-| Expected working tree after final commit | Clean; verify before starting T-003 |
+| Last updated | 2026-07-21 |
+| Current Git branch | `feature/T-003-T-005-dashboard` |
+| Branch relationship | Created from rebased `feature/T-002-local-server-skeleton` at `ab81a70`; intentionally stacked until T-002 is merged |
+| Current tasks | T-003, T-004, and T-005 — `In Progress` |
+| Completed scope in this branch | Dashboard API/contracts foundation; React UI is not implemented yet |
+| Expected working tree after final documentation commit | Clean |
 
 ## Current outcome
 
-T-002 is implemented as a real local API rather than a placeholder. It adds a
-Node.js 24, Express 5, strict TypeScript server with documented watch and
-compiled startup commands. Shared executable contracts, structured
-observability, global errors, seven sites, and per-site mock forecast values
-are in place for the Takt 1 dashboard tasks.
+The API now supplies the data shapes required by the approved dashboard design
+without changing the detailed-page contract into a dashboard endpoint. It adds
+provisional map metadata for all seven locations, batched forecast summaries
+for one selected date, and a fixed selected-site date preview covering Sofia
+today minus two through today plus two.
 
-No database was added. SQLite remains the accepted MVP direction, but schema,
-migrations, access tooling, and a real prediction adapter belong to later work.
-The current API uses repository ports with in-memory/mock adapters.
+No React implementation, database, ORM, new package, environment variable,
+weather source, or model was added. Forecast values remain explicitly synthetic
+`mock` data and must not be presented as aviation weather or flying advice.
 
-The final review correction separates numeric site IDs from public slugs,
-changes forecast lookup to `siteSlug`, renames the internal mock model to
-`ForecastPrediction`, and removes the unsupported `qualityNotes` response field
-while retaining required non-empty `topDrivers`.
-
-## Implemented behavior
-
-### HTTP surface
+## HTTP surface
 
 ```text
 GET /health
 GET /api/v1/sites
 GET /api/v1/forecasts?siteSlug=...&date=YYYY-MM-DD
+GET /api/v1/forecasts/summaries?date=YYYY-MM-DD&siteSlugs=slug-1,slug-2
+GET /api/v1/forecasts/days?siteSlug=...
 ```
 
-- `/health` returns service identity, version, and an ISO timestamp.
-- `/api/v1/sites` returns deterministic numeric IDs, unique public slugs, and
-  names for Sofia - Vitosha (Kominite), Zlatitsa, Sopot, Nevsha, Shumen,
-  Pastrona, and Dobrich region.
-- `/api/v1/forecasts` validates `siteSlug` and a real ISO calendar date,
-  rejects unknown sites with `404`, and returns deterministic per-site mock
-  values with a request-time `generatedAt`.
-- Forecast payloads include explicit `Pct`/`MslM` unit semantics, per-output
-  status and confidence, forecast-level provenance, and top drivers. The mock
-  adapter never presents values as real forecasts.
-- Errors use `application/problem+json`; unexpected exceptions are logged but
-  not exposed. `X-Request-Id` correlates responses and structured logs.
-- CORS allows GET/OPTIONS for the configured exact dashboard origin, with
-  credentials disabled.
+### Sites
 
-### Internal architecture
+- Returns `{ id, slug, name, latitude, longitude }` for seven sites.
+- Sorts explicitly by `id ASC`; there is no `dashboardOrder`.
+- Uses the corrected `Pastrina` / `pastrina` name and preserves numeric ID 6.
+- Coordinates are provisional map points. T-009 still owns authoritative
+  coordinate, alias, and catchment-radius confirmation.
 
-- Feature-oriented modules keep each feature's controller, service, repository
-  port, and adapter together.
-- `main.ts` is the manual dependency-injection composition root.
-- `app.ts` creates Express without listening, enabling in-memory integration
-  tests.
-- `server.ts` owns real TCP startup, idempotent shutdown, and a bounded graceful
-  close period.
-- Pino/`pino-http` provide structured logs, request IDs, and credential-header
-  redaction verified through the real HTTP serializer; no application
-  `console.log` calls were introduced.
-- Zod schemas in `@paragliding-forecasts/contracts` are the runtime payload
-  source of truth and emit both ESM JavaScript and declarations.
-- `dataStatusSchema` is the canonical five-state definition. The non-missing
-  available-value schema is derived with `.exclude(["missing"])`; the metric
-  discriminated union prevents `missing` from carrying a value or confidence.
-- Numeric IDs are internal/future persistence relationship keys; slugs are the
-  browser-facing lookup key. The mock forecast repository receives the numeric
-  ID after the site service resolves a slug.
-- `ForecastPrediction` is an internal domain model, not a claimed database row
-  or a duplicate of the browser/API DTO.
-- Problem type/status/title metadata is centralized by problem code, and the
-  shared schema rejects mismatched Problem Details combinations.
-- Service identity/version live in application metadata rather than logger or
-  environment configuration.
+### Detailed forecast
 
-Accepted T-002 choices are recorded as DEC-010 through DEC-014 in
+- Remains the single-site/date payload intended for the later detailed page.
+- Returns full outputs, provenance, and top drivers for a present fixture.
+- Returns `404 SITE_NOT_FOUND` for an unknown site and
+  `404 FORECAST_NOT_FOUND` for a known site/date without a record.
+
+### Dashboard summaries
+
+- Accepts one real date and one CSV string containing one through seven unique
+  slugs.
+- Rejects duplicate/empty slugs, repeated query keys, unknown parameters, and
+  more than seven slugs with `400 VALIDATION_ERROR`.
+- Resolves all sites before forecast storage; an unknown valid slug makes the
+  request `404 SITE_NOT_FOUND`.
+- Returns exactly one summary per requested site, sorted by numeric site ID.
+- An available item contains generation time, provenance, and all five overview
+  metrics. A missing record remains a `200` item with
+  `availability: "missing"` and a reason.
+- Metric statuses/confidence remain canonical; there is no duplicate summary-
+  level `dataStatus`.
+
+### Five-day preview
+
+- Accepts only `siteSlug`; there are no arrows, date, limit, offset, cursor,
+  anchor, direction, pagination, or historical-navigation fields.
+- Derives `todayDate` in `Europe/Sofia` and returns exactly five consecutive
+  calendar slots: today -2, -1, today, +1, and +2.
+- Each slot contains only its date and the existing `chance100KmPct` metric.
+- Missing predictions do not shift or shorten the strip; the fixed slot carries
+  a `missing` metric with an explicit reason.
+- Date calculation uses Sofia calendar extraction and UTC calendar arithmetic,
+  avoiding fixed-duration DST errors.
+
+## Intended React request ownership
+
+The dashboard route/page should own request orchestration; presentational cards
+should receive data rather than fetch independently.
+
+1. Fetch `/api/v1/sites` once for the map and location selector.
+2. Store selected site slug and date in dashboard state.
+3. Deduplicate the selected site plus the default Other Locations slugs and
+   fetch them through one summaries request.
+4. Index summaries by slug because the API sorts by ID, not request order. If
+   the selected site is also a default card, reuse the same summary in both
+   positions.
+5. Fetch `/api/v1/forecasts/days` when the selected site changes.
+6. Navigate the detailed button with selected slug/date; the detailed page
+   later owns `/api/v1/forecasts`.
+
+This means the forecast portion of one dashboard state needs two requests, not
+one request per component.
+
+## Mock repository behavior and limitation
+
+The mock adapter creates 35 records at API construction time: seven sites
+multiplied by the Sofia startup date minus two through plus two. Day offsets
+have deterministic variations so date cards do not all show identical values.
+The repository supports nullable single reads, batched site/date reads, and
+inclusive site/date-range reads and returns defensive copies.
+
+The five-day service uses the live request clock while the synthetic catalog is
+anchored at startup. A development process kept running across Sofia midnight
+can therefore outlive its mock snapshot; restart the API after the local date
+rolls over. A persisted date-aware prediction adapter must replace this behavior
+before real model output is connected.
+
+## Contracts and missing semantics
+
+`@paragliding-forecasts/contracts` now owns reusable output schemas plus:
+
+- `ForecastSummariesQuery`, `ForecastSummary`, and
+  `ForecastSummariesResponse`;
+- `ForecastDaysQuery`, `ForecastDay`, and `ForecastDaysResponse`;
+- `FORECAST_NOT_FOUND` Problem Details metadata;
+- required bounded latitude/longitude fields for `Site`.
+
+Missing records deliberately differ by read model:
+
+| Read model | Behavior |
+| --- | --- |
+| Detailed | `404 FORECAST_NOT_FOUND` |
+| Summaries | `200` missing item |
+| Days | `200` fixed slot with missing p100 metric |
+
+Accepted design decisions are recorded as DEC-015 and DEC-016 in
 [`decisions.md`](decisions.md).
 
-## Commands
+## Validation
 
-From the repository root:
+Final verification on 2026-07-21 passed:
 
-```powershell
-npm.cmd run dev:api
-npm.cmd run start:api
-npm.cmd run build
-npm.cmd run typecheck
-npm.cmd run lint
-npm.cmd run format:check
-npm.cmd test
-npm.cmd run test:coverage
-npm.cmd run repo:check
-```
+- `npm.cmd run build`
+- `npm.cmd run typecheck`
+- `npm.cmd run lint`
+- `npm.cmd run format:check`
+- `npm.cmd run repo:check`
+- `npm.cmd test`: contracts 2 files / 15 tests; API 16 files / 76 tests
+- `npm.cmd run test:coverage`:
+  - contracts: 98.82% statements/lines, 97.22% branches, 100% functions;
+  - API: 79.87% statements, 81.11% branches, 81.81% functions, 80.06% lines.
 
-The API reads the root `.env` when present and validates only `NODE_ENV`,
-`LOG_LEVEL`, `API_HOST`, `API_PORT`, `CORS_ORIGIN`, and
-`FORECAST_DATA_MODE=mock`. It has safe local defaults. `DATABASE_URL` and
-`MODEL_ARTIFACT_DIR` are reserved and unused by T-002.
-The schema defaults logging to `info`; the reviewed `.env.example` explicitly
-opts local development into `debug`.
-The root lint lifecycle rebuilds the contracts workspace first so type-aware
-ESLint never depends on stale generated declarations from an earlier command.
-
-## Test strategy and validation
-
-The selected levels are proportionate to this API ticket:
-
-- contract tests for runtime schemas, ranges, dates, missing states, and XC
-  probability ordering;
-- unit tests for configuration, logging/redaction, request IDs, site service,
-  and forecast mapping;
-- in-memory HTTP integration tests for health, CORS, errors, request/response
-  contracts, sites, forecasts, validation, and real pino-http redaction;
-- a real ephemeral-port server smoke test for listen/fetch/close behavior;
-- source-wide V8 coverage with enforced per-workspace global thresholds;
-- manual probes of both documented process commands through the real
-  composition root.
-
-Component/browser E2E tests are not applicable to T-002. Browser smoke coverage
-is owned by T-008 after the dashboard exists. Database component tests are
-deferred with the database implementation.
-
-Final branch verification on 2026-07-20:
-
-- **Passed:** `npm.cmd ci` earlier in the same T-002 review - lockfile-exact
-  install, 291 packages audited, zero reported vulnerabilities.
-- **Passed:** build, typecheck, lint, format check, and repository structure
-  check after the final contract/status changes.
-- **Passed:** contracts: 1 file/7 tests; API: 10 files/45 tests.
-- **Passed:** coverage - contracts: 97.82% lines, 96.15% branches, 100%
-  functions; API: 72.88% lines, 76.81% branches, 74.24% functions. All
-  configured thresholds passed.
-- **Passed:** compiled-process forecast probe using `siteSlug=sopot` returned
-  numeric `siteId=3`, `siteSlug=sopot`, mock status, and non-empty top drivers
-  without a `qualityNotes` property.
-- The probe process was stopped and port `31914` was verified free.
-- **Passed:** final whitespace/diff review and staged secret-pattern scan; only
-  the intended T-002 API, contract, test, and documentation changes remain.
+Coverage remains above all configured workspace thresholds. Tests include real
+Express/Supertest query parsing, summary ordering and partial missing data,
+fixed missing date slots, timezone/calendar boundaries, repository batch/range
+behavior, and existing server/logging/error behavior.
 
 ## Git checkpoints
 
-The branch was created from T-001 without merging T-001 into `main`, as
-explicitly requested. T-002 work was split into reviewable commits:
+This branch contains these reviewable commits after the T-002 base:
 
-- `5d94ed2 T-002 add project context documentation`
-- `4087b72 T-002 define shared API contracts`
-- `43421bb T-002 add API server foundation`
-- `0f475ea T-002 add site catalog endpoint`
-- `75387d4 T-002 add mock forecast endpoint`
-- `3e71bc5 T-002 document API operation and decisions`
-- `04adafe T-002 tighten forecast and error invariants`
-- `85af55f T-002 add coverage and refine runtime tooling`
-- `3379e80 T-002 document review hardening`
-- `892f943 T-002 rebuild contracts before lint`
-- `4924136 T-002 document lint lifecycle fix`
-- final `T-002 refine site and forecast contracts` commit (contains this
-  handoff)
+- `54bd271 T-004 add provisional site map coordinates`
+- `4acc6b1 T-003-T-005 define dashboard forecast contracts`
+- `bb18bfd T-003-T-005 add date-aware forecast fixtures`
+- `58841d5 T-003-T-005 add forecast summary endpoint`
+- `bf7192c T-005 add five-day forecast preview endpoint`
+- `3180131 T-003-T-005 harden dashboard API implementation`
+- final `T-003-T-005 document dashboard API foundation` commit containing this
+  handoff
 
-No branch was pushed and no pull request or merge was created in this session.
+No branch was pushed and no pull request was created. After T-002 is merged,
+fetch and rebase this branch onto the updated `origin/main`; do not use a stale
+local `main` as the rebase target.
 
-## Compatibility with the project brief
+## Next implementation step
 
-The internal mock `ForecastPrediction` aligns with the draft `predictions`
-fields: numeric site identity/date, generation timestamp, cloudbase,
-probabilities for 100/200/300+ km, overdevelopment risk, confidence, and top
-drivers. It is a domain model rather than a database-row claim. The public
-contract adds the site slug and explicit unit/status/provenance structure.
+Continue T-003-T-005 in `apps/web`:
 
-Before persistence is implemented, its owner must define:
+- turn the React/Vite scaffold into a runnable dashboard workspace;
+- implement route-level query/state ownership described above;
+- build the header, selected forecast overview, map/location selector, default
+  Other Locations cards, and five-card date strip from the approved mockup;
+- label `mock` and missing data clearly and implement loading/error/empty states;
+- keep the detailed forecast destination outside this dashboard slice;
+- add the real web commands and their documentation in the same UI change.
 
-- whether stored probabilities use `0..1` or `0..100`;
-- whether cloudbase is MSL or AGL;
-- per-output missing/status/confidence representation;
-- provenance and source/model version;
-- behavior when no prediction exists for a site/date.
-
-The current internal mock prediction requires all outputs and its repository
-port always returns a prediction. A real adapter will need to refine that
-boundary for no-prediction and mixed-missing cases; the public contract already
-supports missing metrics.
-
-The full data-status enum is defined once. Its available-value subset is
-derived by excluding `missing`, so later consumers can switch over all five
-states while present-value payloads remain structurally unable to claim
-`missing`.
-
-## Known follow-ups and boundaries
-
-- The backlog has no explicit task for the persisted prediction schema and the
-  SQLite forecast adapter that will replace T-002's mock repository. Assign an
-  owner before wiring T-022-T-024 model outputs into the API.
-- The project brief requires visibility of underlying forecast inputs and a
-  high/medium/low signal label, but T-003-T-007 and T-025 do not clearly own
-  both requirements. Add/clarify backlog ownership before claiming them done.
-- T-009 still owns exact coordinates, aliases, and catchment radii. T-002
-  therefore exposes only reviewed names, numeric IDs, and slugs, not guessed
-  geographic data.
-- The real composition-root startup is manually probed but not yet automated as
-  a child-process test. The automated real-socket smoke covers server lifecycle
-  through a test composition root.
-- The earlier local `uv sync` cache/interpreter issue was not part of T-002 and
-  was not retested. The committed ML lockfile is unchanged.
-- `docs/tasks.md` still contains spreadsheet serial dates and a mis-encoded
-  euro heading inherited from its source. T-002 changes only its own status.
-- Source access, weather providers, browser tooling, alert channel, deployment,
-  and repository license remain open in `decisions.md`.
-
-## Quick start for the next Codex session
-
-> Read root `AGENTS.md`, this handoff, T-003 in `tasks.md`, and only the relevant
-> dashboard sections of `project-brief.md` and `architecture.md`. Inspect Git
-> branch/status/log first. T-002 is stacked on unmerged T-001, so review/merge
-> dependencies in order or explicitly agree another stacked branch; do not
-> silently merge or rebase. For T-003, implement the initial forecast dashboard
-> route and its real Vite run/build/test commands without absorbing T-004's site
-> selector, T-005's date selector, T-006's forecast cards, or T-008's browser
-> smoke test unless the user explicitly broadens scope. The finalized API
-> contract exposes sites as `{ id, slug, name }`, looks forecasts up with
-> `siteSlug`, requires non-empty `topDrivers`, and has no `qualityNotes` field.
+T-003-T-005 remain `In Progress` until the React dashboard and its relevant
+validation are implemented. T-008 still owns the browser smoke-test tooling.

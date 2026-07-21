@@ -42,6 +42,13 @@ and date, calls the API, and renders forecast values with their status,
 confidence, units, provenance, loading state, and error state. It does not read
 SQLite or calculate prediction probabilities.
 
+For the initial dashboard, route-level React state owns request orchestration.
+It fetches the site catalog once, makes one deduplicated multi-site summary
+request for the selected date, and makes one fixed five-day preview request for
+the selected site. Presentational cards consume those results as props rather
+than issuing per-component requests. The detailed page later owns the existing
+single-site/date forecast request.
+
 ## Express API
 
 The API is the browser-facing boundary. It validates requests and responses,
@@ -64,6 +71,12 @@ The HTTP boundary uses strict Zod schemas from `packages/contracts`, Pino for
 structured/redacted logs and request correlation, and
 `application/problem+json` for globally handled errors. The current sites and
 forecasts adapters are in-memory/mock implementations for Takt 1 UI work.
+
+The forecast feature exposes three read shapes with intentional missing-data
+semantics: a detailed lookup fails with `FORECAST_NOT_FOUND`, batched summaries
+keep a missing site item, and the fixed Sofia-calendar preview keeps a missing
+metric in its date slot. Repository ports support nullable single reads,
+multi-site reads for one date, and inclusive date-range reads for one site.
 
 ## Python data and ML pipeline
 
@@ -93,6 +106,11 @@ Site identity has two explicit forms. A positive integer is the internal ID and
 future persistence relationship key; a unique lowercase slug is the public API
 lookup key. Slug changes must not require rewriting prediction, weather, or
 alert relationships.
+
+The Takt 1 site payload also includes provisional latitude/longitude values for
+map placement and is explicitly ordered by numeric ID. It does not contain a
+presentation-specific dashboard order. T-009 still owns final coordinate,
+alias, and catchment-radius validation.
 
 ## Forecast record principles
 

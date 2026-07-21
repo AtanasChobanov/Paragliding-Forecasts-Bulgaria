@@ -470,6 +470,84 @@ does not select a SQLite access layer or implement schema/migrations.
 [`../packages/contracts/src/forecast.ts`](../packages/contracts/src/forecast.ts),
 [`../apps/api/src/modules/sites/in-memory-site.repository.ts`](../apps/api/src/modules/sites/in-memory-site.repository.ts).
 
+### DEC-015 — Add dashboard-specific forecast read models
+
+**Status:** Accepted
+
+**Date:** 2026-07-21
+
+**Context:** The approved dashboard needs one selected-location overview,
+several default location cards, and five compact date cards. Fetching the
+detailed forecast once per component would duplicate data and couple UI layout
+to storage queries. The date strip no longer needs arrows or historical
+pagination.
+
+**Decision:** Keep the detailed `GET /api/v1/forecasts` lookup for the later
+location/date page. Add `GET /api/v1/forecasts/summaries` with one date and one
+CSV list of one through seven unique site slugs, returning one item per site in
+numeric-ID order. Add `GET /api/v1/forecasts/days` with only a site slug,
+returning exactly the five Europe/Sofia calendar dates centered on today and
+only the 100+ km metric per slot. Do not add cursor, offset, limit, anchor, or
+direction fields to the dashboard date-preview contract.
+
+The React dashboard will own these requests at route level: fetch sites once,
+deduplicate the selected/default summary slugs into one request, index results
+by slug, and make one separate days request for the selected site. Cards receive
+data as props and do not issue their own requests.
+
+**Rationale:** These shapes match the information density and interactions of
+the approved dashboard while keeping network work bounded and storage details
+out of React components. Fixed calendar slots make missing dates visible
+without pagination state.
+
+**Alternatives considered:** One detailed request per card was rejected because
+it over-fetches top drivers and repeats HTTP work. A monolithic dashboard
+endpoint was rejected because site metadata, multi-site summaries, and the
+selected-site date strip have different cache and refresh triggers. Cursor- or
+offset-based date pagination was removed after client review.
+
+**Consequences:** Summary input is strict and duplicate-free; output order is
+ID-based rather than request-based. Missing detailed forecasts return `404`,
+missing summary records remain `200` items, and missing day records remain
+`200` metrics in their fixed slots. The mock snapshot's startup-date limitation
+must stay documented until persistence replaces it.
+
+**Related files:** [`architecture.md`](architecture.md),
+[`../apps/api/README.md`](../apps/api/README.md),
+[`../packages/contracts/src/dashboard-forecasts.ts`](../packages/contracts/src/dashboard-forecasts.ts).
+
+### DEC-016 — Expose provisional map coordinates and confirm Pastrina spelling
+
+**Status:** Accepted
+
+**Date:** 2026-07-21
+
+**Context:** T-004 needs all seven locations selectable from the dashboard map
+before T-009 performs field-grade coordinate and catchment validation. The
+earlier `Pastrona` label was confirmed to be misspelled.
+
+**Decision:** Add latitude and longitude directly to each site response, retain
+the existing numeric IDs, sort the catalog by `id ASC`, and do not add a
+`dashboardOrder` field. Rename site ID 6 to `Pastrina` with slug `pastrina`.
+Use the agreed provisional coordinates only for initial map placement.
+
+**Rationale:** Coordinates are domain metadata required by any map client,
+while a dashboard-specific ordering field would encode current presentation in
+the site model. Keeping ID 6 avoids unnecessary identity churn during the
+spelling correction.
+
+**Alternatives considered:** Hard-coding map coordinates in React and adding a
+separate dashboard order were rejected because both duplicate or leak domain
+metadata into presentation. Waiting for T-009 would block the initial selector.
+
+**Consequences:** The site contract now requires bounded geographic
+coordinates. T-009 must still verify exact points, aliases, and radii before
+ingestion or geographic matching treats them as authoritative.
+
+**Related files:** [`project-brief.md`](project-brief.md),
+[`../packages/contracts/src/sites.ts`](../packages/contracts/src/sites.ts),
+[`../apps/api/src/modules/sites/in-memory-site.repository.ts`](../apps/api/src/modules/sites/in-memory-site.repository.ts).
+
 ## Open decisions
 
 | Question | Options / constraints | Resolve by |
@@ -477,7 +555,7 @@ does not select a SQLite access layer or implement schema/migrations.
 | Which SQLite access layer and migration approach should be used? | Direct driver, query builder, or ORM are possible; keep persistence behind repositories and do not add storage solely for a health endpoint. | The first persistence/schema ticket, expected by T-012/T-018. |
 | Which task owns the persisted prediction schema and SQLite forecast adapter? | The backlog has flight and weather schema tasks but no explicit owner for storing T-022-T-024 outputs and replacing the T-002 mock adapter. Public units/status/provenance must be mapped deliberately. | Backlog planning before real predictions are connected to the API. |
 | Which task owns the underlying forecast-input panel and high/medium/low signal semantics? | Both appear in the project brief, but T-003-T-007 cover the initial screen/selectors/cards/status and T-025 covers confidence/top drivers only. | Backlog planning before claiming the full dashboard requirement. |
-| What are the final coordinates, aliases, and catchment radii for each site? | Pastrona and the Dobrich regional model need particular confirmation. | T-009. |
+| What are the final coordinates, aliases, and catchment radii for each site? | Current map points are provisional; Pastrina and the Dobrich regional model need particular confirmation. | T-009. |
 | What access methods, permissions, attribution, caching, and rate limits apply to flight sources? | XCContest and SkyNomad must be researched without assuming scraping permission. | T-010 and T-011. |
 | Which historical forecast/archive or reanalysis sources will be used? | Exact archived forecasts are preferred; reanalysis is the documented fallback. | T-016, with units refined in T-017. |
 | Which browser test tool should be adopted? | Must support the local dashboard smoke test and avoid unneeded test infrastructure before the UI exists. | T-008. |
