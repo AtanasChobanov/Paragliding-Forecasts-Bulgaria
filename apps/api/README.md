@@ -162,11 +162,13 @@ apps/api/src/
 `-- server.ts                # TCP listen/close lifecycle
 ```
 
-Controllers validate transport data, the service composes read models, and the
-repository port owns single, batched, and inclusive-range prediction reads.
-Services construct response order independently of repository result order.
-Dependencies remain manually wired in `main.ts`; no DI container or storage
-library is needed for the current scope.
+Controllers validate transport data, the service orchestrates site lookup,
+clock, and repository reads, and stateless mapper functions translate internal
+predictions into browser-facing response models. The repository port owns
+single, batched, and inclusive-range prediction reads. Services construct
+response order independently of repository result order. Dependencies remain
+manually wired in `main.ts`; no DI container or storage library is needed for
+the current scope.
 
 ## Configuration
 

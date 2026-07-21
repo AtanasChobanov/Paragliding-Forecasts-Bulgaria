@@ -77,6 +77,9 @@ semantics: a detailed lookup fails with `FORECAST_NOT_FOUND`, batched summaries
 keep a missing site item, and the fixed Sofia-calendar preview keeps a missing
 metric in its date slot. Repository ports support nullable single reads,
 multi-site reads for one date, and inclusive date-range reads for one site.
+Pure response mapping lives in a stateless feature module rather than in the
+service class or a state-free helper class; the service remains responsible for
+use-case orchestration and dependency-backed behavior.
 
 ## Python data and ML pipeline
 

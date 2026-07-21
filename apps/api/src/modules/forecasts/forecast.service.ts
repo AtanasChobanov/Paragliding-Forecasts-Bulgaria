@@ -1,59 +1,28 @@
 import type {
-  ForecastDate,
   ForecastDaysQuery,
   ForecastDaysResponse,
-  ForecastOutputs,
   ForecastQuery,
   ForecastResponse,
   ForecastSummariesQuery,
   ForecastSummariesResponse,
-  ForecastSummary,
   Site,
   SiteSlug,
 } from "@paragliding-forecasts/contracts";
 
 import { AppError } from "../../http/errors/app-error.js";
 import { createForecastDateWindow, FORECAST_TIME_ZONE, toForecastDate } from "./forecast-date.js";
-import type { ForecastPrediction } from "./forecast-prediction.js";
+import {
+  createMissingChance100KmMetric,
+  createMissingForecastSummary,
+  mapPredictionToChance100KmMetric,
+  mapPredictionToForecastResponse,
+  mapPredictionToForecastSummary,
+} from "./forecast-response.mapper.js";
 import type { ForecastRepository } from "./forecast.repository.js";
 
 export interface SiteLookup {
   findSiteBySlug(siteSlug: SiteSlug): Promise<Site | undefined>;
 }
-
-const metric = <Value>(prediction: ForecastPrediction, value: Value) => ({
-  value,
-  dataStatus: prediction.dataStatus,
-  confidence: { ...prediction.confidence },
-});
-
-const mapPredictionOutputs = (prediction: ForecastPrediction): ForecastOutputs => ({
-  cloudbaseMslM: metric(prediction, prediction.cloudbasePredictionMslM),
-  chance100KmPct: metric(prediction, prediction.probability100KmPct),
-  chance200KmPct: metric(prediction, prediction.probability200KmPct),
-  chance300KmPct: metric(prediction, prediction.probability300KmPct),
-  overdevelopmentRisk: metric(prediction, prediction.overdevelopmentRisk),
-});
-
-const mapPredictionToResponse = (
-  prediction: ForecastPrediction,
-  siteSlug: SiteSlug,
-): ForecastResponse => ({
-  siteId: prediction.siteId,
-  siteSlug,
-  forecastDate: prediction.forecastDate,
-  generatedAt: prediction.generatedAt,
-  provenance: { ...prediction.provenance },
-  outputs: mapPredictionOutputs(prediction),
-  topDrivers: [...prediction.topDrivers],
-});
-
-const missingChance = (siteSlug: SiteSlug, forecastDate: ForecastDate) => ({
-  value: null,
-  dataStatus: "missing" as const,
-  confidence: null,
-  missingReason: `No 100+ km forecast is available for site '${siteSlug}' on ${forecastDate}.`,
-});
 
 export class ForecastService {
   readonly #forecastRepository: ForecastRepository;
@@ -77,7 +46,7 @@ export class ForecastService {
       });
     }
 
-    return mapPredictionToResponse(prediction, site.slug);
+    return mapPredictionToForecastResponse(prediction, site.slug);
   }
 
   async getForecastSummaries(query: ForecastSummariesQuery): Promise<ForecastSummariesResponse> {
@@ -91,28 +60,14 @@ export class ForecastService {
     const predictionsBySiteId = new Map(
       predictions.map((prediction) => [prediction.siteId, prediction]),
     );
-    const summaries: ForecastSummary[] = sites.map((site) => {
+    const summaries = sites.map((site) => {
       const prediction = predictionsBySiteId.get(site.id);
 
       if (prediction === undefined) {
-        return {
-          availability: "missing",
-          siteId: site.id,
-          siteSlug: site.slug,
-          forecastDate: query.date,
-          missingReason: `No forecast exists for site '${site.slug}' on ${query.date}.`,
-        };
+        return createMissingForecastSummary(site, query.date);
       }
 
-      return {
-        availability: "available",
-        siteId: site.id,
-        siteSlug: site.slug,
-        forecastDate: prediction.forecastDate,
-        generatedAt: prediction.generatedAt,
-        provenance: { ...prediction.provenance },
-        outputs: mapPredictionOutputs(prediction),
-      };
+      return mapPredictionToForecastSummary(prediction, site.slug);
     });
 
     return { forecastDate: query.date, summaries };
@@ -151,8 +106,8 @@ export class ForecastService {
           forecastDate,
           chance100KmPct:
             prediction === undefined
-              ? missingChance(site.slug, forecastDate)
-              : metric(prediction, prediction.probability100KmPct),
+              ? createMissingChance100KmMetric(site.slug, forecastDate)
+              : mapPredictionToChance100KmMetric(prediction),
         };
       }),
     };

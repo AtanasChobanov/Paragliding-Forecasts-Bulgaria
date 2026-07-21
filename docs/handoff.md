@@ -4,12 +4,12 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated | 2026-07-21 |
+| Last updated | 2026-07-22 |
 | Current Git branch | `feature/T-003-T-005-dashboard` |
 | Branch relationship | Created from rebased `feature/T-002-local-server-skeleton` at `ab81a70`; intentionally stacked until T-002 is merged |
 | Current tasks | T-003, T-004, and T-005 — `In Progress` |
 | Completed scope in this branch | Dashboard API/contracts foundation; React UI is not implemented yet |
-| Expected working tree after final documentation commit | Clean |
+| Expected working tree after the response-mapper commit | Clean |
 
 ## Current outcome
 
@@ -18,6 +18,12 @@ without changing the detailed-page contract into a dashboard endpoint. It adds
 provisional map metadata for all seven locations, batched forecast summaries
 for one selected date, and a fixed selected-site date preview covering Sofia
 today minus two through today plus two.
+
+Pure conversion from internal `ForecastPrediction` values to detailed,
+summary, and day-preview response shapes now lives in
+`forecast-response.mapper.ts`. `ForecastService` contains only the three public
+use cases, site resolution, clock use, repository access, ordering, and missing
+record decisions. No state-free helper class was introduced.
 
 No React implementation, database, ORM, new package, environment variable,
 weather source, or model was added. Forecast values remain explicitly synthetic
@@ -131,7 +137,7 @@ Accepted design decisions are recorded as DEC-015 and DEC-016 in
 
 ## Validation
 
-Final verification on 2026-07-21 passed:
+Final verification on 2026-07-22 passed:
 
 - `npm.cmd run build`
 - `npm.cmd run typecheck`
@@ -141,7 +147,7 @@ Final verification on 2026-07-21 passed:
 - `npm.cmd test`: contracts 2 files / 15 tests; API 16 files / 76 tests
 - `npm.cmd run test:coverage`:
   - contracts: 98.82% statements/lines, 97.22% branches, 100% functions;
-  - API: 79.87% statements, 81.11% branches, 81.81% functions, 80.06% lines.
+  - API: 80.24% statements, 81.11% branches, 82.35% functions, 80.50% lines.
 
 Coverage remains above all configured workspace thresholds. Tests include real
 Express/Supertest query parsing, summary ordering and partial missing data,
@@ -158,7 +164,8 @@ This branch contains these reviewable commits after the T-002 base:
 - `58841d5 T-003-T-005 add forecast summary endpoint`
 - `bf7192c T-005 add five-day forecast preview endpoint`
 - `3180131 T-003-T-005 harden dashboard API implementation`
-- final `T-003-T-005 document dashboard API foundation` commit containing this
+- `518e1fb T-003-T-005 document dashboard API foundation`
+- final `T-003-T-005 extract forecast response mapper` commit containing this
   handoff
 
 No branch was pushed and no pull request was created. After T-002 is merged,
