@@ -34,7 +34,7 @@ const run = async (): Promise<void> => {
   const siteService = new SiteService(siteRepository);
   const siteRouter = createSiteRouter({ siteService });
   const forecastRepository = new MockForecastRepository({ now: () => new Date() });
-  const forecastService = new ForecastService(forecastRepository, siteService);
+  const forecastService = new ForecastService(forecastRepository, siteService, () => new Date());
   const forecastRouter = createForecastRouter({ forecastService });
   const router = createRootRouter([healthRouter, siteRouter, forecastRouter]);
   const app = createApp({

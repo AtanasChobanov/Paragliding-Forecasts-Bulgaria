@@ -10,7 +10,7 @@ import { FIXED_NOW } from "../support/create-test-app.js";
 const createDependencies = () => {
   const siteService = new SiteService(new InMemorySiteRepository());
   const forecastRepository = new MockForecastRepository({ now: () => FIXED_NOW });
-  const forecastService = new ForecastService(forecastRepository, siteService);
+  const forecastService = new ForecastService(forecastRepository, siteService, () => FIXED_NOW);
 
   return { forecastRepository, forecastService };
 };

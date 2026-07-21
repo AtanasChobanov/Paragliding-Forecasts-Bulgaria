@@ -1,4 +1,7 @@
 import type {
+  ForecastDate,
+  ForecastDaysQuery,
+  ForecastDaysResponse,
   ForecastOutputs,
   ForecastQuery,
   ForecastResponse,
@@ -10,6 +13,7 @@ import type {
 } from "@paragliding-forecasts/contracts";
 
 import { AppError } from "../../http/errors/app-error.js";
+import { createForecastDateWindow, FORECAST_TIME_ZONE, toForecastDate } from "./forecast-date.js";
 import type { ForecastPrediction } from "./forecast-prediction.js";
 import type { ForecastRepository } from "./forecast.repository.js";
 
@@ -44,13 +48,22 @@ const mapPredictionToResponse = (
   topDrivers: [...prediction.topDrivers],
 });
 
+const missingChance = (siteSlug: SiteSlug, forecastDate: ForecastDate) => ({
+  value: null,
+  dataStatus: "missing" as const,
+  confidence: null,
+  missingReason: `No 100+ km forecast is available for site '${siteSlug}' on ${forecastDate}.`,
+});
+
 export class ForecastService {
   readonly #forecastRepository: ForecastRepository;
+  readonly #now: () => Date;
   readonly #siteLookup: SiteLookup;
 
-  constructor(forecastRepository: ForecastRepository, siteLookup: SiteLookup) {
+  constructor(forecastRepository: ForecastRepository, siteLookup: SiteLookup, now: () => Date) {
     this.#forecastRepository = forecastRepository;
     this.#siteLookup = siteLookup;
+    this.#now = now;
   }
 
   async getForecast(query: ForecastQuery): Promise<ForecastResponse> {
@@ -103,6 +116,46 @@ export class ForecastService {
     });
 
     return { forecastDate: query.date, summaries };
+  }
+
+  async getForecastDays(query: ForecastDaysQuery): Promise<ForecastDaysResponse> {
+    const referenceInstant = this.#now();
+    const site = await this.#getSite(query.siteSlug);
+    const todayDate = toForecastDate(referenceInstant);
+    const dates = createForecastDateWindow(todayDate, 2, 2);
+    const fromDate = dates[0];
+    const throughDate = dates.at(-1);
+
+    if (fromDate === undefined || throughDate === undefined) {
+      throw new Error("Forecast date window cannot be empty.");
+    }
+
+    const predictions = await this.#forecastRepository.listBySiteAndDateRange(
+      site.id,
+      fromDate,
+      throughDate,
+    );
+    const predictionsByDate = new Map(
+      predictions.map((prediction) => [prediction.forecastDate, prediction]),
+    );
+
+    return {
+      siteId: site.id,
+      siteSlug: site.slug,
+      timeZone: FORECAST_TIME_ZONE,
+      todayDate,
+      days: dates.map((forecastDate) => {
+        const prediction = predictionsByDate.get(forecastDate);
+
+        return {
+          forecastDate,
+          chance100KmPct:
+            prediction === undefined
+              ? missingChance(site.slug, forecastDate)
+              : metric(prediction, prediction.probability100KmPct),
+        };
+      }),
+    };
   }
 
   async #getSite(siteSlug: SiteSlug): Promise<Site> {

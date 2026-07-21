@@ -33,7 +33,7 @@ export const createTestApp = ({
   const siteService = new SiteService(siteRepository);
   const siteRouter = createSiteRouter({ siteService });
   const forecastRepository = new MockForecastRepository({ now: () => FIXED_NOW });
-  const forecastService = new ForecastService(forecastRepository, siteService);
+  const forecastService = new ForecastService(forecastRepository, siteService, () => FIXED_NOW);
   const forecastRouter = createForecastRouter({ forecastService });
   const router = createRootRouter([healthRouter, siteRouter, forecastRouter, ...additionalRouters]);
 

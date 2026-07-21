@@ -1,4 +1,6 @@
 import {
+  forecastDaysQuerySchema,
+  forecastDaysResponseSchema,
   forecastQuerySchema,
   forecastResponseSchema,
   forecastSummariesQuerySchema,
@@ -29,6 +31,16 @@ export const createGetForecastSummariesController =
     const query = parseRequest(forecastSummariesQuerySchema, request.query);
     const summaries = await forecastService.getForecastSummaries(query);
     const body = parseResponse(forecastSummariesResponseSchema, summaries);
+
+    response.status(200).json(body);
+  };
+
+export const createGetForecastDaysController =
+  ({ forecastService }: ForecastControllerDependencies): RequestHandler =>
+  async (request, response) => {
+    const query = parseRequest(forecastDaysQuerySchema, request.query);
+    const forecastDays = await forecastService.getForecastDays(query);
+    const body = parseResponse(forecastDaysResponseSchema, forecastDays);
 
     response.status(200).json(body);
   };
