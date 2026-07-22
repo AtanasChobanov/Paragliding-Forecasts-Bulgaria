@@ -3,5 +3,23 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "React dashboard for Paragliding Forecasts Bulgaria."
+  "description": "React dashboard for Paragliding Forecasts Bulgaria.",
+  "scripts": {
+    "build": "npm run typecheck && vite build",
+    "dev": "npm run dev:raw",
+    "dev:raw": "vite",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json"
+  },
+  "dependencies": {
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.4",
+    "vite": "^8.1.5"
+  }
 }

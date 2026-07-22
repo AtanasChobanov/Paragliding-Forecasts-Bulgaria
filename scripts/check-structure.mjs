@@ -23,7 +23,14 @@ const requiredPaths = [
   "apps/api/test/smoke/server.test.ts",
   "apps/api/tsconfig.build.json",
   "apps/web/README.md",
+  "apps/web/index.html",
   "apps/web/package.json",
+  "apps/web/src/App.tsx",
+  "apps/web/src/config/runtime-config.ts",
+  "apps/web/src/main.tsx",
+  "apps/web/src/vite-env.d.ts",
+  "apps/web/tsconfig.node.json",
+  "apps/web/vite.config.ts",
   "data/README.md",
   "docs/architecture.md",
   "docs/decisions.md",
@@ -36,6 +43,7 @@ const requiredPaths = [
   "packages/contracts/src/index.ts",
   "packages/contracts/test/contracts.test.ts",
   "packages/contracts/tsconfig.build.json",
+  "scripts/dev.mjs",
   "services/ml/README.md",
   "services/ml/.python-version",
   "services/ml/pyproject.toml",
@@ -54,8 +62,11 @@ const requiredScripts = new Map([
     "package.json",
     [
       "build",
+      "dev",
       "dev:api",
+      "dev:web",
       "format:check",
+      "predev",
       "prelint",
       "lint",
       "repo:check",
@@ -65,7 +76,11 @@ const requiredScripts = new Map([
       "typecheck",
     ],
   ],
-  ["apps/api/package.json", ["build", "dev", "start", "test", "test:coverage", "typecheck"]],
+  [
+    "apps/api/package.json",
+    ["build", "dev", "dev:raw", "start", "test", "test:coverage", "typecheck"],
+  ],
+  ["apps/web/package.json", ["build", "dev", "dev:raw", "typecheck"]],
   ["packages/contracts/package.json", ["build", "test", "test:coverage", "typecheck"]],
 ]);
 
@@ -75,9 +90,16 @@ const requiredDependencies = new Map([
     ["@paragliding-forecasts/contracts", "cors", "express", "pino", "pino-http", "zod"],
   ],
   ["packages/contracts/package.json", ["zod"]],
+  ["apps/web/package.json", ["react", "react-dom", "zod"]],
 ]);
 
-const requiredDevDependencies = new Map([["package.json", ["@vitest/coverage-v8"]]]);
+const requiredDevDependencies = new Map([
+  ["package.json", ["@vitest/coverage-v8"]],
+  [
+    "apps/web/package.json",
+    ["@types/node", "@types/react", "@types/react-dom", "@vitejs/plugin-react", "vite"],
+  ],
+]);
 
 const missing = [];
 
@@ -154,4 +176,4 @@ if (rootManifest.engines?.node !== ">=24 <25" || rootManifest.engines?.npm !== "
   process.exit(1);
 }
 
-console.log("Repository structure and API workspace check passed.");
+console.log("Repository structure and runnable workspace check passed.");

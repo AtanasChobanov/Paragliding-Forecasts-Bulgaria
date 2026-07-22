@@ -2,9 +2,9 @@
 
 ## Status
 
-Directory scaffold only. The React application and its first dashboard route
-belong to **T-003**. T-001 intentionally contains no landing page or fake dev
-server.
+The React/Vite workspace is runnable and production-buildable. It currently
+renders only the truthful application heading; the real dashboard route, API
+queries, and visual components are added by the remaining T-003-T-005 stages.
 
 ## Responsibilities
 
@@ -17,7 +17,7 @@ server.
 The web app must not calculate model probabilities or read databases directly.
 It consumes versioned HTTP contracts from `@paragliding-forecasts/contracts`.
 
-## Planned stack
+## Accepted stack
 
 - React
 - Vite
@@ -31,48 +31,57 @@ It consumes versioned HTTP contracts from `@paragliding-forecasts/contracts`.
 - Vitest, React Testing Library, and MSW for unit/component/API-client tests
 - A browser-testing tool selected when T-008 is implemented
 
-## Planned layout
+## Current layout
 
 ```text
 apps/web/
+|-- index.html
 |-- src/
-|   |-- components/
-|   |-- features/forecast/
-|   |-- routes/
-|   |-- services/
-|   `-- main.tsx
-|-- public/
+|   |-- config/runtime-config.ts
+|   |-- App.tsx
+|   |-- main.tsx
+|   `-- vite-env.d.ts
 |-- package.json
-`-- tsconfig.json
+|-- tsconfig.json
+|-- tsconfig.node.json
+`-- vite.config.ts
 ```
 
 Prefer feature-oriented folders once the UI grows; avoid a single global
 `components` folder containing unrelated domain behavior.
 
-## Commands after T-003
+## Commands
 
 Run from the repository root:
 
 ```powershell
 npm.cmd run dev:web
 npm.cmd run build --workspace @paragliding-forecasts/web
-npm.cmd run test --workspace @paragliding-forecasts/web
+npm.cmd run typecheck --workspace @paragliding-forecasts/web
 ```
 
-Until T-003 adds the Vite entry point and package scripts, these commands are
-documentation targets, not working application commands.
+Use `npm.cmd run dev` to supervise the API and web servers together. Vite uses
+`strictPort: true`, so an occupied configured port fails instead of silently
+moving the dashboard to another origin. Stage 2 adds the first real web test
+scripts together with meaningful API-client/provider tests.
 
 ## Configuration
 
 Browser-exposed variables must use Vite's `VITE_` prefix. Never place secrets
 in web environment variables because they are bundled into client code.
 
-Initial variable:
+Current variables:
 
-- `VITE_API_BASE_URL` - base URL of the local Express API
+- `VITE_API_BASE_URL` - absolute HTTP(S) base URL of the local Express API;
+  validated before React renders and normalized without a trailing slash
+- `WEB_PORT` - Vite development port, default `5173`; changing it requires the
+  exact matching `CORS_ORIGIN`
 
 ## Testing expectations
 
 - Unit tests for forecast-card transformations and data-status mapping.
 - Component tests for loading, missing, and error states.
 - T-008 browser smoke test proving the dashboard and required cards render.
+
+There is intentionally no passing placeholder web test script. Stage 2 adds the
+test command and coverage gate with the first behavior it can verify.

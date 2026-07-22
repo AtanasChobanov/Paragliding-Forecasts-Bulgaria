@@ -15,12 +15,12 @@ result as an inspectable daily dashboard.
 - Delivery phase: **Takt 1**
 - Current tickets: **T-003-T-005 - Dashboard, site selector, and date selector**
   (`In Progress`)
-- Implemented: a runnable Node.js/Express/TypeScript API, shared runtime
+- Implemented: runnable React/Vite and Node.js/Express workspaces, shared runtime
   contracts, structured logging and errors, a map-ready seven-site catalog,
   deterministic date-aware mock forecasts, and dashboard summary/day-preview
   read endpoints
-- Not implemented: the React dashboard, SQLite schema or access layer, data
-  ingestion, real forecasts, models, and alerts
+- Not implemented: the dashboard route and visual UI, SQLite schema or access
+  layer, data ingestion, real forecasts, models, and alerts
 
 Mock responses are deliberately identified as `mock`; they are development
 fixtures for the upcoming dashboard, not forecasts or flying advice.
@@ -59,7 +59,7 @@ test notes in its README. Cross-project information belongs here or in `docs/`.
 
 | Area | Choice | Current state |
 | --- | --- | --- |
-| Web | React + Vite + TypeScript, Router, TanStack Query, SCSS Modules, and Leaflet | Agreed stack; runnable dashboard pending |
+| Web | React + Vite + TypeScript, Router, TanStack Query, SCSS Modules, and Leaflet | Runnable React/Vite workspace; dashboard route pending |
 | API | Node.js + Express + TypeScript | Runnable with dashboard read endpoints |
 | Shared contracts | TypeScript + Zod | Runtime schemas and inferred types implemented |
 | Data and ML | Python managed by `uv` | Project boundary only |
@@ -131,29 +131,44 @@ npm.cmd run start:api
 See [`apps/api/README.md`](apps/api/README.md) for request, configuration,
 error, and data limitations.
 
+## Run web development
+
+Start the API and web development servers together:
+
+```powershell
+npm.cmd run dev
+```
+
+The dashboard origin is `http://localhost:5173` by default. To run only the
+current React/Vite workspace, use `npm.cmd run dev:web`; it still needs the API
+for real dashboard data once Stage 2 connects the HTTP client.
+
 ## Commands
 
 | Command | Purpose |
 | --- | --- |
+| `npm run dev` | Supervise the API and web development servers together |
 | `npm run dev:api` | Build shared contracts and start the API in watch mode |
+| `npm run dev:web` | Start Vite on the configured strict web port |
 | `npm run start:api` | Build contracts/API and start compiled JavaScript |
-| `npm run build` | Build shared contracts, then the API |
-| `npm run typecheck` | Type-check contracts and API |
-| `npm run lint` | Build shared contract declarations, then lint TypeScript sources and tests |
-| `npm run format:check` | Check maintained TypeScript/config formatting |
+| `npm run build` | Build contracts, API, and the production web bundle |
+| `npm run typecheck` | Type-check contracts, API, and web workspaces |
+| `npm run lint` | Build shared contract declarations, then lint TypeScript/TSX sources and tests |
+| `npm run format:check` | Check maintained TypeScript, TSX, HTML, SCSS, and config formatting |
 | `npm test` | Run contract and API unit/integration/smoke tests |
 | `npm run test:coverage` | Run the same suites with V8 coverage and enforced thresholds |
 | `npm run repo:check` | Validate repository structure and runnable workspace metadata |
 | `uv sync --project services/ml` | Sync the Python ML environment |
 
-`npm run dev:web` and the combined `npm run dev` are not runnable yet; the
-React portion of T-003-T-005 must add and document their real behavior.
-
 ## Configuration and data
 
-Copy `.env.example` to `.env` for local overrides. The API currently consumes
-only `NODE_ENV`, `LOG_LEVEL`, `API_HOST`, `API_PORT`, `CORS_ORIGIN`, and
-`FORECAST_DATA_MODE=mock`. It starts with safe defaults when `.env` is absent.
+Copy `.env.example` to `.env` for local overrides. Vite consumes `WEB_PORT` and
+the browser-exposed `VITE_API_BASE_URL`; the latter is validated as an absolute
+HTTP(S) URL before React renders. If `WEB_PORT` changes, `CORS_ORIGIN` must use
+the same dashboard origin. The API consumes `NODE_ENV`, `LOG_LEVEL`, `API_HOST`,
+`API_PORT`, `CORS_ORIGIN`, and `FORECAST_DATA_MODE=mock`.
+
+The API starts with safe defaults when `.env` is absent.
 The logger defaults to `info`; `.env.example` opts local development into
 `debug` explicitly.
 `DATABASE_URL` and `MODEL_ARTIFACT_DIR` are reserved for future persistence and
