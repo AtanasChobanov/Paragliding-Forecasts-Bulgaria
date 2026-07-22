@@ -6,9 +6,11 @@ The React/Vite workspace is runnable, production-buildable, and backed by a
 validated dashboard HTTP/query foundation. The dashboard route coordinates
 canonical URL selection and the sites, days, and summaries queries inside a
 responsive visual shell with a semantic application header, stable dashboard
-panels, reusable content states, self-hosted Inter, and shared theme tokens.
-Forecast cards, the interactive map, and the five-day selector are added by the
-remaining T-003-T-005 stages.
+panels, reusable content states, self-hosted Inter, and shared theme tokens. The
+selected overview and fixed-order Other Locations cards now render validated
+summary data with explicit status, confidence, provenance, units, and missing-
+data semantics. The interactive map and five-day selector are added by the
+remaining T-004-T-005 stages.
 
 ## Responsibilities
 
@@ -142,6 +144,21 @@ URL date is unusable, and handles an empty catalog. Summary requests deduplicate
 the selected site plus the configured Other Locations by numeric ID while the
 UI keeps its separate Zlatitsa, Sofia - Vitosha, Dobrich region order.
 
+## Forecast presentation behavior
+
+The selected overview renders 100+/200+/300+ kilometre chances, cloudbase in
+metres MSL, and overdevelopment risk. Date-only values are formatted as UTC
+calendar labels to avoid a browser-timezone day shift; generation instants are
+shown in `Europe/Sofia`. Status labels preserve `mock`, `manual`, `baseline`,
+`real`, and `missing` distinctions, while mixed metrics retain per-metric status
+and confidence context.
+
+Other Locations remain static comparison cards in the explicit Zlatitsa,
+Sofia - Vitosha, and Dobrich region order. The selected location is not filtered
+out when it is one of those configured cards. Missing summary items and missing
+metrics show their reasons without substituting zero. No detailed-forecast
+control is rendered; T-006 owns both that control and its working destination.
+
 ## Testing expectations
 
 - API-client tests for URL encoding, success parsing, Problem Details, network
@@ -152,8 +169,8 @@ UI keeps its separate Zlatitsa, Sofia - Vitosha, Dobrich region order.
 - Route tests for URL normalization, deep links, history navigation, dependent
   query enabling, request deduplication/reindexing, partial catalogs, empty
   catalogs, independent failures, and stale-selection prevention.
-- Unit tests for forecast-card transformations and data-status mapping as the
-  presentation components are added.
+- Unit tests for forecast/date formatting, data-status and confidence summaries,
+  and mixed/missing metric behavior.
 - Component tests for loading, missing, and error states as the route and
   presentation components are added.
 - Component tests for the stable dashboard shell, panel semantics, and reusable

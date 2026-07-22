@@ -8,8 +8,8 @@
 | Current Git branch | `feature/T-003-T-005-dashboard` |
 | Branch relationship | Rebased onto `origin/main` at merge commit `d4167ff` after T-002 merged |
 | Current tasks | T-003, T-004, and T-005 — `In Progress` |
-| Completed scope in this branch | Dashboard API/contracts foundation, Stage 0 preflight, runnable React/Vite workspace, validated browser queries, URL-owned dashboard orchestration, and the responsive visual foundation |
-| Expected working tree after the Stage 4 commit | Clean |
+| Completed scope in this branch | Dashboard API/contracts foundation, Stage 0 preflight, runnable React/Vite workspace, validated browser queries, URL-owned orchestration, responsive visual foundation, and forecast overview/comparison cards |
+| Expected working tree after the Stage 5 commit | Clean |
 
 ## Current outcome
 
@@ -40,6 +40,13 @@ application header, four stable dashboard regions, and reusable panel/content-
 state primitives. Forecast values remain explicitly synthetic `mock` data and
 must not be presented as aviation weather or flying advice.
 
+The selected overview now renders the five contracted metrics with explicit
+units plus generated-at, provenance, confidence, and data-status context. The
+Other Locations region renders Zlatitsa, Sofia - Vitosha, and Dobrich region in
+that fixed UI order without filtering a duplicate selected site. Summary-level
+missing data, omitted content, partial missing metrics, and fully missing
+metrics remain visibly distinct and never become numeric zero.
+
 ## Web workspace
 
 - `npm.cmd run dev:web` starts Vite on `http://localhost:5173` by default.
@@ -67,6 +74,12 @@ must not be presented as aviation weather or flying advice.
 - The visible header states `Decision support only` and `Not aviation weather`;
   it intentionally omits the reference image's decorative bell and any broken
   detailed-forecast action.
+- Forecast date-only labels are formatted with UTC calendar parts, while
+  generation instants are rendered in `Europe/Sofia`; no naive date-only parse
+  can move the visible forecast to a different day.
+- The dashboard does not render the reference image's detailed-forecast button.
+  T-006 owns both the real route and its action, so this checkpoint does not
+  ship a disabled or misleading control.
 
 ## HTTP surface
 
@@ -268,6 +281,19 @@ performed at the user's request. Final visual inspection remains a manual user
 check; the automated gate covers structure, semantics, behavior, and build
 integrity.
 
+The Stage 5 forecast-presentation checkpoint passed:
+
+- web build and typecheck passed, including the production Vite bundle;
+- web tests: 12 files / 95 tests;
+- web coverage: 94.73% statements, 87.50% branches, 96.92% functions, and
+  94.72% lines;
+- tests cover exact units and formatting, Sofia generation time, all five data
+  statuses, homogeneous/mixed/unavailable confidence, partial/full missing
+  metrics, summary-level missing and omitted content, explicit Other Locations
+  order versus response-map order, and a selected site retained as a card;
+- repository lint, formatting, structure, and `git diff --check` passed after
+  the final gate.
+
 ## Git checkpoints
 
 This branch contains these reviewable commits after the T-002 base:
@@ -284,18 +310,19 @@ This branch contains these reviewable commits after the T-002 base:
 - `9cea79b T-003 scaffold runnable React dashboard workspace`
 - `5abe401 T-003-T-005 add validated dashboard API queries`
 - `71bbc4f T-003-T-005 coordinate dashboard URL state`
-- next checkpoint: `T-003 establish dashboard visual foundation`
+- `ce068f8 T-003 establish dashboard visual foundation`
+- next checkpoint: `T-003 render dashboard forecast overview`
 
 The branch was rebased onto the T-002 merge in current `origin/main`. It has not
 been pushed and no pull request was created.
 
 ## Next implementation step
 
-Implement the selected forecast overview and the three static Other Locations
-cards with explicit status, confidence, missing-data, and provenance semantics.
-Then continue with the Leaflet map, date strip, hardening, documentation, and
-final validation. The confirmed Other Locations order is Zlatitsa, Sofia -
-Vitosha, and Dobrich region; the dashboard copy is English.
+Implement the Leaflet/OpenStreetMap location selector with a fitted Bulgaria
+view, permanent labels, selected marker, shared native-selector URL update,
+visible attribution, and an explained tile-failure fallback. Then continue with
+the date strip, hardening, documentation, and final validation. The dashboard
+copy is English.
 
 T-003-T-005 remain `In Progress` until the React dashboard and its relevant
 validation are implemented. T-008 still owns the browser smoke-test tooling.

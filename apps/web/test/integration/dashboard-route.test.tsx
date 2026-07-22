@@ -274,7 +274,7 @@ describe("dashboard route URL orchestration", () => {
 
     renderDashboardRoute("/?date=2026-07-17&extra=discarded&site=sopot");
 
-    await screen.findByText("Available · mock · source source-sopot");
+    await screen.findByText("source source-sopot");
     expect(requests.days).toEqual(["sopot"]);
     expect(requests.summaries[0]).toMatchObject({ date: "2026-07-17" });
     await expectCanonicalLocation("?site=sopot&date=2026-07-17");
@@ -305,7 +305,7 @@ describe("dashboard route URL orchestration", () => {
     renderDashboardRoute("/?site=sopot&date=2026-08-01");
 
     await expectCanonicalLocation("?site=sopot&date=2026-07-18");
-    expect(await screen.findByText("Sopot · 2026-07-18")).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Sopot · Saturday, 18 Jul" })).toBeVisible();
   });
 
   it("pushes deliberate site/date changes and restores them with Back and Forward", async () => {
@@ -313,7 +313,9 @@ describe("dashboard route URL orchestration", () => {
     const user = userEvent.setup();
     renderDashboardRoute("/?site=sofia-vitosha-kominite&date=2026-07-18");
 
-    await screen.findByText("Sofia - Vitosha (Kominite) · 2026-07-18");
+    await screen.findByRole("heading", {
+      name: "Sofia - Vitosha (Kominite) · Saturday, 18 Jul",
+    });
     await user.selectOptions(screen.getByLabelText("Location"), "sopot");
     await expectCanonicalLocation("?site=sopot&date=2026-07-18");
     await user.click(screen.getByRole("button", { name: "2026-07-19" }));
@@ -332,7 +334,9 @@ describe("dashboard route URL orchestration", () => {
     const user = userEvent.setup();
     renderDashboardRoute("/?site=sofia-vitosha-kominite&date=2026-07-18");
 
-    await screen.findByText("Sofia - Vitosha (Kominite) · 2026-07-18");
+    await screen.findByRole("heading", {
+      name: "Sofia - Vitosha (Kominite) · Saturday, 18 Jul",
+    });
     await user.selectOptions(screen.getByLabelText("Location"), "sopot");
 
     await expectCanonicalLocation("?site=sopot&date=2026-07-21");
@@ -348,7 +352,7 @@ describe("dashboard route URL orchestration", () => {
 
     renderWithQueryClient(<App dashboardApi={createTestDashboardApi()} />);
 
-    expect(await screen.findByText("Sopot · 2026-07-17")).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Sopot · Friday, 17 Jul" })).toBeVisible();
     expect(window.location.search).toBe("?site=sopot&date=2026-07-17");
   });
 
@@ -397,7 +401,7 @@ describe("dashboard request and presentation selection", () => {
     const requests = installDashboardHandlers();
     renderDashboardRoute("/?site=zlatitsa&date=2026-07-18");
 
-    await screen.findByText("Zlatitsa · 2026-07-18");
+    await screen.findByRole("heading", { name: "Zlatitsa · Saturday, 18 Jul" });
     expect(requests.summaries[0]?.siteSlugs).toEqual([
       "sofia-vitosha-kominite",
       "zlatitsa",
@@ -416,7 +420,7 @@ describe("dashboard request and presentation selection", () => {
     const requests = installDashboardHandlers({ catalog });
     renderDashboardRoute("/?site=sopot&date=2026-07-18");
 
-    await screen.findByText("Sopot · 2026-07-18");
+    await screen.findByRole("heading", { name: "Sopot · Saturday, 18 Jul" });
     expect(requests.summaries[0]?.siteSlugs).toEqual(["zlatitsa", "sopot"]);
     const otherSection = screen
       .getByRole("heading", {
@@ -461,16 +465,14 @@ describe("dashboard request and presentation selection", () => {
     const user = userEvent.setup();
     renderDashboardRoute("/?site=sofia-vitosha-kominite&date=2026-07-18");
 
-    await screen.findByText("Available · mock · source source-sofia-vitosha-kominite");
+    await screen.findByText("source source-sofia-vitosha-kominite");
     await user.selectOptions(screen.getByLabelText("Location"), "sopot");
-    expect(await screen.findByText("Sopot · 2026-07-18")).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Sopot · Saturday, 18 Jul" })).toBeVisible();
     expect(screen.getByText("Loading the selected forecast…")).toBeVisible();
-    expect(
-      screen.queryByText("Available · mock · source source-sofia-vitosha-kominite"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("source source-sofia-vitosha-kominite")).not.toBeInTheDocument();
 
     sopotSummary.resolve();
-    expect(await screen.findByText("Available · mock · source source-sopot")).toBeVisible();
+    expect(await screen.findByText("source source-sopot")).toBeVisible();
   });
 });
 
@@ -502,7 +504,7 @@ describe("dashboard independent failures", () => {
     server.use(http.get(DAYS_URL, () => HttpResponse.json({ error: true }, { status: 500 })));
     renderDashboardRoute("/?site=sopot&date=2026-07-18");
 
-    expect(await screen.findByText("Available · mock · source source-sopot")).toBeVisible();
+    expect(await screen.findByText("source source-sopot")).toBeVisible();
     expect(screen.getByRole("button", { name: "Retry forecast dates" })).toBeVisible();
   });
 
@@ -523,7 +525,7 @@ describe("dashboard independent failures", () => {
     installDashboardHandlers({ transformDays: () => createDays(zlatitsa) });
     renderDashboardRoute("/?site=sopot&date=2026-07-18");
 
-    expect(await screen.findByText("Available · mock · source source-sopot")).toBeVisible();
+    expect(await screen.findByText("source source-sopot")).toBeVisible();
     expect(
       screen.getByText("The forecast service returned days for a different location."),
     ).toBeVisible();

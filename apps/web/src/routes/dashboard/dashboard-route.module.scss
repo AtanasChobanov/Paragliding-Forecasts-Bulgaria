@@ -76,47 +76,10 @@
   }
 }
 
-.forecastHeading {
-  margin-bottom: var(--space-5);
-  color: var(--color-heading);
-  font-size: clamp(1.35rem, 2.4vw, 2rem);
-  font-weight: 600;
-  line-height: 1.2;
-}
-
-.otherList,
 .dateList {
   padding: 0;
   margin: 0;
   list-style: none;
-}
-
-.otherList {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-3);
-
-  li {
-    display: flex;
-    min-width: 0;
-    flex-direction: column;
-    gap: var(--space-2);
-    padding: var(--space-4);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-control);
-    background: var(--color-surface-subtle);
-    overflow-wrap: anywhere;
-  }
-
-  strong {
-    color: var(--color-heading);
-    font-weight: 600;
-  }
-
-  span {
-    color: var(--color-text-secondary);
-    font-size: 0.875rem;
-  }
 }
 
 .dateList {
@@ -159,10 +122,6 @@
 }
 
 @media (max-width: 52rem) {
-  .otherList {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .dateList {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--space-2);

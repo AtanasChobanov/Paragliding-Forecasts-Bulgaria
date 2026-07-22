@@ -5,6 +5,11 @@ import { useSearchParams } from "react-router-dom";
 
 import { ContentState } from "../../components/content-state/ContentState.js";
 import { DashboardShell } from "../../features/dashboard/components/DashboardShell.js";
+import {
+  ForecastOverview,
+  SelectedForecastHeading,
+} from "../../features/dashboard/components/ForecastOverview.js";
+import { OtherLocationsSection } from "../../features/dashboard/components/OtherLocationsSection.js";
 import { createDashboardQueryOptions } from "../../features/dashboard/dashboard-query-options.js";
 import {
   createCanonicalDashboardSearch,
@@ -121,43 +126,32 @@ const SummaryDashboard = ({
   );
   const selectedSummary = summariesBySlug?.get(selectedSite.slug);
 
-  const overviewContent = summariesQuery.isPending ? (
-    <ContentState
-      message="The selected forecast is being validated and loaded."
-      title="Loading the selected forecast…"
-      variant="loading"
-    />
-  ) : summariesQuery.isError ? (
-    <ContentState
-      message={describeError(summariesQuery.error)}
-      onRetry={() => void summariesQuery.refetch()}
-      retryLabel="Retry selected forecast"
-      title="Forecast request failed"
-      variant="error"
-    />
-  ) : (
-    <>
-      {selectedSummary?.availability === "available" ? (
-        <p>
-          Available · {selectedSummary.outputs.chance100KmPct.dataStatus} · source{" "}
-          {selectedSummary.provenance.source}
-        </p>
-      ) : null}
-      {selectedSummary?.availability === "missing" ? (
-        <p>Forecast unavailable: {selectedSummary.missingReason}</p>
-      ) : null}
-      {selectedSummary === undefined ? (
-        <p>No summary was returned for the selected location.</p>
-      ) : null}
-    </>
-  );
-  const overview = (
+  const overview = summariesQuery.isPending ? (
     <div>
-      <h3 className={styles.forecastHeading}>
-        {selectedSite.name} · {forecastDate}
-      </h3>
-      {overviewContent}
+      <SelectedForecastHeading forecastDate={forecastDate} siteName={selectedSite.name} />
+      <ContentState
+        message="The selected forecast is being validated and loaded."
+        title="Loading the selected forecast…"
+        variant="loading"
+      />
     </div>
+  ) : summariesQuery.isError ? (
+    <div>
+      <SelectedForecastHeading forecastDate={forecastDate} siteName={selectedSite.name} />
+      <ContentState
+        message={describeError(summariesQuery.error)}
+        onRetry={() => void summariesQuery.refetch()}
+        retryLabel="Retry selected forecast"
+        title="Forecast request failed"
+        variant="error"
+      />
+    </div>
+  ) : (
+    <ForecastOverview
+      forecastDate={forecastDate}
+      siteName={selectedSite.name}
+      summary={selectedSummary}
+    />
   );
 
   const otherLocations = summariesQuery.isPending ? (
@@ -173,24 +167,7 @@ const SummaryDashboard = ({
       variant="info"
     />
   ) : (
-    <ul className={styles.otherList}>
-      {otherLocationSites.map((site) => {
-        const summary = summariesBySlug?.get(site.slug);
-
-        return (
-          <li key={site.id} data-site-slug={site.slug}>
-            <strong>{site.name}</strong>
-            {summary?.availability === "available" ? (
-              <span>{summary.outputs.chance100KmPct.value}% chance of 100+ km</span>
-            ) : null}
-            {summary?.availability === "missing" ? (
-              <span>Forecast unavailable: {summary.missingReason}</span>
-            ) : null}
-            {summary === undefined ? <span>No summary returned</span> : null}
-          </li>
-        );
-      })}
-    </ul>
+    <OtherLocationsSection sites={otherLocationSites} summariesBySlug={summariesBySlug} />
   );
 
   return (

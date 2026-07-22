@@ -1,0 +1,104 @@
+.headingRow {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.heading {
+  margin: 0;
+  color: var(--color-heading);
+  font-size: clamp(1.35rem, 2.4vw, 2rem);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.metrics {
+  display: grid;
+  padding: var(--space-4) 0;
+  margin: 0;
+  grid-template-columns: 1fr 1.15fr 1fr 1fr 1fr;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control) var(--radius-control) 0 0;
+  list-style: none;
+}
+
+.unavailableNotice {
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+}
+
+.footer {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-top: 0;
+  border-radius: 0 0 var(--radius-control) var(--radius-control);
+  background: var(--color-surface-subtle);
+}
+
+.metadata {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.73rem;
+  text-align: right;
+
+  span + span::before {
+    margin-right: var(--space-3);
+    color: var(--color-border-strong);
+    content: "·";
+  }
+}
+
+@media (max-width: 52rem) {
+  .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2);
+    border: 0;
+
+    > :last-child {
+      grid-column: 1 / -1;
+    }
+  }
+
+  .footer {
+    flex-direction: column;
+    border-top: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+  }
+
+  .metadata {
+    justify-content: flex-start;
+    text-align: left;
+  }
+}
+
+@media (max-width: 28rem) {
+  .metrics {
+    grid-template-columns: minmax(0, 1fr);
+
+    > :last-child {
+      grid-column: auto;
+    }
+  }
+
+  .metadata {
+    flex-direction: column;
+
+    span + span::before {
+      content: none;
+    }
+  }
+}

@@ -1,0 +1,46 @@
+.badge {
+  display: inline-flex;
+  min-height: 1.75rem;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-control);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.025em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.compact {
+  min-height: 1.5rem;
+  padding: 0.15rem 0.45rem;
+  font-size: 0.65rem;
+}
+
+.mock,
+.mixed {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.manual {
+  background: var(--color-warning-soft);
+  color: #885600;
+}
+
+.baseline {
+  background: #edf2f8;
+  color: #465e78;
+}
+
+.real {
+  background: #eaf4ec;
+  color: #3f6747;
+}
+
+.missing {
+  background: var(--color-surface-subtle);
+  color: var(--color-text-secondary);
+}
