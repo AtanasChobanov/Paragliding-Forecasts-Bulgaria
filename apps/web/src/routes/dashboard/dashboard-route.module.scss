@@ -1,0 +1,211 @@
+@use "../../styles/mixins";
+
+.locationContent {
+  display: flex;
+  min-height: 32rem;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.selectorField {
+  display: grid;
+  grid-template-columns: minmax(7rem, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+
+  label {
+    color: var(--color-text-secondary);
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+
+  select {
+    width: 100%;
+    min-width: 0;
+    padding: 0 var(--space-4);
+    border: 1px solid var(--color-primary);
+    border-radius: var(--radius-control);
+    background: var(--color-surface);
+    color: var(--color-heading);
+    font-weight: 600;
+  }
+}
+
+.mapPreview {
+  display: grid;
+  min-height: 27rem;
+  flex: 1;
+  place-content: center;
+  place-items: center;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background:
+    radial-gradient(circle at 65% 35%, rgb(94 125 99 / 12%), transparent 28%),
+    radial-gradient(circle at 30% 70%, rgb(59 130 160 / 10%), transparent 32%),
+    var(--color-surface-subtle);
+  color: var(--color-text-secondary);
+  text-align: center;
+
+  p {
+    max-width: 22rem;
+    margin: 0;
+    font-size: 0.875rem;
+  }
+}
+
+.mapPin {
+  position: relative;
+  width: 2rem;
+  height: 2rem;
+  transform: rotate(45deg);
+  border: 3px solid var(--color-surface);
+  border-radius: 50% 50% 50% 0;
+  background: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-primary);
+
+  &::after {
+    position: absolute;
+    width: 0.5rem;
+    height: 0.5rem;
+    transform: translate(0.45rem, 0.45rem);
+    border-radius: 50%;
+    background: var(--color-surface);
+    content: "";
+  }
+}
+
+.forecastHeading {
+  margin-bottom: var(--space-5);
+  color: var(--color-heading);
+  font-size: clamp(1.35rem, 2.4vw, 2rem);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.otherList,
+.dateList {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.otherList {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+
+  li {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-4);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    background: var(--color-surface-subtle);
+    overflow-wrap: anywhere;
+  }
+
+  strong {
+    color: var(--color-heading);
+    font-weight: 600;
+  }
+
+  span {
+    color: var(--color-text-secondary);
+    font-size: 0.875rem;
+  }
+}
+
+.dateList {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+
+  li + li {
+    border-left: 1px solid var(--color-border);
+  }
+
+  button {
+    width: 100%;
+    min-height: 7.5rem;
+    padding: var(--space-3);
+    border: 0;
+    background: var(--color-surface);
+    color: var(--color-heading);
+    font-weight: 600;
+
+    &[aria-current="date"] {
+      box-shadow: inset 0 0 0 2px var(--color-primary);
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
+    }
+
+    &:hover {
+      background: var(--color-surface-subtle);
+    }
+
+    &:focus-visible {
+      @include mixins.focus-ring;
+
+      position: relative;
+      z-index: 1;
+    }
+  }
+}
+
+@media (max-width: 52rem) {
+  .otherList {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dateList {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2);
+    overflow: visible;
+    border: 0;
+
+    li,
+    li + li {
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-control);
+    }
+
+    li:last-child {
+      grid-column: 1 / -1;
+    }
+
+    button {
+      min-height: 5.5rem;
+      border-radius: inherit;
+    }
+  }
+}
+
+@include mixins.compact {
+  .locationContent {
+    min-height: 22rem;
+  }
+
+  .selectorField {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mapPreview {
+    min-height: 16rem;
+  }
+}
+
+@media (max-width: 28rem) {
+  .dateList {
+    grid-template-columns: minmax(0, 1fr);
+
+    li:last-child {
+      grid-column: auto;
+    }
+  }
+}

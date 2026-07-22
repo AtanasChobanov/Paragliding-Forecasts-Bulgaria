@@ -8,8 +8,8 @@
 | Current Git branch | `feature/T-003-T-005-dashboard` |
 | Branch relationship | Rebased onto `origin/main` at merge commit `d4167ff` after T-002 merged |
 | Current tasks | T-003, T-004, and T-005 — `In Progress` |
-| Completed scope in this branch | Dashboard API/contracts foundation, Stage 0 preflight, runnable React/Vite workspace, validated browser queries, and URL-owned dashboard orchestration; visual dashboard components are not implemented yet |
-| Expected working tree after the Stage 3 commit | Clean |
+| Completed scope in this branch | Dashboard API/contracts foundation, Stage 0 preflight, runnable React/Vite workspace, validated browser queries, URL-owned dashboard orchestration, and the responsive visual foundation |
+| Expected working tree after the Stage 4 commit | Clean |
 
 ## Current outcome
 
@@ -34,10 +34,11 @@ build, runtime API-base validation, strict configurable development port, and
 supervised API/web development command now exist. The browser also has a
 shared-schema-validated fetch client, classified errors, TanStack Query
 provider/options, URL-owned Browser Router dashboard orchestration, and real
-Vitest/jsdom/RTL/MSW tests. No fabricated forecast placeholder, visual design,
-map, database, ORM, weather source, or model was added. Forecast values remain
-explicitly synthetic `mock` data and must not be presented as aviation weather
-or flying advice.
+Vitest/jsdom/RTL/MSW tests. The visual foundation adds self-hosted Inter with
+Cyrillic coverage, CSS theme tokens, a responsive framed layout, a semantic
+application header, four stable dashboard regions, and reusable panel/content-
+state primitives. Forecast values remain explicitly synthetic `mock` data and
+must not be presented as aviation weather or flying advice.
 
 ## Web workspace
 
@@ -60,6 +61,12 @@ or flying advice.
   invalid defaults use history replace and deliberate changes use history push.
 - Sites, five-day previews, and batched summaries retain independent loading,
   error, retry, missing, and response-correlation behavior.
+- The visual shell keeps Overview, Other Locations, Site Selector, and Date
+  Selector mounted across request states so content changes do not reconstruct
+  the page hierarchy.
+- The visible header states `Decision support only` and `Not aviation weather`;
+  it intentionally omits the reference image's decorative bell and any broken
+  detailed-forecast action.
 
 ## HTTP surface
 
@@ -245,6 +252,22 @@ independent failures, stale-data prevention, and response correlation. Vite
 reported a non-blocking 560.27 kB minified main-chunk warning; later visual/map
 work should keep code-splitting in view without inventing a premature route.
 
+The Stage 4 visual-foundation checkpoint passed:
+
+- web build and typecheck passed, including the production Vite bundle;
+- web tests: 9 files / 82 tests;
+- web coverage: 94.55% statements, 91.08% branches, 95.78% functions, and
+  94.68% lines;
+- the responsive shell, semantic panel headings, scoped loading/error/empty
+  states, and application header have component/integration coverage;
+- repository lint, formatting, structure, and `git diff --check` passed after
+  the final gate.
+
+Screenshot generation and automated pixel comparison were deliberately not
+performed at the user's request. Final visual inspection remains a manual user
+check; the automated gate covers structure, semantics, behavior, and build
+integrity.
+
 ## Git checkpoints
 
 This branch contains these reviewable commits after the T-002 base:
@@ -260,18 +283,19 @@ This branch contains these reviewable commits after the T-002 base:
 - `ac6adf9 T-003-T-005 complete dashboard contract preflight`
 - `9cea79b T-003 scaffold runnable React dashboard workspace`
 - `5abe401 T-003-T-005 add validated dashboard API queries`
-- next checkpoint: `T-003-T-005 coordinate dashboard URL state`
+- `71bbc4f T-003-T-005 coordinate dashboard URL state`
+- next checkpoint: `T-003 establish dashboard visual foundation`
 
 The branch was rebased onto the T-002 merge in current `origin/main`. It has not
 been pushed and no pull request was created.
 
 ## Next implementation step
 
-Implement the self-hosted Inter/theme foundation, responsive screenshot-shaped
-page shell, reusable panel/state primitives, and semantic application header.
-Then continue with the overview, Leaflet map, date strip, hardening,
-documentation, and final validation. The confirmed Other Locations order is
-Zlatitsa, Sofia - Vitosha, and Dobrich region; the dashboard copy is English.
+Implement the selected forecast overview and the three static Other Locations
+cards with explicit status, confidence, missing-data, and provenance semantics.
+Then continue with the Leaflet map, date strip, hardening, documentation, and
+final validation. The confirmed Other Locations order is Zlatitsa, Sofia -
+Vitosha, and Dobrich region; the dashboard copy is English.
 
 T-003-T-005 remain `In Progress` until the React dashboard and its relevant
 validation are implemented. T-008 still owns the browser smoke-test tooling.

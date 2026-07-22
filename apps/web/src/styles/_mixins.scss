@@ -1,0 +1,32 @@
+$wide-breakpoint: 70rem;
+$compact-breakpoint: 42rem;
+
+@mixin wide {
+  @media (min-width: $wide-breakpoint) {
+    @content;
+  }
+}
+
+@mixin compact {
+  @media (max-width: $compact-breakpoint) {
+    @content;
+  }
+}
+
+@mixin panel-surface {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-panel);
+}
+
+@mixin focus-ring {
+  outline: 3px solid color-mix(in srgb, var(--color-focus-ring) 35%, transparent);
+  outline-offset: 3px;
+}
+
+@mixin reduced-motion {
+  @media (prefers-reduced-motion: reduce) {
+    @content;
+  }
+}

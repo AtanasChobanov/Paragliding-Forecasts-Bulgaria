@@ -1,0 +1,126 @@
+@use "../../styles/mixins";
+
+.header {
+  display: flex;
+  min-height: 4.875rem;
+  align-items: center;
+  gap: var(--space-6);
+  padding: var(--space-3) var(--space-6);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--color-heading);
+  font-size: clamp(1.35rem, 2vw, 1.75rem);
+  font-weight: 600;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.mark {
+  width: 3rem;
+  height: 3rem;
+  flex: 0 0 auto;
+  color: var(--color-primary);
+
+  path[stroke] {
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.75;
+  }
+}
+
+.divider {
+  width: 1px;
+  height: 2rem;
+  background: var(--color-border);
+}
+
+.currentSection {
+  position: relative;
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-primary);
+  font-size: 1.05rem;
+  font-weight: 600;
+
+  &::after {
+    position: absolute;
+    right: 0;
+    bottom: -0.8rem;
+    left: 0;
+    height: 0.25rem;
+    border-radius: var(--radius-pill);
+    background: var(--color-primary);
+    content: "";
+  }
+}
+
+.safetyContext {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 0 auto;
+  color: var(--color-heading);
+  font-size: 0.75rem;
+  line-height: 1.25;
+
+  > svg {
+    width: 1.5rem;
+    height: 1.5rem;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: var(--color-primary);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.75;
+  }
+
+  strong,
+  span {
+    display: block;
+  }
+}
+
+.safetyDetail {
+  color: var(--color-text-secondary);
+  font-weight: 400;
+}
+
+@include mixins.compact {
+  .header {
+    min-height: auto;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    padding: var(--space-3);
+  }
+
+  .brand {
+    font-size: 1.3rem;
+  }
+
+  .mark {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  .divider {
+    height: 1.75rem;
+  }
+
+  .currentSection::after {
+    bottom: -0.7rem;
+  }
+
+  .safetyContext {
+    width: 100%;
+    margin-left: 0;
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--color-border);
+  }
+}

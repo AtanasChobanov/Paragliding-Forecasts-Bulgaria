@@ -1,3 +1,5 @@
+import "@fontsource-variable/inter";
+
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
@@ -7,6 +9,7 @@ import { createDashboardQueryClient } from "./app/query-client.js";
 import { loadRuntimeConfig } from "./config/runtime-config.js";
 import { createApiClient } from "./services/api/api-client.js";
 import { createDashboardApi } from "./services/api/dashboard-api.js";
+import "./styles/globals.scss";
 
 const runtimeConfig = loadRuntimeConfig();
 const queryClient = createDashboardQueryClient();

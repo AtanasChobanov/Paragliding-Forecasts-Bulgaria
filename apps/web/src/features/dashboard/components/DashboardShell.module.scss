@@ -1,0 +1,66 @@
+@use "../../../styles/mixins";
+
+.main {
+  display: grid;
+  min-width: 0;
+  grid-template-areas:
+    "location"
+    "overview"
+    "other"
+    "dates";
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+.location {
+  grid-area: location;
+}
+
+.overview {
+  grid-area: overview;
+}
+
+.other {
+  grid-area: other;
+}
+
+.dates {
+  grid-area: dates;
+}
+
+@include mixins.wide {
+  .main {
+    grid-template-areas:
+      "overview location"
+      "other location"
+      "dates dates";
+    grid-template-columns: minmax(0, 1.08fr) minmax(28rem, 0.92fr);
+    grid-template-rows: auto auto auto;
+    column-gap: var(--space-6);
+    row-gap: var(--space-4);
+    padding: var(--space-4) 2.125rem 1.75rem;
+  }
+
+  .overview {
+    min-height: 21.5rem;
+  }
+
+  .other {
+    min-height: 18rem;
+  }
+
+  .location {
+    min-height: 40.5rem;
+  }
+
+  .dates {
+    min-height: 13.5rem;
+  }
+}
+
+@include mixins.compact {
+  .main {
+    padding: var(--space-3);
+  }
+}

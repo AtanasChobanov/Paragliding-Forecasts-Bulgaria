@@ -1,0 +1,25 @@
+@use "./styles/mixins";
+
+.frame {
+  width: calc(100% - 0.5rem);
+  min-width: 0;
+  min-height: calc(100vh - 0.5rem);
+  max-width: var(--content-max);
+  margin: var(--space-1) auto;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-shell);
+  background: var(--color-surface-subtle);
+  box-shadow: var(--shadow-shell);
+}
+
+@include mixins.compact {
+  .frame {
+    width: 100%;
+    min-height: 100vh;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}

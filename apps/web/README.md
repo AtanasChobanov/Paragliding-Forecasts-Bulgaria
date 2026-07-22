@@ -3,10 +3,12 @@
 ## Status
 
 The React/Vite workspace is runnable, production-buildable, and backed by a
-validated dashboard HTTP/query foundation. The dashboard route now coordinates
-canonical URL selection and the sites, days, and summaries queries. Its current
-markup is deliberately semantic and unstyled; the screenshot-faithful visual
-components are added by the remaining T-003-T-005 stages.
+validated dashboard HTTP/query foundation. The dashboard route coordinates
+canonical URL selection and the sites, days, and summaries queries inside a
+responsive visual shell with a semantic application header, stable dashboard
+panels, reusable content states, self-hosted Inter, and shared theme tokens.
+Forecast cards, the interactive map, and the five-day selector are added by the
+remaining T-003-T-005 stages.
 
 ## Responsibilities
 
@@ -44,16 +46,28 @@ apps/web/
 |   |   |-- app-routes.tsx
 |   |   `-- query-client.ts
 |   |-- config/runtime-config.ts
+|   |-- components/
+|   |   |-- app-header/
+|   |   |-- content-state/
+|   |   `-- dashboard-panel/
 |   |-- features/dashboard/
+|   |   |-- components/DashboardShell.tsx
 |   |   |-- dashboard-compatibility-error.ts
 |   |   |-- dashboard-query-options.ts
 |   |   |-- dashboard-search-params.ts
 |   |   `-- dashboard-summary-selection.ts
-|   |-- routes/dashboard/dashboard-route.tsx
+|   |-- routes/dashboard/
+|   |   |-- dashboard-route.module.scss
+|   |   `-- dashboard-route.tsx
 |   |-- services/api/
 |   |   |-- api-client.ts
 |   |   |-- api-errors.ts
 |   |   `-- dashboard-api.ts
+|   |-- styles/
+|   |   |-- _mixins.scss
+|   |   |-- _tokens.scss
+|   |   `-- globals.scss
+|   |-- App.module.scss
 |   |-- App.tsx
 |   |-- main.tsx
 |   `-- vite-env.d.ts
@@ -142,6 +156,8 @@ UI keeps its separate Zlatitsa, Sofia - Vitosha, Dobrich region order.
   presentation components are added.
 - Component tests for loading, missing, and error states as the route and
   presentation components are added.
+- Component tests for the stable dashboard shell, panel semantics, and reusable
+  loading, error, empty, and informational states.
 - T-008 browser smoke test proving the dashboard and required cards render.
 
 V8 coverage counts all maintained `src/**/*.{ts,tsx}` files, including files a

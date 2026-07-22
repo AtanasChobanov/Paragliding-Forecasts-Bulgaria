@@ -372,11 +372,12 @@ describe("dashboard request and presentation selection", () => {
     const requests = installDashboardHandlers();
     renderDashboardRoute("/?site=sopot&date=2026-07-18");
 
-    const otherSection = (
-      await screen.findByRole("heading", {
+    await screen.findByText("Zlatitsa");
+    const otherSection = screen
+      .getByRole("heading", {
         name: "Other locations for this date",
       })
-    ).closest("section");
+      .closest("section");
     expect(otherSection).not.toBeNull();
     const items = await within(requireElement(otherSection)).findAllByRole("listitem");
     expect(items.map((item) => item.getAttribute("data-site-slug"))).toEqual([

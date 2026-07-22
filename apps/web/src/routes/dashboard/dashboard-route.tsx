@@ -1,8 +1,10 @@
 import { type ForecastDate, type Site, type SiteSlug } from "@paragliding-forecasts/contracts";
 import { useQuery } from "@tanstack/react-query";
-import { type ChangeEvent, useCallback, useEffect, useMemo } from "react";
+import { type ChangeEvent, type ReactNode, useCallback, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 
+import { ContentState } from "../../components/content-state/ContentState.js";
+import { DashboardShell } from "../../features/dashboard/components/DashboardShell.js";
 import { createDashboardQueryOptions } from "../../features/dashboard/dashboard-query-options.js";
 import {
   createCanonicalDashboardSearch,
@@ -18,6 +20,7 @@ import {
   selectOtherLocationSites,
 } from "../../features/dashboard/dashboard-summary-selection.js";
 import type { DashboardApi } from "../../services/api/dashboard-api.js";
+import styles from "./dashboard-route.module.scss";
 
 export interface DashboardRouteProps {
   readonly dashboardApi: DashboardApi;
@@ -26,21 +29,85 @@ export interface DashboardRouteProps {
 const describeError = (error: unknown): string =>
   error instanceof Error ? error.message : "The forecast request failed unexpectedly.";
 
-interface SummaryRegionsProps {
+interface SiteSelectorControlProps {
+  readonly onSelectSite: (siteSlug: SiteSlug) => void;
+  readonly selectedSite: Site;
+  readonly sites: readonly Site[];
+}
+
+const SiteSelectorControl = ({ onSelectSite, selectedSite, sites }: SiteSelectorControlProps) => {
+  const handleChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    onSelectSite(event.target.value);
+  };
+
+  return (
+    <div className={styles.locationContent}>
+      <div className={styles.selectorField}>
+        <label htmlFor="dashboard-site-selector">Location</label>
+        <select id="dashboard-site-selector" value={selectedSite.slug} onChange={handleChange}>
+          {sites
+            .slice()
+            .sort((left, right) => left.id - right.id)
+            .map((site) => (
+              <option key={site.id} value={site.slug}>
+                {site.name}
+              </option>
+            ))}
+        </select>
+      </div>
+      <div className={styles.mapPreview}>
+        <span aria-hidden="true" className={styles.mapPin} />
+        <p>Interactive location map is added in the T-004 checkpoint.</p>
+      </div>
+    </div>
+  );
+};
+
+interface ForecastDateControlsProps {
+  readonly dates: readonly ForecastDate[];
+  readonly onSelectDate: (date: ForecastDate) => void;
+  readonly selectedDate: ForecastDate;
+}
+
+const ForecastDateControls = ({ dates, onSelectDate, selectedDate }: ForecastDateControlsProps) => (
+  <ol className={styles.dateList}>
+    {dates.map((date) => (
+      <li key={date}>
+        <button
+          aria-current={date === selectedDate ? "date" : undefined}
+          type="button"
+          onClick={() => {
+            onSelectDate(date);
+          }}
+        >
+          {date}
+        </button>
+      </li>
+    ))}
+  </ol>
+);
+
+interface SummaryDashboardProps {
   readonly canonicalSummarySiteSlugs: readonly SiteSlug[];
   readonly dashboardApi: DashboardApi;
+  readonly datesBusy: boolean;
+  readonly datesContent: ReactNode;
   readonly forecastDate: ForecastDate;
+  readonly locationSelector: ReactNode;
   readonly otherLocationSites: readonly Site[];
   readonly selectedSite: Site;
 }
 
-const SummaryRegions = ({
+const SummaryDashboard = ({
   canonicalSummarySiteSlugs,
   dashboardApi,
+  datesBusy,
+  datesContent,
   forecastDate,
+  locationSelector,
   otherLocationSites,
   selectedSite,
-}: SummaryRegionsProps) => {
+}: SummaryDashboardProps) => {
   const queryOptions = useMemo(() => createDashboardQueryOptions(dashboardApi), [dashboardApi]);
   const summariesQuery = useQuery(
     queryOptions.forecastSummaries(forecastDate, canonicalSummarySiteSlugs),
@@ -54,62 +121,89 @@ const SummaryRegions = ({
   );
   const selectedSummary = summariesBySlug?.get(selectedSite.slug);
 
-  return (
+  const overviewContent = summariesQuery.isPending ? (
+    <ContentState
+      message="The selected forecast is being validated and loaded."
+      title="Loading the selected forecast…"
+      variant="loading"
+    />
+  ) : summariesQuery.isError ? (
+    <ContentState
+      message={describeError(summariesQuery.error)}
+      onRetry={() => void summariesQuery.refetch()}
+      retryLabel="Retry selected forecast"
+      title="Forecast request failed"
+      variant="error"
+    />
+  ) : (
     <>
-      <section aria-busy={summariesQuery.isPending} aria-labelledby="forecast-overview-heading">
-        <h2 id="forecast-overview-heading">Forecast overview</h2>
+      {selectedSummary?.availability === "available" ? (
         <p>
-          {selectedSite.name} · {forecastDate}
+          Available · {selectedSummary.outputs.chance100KmPct.dataStatus} · source{" "}
+          {selectedSummary.provenance.source}
         </p>
-        {summariesQuery.isPending ? <p>Loading the selected forecast…</p> : null}
-        {summariesQuery.isError ? (
-          <div role="alert">
-            <p>{describeError(summariesQuery.error)}</p>
-            <button type="button" onClick={() => void summariesQuery.refetch()}>
-              Retry selected forecast
-            </button>
-          </div>
-        ) : null}
-        {selectedSummary?.availability === "available" ? (
-          <p>
-            Available · {selectedSummary.outputs.chance100KmPct.dataStatus} · source{" "}
-            {selectedSummary.provenance.source}
-          </p>
-        ) : null}
-        {selectedSummary?.availability === "missing" ? (
-          <p>Forecast unavailable: {selectedSummary.missingReason}</p>
-        ) : null}
-        {summariesQuery.isSuccess && selectedSummary === undefined ? (
-          <p>No summary was returned for the selected location.</p>
-        ) : null}
-      </section>
-
-      <section aria-busy={summariesQuery.isPending} aria-labelledby="other-locations-heading">
-        <h2 id="other-locations-heading">Other locations for this date</h2>
-        {summariesQuery.isPending ? <p>Loading other locations…</p> : null}
-        {summariesQuery.isError ? <p>Other-location summaries are unavailable.</p> : null}
-        {!summariesQuery.isPending && !summariesQuery.isError ? (
-          <ul>
-            {otherLocationSites.map((site) => {
-              const summary = summariesBySlug?.get(site.slug);
-
-              return (
-                <li key={site.id} data-site-slug={site.slug}>
-                  <span>{site.name}</span>{" "}
-                  {summary?.availability === "available" ? (
-                    <span>{summary.outputs.chance100KmPct.value}% chance of 100+ km</span>
-                  ) : null}
-                  {summary?.availability === "missing" ? (
-                    <span>Forecast unavailable: {summary.missingReason}</span>
-                  ) : null}
-                  {summary === undefined ? <span>No summary returned</span> : null}
-                </li>
-              );
-            })}
-          </ul>
-        ) : null}
-      </section>
+      ) : null}
+      {selectedSummary?.availability === "missing" ? (
+        <p>Forecast unavailable: {selectedSummary.missingReason}</p>
+      ) : null}
+      {selectedSummary === undefined ? (
+        <p>No summary was returned for the selected location.</p>
+      ) : null}
     </>
+  );
+  const overview = (
+    <div>
+      <h3 className={styles.forecastHeading}>
+        {selectedSite.name} · {forecastDate}
+      </h3>
+      {overviewContent}
+    </div>
+  );
+
+  const otherLocations = summariesQuery.isPending ? (
+    <ContentState
+      message="The configured comparison locations are loading."
+      title="Loading other locations…"
+      variant="loading"
+    />
+  ) : summariesQuery.isError ? (
+    <ContentState
+      message="Other-location summaries are unavailable until the shared request succeeds."
+      title="Comparison unavailable"
+      variant="info"
+    />
+  ) : (
+    <ul className={styles.otherList}>
+      {otherLocationSites.map((site) => {
+        const summary = summariesBySlug?.get(site.slug);
+
+        return (
+          <li key={site.id} data-site-slug={site.slug}>
+            <strong>{site.name}</strong>
+            {summary?.availability === "available" ? (
+              <span>{summary.outputs.chance100KmPct.value}% chance of 100+ km</span>
+            ) : null}
+            {summary?.availability === "missing" ? (
+              <span>Forecast unavailable: {summary.missingReason}</span>
+            ) : null}
+            {summary === undefined ? <span>No summary returned</span> : null}
+          </li>
+        );
+      })}
+    </ul>
+  );
+
+  return (
+    <DashboardShell
+      announcement={`Selected ${selectedSite.name} for ${forecastDate}.`}
+      datesBusy={datesBusy}
+      forecastDates={datesContent}
+      locationSelector={locationSelector}
+      otherBusy={summariesQuery.isPending}
+      otherLocations={otherLocations}
+      overview={overview}
+      overviewBusy={summariesQuery.isPending}
+    />
   );
 };
 
@@ -129,8 +223,7 @@ const ResolvedDashboard = ({
   const [searchParameters, setSearchParameters] = useSearchParams();
   const queryOptions = useMemo(() => createDashboardQueryOptions(dashboardApi), [dashboardApi]);
   const forecastDaysQuery = useQuery(queryOptions.forecastDays(selectedSite.slug));
-  const forecastDays = forecastDaysQuery.data;
-  const selectedDate = resolveSelectedDate(searchSelection, forecastDays);
+  const selectedDate = resolveSelectedDate(searchSelection, forecastDaysQuery.data);
   const canonicalSummarySiteSlugs = useMemo(
     () => createCanonicalSummarySiteSlugs(sites, selectedSite),
     [selectedSite, sites],
@@ -153,105 +246,90 @@ const ResolvedDashboard = ({
 
       const nextSite = sites.find((site) => site.slug === siteSlug);
 
-      if (nextSite === undefined) {
-        return;
+      if (nextSite !== undefined) {
+        setSearchParameters(createCanonicalDashboardSearch(nextSite.slug, selectedDate));
       }
-
-      setSearchParameters(createCanonicalDashboardSearch(nextSite.slug, selectedDate));
     },
     [selectedDate, selectedSite.slug, setSearchParameters, sites],
   );
 
-  const handleSiteChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    selectSite(event.target.value);
-  };
-
   const selectDate = useCallback(
-    (forecastDate: ForecastDate) => {
-      if (forecastDate === selectedDate) {
-        return;
+    (date: ForecastDate) => {
+      if (date !== selectedDate) {
+        setSearchParameters(createCanonicalDashboardSearch(selectedSite.slug, date));
       }
-
-      setSearchParameters(createCanonicalDashboardSearch(selectedSite.slug, forecastDate));
     },
     [selectedDate, selectedSite.slug, setSearchParameters],
   );
 
+  const locationSelector = (
+    <SiteSelectorControl onSelectSite={selectSite} selectedSite={selectedSite} sites={sites} />
+  );
+  const datesContent = forecastDaysQuery.isPending ? (
+    <ContentState
+      message="The selected location's five Sofia calendar dates are loading."
+      title="Loading forecast dates…"
+      variant="loading"
+    />
+  ) : forecastDaysQuery.isError ? (
+    <ContentState
+      message={describeError(forecastDaysQuery.error)}
+      onRetry={() => void forecastDaysQuery.refetch()}
+      retryLabel="Retry forecast dates"
+      title="Forecast dates failed"
+      variant="error"
+    />
+  ) : selectedDate === undefined ? null : (
+    <ForecastDateControls
+      dates={forecastDaysQuery.data.days.map((day) => day.forecastDate)}
+      onSelectDate={selectDate}
+      selectedDate={selectedDate}
+    />
+  );
+
+  if (selectedDate === undefined) {
+    return (
+      <DashboardShell
+        announcement={`Selected ${selectedSite.name}. Waiting for forecast dates.`}
+        datesBusy={forecastDaysQuery.isPending}
+        forecastDates={datesContent}
+        locationSelector={locationSelector}
+        otherLocations={
+          <ContentState
+            message="Selecting a valid forecast date is still in progress."
+            title="Waiting for a date"
+            variant="info"
+          />
+        }
+        overview={
+          <ContentState
+            message="Waiting for the selected location's forecast dates."
+            title="Waiting for forecast dates"
+            variant="loading"
+          />
+        }
+        overviewBusy
+      />
+    );
+  }
+
   return (
-    <>
-      <section aria-labelledby="site-selector-heading">
-        <h2 id="site-selector-heading">Select a location</h2>
-        <label htmlFor="dashboard-site-selector">Location</label>
-        <select id="dashboard-site-selector" value={selectedSite.slug} onChange={handleSiteChange}>
-          {sites
-            .slice()
-            .sort((left, right) => left.id - right.id)
-            .map((site) => (
-              <option key={site.id} value={site.slug}>
-                {site.name}
-              </option>
-            ))}
-        </select>
-      </section>
-
-      {selectedDate === undefined ? (
-        <>
-          <section aria-labelledby="forecast-overview-heading">
-            <h2 id="forecast-overview-heading">Forecast overview</h2>
-            <p>Waiting for the selected location's forecast dates.</p>
-          </section>
-          <section aria-labelledby="other-locations-heading">
-            <h2 id="other-locations-heading">Other locations for this date</h2>
-            <p>Selecting a valid forecast date is still in progress.</p>
-          </section>
-        </>
-      ) : (
-        <SummaryRegions
-          canonicalSummarySiteSlugs={canonicalSummarySiteSlugs}
-          dashboardApi={dashboardApi}
-          forecastDate={selectedDate}
-          otherLocationSites={otherLocationSites}
-          selectedSite={selectedSite}
-        />
-      )}
-
-      <section aria-busy={forecastDaysQuery.isPending} aria-labelledby="forecast-date-heading">
-        <h2 id="forecast-date-heading">Select forecast date</h2>
-        {forecastDaysQuery.isPending ? <p>Loading forecast dates…</p> : null}
-        {forecastDaysQuery.isError ? (
-          <div role="alert">
-            <p>{describeError(forecastDaysQuery.error)}</p>
-            <button type="button" onClick={() => void forecastDaysQuery.refetch()}>
-              Retry forecast dates
-            </button>
-          </div>
-        ) : null}
-        {forecastDaysQuery.isSuccess ? (
-          <ol>
-            {forecastDaysQuery.data.days.map((day) => (
-              <li key={day.forecastDate}>
-                <button
-                  aria-current={day.forecastDate === selectedDate ? "date" : undefined}
-                  type="button"
-                  onClick={() => {
-                    selectDate(day.forecastDate);
-                  }}
-                >
-                  {day.forecastDate}
-                </button>
-              </li>
-            ))}
-          </ol>
-        ) : null}
-      </section>
-
-      <p aria-live="polite" role="status">
-        Selected {selectedSite.name}
-        {selectedDate === undefined ? "" : ` for ${selectedDate}`}.
-      </p>
-    </>
+    <SummaryDashboard
+      canonicalSummarySiteSlugs={canonicalSummarySiteSlugs}
+      dashboardApi={dashboardApi}
+      datesBusy={forecastDaysQuery.isPending}
+      datesContent={datesContent}
+      forecastDate={selectedDate}
+      locationSelector={locationSelector}
+      otherLocationSites={otherLocationSites}
+      selectedSite={selectedSite}
+    />
   );
 };
+
+const waitingForSites = (message: string) => (
+  <ContentState message={message} title="Waiting for locations" variant="info" />
+);
 
 export const DashboardRoute = ({ dashboardApi }: DashboardRouteProps) => {
   const [searchParameters] = useSearchParams();
@@ -263,40 +341,69 @@ export const DashboardRoute = ({ dashboardApi }: DashboardRouteProps) => {
     [searchSelection, sitesQuery.data?.sites],
   );
 
+  if (sitesQuery.isPending) {
+    return (
+      <DashboardShell
+        announcement="Loading available forecast locations."
+        forecastDates={waitingForSites("Forecast dates load after a location is selected.")}
+        locationBusy
+        locationSelector={
+          <ContentState
+            message="The dashboard is validating the available site catalog."
+            title="Loading available locations…"
+            variant="loading"
+          />
+        }
+        otherLocations={waitingForSites("Comparison locations load with the catalog.")}
+        overview={waitingForSites("The forecast overview loads after a location is selected.")}
+      />
+    );
+  }
+
+  if (sitesQuery.isError) {
+    return (
+      <DashboardShell
+        announcement="The forecast location catalog could not be loaded."
+        forecastDates={waitingForSites("Forecast dates require the location catalog.")}
+        locationSelector={
+          <ContentState
+            message={describeError(sitesQuery.error)}
+            onRetry={() => void sitesQuery.refetch()}
+            retryLabel="Retry locations"
+            title="Locations request failed"
+            variant="error"
+          />
+        }
+        otherLocations={waitingForSites("Comparison locations require the catalog.")}
+        overview={waitingForSites("The forecast overview requires a known location.")}
+      />
+    );
+  }
+
+  if (sitesQuery.data.sites.length === 0 || selectedSite === undefined) {
+    return (
+      <DashboardShell
+        announcement="The site catalog is empty."
+        forecastDates={waitingForSites("Forecast dates require a configured location.")}
+        locationSelector={
+          <ContentState
+            message="No forecast locations are configured."
+            title="No locations available"
+            variant="empty"
+          />
+        }
+        otherLocations={waitingForSites("There are no comparison locations to show.")}
+        overview={waitingForSites("There is no location forecast to show.")}
+      />
+    );
+  }
+
   return (
-    <main aria-labelledby="dashboard-heading">
-      <h1 id="dashboard-heading">XC Forecast dashboard</h1>
-      {sitesQuery.isPending ? (
-        <section aria-busy="true" aria-labelledby="site-selector-heading">
-          <h2 id="site-selector-heading">Select a location</h2>
-          <p>Loading available locations…</p>
-        </section>
-      ) : null}
-      {sitesQuery.isError ? (
-        <section aria-labelledby="site-selector-heading">
-          <h2 id="site-selector-heading">Select a location</h2>
-          <div role="alert">
-            <p>{describeError(sitesQuery.error)}</p>
-            <button type="button" onClick={() => void sitesQuery.refetch()}>
-              Retry locations
-            </button>
-          </div>
-        </section>
-      ) : null}
-      {sitesQuery.isSuccess && sitesQuery.data.sites.length === 0 ? (
-        <section aria-labelledby="site-selector-heading">
-          <h2 id="site-selector-heading">Select a location</h2>
-          <p>No forecast locations are configured.</p>
-        </section>
-      ) : null}
-      {sitesQuery.isSuccess && selectedSite !== undefined ? (
-        <ResolvedDashboard
-          dashboardApi={dashboardApi}
-          searchSelection={searchSelection}
-          selectedSite={selectedSite}
-          sites={sitesQuery.data.sites}
-        />
-      ) : null}
-    </main>
+    <ResolvedDashboard
+      dashboardApi={dashboardApi}
+      searchSelection={searchSelection}
+      selectedSite={selectedSite}
+      sites={sitesQuery.data.sites}
+    />
   );
 };
