@@ -8,8 +8,8 @@
 | Current Git branch | `feature/T-003-T-005-dashboard` |
 | Branch relationship | Rebased onto `origin/main` at merge commit `d4167ff` after T-002 merged |
 | Current tasks | T-003, T-004, and T-005 — `In Progress` |
-| Completed scope in this branch | Dashboard API/contracts foundation, Stage 0 preflight, and runnable React/Vite workspace; dashboard UI is not implemented yet |
-| Expected working tree after the Stage 1 commit | Clean |
+| Completed scope in this branch | Dashboard API/contracts foundation, Stage 0 preflight, runnable React/Vite workspace, and validated browser query foundation; dashboard UI is not implemented yet |
+| Expected working tree after the Stage 2 commit | Clean |
 
 ## Current outcome
 
@@ -31,7 +31,9 @@ the repository deliberately does not contain a separate dashboard-plan file.
 
 A minimal React root, strict browser/Node TypeScript configs, Vite production
 build, runtime API-base validation, strict configurable development port, and
-supervised API/web development command now exist. No forecast placeholder,
+supervised API/web development command now exist. The browser also has a
+shared-schema-validated fetch client, classified errors, TanStack Query
+provider/options, and real Vitest/jsdom/RTL/MSW tests. No forecast placeholder,
 dashboard route, database, ORM, weather source, or model was added. Forecast
 values remain explicitly synthetic `mock` data and must not be presented as
 aviation weather or flying advice.
@@ -46,8 +48,13 @@ aviation weather or flying advice.
 - `VITE_API_BASE_URL` is validated before React renders as an absolute HTTP(S)
   URL and normalized without a trailing slash.
 - Root build, typecheck, lint, format, and structure checks now include web.
-- Web tests remain deliberately absent until Stage 2 adds real client/provider
-  behavior and coverage.
+- Standalone web commands build shared contracts before compiling or testing;
+  the combined supervisor builds them once before starting raw watchers.
+- Browser requests classify network, HTTP Problem Details, and invalid-success
+  failures, propagate cancellation, and retry only the first network/5xx
+  failure.
+- Web coverage counts all maintained TS/TSX source with enforced 80%
+  statement/line/function and 75% branch minimums.
 
 ## HTTP surface
 
@@ -204,6 +211,19 @@ API and web responses together, an invalid `WEB_PORT` failed nonzero and left
 no API listener behind, and a second Vite process failed rather than falling
 through from occupied port 5173.
 
+The Stage 2 browser query checkpoint passed:
+
+- web build and typecheck passed, including the production Vite bundle;
+- web tests: 4 files / 32 tests;
+- web coverage: 87.93% statements, 88.46% branches, 94.11% functions, and
+  88.49% lines;
+- repository lint, formatting, structure, and `git diff --check` passed.
+
+Tests cover base-path-safe URL/query encoding, all three response schemas,
+validated Problem Details, safe non-JSON HTTP fallback, network failure,
+cancellation, malformed successful responses, stable query keys/signals, and
+retry/freshness/provider defaults.
+
 ## Git checkpoints
 
 This branch contains these reviewable commits after the T-002 base:
@@ -217,18 +237,20 @@ This branch contains these reviewable commits after the T-002 base:
 - `1519111 T-003-T-005 document dashboard API foundation`
 - `6eb8352 T-003-T-005 extract forecast response mapper`
 - `ac6adf9 T-003-T-005 complete dashboard contract preflight`
-- next checkpoint: `T-003 scaffold runnable React dashboard workspace`
+- `9cea79b T-003 scaffold runnable React dashboard workspace`
+- next checkpoint: `T-003-T-005 add validated dashboard API queries`
 
 The branch was rebased onto the T-002 merge in current `origin/main`. It has not
 been pushed and no pull request was created.
 
 ## Next implementation step
 
-Continue with the validated dashboard API client, TanStack Query provider,
-Vitest/jsdom/RTL/MSW foundation, and enforced web coverage. Then implement URL
-state, visual foundation, overview, Leaflet map, date strip, hardening,
-documentation, and final validation. The confirmed Other Locations order is
-Zlatitsa, Sofia - Vitosha, and Dobrich region; the dashboard copy is English.
+Implement URL-owned site/date normalization, dependent query orchestration,
+history navigation, canonical request deduplication, and summary reindexing.
+Then continue with the visual foundation, overview, Leaflet map, date strip,
+hardening, documentation, and final validation. The confirmed Other Locations
+order is Zlatitsa, Sofia - Vitosha, and Dobrich region; the dashboard copy is
+English.
 
 T-003-T-005 remain `In Progress` until the React dashboard and its relevant
 validation are implemented. T-008 still owns the browser smoke-test tooling.

@@ -2,9 +2,10 @@
 
 ## Status
 
-The React/Vite workspace is runnable and production-buildable. It currently
-renders only the truthful application heading; the real dashboard route, API
-queries, and visual components are added by the remaining T-003-T-005 stages.
+The React/Vite workspace is runnable, production-buildable, and backed by a
+validated dashboard HTTP/query foundation. It still renders only the truthful
+application heading; URL orchestration and visual dashboard components are
+added by the remaining T-003-T-005 stages.
 
 ## Responsibilities
 
@@ -37,14 +38,27 @@ It consumes versioned HTTP contracts from `@paragliding-forecasts/contracts`.
 apps/web/
 |-- index.html
 |-- src/
+|   |-- app/
+|   |   |-- AppProviders.tsx
+|   |   `-- query-client.ts
 |   |-- config/runtime-config.ts
+|   |-- features/dashboard/dashboard-query-options.ts
+|   |-- services/api/
+|   |   |-- api-client.ts
+|   |   |-- api-errors.ts
+|   |   `-- dashboard-api.ts
 |   |-- App.tsx
 |   |-- main.tsx
 |   `-- vite-env.d.ts
+|-- test/
+|   |-- integration/
+|   |-- support/
+|   `-- unit/
 |-- package.json
 |-- tsconfig.json
 |-- tsconfig.node.json
-`-- vite.config.ts
+|-- vite.config.ts
+`-- vitest.config.ts
 ```
 
 Prefer feature-oriented folders once the UI grows; avoid a single global
@@ -58,12 +72,14 @@ Run from the repository root:
 npm.cmd run dev:web
 npm.cmd run build --workspace @paragliding-forecasts/web
 npm.cmd run typecheck --workspace @paragliding-forecasts/web
+npm.cmd run test --workspace @paragliding-forecasts/web
+npm.cmd run test:coverage --workspace @paragliding-forecasts/web
 ```
 
 Use `npm.cmd run dev` to supervise the API and web servers together. Vite uses
 `strictPort: true`, so an occupied configured port fails instead of silently
-moving the dashboard to another origin. Stage 2 adds the first real web test
-scripts together with meaningful API-client/provider tests.
+moving the dashboard to another origin. The test scripts run meaningful
+API-client, query, provider, and runtime-configuration tests.
 
 ## Configuration
 
@@ -77,11 +93,33 @@ Current variables:
 - `WEB_PORT` - Vite development port, default `5173`; changing it requires the
   exact matching `CORS_ORIGIN`
 
+Standalone web `dev`, `build`, `typecheck`, and test commands build the shared
+contracts first. The combined root `dev` supervisor builds contracts once and
+then starts the raw API and web watchers.
+
+## API and query behavior
+
+The browser client exposes the site catalog, batched daily summaries, and
+five-day preview endpoints. Successful JSON is parsed with the shared Zod
+response schemas. Failures remain distinguishable as network errors, validated
+HTTP Problem Details, or incompatible successful responses. TanStack Query
+forwards cancellation, treats the site catalog as static, uses five-minute
+forecast freshness, disables focus refetch, and retries only the first network
+or HTTP 5xx failure.
+
 ## Testing expectations
 
-- Unit tests for forecast-card transformations and data-status mapping.
-- Component tests for loading, missing, and error states.
+- API-client tests for URL encoding, success parsing, Problem Details, network
+  failure, cancellation, malformed JSON, invalid response shapes, and safe
+  non-JSON HTTP fallbacks.
+- Query/provider tests for stable keys, cancellation signals, freshness, and
+  retry policy.
+- Unit tests for forecast-card transformations and data-status mapping as the
+  presentation components are added.
+- Component tests for loading, missing, and error states as the route and
+  presentation components are added.
 - T-008 browser smoke test proving the dashboard and required cards render.
 
-There is intentionally no passing placeholder web test script. Stage 2 adds the
-test command and coverage gate with the first behavior it can verify.
+V8 coverage counts all maintained `src/**/*.{ts,tsx}` files, including files a
+test never imports. The enforced minimums are 80% statements, lines, and
+functions and 75% branches.
