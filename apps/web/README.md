@@ -22,6 +22,13 @@ It consumes versioned HTTP contracts from `@paragliding-forecasts/contracts`.
 - React
 - Vite
 - TypeScript in strict mode
+- React Router with `site` and `date` URL search parameters
+- TanStack Query for API/server state
+- native `fetch` validated with `@paragliding-forecasts/contracts`
+- SCSS Modules, CSS custom-property theme tokens, and self-hosted Inter
+- Leaflet through React Leaflet with OpenStreetMap raster tiles for the local
+  MVP
+- Vitest, React Testing Library, and MSW for unit/component/API-client tests
 - A browser-testing tool selected when T-008 is implemented
 
 ## Planned layout

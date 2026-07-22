@@ -4,6 +4,7 @@ import pino from "pino";
 import { createApp } from "../../src/app.js";
 import { API_VERSION } from "../../src/app-metadata.js";
 import { createRootRouter } from "../../src/http/router.js";
+import type { ForecastRepository } from "../../src/modules/forecasts/forecast.repository.js";
 import { createForecastRouter } from "../../src/modules/forecasts/forecast.routes.js";
 import { ForecastService } from "../../src/modules/forecasts/forecast.service.js";
 import { MockForecastRepository } from "../../src/modules/forecasts/mock-forecast.repository.js";
@@ -17,12 +18,14 @@ export const FIXED_NOW = new Date("2026-07-17T12:00:00.000Z");
 export interface TestAppOptions {
   readonly additionalRouters?: readonly ExpressRouter[];
   readonly corsOrigin?: string;
+  readonly forecastRepository?: ForecastRepository;
   readonly version?: string;
 }
 
 export const createTestApp = ({
   additionalRouters = [],
   corsOrigin = "http://localhost:5173",
+  forecastRepository = new MockForecastRepository({ now: () => FIXED_NOW }),
   version = API_VERSION,
 }: TestAppOptions = {}): Express => {
   const healthRouter = createHealthRouter({
@@ -32,7 +35,6 @@ export const createTestApp = ({
   const siteRepository = new InMemorySiteRepository();
   const siteService = new SiteService(siteRepository);
   const siteRouter = createSiteRouter({ siteService });
-  const forecastRepository = new MockForecastRepository({ now: () => FIXED_NOW });
   const forecastService = new ForecastService(forecastRepository, siteService, () => FIXED_NOW);
   const forecastRouter = createForecastRouter({ forecastService });
   const router = createRootRouter([healthRouter, siteRouter, forecastRouter, ...additionalRouters]);

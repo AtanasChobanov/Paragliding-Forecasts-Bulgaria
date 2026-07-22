@@ -20,6 +20,15 @@ describe("GET /api/v1/sites", () => {
       "pastrina",
       "dobrich-region",
     ]);
+    expect(body.sites.map((site) => site.name)).toEqual([
+      "Sofia - Vitosha (Kominite)",
+      "Zlatitsa",
+      "Sopot",
+      "Nevsha",
+      "Shumen",
+      "Pastrina",
+      "Dobrich region",
+    ]);
     expect(body.sites.map(({ latitude, longitude }) => ({ latitude, longitude }))).toEqual([
       { latitude: 42.60222, longitude: 23.28927 },
       { latitude: 42.71506, longitude: 24.13749 },

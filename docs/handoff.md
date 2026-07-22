@@ -6,10 +6,10 @@
 | --- | --- |
 | Last updated | 2026-07-22 |
 | Current Git branch | `feature/T-003-T-005-dashboard` |
-| Branch relationship | Created from rebased `feature/T-002-local-server-skeleton` at `ab81a70`; intentionally stacked until T-002 is merged |
+| Branch relationship | Rebased onto `origin/main` at merge commit `d4167ff` after T-002 merged |
 | Current tasks | T-003, T-004, and T-005 — `In Progress` |
-| Completed scope in this branch | Dashboard API/contracts foundation; React UI is not implemented yet |
-| Expected working tree after the response-mapper commit | Clean |
+| Completed scope in this branch | Dashboard API/contracts foundation, accepted implementation direction, and Stage 0 HTTP integration preflight; React UI is not implemented yet |
+| Expected working tree after the Stage 0 commit | Clean |
 
 ## Current outcome
 
@@ -24,6 +24,10 @@ summary, and day-preview response shapes now lives in
 `forecast-response.mapper.ts`. `ForecastService` contains only the three public
 use cases, site resolution, clock use, repository access, ordering, and missing
 record decisions. No state-free helper class was introduced.
+
+The dashboard implementation plan is supplied outside the repository with the
+implementation task. DEC-017 records its durable accepted technology choices;
+the repository deliberately does not contain a separate dashboard-plan file.
 
 No React implementation, database, ORM, new package, environment variable,
 weather source, or model was added. Forecast values remain explicitly synthetic
@@ -87,15 +91,16 @@ The dashboard route/page should own request orchestration; presentational cards
 should receive data rather than fetch independently.
 
 1. Fetch `/api/v1/sites` once for the map and location selector.
-2. Store selected site slug and date in dashboard state.
+2. Derive selected site slug and date from canonical URL search parameters.
 3. Deduplicate the selected site plus the default Other Locations slugs and
    fetch them through one summaries request.
 4. Index summaries by slug because the API sorts by ID, not request order. If
    the selected site is also a default card, reuse the same summary in both
    positions.
 5. Fetch `/api/v1/forecasts/days` when the selected site changes.
-6. Navigate the detailed button with selected slug/date; the detailed page
-   later owns `/api/v1/forecasts`.
+6. Omit the detailed action in T-003-T-005. T-006 adds the control together
+   with its real route and later owns `/api/v1/forecasts`; do not ship a broken,
+   disabled, or placeholder dashboard control now.
 
 This means the forecast portion of one dashboard state needs two requests, not
 one request per component.
@@ -132,7 +137,7 @@ Missing records deliberately differ by read model:
 | Summaries | `200` missing item |
 | Days | `200` fixed slot with missing p100 metric |
 
-Accepted design decisions are recorded as DEC-015 and DEC-016 in
+Accepted design decisions are recorded as DEC-015 through DEC-017 in
 [`decisions.md`](decisions.md).
 
 ## Validation
@@ -154,35 +159,44 @@ Express/Supertest query parsing, summary ordering and partial missing data,
 fixed missing date slots, timezone/calendar boundaries, repository batch/range
 behavior, and existing server/logging/error behavior.
 
+The Stage 0 contracts/API gate was rerun and extended on 2026-07-22:
+
+- contracts build and typecheck passed;
+- contracts tests: 2 files / 15 tests;
+- contracts coverage: 98.82% statements/lines, 97.22% branches, 100% functions;
+- API build and typecheck passed;
+- API tests: 16 files / 82 tests;
+- API coverage: 80.24% statements, 81.11% branches, 82.35% functions, 80.50% lines.
+
+The new HTTP cases cover exact site names, the seven-site summary upper bound,
+strict missing/repeated parameters, exact batch membership, correlated Problem
+Details, mixed available/missing summaries, and a fixed missing day slot.
+
 ## Git checkpoints
 
 This branch contains these reviewable commits after the T-002 base:
 
-- `54bd271 T-004 add provisional site map coordinates`
-- `4acc6b1 T-003-T-005 define dashboard forecast contracts`
-- `bb18bfd T-003-T-005 add date-aware forecast fixtures`
-- `58841d5 T-003-T-005 add forecast summary endpoint`
-- `bf7192c T-005 add five-day forecast preview endpoint`
-- `3180131 T-003-T-005 harden dashboard API implementation`
-- `518e1fb T-003-T-005 document dashboard API foundation`
-- final `T-003-T-005 extract forecast response mapper` commit containing this
-  handoff
+- `3c7283b T-004 add provisional site map coordinates`
+- `34dabe5 T-003-T-005 define dashboard forecast contracts`
+- `e0d07e8 T-003-T-005 add date-aware forecast fixtures`
+- `035ba8e T-003-T-005 add forecast summary endpoint`
+- `af54e88 T-005 add five-day forecast preview endpoint`
+- `5aa3250 T-003-T-005 harden dashboard API implementation`
+- `1519111 T-003-T-005 document dashboard API foundation`
+- `6eb8352 T-003-T-005 extract forecast response mapper`
+- next checkpoint: `T-003-T-005 complete dashboard contract preflight`
 
-No branch was pushed and no pull request was created. After T-002 is merged,
-fetch and rebase this branch onto the updated `origin/main`; do not use a stale
-local `main` as the rebase target.
+The branch was rebased onto the T-002 merge in current `origin/main`. It has not
+been pushed and no pull request was created.
 
 ## Next implementation step
 
-Continue T-003-T-005 in `apps/web`:
-
-- turn the React/Vite scaffold into a runnable dashboard workspace;
-- implement route-level query/state ownership described above;
-- build the header, selected forecast overview, map/location selector, default
-  Other Locations cards, and five-card date strip from the approved mockup;
-- label `mock` and missing data clearly and implement loading/error/empty states;
-- keep the detailed forecast destination outside this dashboard slice;
-- add the real web commands and their documentation in the same UI change.
+Stage 0 is complete. Continue with the runnable React/Vite workspace, then the
+validated client/query, URL state, visual foundation, overview, Leaflet map,
+date strip, hardening, documentation, and validation checkpoints. Derive the
+Other Locations order and visual copy from the supplied image, not API ID
+order. The confirmed card order is Zlatitsa, Sofia - Vitosha, and Dobrich
+region; the dashboard copy is English.
 
 T-003-T-005 remain `In Progress` until the React dashboard and its relevant
 validation are implemented. T-008 still owns the browser smoke-test tooling.

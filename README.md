@@ -59,7 +59,7 @@ test notes in its README. Cross-project information belongs here or in `docs/`.
 
 | Area | Choice | Current state |
 | --- | --- | --- |
-| Web | React + Vite + TypeScript | Scaffold present; dashboard implementation pending |
+| Web | React + Vite + TypeScript, Router, TanStack Query, SCSS Modules, and Leaflet | Agreed stack; runnable dashboard pending |
 | API | Node.js + Express + TypeScript | Runnable with dashboard read endpoints |
 | Shared contracts | TypeScript + Zod | Runtime schemas and inferred types implemented |
 | Data and ML | Python managed by `uv` | Project boundary only |

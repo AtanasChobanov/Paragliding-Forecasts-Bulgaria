@@ -27,6 +27,9 @@ consequences. Temporary progress and Git state belong in
 | DEC-012 | Use TSX and Vitest for the initial API development loop | Accepted | 2026-07-17 |
 | DEC-013 | Use Pino logging and Problem Details HTTP errors | Accepted | 2026-07-17 |
 | DEC-014 | Separate internal numeric site IDs from public slugs | Accepted | 2026-07-20 |
+| DEC-015 | Add dashboard-specific forecast read models | Accepted | 2026-07-21 |
+| DEC-016 | Expose provisional map coordinates and confirm Pastrina spelling | Accepted | 2026-07-21 |
+| DEC-017 | Use a focused React dashboard stack with Leaflet | Accepted | 2026-07-22 |
 
 ## Individual decisions
 
@@ -547,6 +550,64 @@ ingestion or geographic matching treats them as authoritative.
 **Related files:** [`project-brief.md`](project-brief.md),
 [`../packages/contracts/src/sites.ts`](../packages/contracts/src/sites.ts),
 [`../apps/api/src/modules/sites/in-memory-site.repository.ts`](../apps/api/src/modules/sites/in-memory-site.repository.ts).
+
+### DEC-017 — Use a focused React dashboard stack with Leaflet
+
+**Status:** Accepted
+
+**Date:** 2026-07-22
+
+**Context:** T-003-T-005 need a shareable selected site/date, validated API
+data, a bespoke responsive visual system, and a real map with zoom, pan,
+labeled pins, and location selection. The dashboard has only two canonical
+selection values and three bounded server reads, so a general-purpose client
+state store or component framework would add more concepts than the current
+scope requires.
+
+**Decision:** Keep `site` and `date` in React Router search parameters and use
+TanStack Query for server state. Use native `fetch` and validate every
+successful response with the Zod schemas exported by
+`@paragliding-forecasts/contracts`. Keep transient UI state local rather than
+creating a Redux, Zustand, or custom global Context store.
+
+Style the application with SCSS Modules, Sass `@use`, and one CSS-custom-
+property theme. Use the self-hosted Inter family throughout the MVP. Build the
+interactive location selector with Leaflet through React Leaflet. Use
+OpenStreetMap Standard raster tiles only for the low-volume local MVP, keep the
+tile source and attribution centralized/configurable, follow the tile usage
+policy, and provide an accessible HTML location selector and tile-failure
+fallback.
+
+**Rationale:** This separates shareable browser navigation, cached server data,
+and transient presentation state without duplicating sources of truth. SCSS
+Modules support the supplied custom design while retaining component scope and
+reusable theme tokens. Leaflet provides the required map interactions and
+selectable named markers without Google Maps account, billing, or provider
+lock-in.
+
+**Alternatives considered:** Raw `useEffect`/`useState` fetching was not chosen
+because it would require custom cancellation, stale-response, cache, retry, and
+error logic. Redux, Zustand, and a custom dashboard Context were not chosen
+because the URL and TanStack Query already own the relevant state. Tailwind and
+Bootstrap were not chosen because the supplied visual language is small and
+bespoke; both would add a second styling vocabulary, and Bootstrap would also
+require substantial visual overrides. Google Maps was not chosen because it
+adds billing/account and vendor coupling. A hand-built SVG map was rejected
+because it would not provide a real navigable basemap. MapLibre remains a
+future option if vector maps become a concrete requirement.
+
+**Consequences:** Web dependencies belong to `apps/web` and must be version-
+locked through the root npm lockfile. Route-level query ownership follows
+DEC-015; presentational cards do not fetch. URL normalization must distinguish
+history `replace` from user-navigation `push`. The browser must never duplicate
+shared response schemas. Public OSM tiles require network access, visible
+attribution, policy compliance, and have no availability guarantee. T-008 still
+owns selection of browser-test tooling, and T-009 still owns authoritative site
+coordinates.
+
+**Related files:** [`handoff.md`](handoff.md),
+[`../apps/web/README.md`](../apps/web/README.md),
+[`architecture.md`](architecture.md), [`../README.md`](../README.md).
 
 ## Open decisions
 
