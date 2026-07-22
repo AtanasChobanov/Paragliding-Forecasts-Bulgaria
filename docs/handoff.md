@@ -8,8 +8,8 @@
 | Current Git branch | `feature/T-003-T-005-dashboard` |
 | Branch relationship | Rebased onto `origin/main` at merge commit `d4167ff` after T-002 merged |
 | Current tasks | T-003, T-004, and T-005 — `In Progress` |
-| Completed scope in this branch | Dashboard API/contracts foundation, Stage 0 preflight, runnable React/Vite workspace, and validated browser query foundation; dashboard UI is not implemented yet |
-| Expected working tree after the Stage 2 commit | Clean |
+| Completed scope in this branch | Dashboard API/contracts foundation, Stage 0 preflight, runnable React/Vite workspace, validated browser queries, and URL-owned dashboard orchestration; visual dashboard components are not implemented yet |
+| Expected working tree after the Stage 3 commit | Clean |
 
 ## Current outcome
 
@@ -33,10 +33,11 @@ A minimal React root, strict browser/Node TypeScript configs, Vite production
 build, runtime API-base validation, strict configurable development port, and
 supervised API/web development command now exist. The browser also has a
 shared-schema-validated fetch client, classified errors, TanStack Query
-provider/options, and real Vitest/jsdom/RTL/MSW tests. No forecast placeholder,
-dashboard route, database, ORM, weather source, or model was added. Forecast
-values remain explicitly synthetic `mock` data and must not be presented as
-aviation weather or flying advice.
+provider/options, URL-owned Browser Router dashboard orchestration, and real
+Vitest/jsdom/RTL/MSW tests. No fabricated forecast placeholder, visual design,
+map, database, ORM, weather source, or model was added. Forecast values remain
+explicitly synthetic `mock` data and must not be presented as aviation weather
+or flying advice.
 
 ## Web workspace
 
@@ -55,6 +56,10 @@ aviation weather or flying advice.
   failure.
 - Web coverage counts all maintained TS/TSX source with enforced 80%
   statement/line/function and 75% branch minimums.
+- `site` and `date` URL parameters are the sole dashboard selection state;
+  invalid defaults use history replace and deliberate changes use history push.
+- Sites, five-day previews, and batched summaries retain independent loading,
+  error, retry, missing, and response-correlation behavior.
 
 ## HTTP surface
 
@@ -108,10 +113,10 @@ GET /api/v1/forecasts/days?siteSlug=...
 - Date calculation uses Sofia calendar extraction and UTC calendar arithmetic,
   avoiding fixed-duration DST errors.
 
-## Intended React request ownership
+## React request ownership
 
-The dashboard route/page should own request orchestration; presentational cards
-should receive data rather than fetch independently.
+The dashboard route owns request orchestration; presentational cards receive
+data rather than fetching independently.
 
 1. Fetch `/api/v1/sites` once for the map and location selector.
 2. Derive selected site slug and date from canonical URL search parameters.
@@ -224,6 +229,22 @@ validated Problem Details, safe non-JSON HTTP fallback, network failure,
 cancellation, malformed successful responses, stable query keys/signals, and
 retry/freshness/provider defaults.
 
+The Stage 3 URL orchestration checkpoint passed:
+
+- web build and typecheck passed, including the production Vite bundle;
+- web tests: 6 files / 76 tests;
+- web coverage: 93.43% statements, 91.55% branches, 95.18% functions, and
+  93.52% lines;
+- repository lint, formatting, structure, and `git diff --check` passed.
+
+Tests cover strict/default URL normalization, valid-date concurrency, API-
+defined today fallback, out-of-strip correction, Back/Forward and production
+BrowserRouter deep links, same-selection no-ops, numeric-ID request ordering,
+selected-site deduplication, partial/empty catalogs, omitted summary content,
+independent failures, stale-data prevention, and response correlation. Vite
+reported a non-blocking 560.27 kB minified main-chunk warning; later visual/map
+work should keep code-splitting in view without inventing a premature route.
+
 ## Git checkpoints
 
 This branch contains these reviewable commits after the T-002 base:
@@ -238,19 +259,19 @@ This branch contains these reviewable commits after the T-002 base:
 - `6eb8352 T-003-T-005 extract forecast response mapper`
 - `ac6adf9 T-003-T-005 complete dashboard contract preflight`
 - `9cea79b T-003 scaffold runnable React dashboard workspace`
-- next checkpoint: `T-003-T-005 add validated dashboard API queries`
+- `5abe401 T-003-T-005 add validated dashboard API queries`
+- next checkpoint: `T-003-T-005 coordinate dashboard URL state`
 
 The branch was rebased onto the T-002 merge in current `origin/main`. It has not
 been pushed and no pull request was created.
 
 ## Next implementation step
 
-Implement URL-owned site/date normalization, dependent query orchestration,
-history navigation, canonical request deduplication, and summary reindexing.
-Then continue with the visual foundation, overview, Leaflet map, date strip,
-hardening, documentation, and final validation. The confirmed Other Locations
-order is Zlatitsa, Sofia - Vitosha, and Dobrich region; the dashboard copy is
-English.
+Implement the self-hosted Inter/theme foundation, responsive screenshot-shaped
+page shell, reusable panel/state primitives, and semantic application header.
+Then continue with the overview, Leaflet map, date strip, hardening,
+documentation, and final validation. The confirmed Other Locations order is
+Zlatitsa, Sofia - Vitosha, and Dobrich region; the dashboard copy is English.
 
 T-003-T-005 remain `In Progress` until the React dashboard and its relevant
 validation are implemented. T-008 still owns the browser smoke-test tooling.

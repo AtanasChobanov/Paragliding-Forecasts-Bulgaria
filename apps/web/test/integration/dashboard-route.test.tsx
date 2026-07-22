@@ -1,0 +1,547 @@
+import {
+  forecastDaysResponseSchema,
+  forecastSummariesResponseSchema,
+  sitesResponseSchema,
+  type ForecastDate,
+  type ForecastDaysResponse,
+  type ForecastSummariesResponse,
+  type Site,
+  type SiteSlug,
+} from "@paragliding-forecasts/contracts";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { HttpResponse, http } from "msw";
+import { useLocation, useNavigate, MemoryRouter } from "react-router-dom";
+import { afterEach, describe, expect, it } from "vitest";
+
+import { App } from "../../src/App.js";
+import { AppRoutes } from "../../src/app/app-routes.js";
+import { createApiClient } from "../../src/services/api/api-client.js";
+import { createDashboardApi } from "../../src/services/api/dashboard-api.js";
+import { createForecastOutputs, createSitesResponse } from "../support/dashboard-fixtures.js";
+import { renderWithQueryClient } from "../support/render.js";
+import { server } from "../support/server.js";
+
+const API_BASE_URL = "https://dashboard-route.example.test/local";
+const SITES_URL = `${API_BASE_URL}/api/v1/sites`;
+const SUMMARIES_URL = `${API_BASE_URL}/api/v1/forecasts/summaries`;
+const DAYS_URL = `${API_BASE_URL}/api/v1/forecasts/days`;
+const DEFAULT_TODAY = "2026-07-18" satisfies ForecastDate;
+
+const createTestDashboardApi = () => createDashboardApi(createApiClient({ baseUrl: API_BASE_URL }));
+const fullCatalog = createSitesResponse().sites;
+
+const requireSearchParameter = (searchParameters: URLSearchParams, name: string): string => {
+  const value = searchParameters.get(name);
+
+  if (value === null) {
+    throw new Error(`Expected the ${name} request parameter.`);
+  }
+
+  return value;
+};
+
+const requireElement = <ElementType extends Element>(element: ElementType | null): ElementType => {
+  if (element === null) {
+    throw new Error("Expected the dashboard section to be rendered.");
+  }
+
+  return element;
+};
+
+interface Deferred {
+  readonly promise: Promise<void>;
+  readonly resolve: () => void;
+}
+
+const createDeferred = (): Deferred => {
+  let resolvePromise: () => void = () => {
+    // Replaced synchronously by the Promise constructor.
+  };
+  const promise = new Promise<void>((resolve) => {
+    resolvePromise = resolve;
+  });
+
+  return { promise, resolve: resolvePromise };
+};
+
+const addUtcDays = (date: ForecastDate, offset: number): ForecastDate => {
+  const [year, month, day] = date.split("-").map(Number) as [number, number, number];
+  return new Date(Date.UTC(year, month - 1, day + offset)).toISOString().slice(0, 10);
+};
+
+const createDays = (site: Site, todayDate: ForecastDate = DEFAULT_TODAY): ForecastDaysResponse =>
+  forecastDaysResponseSchema.parse({
+    siteId: site.id,
+    siteSlug: site.slug,
+    timeZone: "Europe/Sofia",
+    todayDate,
+    days: [-2, -1, 0, 1, 2].map((offset) => ({
+      forecastDate: addUtcDays(todayDate, offset),
+      chance100KmPct: {
+        value: 65 + offset,
+        dataStatus: "mock",
+        confidence: { level: "low", note: "Synthetic route-test value." },
+      },
+    })),
+  });
+
+const createSummaries = (
+  forecastDate: ForecastDate,
+  sites: readonly Site[],
+): ForecastSummariesResponse =>
+  forecastSummariesResponseSchema.parse({
+    forecastDate,
+    summaries: sites
+      .slice()
+      .sort((left, right) => left.id - right.id)
+      .map((site) => ({
+        availability: "available",
+        siteId: site.id,
+        siteSlug: site.slug,
+        forecastDate,
+        generatedAt: "2026-07-17T20:00:00.000Z",
+        provenance: { source: `source-${site.slug}`, version: "route-test-v1" },
+        outputs: createForecastOutputs(),
+      })),
+  });
+
+interface DashboardHandlerOptions {
+  readonly catalog?: readonly Site[];
+  readonly daysGate?: Promise<void>;
+  readonly summaryGate?: (requestedSlugs: readonly SiteSlug[]) => Promise<void> | undefined;
+  readonly todayBySite?: Readonly<Partial<Record<SiteSlug, ForecastDate>>>;
+  readonly transformDays?: (response: ForecastDaysResponse) => ForecastDaysResponse;
+  readonly transformSummaries?: (response: ForecastSummariesResponse) => ForecastSummariesResponse;
+}
+
+interface RecordedRequests {
+  readonly days: SiteSlug[];
+  readonly summaries: {
+    readonly date: ForecastDate;
+    readonly siteSlugs: readonly SiteSlug[];
+  }[];
+}
+
+const installDashboardHandlers = ({
+  catalog = fullCatalog,
+  daysGate,
+  summaryGate,
+  todayBySite = {},
+  transformDays = (response) => response,
+  transformSummaries = (response) => response,
+}: DashboardHandlerOptions = {}): RecordedRequests => {
+  const requests: RecordedRequests = { days: [], summaries: [] };
+
+  server.use(
+    http.get(SITES_URL, () => HttpResponse.json(sitesResponseSchema.parse({ sites: catalog }))),
+    http.get(DAYS_URL, async ({ request }) => {
+      const siteSlug = requireSearchParameter(new URL(request.url).searchParams, "siteSlug");
+      requests.days.push(siteSlug);
+      await daysGate;
+      const site = catalog.find((candidate) => candidate.slug === siteSlug);
+
+      if (site === undefined) {
+        return HttpResponse.json({ title: "Unknown site", status: 400 }, { status: 400 });
+      }
+
+      return HttpResponse.json(
+        transformDays(createDays(site, todayBySite[siteSlug] ?? DEFAULT_TODAY)),
+      );
+    }),
+    http.get(SUMMARIES_URL, async ({ request }) => {
+      const searchParameters = new URL(request.url).searchParams;
+      const date = requireSearchParameter(searchParameters, "date");
+      const siteSlugs = (searchParameters.get("siteSlugs") ?? "").split(",");
+      requests.summaries.push({ date, siteSlugs });
+      await summaryGate?.(siteSlugs);
+      const requestedSites = siteSlugs.flatMap((slug) => {
+        const site = catalog.find((candidate) => candidate.slug === slug);
+        return site === undefined ? [] : [site];
+      });
+
+      return HttpResponse.json(transformSummaries(createSummaries(date, requestedSites)));
+    }),
+  );
+
+  return requests;
+};
+
+const LocationProbe = () => {
+  const location = useLocation();
+  return (
+    <>
+      <output data-testid="location-search">{location.search}</output>
+      <output data-testid="location-key">{location.key}</output>
+    </>
+  );
+};
+
+const HistoryControls = () => {
+  const navigate = useNavigate();
+  return (
+    <aside>
+      <button
+        type="button"
+        onClick={() => {
+          void navigate(-1);
+        }}
+      >
+        Test back
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          void navigate(1);
+        }}
+      >
+        Test forward
+      </button>
+    </aside>
+  );
+};
+
+const renderDashboardRoute = (initialEntry: string) =>
+  renderWithQueryClient(
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <AppRoutes dashboardApi={createTestDashboardApi()} />
+      <LocationProbe />
+      <HistoryControls />
+    </MemoryRouter>,
+  );
+
+const expectCanonicalLocation = async (expected: string) => {
+  await waitFor(() => {
+    expect(screen.getByTestId("location-search")).toHaveTextContent(expected);
+  });
+};
+
+afterEach(() => {
+  window.history.replaceState({}, "", "/");
+});
+
+describe("dashboard route URL orchestration", () => {
+  it("defaults an unordered catalog to its minimum numeric ID and today's date", async () => {
+    const catalog = [fullCatalog[2], fullCatalog[6], fullCatalog[0], fullCatalog[1]].filter(
+      (site): site is Site => site !== undefined,
+    );
+    const requests = installDashboardHandlers({ catalog });
+
+    renderDashboardRoute("/?unowned=discarded");
+
+    await expectCanonicalLocation("?site=sofia-vitosha-kominite&date=2026-07-18");
+    expect(screen.getByLabelText("Location")).toHaveValue("sofia-vitosha-kominite");
+    expect(requests.days).toEqual(["sofia-vitosha-kominite"]);
+    await waitFor(() => {
+      expect(requests.summaries).toEqual([
+        {
+          date: "2026-07-18",
+          siteSlugs: ["sofia-vitosha-kominite", "zlatitsa", "dobrich-region"],
+        },
+      ]);
+    });
+  });
+
+  it.each([
+    ["an unknown site", "/?site=unknown&date=2026-07-18"],
+    ["a repeated site", "/?site=sopot&site=zlatitsa&date=2026-07-18"],
+    ["a missing site", "/?date=2026-07-18"],
+  ])("replaces %s with the explicit minimum-ID site", async (_description, entry) => {
+    installDashboardHandlers();
+    renderDashboardRoute(entry);
+
+    await expectCanonicalLocation("?site=sofia-vitosha-kominite&date=2026-07-18");
+  });
+
+  it.each([
+    ["a malformed date", "/?site=sopot&date=not-a-date"],
+    ["a repeated date", "/?site=sopot&date=2026-07-17&date=2026-07-18"],
+    ["a missing date", "/?site=sopot"],
+  ])("waits for days and replaces %s with today", async (_description, entry) => {
+    installDashboardHandlers();
+    renderDashboardRoute(entry);
+
+    await expectCanonicalLocation("?site=sopot&date=2026-07-18");
+    expect(screen.getByRole("button", { name: "2026-07-18" })).toHaveAttribute(
+      "aria-current",
+      "date",
+    );
+  });
+
+  it("queries a valid deep-link date before days resolves and canonicalizes owned parameters", async () => {
+    const days = createDeferred();
+    const requests = installDashboardHandlers({ daysGate: days.promise });
+
+    renderDashboardRoute("/?date=2026-07-17&extra=discarded&site=sopot");
+
+    await screen.findByText("Available · mock · source source-sopot");
+    expect(requests.days).toEqual(["sopot"]);
+    expect(requests.summaries[0]).toMatchObject({ date: "2026-07-17" });
+    await expectCanonicalLocation("?site=sopot&date=2026-07-17");
+    days.resolve();
+    await screen.findByRole("button", { name: "2026-07-17" });
+  });
+
+  it("does not query summaries for a missing date until days supplies today", async () => {
+    const days = createDeferred();
+    const requests = installDashboardHandlers({ daysGate: days.promise });
+
+    renderDashboardRoute("/?site=sopot");
+    await waitFor(() => {
+      expect(requests.days).toEqual(["sopot"]);
+    });
+    expect(requests.summaries).toHaveLength(0);
+    expect(screen.getByText("Waiting for the selected location's forecast dates.")).toBeVisible();
+
+    days.resolve();
+    await waitFor(() => {
+      expect(requests.summaries).toHaveLength(1);
+    });
+    expect(requests.summaries[0]?.date).toBe(DEFAULT_TODAY);
+  });
+
+  it("replaces a valid but out-of-strip date with today after days resolves", async () => {
+    installDashboardHandlers();
+    renderDashboardRoute("/?site=sopot&date=2026-08-01");
+
+    await expectCanonicalLocation("?site=sopot&date=2026-07-18");
+    expect(await screen.findByText("Sopot · 2026-07-18")).toBeVisible();
+  });
+
+  it("pushes deliberate site/date changes and restores them with Back and Forward", async () => {
+    installDashboardHandlers();
+    const user = userEvent.setup();
+    renderDashboardRoute("/?site=sofia-vitosha-kominite&date=2026-07-18");
+
+    await screen.findByText("Sofia - Vitosha (Kominite) · 2026-07-18");
+    await user.selectOptions(screen.getByLabelText("Location"), "sopot");
+    await expectCanonicalLocation("?site=sopot&date=2026-07-18");
+    await user.click(screen.getByRole("button", { name: "2026-07-19" }));
+    await expectCanonicalLocation("?site=sopot&date=2026-07-19");
+
+    await user.click(screen.getByRole("button", { name: "Test back" }));
+    await expectCanonicalLocation("?site=sopot&date=2026-07-18");
+    await user.click(screen.getByRole("button", { name: "Test back" }));
+    await expectCanonicalLocation("?site=sofia-vitosha-kominite&date=2026-07-18");
+    await user.click(screen.getByRole("button", { name: "Test forward" }));
+    await expectCanonicalLocation("?site=sopot&date=2026-07-18");
+  });
+
+  it("preserves a site's current date only when it remains in the new site's strip", async () => {
+    installDashboardHandlers({ todayBySite: { sopot: "2026-07-21" } });
+    const user = userEvent.setup();
+    renderDashboardRoute("/?site=sofia-vitosha-kominite&date=2026-07-18");
+
+    await screen.findByText("Sofia - Vitosha (Kominite) · 2026-07-18");
+    await user.selectOptions(screen.getByLabelText("Location"), "sopot");
+
+    await expectCanonicalLocation("?site=sopot&date=2026-07-21");
+    expect(screen.getByRole("button", { name: "2026-07-21" })).toHaveAttribute(
+      "aria-current",
+      "date",
+    );
+  });
+
+  it("reconstructs a pasted deep link through the production BrowserRouter", async () => {
+    installDashboardHandlers();
+    window.history.replaceState({}, "", "/?site=sopot&date=2026-07-17");
+
+    renderWithQueryClient(<App dashboardApi={createTestDashboardApi()} />);
+
+    expect(await screen.findByText("Sopot · 2026-07-17")).toBeVisible();
+    expect(window.location.search).toBe("?site=sopot&date=2026-07-17");
+  });
+
+  it("does not create history entries for same-site or same-date selections", async () => {
+    installDashboardHandlers();
+    const user = userEvent.setup();
+    renderDashboardRoute("/?site=sopot&date=2026-07-18");
+    const selectedDateButton = await screen.findByRole("button", { name: "2026-07-18" });
+    const initialKey = screen.getByTestId("location-key").textContent;
+
+    fireEvent.change(screen.getByLabelText("Location"), { target: { value: "sopot" } });
+    await user.click(selectedDateButton);
+
+    expect(screen.getByTestId("location-key")).toHaveTextContent(initialKey);
+    expect(screen.getByTestId("location-search")).toHaveTextContent("?site=sopot&date=2026-07-18");
+  });
+});
+
+describe("dashboard request and presentation selection", () => {
+  it("keeps Other Locations presentation order while requesting by numeric ID", async () => {
+    const requests = installDashboardHandlers();
+    renderDashboardRoute("/?site=sopot&date=2026-07-18");
+
+    const otherSection = (
+      await screen.findByRole("heading", {
+        name: "Other locations for this date",
+      })
+    ).closest("section");
+    expect(otherSection).not.toBeNull();
+    const items = await within(requireElement(otherSection)).findAllByRole("listitem");
+    expect(items.map((item) => item.getAttribute("data-site-slug"))).toEqual([
+      "zlatitsa",
+      "sofia-vitosha-kominite",
+      "dobrich-region",
+    ]);
+    expect(requests.summaries[0]?.siteSlugs).toEqual([
+      "sofia-vitosha-kominite",
+      "zlatitsa",
+      "sopot",
+      "dobrich-region",
+    ]);
+  });
+
+  it("deduplicates a configured selected site in the request without removing its Other card", async () => {
+    const requests = installDashboardHandlers();
+    renderDashboardRoute("/?site=zlatitsa&date=2026-07-18");
+
+    await screen.findByText("Zlatitsa · 2026-07-18");
+    expect(requests.summaries[0]?.siteSlugs).toEqual([
+      "sofia-vitosha-kominite",
+      "zlatitsa",
+      "dobrich-region",
+    ]);
+    const otherSection = screen
+      .getByRole("heading", {
+        name: "Other locations for this date",
+      })
+      .closest("section");
+    expect(await within(requireElement(otherSection)).findByText("Zlatitsa")).toBeVisible();
+  });
+
+  it("requests and presents only configured sites that exist in a partial catalog", async () => {
+    const catalog = fullCatalog.filter((site) => site.slug === "zlatitsa" || site.slug === "sopot");
+    const requests = installDashboardHandlers({ catalog });
+    renderDashboardRoute("/?site=sopot&date=2026-07-18");
+
+    await screen.findByText("Sopot · 2026-07-18");
+    expect(requests.summaries[0]?.siteSlugs).toEqual(["zlatitsa", "sopot"]);
+    const otherSection = screen
+      .getByRole("heading", {
+        name: "Other locations for this date",
+      })
+      .closest("section");
+    expect(await within(requireElement(otherSection)).findAllByRole("listitem")).toHaveLength(1);
+    expect(within(requireElement(otherSection)).getByText("Zlatitsa")).toBeVisible();
+  });
+
+  it("handles an empty catalog without issuing dependent requests", async () => {
+    const requests = installDashboardHandlers({ catalog: [] });
+    renderDashboardRoute("/?site=sopot&date=2026-07-18");
+
+    expect(await screen.findByText("No forecast locations are configured.")).toBeVisible();
+    expect(requests.days).toHaveLength(0);
+    expect(requests.summaries).toHaveLength(0);
+  });
+
+  it("treats an omitted selected summary as partial content instead of a request error", async () => {
+    installDashboardHandlers({
+      transformSummaries: (response) => ({
+        ...response,
+        summaries: response.summaries.filter((summary) => summary.siteSlug !== "sopot"),
+      }),
+    });
+    renderDashboardRoute("/?site=sopot&date=2026-07-18");
+
+    expect(
+      await screen.findByText("No summary was returned for the selected location."),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Retry selected forecast" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not retain a previous site's summary while a new selection loads", async () => {
+    const sopotSummary = createDeferred();
+    installDashboardHandlers({
+      summaryGate: (slugs) => (slugs.includes("sopot") ? sopotSummary.promise : undefined),
+    });
+    const user = userEvent.setup();
+    renderDashboardRoute("/?site=sofia-vitosha-kominite&date=2026-07-18");
+
+    await screen.findByText("Available · mock · source source-sofia-vitosha-kominite");
+    await user.selectOptions(screen.getByLabelText("Location"), "sopot");
+    expect(await screen.findByText("Sopot · 2026-07-18")).toBeVisible();
+    expect(screen.getByText("Loading the selected forecast…")).toBeVisible();
+    expect(
+      screen.queryByText("Available · mock · source source-sofia-vitosha-kominite"),
+    ).not.toBeInTheDocument();
+
+    sopotSummary.resolve();
+    expect(await screen.findByText("Available · mock · source source-sopot")).toBeVisible();
+  });
+});
+
+describe("dashboard independent failures", () => {
+  it("renders a scoped sites failure without dependent regions", async () => {
+    server.use(
+      http.get(SITES_URL, () =>
+        HttpResponse.json(
+          {
+            type: "urn:paragliding-forecasts:problem:internal-server-error",
+            title: "Internal server error",
+            status: 500,
+            detail: "Sites are temporarily unavailable.",
+            code: "INTERNAL_SERVER_ERROR",
+            requestId: "sites-request-id",
+          },
+          { status: 500 },
+        ),
+      ),
+    );
+    renderDashboardRoute("/");
+
+    expect(await screen.findByRole("button", { name: "Retry locations" })).toBeVisible();
+    expect(screen.queryByLabelText("Location")).not.toBeInTheDocument();
+  });
+
+  it("keeps a valid selected summary when the days request fails", async () => {
+    installDashboardHandlers();
+    server.use(http.get(DAYS_URL, () => HttpResponse.json({ error: true }, { status: 500 })));
+    renderDashboardRoute("/?site=sopot&date=2026-07-18");
+
+    expect(await screen.findByText("Available · mock · source source-sopot")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Retry forecast dates" })).toBeVisible();
+  });
+
+  it("keeps the date strip when the summaries request fails", async () => {
+    installDashboardHandlers();
+    server.use(http.get(SUMMARIES_URL, () => HttpResponse.json({ error: true }, { status: 500 })));
+    renderDashboardRoute("/?site=sopot&date=2026-07-18");
+
+    expect(await screen.findByRole("button", { name: "Retry selected forecast" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "2026-07-18" })).toHaveAttribute(
+      "aria-current",
+      "date",
+    );
+  });
+
+  it("surfaces a days correlation mismatch as an API compatibility error", async () => {
+    const zlatitsa = fullCatalog.find((site) => site.slug === "zlatitsa") as Site;
+    installDashboardHandlers({ transformDays: () => createDays(zlatitsa) });
+    renderDashboardRoute("/?site=sopot&date=2026-07-18");
+
+    expect(await screen.findByText("Available · mock · source source-sopot")).toBeVisible();
+    expect(
+      screen.getByText("The forecast service returned days for a different location."),
+    ).toBeVisible();
+  });
+
+  it("surfaces a summary correlation mismatch without hiding the date strip", async () => {
+    installDashboardHandlers({
+      transformSummaries: () => {
+        const unrequestedSite = fullCatalog.find((site) => site.slug === "nevsha") as Site;
+        return createSummaries(DEFAULT_TODAY, [unrequestedSite]);
+      },
+    });
+    renderDashboardRoute("/?site=sopot&date=2026-07-18");
+
+    expect(
+      await screen.findByText(
+        "The forecast service returned a summary for an unrequested location.",
+      ),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "2026-07-18" })).toBeVisible();
+  });
+});

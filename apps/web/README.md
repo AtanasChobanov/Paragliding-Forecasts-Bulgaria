@@ -3,9 +3,10 @@
 ## Status
 
 The React/Vite workspace is runnable, production-buildable, and backed by a
-validated dashboard HTTP/query foundation. It still renders only the truthful
-application heading; URL orchestration and visual dashboard components are
-added by the remaining T-003-T-005 stages.
+validated dashboard HTTP/query foundation. The dashboard route now coordinates
+canonical URL selection and the sites, days, and summaries queries. Its current
+markup is deliberately semantic and unstyled; the screenshot-faithful visual
+components are added by the remaining T-003-T-005 stages.
 
 ## Responsibilities
 
@@ -40,9 +41,15 @@ apps/web/
 |-- src/
 |   |-- app/
 |   |   |-- AppProviders.tsx
+|   |   |-- app-routes.tsx
 |   |   `-- query-client.ts
 |   |-- config/runtime-config.ts
-|   |-- features/dashboard/dashboard-query-options.ts
+|   |-- features/dashboard/
+|   |   |-- dashboard-compatibility-error.ts
+|   |   |-- dashboard-query-options.ts
+|   |   |-- dashboard-search-params.ts
+|   |   `-- dashboard-summary-selection.ts
+|   |-- routes/dashboard/dashboard-route.tsx
 |   |-- services/api/
 |   |   |-- api-client.ts
 |   |   |-- api-errors.ts
@@ -107,6 +114,20 @@ forwards cancellation, treats the site catalog as static, uses five-minute
 forecast freshness, disables focus refetch, and retries only the first network
 or HTTP 5xx failure.
 
+## URL selection behavior
+
+The canonical dashboard URL is `/?site=<site-slug>&date=YYYY-MM-DD`. React
+Router search parameters are the only selected-site/date state. Missing,
+repeated, unknown, or out-of-strip values are normalized with history replace;
+deliberate site and date changes create history entries. Back, Forward, refresh,
+and pasted deep links reconstruct the same query selection.
+
+The route explicitly selects the minimum numeric site ID as the catalog
+default, waits for the selected site's API-defined Sofia `todayDate` when the
+URL date is unusable, and handles an empty catalog. Summary requests deduplicate
+the selected site plus the configured Other Locations by numeric ID while the
+UI keeps its separate Zlatitsa, Sofia - Vitosha, Dobrich region order.
+
 ## Testing expectations
 
 - API-client tests for URL encoding, success parsing, Problem Details, network
@@ -114,6 +135,9 @@ or HTTP 5xx failure.
   non-JSON HTTP fallbacks.
 - Query/provider tests for stable keys, cancellation signals, freshness, and
   retry policy.
+- Route tests for URL normalization, deep links, history navigation, dependent
+  query enabling, request deduplication/reindexing, partial catalogs, empty
+  catalogs, independent failures, and stale-selection prevention.
 - Unit tests for forecast-card transformations and data-status mapping as the
   presentation components are added.
 - Component tests for loading, missing, and error states as the route and

@@ -5,9 +5,12 @@ import { App } from "./App.js";
 import { AppProviders } from "./app/AppProviders.js";
 import { createDashboardQueryClient } from "./app/query-client.js";
 import { loadRuntimeConfig } from "./config/runtime-config.js";
+import { createApiClient } from "./services/api/api-client.js";
+import { createDashboardApi } from "./services/api/dashboard-api.js";
 
-loadRuntimeConfig();
+const runtimeConfig = loadRuntimeConfig();
 const queryClient = createDashboardQueryClient();
+const dashboardApi = createDashboardApi(createApiClient({ baseUrl: runtimeConfig.apiBaseUrl }));
 
 const rootElement = document.getElementById("root");
 
@@ -18,7 +21,7 @@ if (!(rootElement instanceof HTMLElement)) {
 createRoot(rootElement).render(
   <StrictMode>
     <AppProviders queryClient={queryClient}>
-      <App />
+      <App dashboardApi={dashboardApi} />
     </AppProviders>
   </StrictMode>,
 );
