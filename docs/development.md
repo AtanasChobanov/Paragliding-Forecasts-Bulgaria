@@ -56,14 +56,13 @@ The runnable workspaces implement these root commands:
 | `npm run typecheck` | Strictly type-check contracts/API/web without emitting |
 | `npm run lint` | Lint TypeScript and TSX source/tests |
 | `npm run format:check` | Verify maintained TS/TSX/HTML/SCSS/config formatting |
-| `npm test` | Run contract and API unit/integration/smoke suites |
-| `npm run test:coverage` | Run V8 coverage for contracts/API and enforce thresholds |
+| `npm test` | Run contract, API, and web unit/integration/component suites |
+| `npm run test:coverage` | Run V8 coverage for contracts/API/web and enforce thresholds |
 | `npm run repo:check` | Validate repository and runnable workspace structure |
 
-Web `test` and `test:coverage` scripts are added only with the first meaningful
-client/provider tests. Until then, the root test commands deliberately cover
-contracts and API only. Each executable command must perform real work and fail
-when its child check fails.
+The root test commands include all three implemented TypeScript workspaces.
+Each executable command must perform real work and fail when its child check
+fails.
 
 ## Environment variables
 

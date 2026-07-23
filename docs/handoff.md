@@ -7,9 +7,9 @@
 | Last updated | 2026-07-23 |
 | Current Git branch | `feature/T-003-T-005-dashboard` |
 | Branch relationship | Rebased onto `origin/main` at merge commit `d4167ff` after T-002 merged |
-| Current tasks | T-003, T-004, and T-005 — `In Progress` |
-| Completed scope in this branch | Dashboard API/contracts foundation, Stage 0 preflight, runnable React/Vite workspace, validated queries/URL orchestration, responsive visual foundation, forecast overview/comparison cards, Leaflet selector, five-day selector, and cross-cutting state/accessibility hardening |
-| Expected working tree after the Stage 8 commit | Clean |
+| Current tasks | T-003, T-004, and T-005 — `In Progress`, pending manual browser/visual review |
+| Completed scope in this branch | Dashboard API/contracts foundation, runnable React/Vite workspace, validated queries/URL orchestration, responsive dashboard UI, forecast cards, Leaflet selector, five-day selector, state/accessibility hardening, automated validation, and setup/limitations documentation |
+| Expected working tree after the final documentation commit | Clean |
 
 ## Current outcome
 
@@ -378,6 +378,37 @@ the user's request. Automated checks cover the rendered semantics and
 interactions but do not prove pixel layout, real-browser focus appearance, map
 tiles, or label collisions.
 
+The final repository-wide dashboard gate passed on 2026-07-23:
+
+- `npm.cmd run build`
+- `npm.cmd run typecheck`
+- `npm.cmd run lint`
+- `npm.cmd run format:check`
+- `npm.cmd run test`
+- `npm.cmd run test:coverage`
+- `npm.cmd run repo:check`
+- `git diff --check`
+
+Test counts were contracts 2 files / 15 tests, API 16 files / 82 tests, and web
+17 files / 112 tests. Coverage remained above every configured threshold:
+
+- contracts: 98.82% statements/lines, 97.22% branches, 100% functions;
+- API: 80.24% statements, 81.11% branches, 82.35% functions, 80.50% lines;
+- web: 96.04% statements, 88.92% branches, 98.78% functions, 96.05% lines.
+
+The production build succeeded with Leaflet in its separate 157.36 kB minified
+chunk and the documented non-blocking 588.73 kB initial dashboard chunk
+warning. A combined `npm.cmd run dev` HTTP smoke returned 200 JSON from
+`/health` and `/api/v1/sites` plus 200 HTML containing the React root from a
+dashboard URL with site/date parameters; both listeners stopped afterward.
+This did not execute browser navigation or React rendering.
+
+No screenshot, automated pixel comparison, or real-browser manual check was
+performed, as requested by the user. The remaining manual review is
+desktop/narrow visual fidelity, copied URL and browser history behavior,
+Leaflet tiles/pan/zoom/labels, keyboard focus, degraded requests/tiles, and the
+browser console.
+
 ## Git checkpoints
 
 This branch contains these reviewable commits after the T-002 base:
@@ -398,16 +429,15 @@ This branch contains these reviewable commits after the T-002 base:
 - `ee517d5 T-003 render dashboard forecast overview`
 - `3d362a8 T-004 add interactive Leaflet site selector`
 - `3fe4557 T-005 add five-day forecast selector`
-- next checkpoint: `T-003-T-005 harden dashboard states and accessibility`
+- `9644d30 T-003-T-005 harden dashboard states and accessibility`
+- final checkpoint: `T-003-T-005 document dashboard setup and limitations`
 
 The branch was rebased onto the T-002 merge in current `origin/main`. It has not
 been pushed and no pull request was created.
 
 ## Next implementation step
 
-Finish the dashboard documentation and run the full repository validation gate.
-Update task status only as far as the verified implementation and deliberately
-deferred manual browser review justify.
-
-T-003-T-005 remain `In Progress` until the React dashboard and its relevant
-validation are implemented. T-008 still owns the browser smoke-test tooling.
+Complete the manual desktop/narrow-screen and real-browser interaction review
+listed above. T-003-T-005 remain `In Progress` until that review is accepted;
+the implementation and automated validation are complete. T-008 still owns
+browser smoke-test tooling and must not be implied complete by this branch.

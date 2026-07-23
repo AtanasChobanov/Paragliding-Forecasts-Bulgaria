@@ -11,8 +11,11 @@ selected overview and fixed-order Other Locations cards now render validated
 summary data with explicit status, confidence, provenance, units, and missing-
 data semantics. The Leaflet site selector now renders all API coordinates with
 permanent labels and a synchronized native control. The five-day selector is
-now rendered from exactly the five API slots. The remaining dashboard work is
-cross-cutting state/accessibility hardening and final documentation.
+rendered from exactly the five API slots. Scoped failure/retry presentation,
+request IDs, compatibility errors, live announcements, focus behavior, reduced
+motion, and narrow-layout wrapping are implemented and covered by automated
+tests. T-003-T-005 remain in progress until the deliberately deferred manual
+browser/visual review is completed.
 
 ## Responsibilities
 
@@ -55,11 +58,14 @@ apps/web/
 |   |   |-- content-state/
 |   |   `-- dashboard-panel/
 |   |-- features/dashboard/
-|   |   |-- components/DashboardShell.tsx
+|   |   |-- components/        # Overview, comparisons, map, and date strip
 |   |   |-- dashboard-compatibility-error.ts
+|   |   |-- dashboard-error-presentation.ts
 |   |   |-- dashboard-query-options.ts
 |   |   |-- dashboard-search-params.ts
-|   |   `-- dashboard-summary-selection.ts
+|   |   |-- dashboard-summary-selection.ts
+|   |   |-- forecast-presentation.ts
+|   |   `-- map-provider.ts
 |   |-- routes/dashboard/
 |   |   `-- dashboard-route.tsx
 |   |-- services/api/
@@ -75,6 +81,7 @@ apps/web/
 |   |-- main.tsx
 |   `-- vite-env.d.ts
 |-- test/
+|   |-- component/
 |   |-- integration/
 |   |-- support/
 |   `-- unit/
@@ -211,7 +218,14 @@ handling. The date cards expose API today separately from URL selection. One
 shared summaries failure creates one alert and one restrained comparison-region
 explanation rather than duplicate alert spam.
 
-## Testing expectations
+## Validation and testing
+
+The repository-level `build`, `typecheck`, `lint`, `format:check`, `test`,
+`test:coverage`, and `repo:check` commands include this workspace. Web coverage
+enforces at least 80% statements, lines, and functions plus 75% branches across
+all maintained `src/**/*.{ts,tsx}` files, including files a test never imports.
+
+Automated coverage includes:
 
 - API-client tests for URL encoding, success parsing, Problem Details, network
   failure, cancellation, malformed JSON, invalid response shapes, and safe
@@ -233,8 +247,9 @@ explanation rather than duplicate alert spam.
 - Integration tests for sites/days/summaries retry recovery, request IDs,
   compatibility failures, independent-region preservation, stale-selection
   prevention, keyboard date activation, and polite selection announcements.
-- T-008 browser smoke test proving the dashboard and required cards render.
 
-V8 coverage counts all maintained `src/**/*.{ts,tsx}` files, including files a
-test never imports. The enforced minimums are 80% statements, lines, and
-functions and 75% branches.
+T-008 still owns the browser smoke test. Until that ticket is implemented,
+manual review must verify real Leaflet tile rendering, pan/zoom, permanent-label
+collisions, full keyboard/focus behavior, copied URL/refresh/Back/Forward,
+desktop visual fidelity, and narrow-screen layout. No screenshot or automated
+pixel comparison is stored in this branch.

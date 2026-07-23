@@ -14,24 +14,27 @@ result as an inspectable daily dashboard.
 
 - Delivery phase: **Takt 1**
 - Current tickets: **T-003-T-005 - Dashboard, site selector, and date selector**
-  (`In Progress`)
+  (`In Progress`, pending manual browser/visual review)
 - Implemented: runnable React/Vite and Node.js/Express workspaces, shared runtime
   contracts, structured logging and errors, a map-ready seven-site catalog,
-  deterministic date-aware mock forecasts, and dashboard summary/day-preview
-  read endpoints
-- Not implemented: the dashboard route and visual UI, SQLite schema or access
-  layer, data ingestion, real forecasts, models, and alerts
+  deterministic date-aware mock forecasts, dashboard summary/day-preview read
+  endpoints, canonical URL selection, forecast overview/comparison cards, an
+  interactive Leaflet site selector, a fixed five-day selector, and scoped
+  accessible request states
+- Not implemented: the detailed forecast view, Takt 1 browser smoke automation,
+  SQLite schema or access layer, data ingestion, real forecasts, models, and
+  alerts
 
-Mock responses are deliberately identified as `mock`; they are development
-fixtures for the upcoming dashboard, not forecasts or flying advice.
+Displayed mock responses are deliberately identified as `mock`; they are
+development fixtures, not forecasts or flying advice.
 
-## Planned MVP
+## Current dashboard
 
-The first dashboard will let a user choose a forecast date and one of the
-initial Bulgarian areas: Sofia - Vitosha (Kominite), Zlatitsa, Sopot, Nevsha,
-Shumen, Pastrina, or the Dobrich region. It will show cloudbase, chances for
-100+ km, 200+ km, and 300+ km flights, and overdevelopment risk. Every value
-must be labelled as `mock`, `manual`, `baseline`, `real`, or `missing`.
+The dashboard lets a user choose a forecast date and one of the initial
+Bulgarian areas: Sofia - Vitosha (Kominite), Zlatitsa, Sopot, Nevsha, Shumen,
+Pastrina, or the Dobrich region. It shows cloudbase, chances for 100+ km,
+200+ km, and 300+ km flights, and overdevelopment risk. Every value is labelled
+as `mock`, `manual`, `baseline`, `real`, or `missing`.
 
 ## Repository layout
 
@@ -59,7 +62,7 @@ test notes in its README. Cross-project information belongs here or in `docs/`.
 
 | Area | Choice | Current state |
 | --- | --- | --- |
-| Web | React + Vite + TypeScript, Router, TanStack Query, SCSS Modules, and Leaflet | Runnable React/Vite workspace; dashboard route pending |
+| Web | React + Vite + TypeScript, Router, TanStack Query, SCSS Modules, and Leaflet | Dashboard implemented; manual browser/visual review pending |
 | API | Node.js + Express + TypeScript | Runnable with dashboard read endpoints |
 | Shared contracts | TypeScript + Zod | Runtime schemas and inferred types implemented |
 | Data and ML | Python managed by `uv` | Project boundary only |
@@ -140,8 +143,8 @@ npm.cmd run dev
 ```
 
 The dashboard origin is `http://localhost:5173` by default. To run only the
-current React/Vite workspace, use `npm.cmd run dev:web`; it still needs the API
-for real dashboard data once Stage 2 connects the HTTP client.
+React/Vite workspace, use `npm.cmd run dev:web`; keep the API running at the
+configured `VITE_API_BASE_URL` to load dashboard data.
 
 ## Commands
 
@@ -155,8 +158,8 @@ for real dashboard data once Stage 2 connects the HTTP client.
 | `npm run typecheck` | Type-check contracts, API, and web workspaces |
 | `npm run lint` | Build shared contract declarations, then lint TypeScript/TSX sources and tests |
 | `npm run format:check` | Check maintained TypeScript, TSX, HTML, SCSS, and config formatting |
-| `npm test` | Run contract and API unit/integration/smoke tests |
-| `npm run test:coverage` | Run the same suites with V8 coverage and enforced thresholds |
+| `npm test` | Run contract, API, and web unit/integration/component tests |
+| `npm run test:coverage` | Run all three suites with V8 coverage and enforced thresholds |
 | `npm run repo:check` | Validate repository structure and runnable workspace metadata |
 | `uv sync --project services/ml` | Sync the Python ML environment |
 
@@ -186,6 +189,7 @@ trained model artifacts, generated output, or local databases. See
 - [`docs/tasks.md`](docs/tasks.md) - task backlog and status
 - [`docs/handoff.md`](docs/handoff.md) - current operational snapshot
 - [`apps/api/README.md`](apps/api/README.md) - API operation and design
+- [`apps/web/README.md`](apps/web/README.md) - dashboard behavior, setup, tests, and limitations
 - [`packages/contracts/README.md`](packages/contracts/README.md) - public payload rules
 - [`services/ml/README.md`](services/ml/README.md) - Python/ML boundary
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) - branch, commit, and review conventions
