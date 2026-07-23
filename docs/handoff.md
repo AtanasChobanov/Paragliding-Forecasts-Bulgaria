@@ -4,12 +4,12 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated | 2026-07-22 |
+| Last updated | 2026-07-23 |
 | Current Git branch | `feature/T-003-T-005-dashboard` |
 | Branch relationship | Rebased onto `origin/main` at merge commit `d4167ff` after T-002 merged |
 | Current tasks | T-003, T-004, and T-005 — `In Progress` |
-| Completed scope in this branch | Dashboard API/contracts foundation, Stage 0 preflight, runnable React/Vite workspace, validated browser queries, URL-owned orchestration, responsive visual foundation, and forecast overview/comparison cards |
-| Expected working tree after the Stage 5 commit | Clean |
+| Completed scope in this branch | Dashboard API/contracts foundation, Stage 0 preflight, runnable React/Vite workspace, validated queries/URL orchestration, responsive visual foundation, forecast overview/comparison cards, and the Leaflet site selector |
+| Expected working tree after the Stage 6 commit | Clean |
 
 ## Current outcome
 
@@ -47,6 +47,14 @@ that fixed UI order without filtering a duplicate selected site. Summary-level
 missing data, omitted content, partial missing metrics, and fully missing
 metrics remain visibly distinct and never become numeric zero.
 
+The location region now lazy-loads a Leaflet map, fits all seven provisional API
+coordinates, renders permanent labels, distinguishes the selected pin by shape,
+size, border, and colour, and routes pin selection through the same URL callback
+as the native selector. OpenStreetMap attribution stays visible. Scroll-wheel
+zoom and map keyboard navigation are disabled; visible zoom controls remain,
+and the native select is the complete keyboard path. A tile error leaves the
+selector, labels, forecast content, and an explicit degraded-map explanation.
+
 ## Web workspace
 
 - `npm.cmd run dev:web` starts Vite on `http://localhost:5173` by default.
@@ -80,6 +88,9 @@ metrics remain visibly distinct and never become numeric zero.
 - The dashboard does not render the reference image's detailed-forecast button.
   T-006 owns both the real route and its action, so this checkpoint does not
   ship a disabled or misleading control.
+- Leaflet is loaded through a separate production chunk. OSM Standard is a
+  runtime internet dependency with no offline or SLA guarantee; the provider
+  URL, linked attribution, maximum zoom, and policy URL are centralized.
 
 ## HTTP surface
 
@@ -294,6 +305,25 @@ The Stage 5 forecast-presentation checkpoint passed:
 - repository lint, formatting, structure, and `git diff --check` passed after
   the final gate.
 
+The Stage 6 Leaflet selector checkpoint passed:
+
+- web build and typecheck passed; Vite emitted a separate 157.38 kB minified
+  `SiteMap` chunk instead of adding Leaflet to the initial dashboard chunk;
+- web tests: 15 files / 101 tests;
+- web coverage: 95.17% statements, 87.50% branches, 96.83% functions, and
+  95.13% lines;
+- tests cover native-selector ordering/selection, fitted API bounds, OSM URL and
+  linked attribution, seven permanent names, non-tabbable pointer pins, shared
+  selection callback, disabled scroll-wheel/map keyboard handling, selected-
+  site viewport updates, reduced motion, and the tile-failure explanation;
+- dependency audit reported 0 vulnerabilities; repository lint, formatting,
+  structure, and `git diff --check` passed after the final gate.
+
+No real-browser map interaction or visual comparison was performed. This is an
+explicit manual user check, and T-008 still owns automated browser proof; jsdom
+component tests do not prove real tile rendering, zoom, pan, or label collision
+behavior.
+
 ## Git checkpoints
 
 This branch contains these reviewable commits after the T-002 base:
@@ -311,18 +341,18 @@ This branch contains these reviewable commits after the T-002 base:
 - `5abe401 T-003-T-005 add validated dashboard API queries`
 - `71bbc4f T-003-T-005 coordinate dashboard URL state`
 - `ce068f8 T-003 establish dashboard visual foundation`
-- next checkpoint: `T-003 render dashboard forecast overview`
+- `ee517d5 T-003 render dashboard forecast overview`
+- next checkpoint: `T-004 add interactive Leaflet site selector`
 
 The branch was rebased onto the T-002 merge in current `origin/main`. It has not
 been pushed and no pull request was created.
 
 ## Next implementation step
 
-Implement the Leaflet/OpenStreetMap location selector with a fitted Bulgaria
-view, permanent labels, selected marker, shared native-selector URL update,
-visible attribution, and an explained tile-failure fallback. Then continue with
-the date strip, hardening, documentation, and final validation. The dashboard
-copy is English.
+Implement the five-card forecast-date selector using exactly the API slots,
+Sofia-calendar-safe labels, visible today/selected/missing states, and URL-owned
+selection with no arrows or pagination. Then continue with hardening,
+documentation, and final validation. The dashboard copy is English.
 
 T-003-T-005 remain `In Progress` until the React dashboard and its relevant
 validation are implemented. T-008 still owns the browser smoke-test tooling.

@@ -1,0 +1,56 @@
+@use "../../../styles/mixins";
+
+.field {
+  display: grid;
+  min-width: min(100%, 15rem);
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+
+  label {
+    display: grid;
+    min-width: var(--control-min-size);
+    min-height: var(--control-min-size);
+    place-items: center;
+    color: var(--color-primary);
+  }
+
+  select {
+    width: 100%;
+    min-width: 0;
+    padding: 0 var(--space-4) 0 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--color-heading);
+    font-weight: 600;
+
+    &:focus-visible {
+      @include mixins.focus-ring;
+
+      outline-offset: -3px;
+    }
+  }
+}
+
+.pin {
+  position: relative;
+  width: 0.8rem;
+  height: 0.8rem;
+  transform: rotate(45deg);
+  border-radius: 50% 50% 50% 0;
+  background: currentColor;
+
+  &::after {
+    position: absolute;
+    width: 0.28rem;
+    height: 0.28rem;
+    transform: translate(0.26rem, 0.26rem);
+    border-radius: 50%;
+    background: var(--color-surface);
+    content: "";
+  }
+}

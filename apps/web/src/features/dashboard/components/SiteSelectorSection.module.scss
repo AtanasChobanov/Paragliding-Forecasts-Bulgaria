@@ -1,0 +1,37 @@
+.content {
+  display: flex;
+  min-height: 32rem;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.controls {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.mapFallback {
+  display: grid;
+  min-height: 27rem;
+  flex: 1;
+  place-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-subtle);
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+}
+
+@media (max-width: 42rem) {
+  .content {
+    min-height: 22rem;
+  }
+
+  .controls > * {
+    width: 100%;
+  }
+
+  .mapFallback {
+    min-height: 16rem;
+  }
+}

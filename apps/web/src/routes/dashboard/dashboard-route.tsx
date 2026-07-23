@@ -1,6 +1,6 @@
 import { type ForecastDate, type Site, type SiteSlug } from "@paragliding-forecasts/contracts";
 import { useQuery } from "@tanstack/react-query";
-import { type ChangeEvent, type ReactNode, useCallback, useEffect, useMemo } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { ContentState } from "../../components/content-state/ContentState.js";
@@ -10,6 +10,7 @@ import {
   SelectedForecastHeading,
 } from "../../features/dashboard/components/ForecastOverview.js";
 import { OtherLocationsSection } from "../../features/dashboard/components/OtherLocationsSection.js";
+import { SiteSelectorSection } from "../../features/dashboard/components/SiteSelectorSection.js";
 import { createDashboardQueryOptions } from "../../features/dashboard/dashboard-query-options.js";
 import {
   createCanonicalDashboardSearch,
@@ -33,40 +34,6 @@ export interface DashboardRouteProps {
 
 const describeError = (error: unknown): string =>
   error instanceof Error ? error.message : "The forecast request failed unexpectedly.";
-
-interface SiteSelectorControlProps {
-  readonly onSelectSite: (siteSlug: SiteSlug) => void;
-  readonly selectedSite: Site;
-  readonly sites: readonly Site[];
-}
-
-const SiteSelectorControl = ({ onSelectSite, selectedSite, sites }: SiteSelectorControlProps) => {
-  const handleChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    onSelectSite(event.target.value);
-  };
-
-  return (
-    <div className={styles.locationContent}>
-      <div className={styles.selectorField}>
-        <label htmlFor="dashboard-site-selector">Location</label>
-        <select id="dashboard-site-selector" value={selectedSite.slug} onChange={handleChange}>
-          {sites
-            .slice()
-            .sort((left, right) => left.id - right.id)
-            .map((site) => (
-              <option key={site.id} value={site.slug}>
-                {site.name}
-              </option>
-            ))}
-        </select>
-      </div>
-      <div className={styles.mapPreview}>
-        <span aria-hidden="true" className={styles.mapPin} />
-        <p>Interactive location map is added in the T-004 checkpoint.</p>
-      </div>
-    </div>
-  );
-};
 
 interface ForecastDateControlsProps {
   readonly dates: readonly ForecastDate[];
@@ -240,7 +207,7 @@ const ResolvedDashboard = ({
   );
 
   const locationSelector = (
-    <SiteSelectorControl onSelectSite={selectSite} selectedSite={selectedSite} sites={sites} />
+    <SiteSelectorSection onSelectSite={selectSite} selectedSite={selectedSite} sites={sites} />
   );
   const datesContent = forecastDaysQuery.isPending ? (
     <ContentState

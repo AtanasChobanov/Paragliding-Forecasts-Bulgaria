@@ -9,8 +9,9 @@ responsive visual shell with a semantic application header, stable dashboard
 panels, reusable content states, self-hosted Inter, and shared theme tokens. The
 selected overview and fixed-order Other Locations cards now render validated
 summary data with explicit status, confidence, provenance, units, and missing-
-data semantics. The interactive map and five-day selector are added by the
-remaining T-004-T-005 stages.
+data semantics. The Leaflet site selector now renders all API coordinates with
+permanent labels and a synchronized native control. The five-day selector is
+added by the remaining T-005 stage.
 
 ## Responsibilities
 
@@ -159,6 +160,25 @@ out when it is one of those configured cards. Missing summary items and missing
 metrics show their reasons without substituting zero. No detailed-forecast
 control is rendered; T-006 owns both that control and its working destination.
 
+## Map behavior and network dependency
+
+The site selector lazy-loads Leaflet and React Leaflet, fits all API coordinates,
+and retains normal pointer pan plus visible zoom controls. Scroll-wheel zoom and
+map keyboard navigation are disabled so the map cannot trap page scrolling or
+keyboard focus. The synchronized native `Location` selector is the complete
+keyboard control; map pins are pointer shortcuts using the same URL update
+callback. The selected pin differs by size, border, and colour, and viewport
+movement respects `prefers-reduced-motion`.
+
+The basemap uses OpenStreetMap Standard raster tiles from
+`https://tile.openstreetmap.org/{z}/{x}/{y}.png`. This creates a runtime internet
+dependency and is best effort, not an offline or production-SLA tile service.
+The URL, linked attribution, maximum zoom, and policy URL are kept in one
+provider descriptor. The app does not prefetch or offer offline downloads. If
+tiles fail, site labels, the native selector, selected forecast, and an explicit
+degraded-map message remain available. Site coordinates are provisional until
+T-009 verifies them.
+
 ## Testing expectations
 
 - API-client tests for URL encoding, success parsing, Problem Details, network
@@ -175,6 +195,9 @@ control is rendered; T-006 owns both that control and its working destination.
   presentation components are added.
 - Component tests for the stable dashboard shell, panel semantics, and reusable
   loading, error, empty, and informational states.
+- Component/unit tests for native location selection, fitted map bounds, OSM
+  provider metadata, permanent site labels, pin selection, reduced motion, and
+  tile-failure degradation.
 - T-008 browser smoke test proving the dashboard and required cards render.
 
 V8 coverage counts all maintained `src/**/*.{ts,tsx}` files, including files a
