@@ -4,7 +4,10 @@ import { describe, expect, it } from "vitest";
 import {
   formatConfidence,
   formatDataStatus,
+  formatForecastDateDayMonth,
   formatForecastDateLong,
+  formatForecastDateWeekday,
+  formatForecastYear,
   formatGeneratedAt,
   formatInteger,
   formatRisk,
@@ -17,6 +20,9 @@ describe("forecast presentation helpers", () => {
   it("formats date-only values without a local-timezone shift", () => {
     expect(formatForecastDateLong("2026-07-20")).toBe("Monday, 20 Jul");
     expect(formatForecastDateLong("2026-01-01")).toBe("Thursday, 01 Jan");
+    expect(formatForecastDateDayMonth("2026-12-31")).toBe("31 Dec");
+    expect(formatForecastDateWeekday("2026-12-31")).toBe("Thursday");
+    expect(formatForecastYear("2026-12-31")).toBe("2026");
   });
 
   it("formats generated instants in the Europe/Sofia timezone", () => {

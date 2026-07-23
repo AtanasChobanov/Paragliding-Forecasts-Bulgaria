@@ -5,6 +5,7 @@ import { useSearchParams } from "react-router-dom";
 
 import { ContentState } from "../../components/content-state/ContentState.js";
 import { DashboardShell } from "../../features/dashboard/components/DashboardShell.js";
+import { ForecastDateStrip } from "../../features/dashboard/components/ForecastDateStrip.js";
 import {
   ForecastOverview,
   SelectedForecastHeading,
@@ -26,7 +27,6 @@ import {
   selectOtherLocationSites,
 } from "../../features/dashboard/dashboard-summary-selection.js";
 import type { DashboardApi } from "../../services/api/dashboard-api.js";
-import styles from "./dashboard-route.module.scss";
 
 export interface DashboardRouteProps {
   readonly dashboardApi: DashboardApi;
@@ -34,30 +34,6 @@ export interface DashboardRouteProps {
 
 const describeError = (error: unknown): string =>
   error instanceof Error ? error.message : "The forecast request failed unexpectedly.";
-
-interface ForecastDateControlsProps {
-  readonly dates: readonly ForecastDate[];
-  readonly onSelectDate: (date: ForecastDate) => void;
-  readonly selectedDate: ForecastDate;
-}
-
-const ForecastDateControls = ({ dates, onSelectDate, selectedDate }: ForecastDateControlsProps) => (
-  <ol className={styles.dateList}>
-    {dates.map((date) => (
-      <li key={date}>
-        <button
-          aria-current={date === selectedDate ? "date" : undefined}
-          type="button"
-          onClick={() => {
-            onSelectDate(date);
-          }}
-        >
-          {date}
-        </button>
-      </li>
-    ))}
-  </ol>
-);
 
 interface SummaryDashboardProps {
   readonly canonicalSummarySiteSlugs: readonly SiteSlug[];
@@ -224,10 +200,11 @@ const ResolvedDashboard = ({
       variant="error"
     />
   ) : selectedDate === undefined ? null : (
-    <ForecastDateControls
-      dates={forecastDaysQuery.data.days.map((day) => day.forecastDate)}
+    <ForecastDateStrip
+      days={forecastDaysQuery.data.days}
       onSelectDate={selectDate}
       selectedDate={selectedDate}
+      todayDate={forecastDaysQuery.data.todayDate}
     />
   );
 

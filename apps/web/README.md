@@ -11,7 +11,8 @@ selected overview and fixed-order Other Locations cards now render validated
 summary data with explicit status, confidence, provenance, units, and missing-
 data semantics. The Leaflet site selector now renders all API coordinates with
 permanent labels and a synchronized native control. The five-day selector is
-added by the remaining T-005 stage.
+now rendered from exactly the five API slots. The remaining dashboard work is
+cross-cutting state/accessibility hardening and final documentation.
 
 ## Responsibilities
 
@@ -60,7 +61,6 @@ apps/web/
 |   |   |-- dashboard-search-params.ts
 |   |   `-- dashboard-summary-selection.ts
 |   |-- routes/dashboard/
-|   |   |-- dashboard-route.module.scss
 |   |   `-- dashboard-route.tsx
 |   |-- services/api/
 |   |   |-- api-client.ts
@@ -178,6 +178,21 @@ provider descriptor. The app does not prefetch or offer offline downloads. If
 tiles fail, site labels, the native selector, selected forecast, and an explicit
 degraded-map message remain available. Site coordinates are provisional until
 T-009 verifies them.
+
+## Forecast date behavior
+
+The date strip renders exactly the ordered five slots supplied by the selected
+site's days response. It has no arrows, pagination, browser-clock expansion, or
+historical navigation. `todayDate` from the API owns the visible `Today` state;
+`aria-pressed` independently identifies the URL-selected date. Labels are
+formatted from numeric date-only parts in UTC so local timezone conversion
+cannot move a Sofia calendar date.
+
+Each card exposes its ISO date as the control name and an explicit accessible
+description for the 100+ kilometre chance, data status, and confidence. Missing
+metrics remain in their original position, stay selectable, and show the API
+reason as unavailable rather than zero. The responsive grid changes from five
+columns to two and then one without adding horizontal page overflow.
 
 ## Testing expectations
 

@@ -8,8 +8,8 @@
 | Current Git branch | `feature/T-003-T-005-dashboard` |
 | Branch relationship | Rebased onto `origin/main` at merge commit `d4167ff` after T-002 merged |
 | Current tasks | T-003, T-004, and T-005 — `In Progress` |
-| Completed scope in this branch | Dashboard API/contracts foundation, Stage 0 preflight, runnable React/Vite workspace, validated queries/URL orchestration, responsive visual foundation, forecast overview/comparison cards, and the Leaflet site selector |
-| Expected working tree after the Stage 6 commit | Clean |
+| Completed scope in this branch | Dashboard API/contracts foundation, Stage 0 preflight, runnable React/Vite workspace, validated queries/URL orchestration, responsive visual foundation, forecast overview/comparison cards, Leaflet site selector, and five-day date selector |
+| Expected working tree after the Stage 7 commit | Clean |
 
 ## Current outcome
 
@@ -55,6 +55,12 @@ zoom and map keyboard navigation are disabled; visible zoom controls remain,
 and the native select is the complete keyboard path. A tile error leaves the
 selector, labels, forecast content, and an explicit degraded-map explanation.
 
+The date region now renders exactly the five ordered API slots with no arrows or
+pagination. API `todayDate` and URL selection are represented independently,
+date-only labels cannot shift through local timezone parsing, and each card
+retains explicit metric status/confidence context. A missing 100+ kilometre
+metric remains selectable in place with its reason and never becomes zero.
+
 ## Web workspace
 
 - `npm.cmd run dev:web` starts Vite on `http://localhost:5173` by default.
@@ -91,6 +97,9 @@ selector, labels, forecast content, and an explicit degraded-map explanation.
 - Leaflet is loaded through a separate production chunk. OSM Standard is a
   runtime internet dependency with no offline or SLA guarantee; the provider
   URL, linked attribution, maximum zoom, and policy URL are centralized.
+- The five-card strip uses `aria-current="date"` for API today and
+  `aria-pressed` for the URL-selected date. It has no hidden date expansion,
+  arrows, qualitative weather labels, or invented iconography.
 
 ## HTTP surface
 
@@ -324,6 +333,19 @@ explicit manual user check, and T-008 still owns automated browser proof; jsdom
 component tests do not prove real tile rendering, zoom, pan, or label collision
 behavior.
 
+The Stage 7 five-day selector checkpoint passed:
+
+- web build and typecheck passed, including the production Vite bundle;
+- web tests: 16 files / 104 tests;
+- web coverage: 95.30% statements, 87.67% branches, 96.93% functions, and
+  95.28% lines;
+- tests cover exactly five ordered slots, API-owned today versus URL-owned
+  selection, UTC-safe day/month/weekday/year labels, callback selection, absent
+  arrows and weather images, explicit accessible descriptions, and a missing
+  slot that stays selectable without zero substitution;
+- repository lint, formatting, structure, and `git diff --check` passed after
+  the final gate.
+
 ## Git checkpoints
 
 This branch contains these reviewable commits after the T-002 base:
@@ -342,17 +364,18 @@ This branch contains these reviewable commits after the T-002 base:
 - `71bbc4f T-003-T-005 coordinate dashboard URL state`
 - `ce068f8 T-003 establish dashboard visual foundation`
 - `ee517d5 T-003 render dashboard forecast overview`
-- next checkpoint: `T-004 add interactive Leaflet site selector`
+- `3d362a8 T-004 add interactive Leaflet site selector`
+- next checkpoint: `T-005 add five-day forecast selector`
 
 The branch was rebased onto the T-002 merge in current `origin/main`. It has not
 been pushed and no pull request was created.
 
 ## Next implementation step
 
-Implement the five-card forecast-date selector using exactly the API slots,
-Sofia-calendar-safe labels, visible today/selected/missing states, and URL-owned
-selection with no arrows or pagination. Then continue with hardening,
-documentation, and final validation. The dashboard copy is English.
+Harden cross-cutting dashboard states and accessibility: actionable scoped
+errors with request IDs when available, stable loading/empty/missing regions,
+restrained live announcements, keyboard/focus behavior, and narrow-screen
+overflow protection. Then finish documentation and the full validation gate.
 
 T-003-T-005 remain `In Progress` until the React dashboard and its relevant
 validation are implemented. T-008 still owns the browser smoke-test tooling.

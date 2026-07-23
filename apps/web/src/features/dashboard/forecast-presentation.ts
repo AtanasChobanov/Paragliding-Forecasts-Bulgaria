@@ -72,6 +72,18 @@ const parseForecastDate = (date: ForecastDate): Date => {
   return new Date(Date.UTC(year, month - 1, day));
 };
 
+const formatForecastDatePart = (date: ForecastDate, options: Intl.DateTimeFormatOptions): string =>
+  new Intl.DateTimeFormat("en-GB", { ...options, timeZone: "UTC" }).format(parseForecastDate(date));
+
+export const formatForecastDateDayMonth = (date: ForecastDate): string =>
+  formatForecastDatePart(date, { day: "2-digit", month: "short" });
+
+export const formatForecastDateWeekday = (date: ForecastDate): string =>
+  formatForecastDatePart(date, { weekday: "long" });
+
+export const formatForecastYear = (date: ForecastDate): string =>
+  formatForecastDatePart(date, { year: "numeric" });
+
 export const formatForecastDateLong = (date: ForecastDate): string => {
   const parts = new Intl.DateTimeFormat("en-GB", {
     day: "2-digit",
