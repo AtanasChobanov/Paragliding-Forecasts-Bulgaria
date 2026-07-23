@@ -82,9 +82,9 @@ const SiteMarker = ({ onSelectSite, selected, site }: SiteMarkerProps) => {
           .filter((candidate): candidate is string => candidate !== undefined)
           .join(" "),
         html: '<span aria-hidden="true"></span>',
-        iconAnchor: selected ? [15, 32] : [12, 27],
-        iconSize: selected ? [30, 34] : [24, 29],
-        tooltipAnchor: [0, -18],
+        iconAnchor: [20, 44],
+        iconSize: [40, 44],
+        tooltipAnchor: [0, -25],
       }),
     [selected],
   );

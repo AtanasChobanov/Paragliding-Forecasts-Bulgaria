@@ -1,4 +1,5 @@
 import {
+  forecastDateSchema,
   forecastDaysResponseSchema,
   forecastSummariesResponseSchema,
   sitesResponseSchema,
@@ -320,6 +321,10 @@ describe("dashboard route URL orchestration", () => {
     await expectCanonicalLocation("?site=sopot&date=2026-07-18");
     await user.click(screen.getByRole("button", { name: "2026-07-19" }));
     await expectCanonicalLocation("?site=sopot&date=2026-07-19");
+    expect(screen.getByText("Selected Sopot for 2026-07-19.")).toHaveAttribute(
+      "aria-live",
+      "polite",
+    );
 
     await user.click(screen.getByRole("button", { name: "Test back" }));
     await expectCanonicalLocation("?site=sopot&date=2026-07-18");
@@ -496,7 +501,39 @@ describe("dashboard independent failures", () => {
     renderDashboardRoute("/");
 
     expect(await screen.findByRole("button", { name: "Retry locations" })).toBeVisible();
+    expect(screen.getByText(/sites-request-id/)).toBeVisible();
     expect(screen.queryByLabelText("Location")).not.toBeInTheDocument();
+  });
+
+  it("retries the sites request in place and restores dependent regions", async () => {
+    installDashboardHandlers();
+    let attempts = 0;
+    server.use(
+      http.get(SITES_URL, () => {
+        attempts += 1;
+
+        return attempts === 1
+          ? HttpResponse.json(
+              {
+                type: "urn:paragliding-forecasts:problem:internal-server-error",
+                title: "Internal server error",
+                status: 500,
+                detail: "Sites are temporarily unavailable.",
+                code: "INTERNAL_SERVER_ERROR",
+                requestId: "sites-retry-id",
+              },
+              { status: 500 },
+            )
+          : HttpResponse.json(sitesResponseSchema.parse({ sites: fullCatalog }));
+      }),
+    );
+    const user = userEvent.setup();
+    renderDashboardRoute("/");
+
+    expect(await screen.findByText(/sites-retry-id/)).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Retry locations" }));
+    expect(await screen.findByLabelText("Location")).toBeVisible();
+    expect(attempts).toBe(2);
   });
 
   it("keeps a valid selected summary when the days request fails", async () => {
@@ -508,16 +545,95 @@ describe("dashboard independent failures", () => {
     expect(screen.getByRole("button", { name: "Retry forecast dates" })).toBeVisible();
   });
 
+  it("retries only the days region while keeping the overview usable", async () => {
+    installDashboardHandlers();
+    let attempts = 0;
+    server.use(
+      http.get(DAYS_URL, ({ request }) => {
+        attempts += 1;
+        const siteSlug = requireSearchParameter(new URL(request.url).searchParams, "siteSlug");
+        const site = fullCatalog.find((candidate) => candidate.slug === siteSlug);
+
+        if (attempts === 1) {
+          return HttpResponse.json(
+            {
+              type: "urn:paragliding-forecasts:problem:internal-server-error",
+              title: "Internal server error",
+              status: 500,
+              detail: "Forecast dates are temporarily unavailable.",
+              code: "INTERNAL_SERVER_ERROR",
+              requestId: "days-retry-id",
+            },
+            { status: 500 },
+          );
+        }
+
+        return site === undefined
+          ? HttpResponse.json({ error: true }, { status: 404 })
+          : HttpResponse.json(createDays(site));
+      }),
+    );
+    const user = userEvent.setup();
+    renderDashboardRoute("/?site=sopot&date=2026-07-18");
+
+    expect(await screen.findByText("source source-sopot")).toBeVisible();
+    expect(screen.getByText(/days-retry-id/)).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Retry forecast dates" }));
+    expect(await screen.findByRole("button", { name: "2026-07-18" })).toBeVisible();
+    expect(attempts).toBe(2);
+  });
+
   it("keeps the date strip when the summaries request fails", async () => {
     installDashboardHandlers();
     server.use(http.get(SUMMARIES_URL, () => HttpResponse.json({ error: true }, { status: 500 })));
     renderDashboardRoute("/?site=sopot&date=2026-07-18");
 
     expect(await screen.findByRole("button", { name: "Retry selected forecast" })).toBeVisible();
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
     expect(screen.getByRole("button", { name: "2026-07-18" })).toHaveAttribute(
       "aria-current",
       "date",
     );
+  });
+
+  it("retries the shared summaries request without disabling map or dates", async () => {
+    installDashboardHandlers();
+    let attempts = 0;
+    server.use(
+      http.get(SUMMARIES_URL, ({ request }) => {
+        attempts += 1;
+        const searchParameters = new URL(request.url).searchParams;
+        const date = forecastDateSchema.parse(requireSearchParameter(searchParameters, "date"));
+        const siteSlugs = requireSearchParameter(searchParameters, "siteSlugs").split(",");
+        const sites = siteSlugs.flatMap((slug) => {
+          const site = fullCatalog.find((candidate) => candidate.slug === slug);
+          return site === undefined ? [] : [site];
+        });
+
+        return attempts === 1
+          ? HttpResponse.json(
+              {
+                type: "urn:paragliding-forecasts:problem:internal-server-error",
+                title: "Internal server error",
+                status: 500,
+                detail: "Summaries are temporarily unavailable.",
+                code: "INTERNAL_SERVER_ERROR",
+                requestId: "summaries-retry-id",
+              },
+              { status: 500 },
+            )
+          : HttpResponse.json(createSummaries(date, sites));
+      }),
+    );
+    const user = userEvent.setup();
+    renderDashboardRoute("/?site=sopot&date=2026-07-18");
+
+    expect(await screen.findByText(/summaries-retry-id/)).toBeVisible();
+    expect(screen.getByLabelText("Location")).toBeVisible();
+    expect(screen.getByRole("button", { name: "2026-07-18" })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Retry selected forecast" }));
+    expect(await screen.findByText("source source-sopot")).toBeVisible();
+    expect(attempts).toBe(2);
   });
 
   it("surfaces a days correlation mismatch as an API compatibility error", async () => {
@@ -529,6 +645,8 @@ describe("dashboard independent failures", () => {
     expect(
       screen.getByText("The forecast service returned days for a different location."),
     ).toBeVisible();
+    expect(screen.getByText("Forecast dates response is incompatible")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Retry forecast dates" })).not.toBeInTheDocument();
   });
 
   it("surfaces a summary correlation mismatch without hiding the date strip", async () => {
@@ -546,5 +664,9 @@ describe("dashboard independent failures", () => {
       ),
     ).toBeVisible();
     expect(screen.getByRole("button", { name: "2026-07-18" })).toBeVisible();
+    expect(screen.getByText("Forecast response is incompatible")).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Retry selected forecast" }),
+    ).not.toBeInTheDocument();
   });
 });

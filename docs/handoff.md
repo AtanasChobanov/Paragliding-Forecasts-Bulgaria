@@ -8,8 +8,8 @@
 | Current Git branch | `feature/T-003-T-005-dashboard` |
 | Branch relationship | Rebased onto `origin/main` at merge commit `d4167ff` after T-002 merged |
 | Current tasks | T-003, T-004, and T-005 — `In Progress` |
-| Completed scope in this branch | Dashboard API/contracts foundation, Stage 0 preflight, runnable React/Vite workspace, validated queries/URL orchestration, responsive visual foundation, forecast overview/comparison cards, Leaflet site selector, and five-day date selector |
-| Expected working tree after the Stage 7 commit | Clean |
+| Completed scope in this branch | Dashboard API/contracts foundation, Stage 0 preflight, runnable React/Vite workspace, validated queries/URL orchestration, responsive visual foundation, forecast overview/comparison cards, Leaflet selector, five-day selector, and cross-cutting state/accessibility hardening |
+| Expected working tree after the Stage 8 commit | Clean |
 
 ## Current outcome
 
@@ -61,6 +61,15 @@ date-only labels cannot shift through local timezone parsing, and each card
 retains explicit metric status/confidence context. A missing 100+ kilometre
 metric remains selectable in place with its reason and never becomes zero.
 
+Cross-cutting hardening now distinguishes retryable request failures from API
+compatibility failures. HTTP Problem Details request IDs are visible, retry is
+offered only for network/5xx paths, and sites, days, and shared summaries each
+recover in place without disabling unrelated successful regions. The shared
+summary failure emits one alert; the Other Locations panel shows restrained
+context instead of repeated alert spam. Native controls, focus rings, live
+selection announcements, reduced motion, larger map controls/pin targets, and
+long-content wrapping are covered by the implementation and tests.
+
 ## Web workspace
 
 - `npm.cmd run dev:web` starts Vite on `http://localhost:5173` by default.
@@ -100,6 +109,9 @@ metric remains selectable in place with its reason and never becomes zero.
 - The five-card strip uses `aria-current="date"` for API today and
   `aria-pressed` for the URL-selected date. It has no hidden date expansion,
   arrows, qualitative weather labels, or invented iconography.
+- Request failures preserve Problem Details support identifiers. Invalid JSON,
+  schema failures, and correlation mismatches are compatibility errors; their
+  untrusted payloads are not rendered and retry is not presented as a fix.
 
 ## HTTP surface
 
@@ -346,6 +358,26 @@ The Stage 7 five-day selector checkpoint passed:
 - repository lint, formatting, structure, and `git diff --check` passed after
   the final gate.
 
+The Stage 8 state/accessibility-hardening checkpoint passed:
+
+- web build and typecheck passed; Vite kept Leaflet in a separate 157.36 kB
+  minified `SiteMap` chunk and reported the existing non-blocking 588.73 kB
+  initial dashboard chunk warning;
+- web tests: 17 files / 112 tests;
+- web coverage: 96.04% statements, 88.92% branches, 98.78% functions, and
+  96.05% lines;
+- tests cover correlated request IDs, retry recovery for sites/days/summaries,
+  non-retryable compatibility errors, a single summary alert, live selected
+  forecast announcements, keyboard date activation, and the existing
+  reduced-motion, tile-failure, stale-data, empty, and missing-data behavior;
+- repository lint, formatting, structure, and `git diff --check` passed after
+  the final gate.
+
+No real-browser keyboard, narrow-screen, or visual inspection was performed at
+the user's request. Automated checks cover the rendered semantics and
+interactions but do not prove pixel layout, real-browser focus appearance, map
+tiles, or label collisions.
+
 ## Git checkpoints
 
 This branch contains these reviewable commits after the T-002 base:
@@ -365,17 +397,17 @@ This branch contains these reviewable commits after the T-002 base:
 - `ce068f8 T-003 establish dashboard visual foundation`
 - `ee517d5 T-003 render dashboard forecast overview`
 - `3d362a8 T-004 add interactive Leaflet site selector`
-- next checkpoint: `T-005 add five-day forecast selector`
+- `3fe4557 T-005 add five-day forecast selector`
+- next checkpoint: `T-003-T-005 harden dashboard states and accessibility`
 
 The branch was rebased onto the T-002 merge in current `origin/main`. It has not
 been pushed and no pull request was created.
 
 ## Next implementation step
 
-Harden cross-cutting dashboard states and accessibility: actionable scoped
-errors with request IDs when available, stable loading/empty/missing regions,
-restrained live announcements, keyboard/focus behavior, and narrow-screen
-overflow protection. Then finish documentation and the full validation gate.
+Finish the dashboard documentation and run the full repository validation gate.
+Update task status only as far as the verified implementation and deliberately
+deferred manual browser review justify.
 
 T-003-T-005 remain `In Progress` until the React dashboard and its relevant
 validation are implemented. T-008 still owns the browser smoke-test tooling.

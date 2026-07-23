@@ -60,6 +60,10 @@
     color: var(--color-border-strong);
     content: "·";
   }
+
+  span {
+    overflow-wrap: anywhere;
+  }
 }
 
 @media (max-width: 52rem) {

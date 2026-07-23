@@ -13,8 +13,9 @@ type InformationalContentStateProps = BaseContentStateProps & {
 
 type ErrorContentStateProps = BaseContentStateProps & {
   readonly variant: "error";
-  readonly onRetry: () => void;
-  readonly retryLabel: string;
+  readonly onRetry?: (() => void) | undefined;
+  readonly requestId?: string | null | undefined;
+  readonly retryLabel?: string | undefined;
 };
 
 export type ContentStateProps = InformationalContentStateProps | ErrorContentStateProps;
@@ -32,7 +33,12 @@ export const ContentState = (props: ContentStateProps) => {
       <div>
         <h3>{title}</h3>
         <p>{message}</p>
-        {variant === "error" ? (
+        {variant === "error" && props.requestId !== null && props.requestId !== undefined ? (
+          <p className={styles.reference}>
+            Request ID: <code>{props.requestId}</code>
+          </p>
+        ) : null}
+        {variant === "error" && props.onRetry !== undefined && props.retryLabel !== undefined ? (
           <button type="button" onClick={props.onRetry}>
             {props.retryLabel}
           </button>

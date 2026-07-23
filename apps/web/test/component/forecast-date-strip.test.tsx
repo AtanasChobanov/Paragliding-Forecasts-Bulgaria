@@ -60,6 +60,25 @@ describe("ForecastDateStrip", () => {
     expect(onSelectDate).toHaveBeenCalledWith("2026-07-19");
   });
 
+  it("supports keyboard-only date selection through native buttons", async () => {
+    const response = createForecastDaysResponse();
+    const onSelectDate = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ForecastDateStrip
+        days={response.days}
+        onSelectDate={onSelectDate}
+        selectedDate="2026-07-18"
+        todayDate={response.todayDate}
+      />,
+    );
+
+    await user.tab();
+    expect(screen.getByRole("button", { name: "2026-07-16" })).toHaveFocus();
+    await user.keyboard("{Enter}");
+    expect(onSelectDate).toHaveBeenCalledWith("2026-07-16");
+  });
+
   it("keeps a missing slot selectable and explains it without substituting zero", async () => {
     const response = createForecastDaysResponse();
     const onSelectDate = vi.fn();

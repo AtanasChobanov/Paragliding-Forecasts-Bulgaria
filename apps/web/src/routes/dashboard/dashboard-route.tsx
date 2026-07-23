@@ -4,6 +4,7 @@ import { type ReactNode, useCallback, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { ContentState } from "../../components/content-state/ContentState.js";
+import { DashboardErrorState } from "../../features/dashboard/components/DashboardErrorState.js";
 import { DashboardShell } from "../../features/dashboard/components/DashboardShell.js";
 import { ForecastDateStrip } from "../../features/dashboard/components/ForecastDateStrip.js";
 import {
@@ -12,6 +13,7 @@ import {
 } from "../../features/dashboard/components/ForecastOverview.js";
 import { OtherLocationsSection } from "../../features/dashboard/components/OtherLocationsSection.js";
 import { SiteSelectorSection } from "../../features/dashboard/components/SiteSelectorSection.js";
+import { presentDashboardError } from "../../features/dashboard/dashboard-error-presentation.js";
 import { createDashboardQueryOptions } from "../../features/dashboard/dashboard-query-options.js";
 import {
   createCanonicalDashboardSearch,
@@ -31,9 +33,6 @@ import type { DashboardApi } from "../../services/api/dashboard-api.js";
 export interface DashboardRouteProps {
   readonly dashboardApi: DashboardApi;
 }
-
-const describeError = (error: unknown): string =>
-  error instanceof Error ? error.message : "The forecast request failed unexpectedly.";
 
 interface SummaryDashboardProps {
   readonly canonicalSummarySiteSlugs: readonly SiteSlug[];
@@ -68,6 +67,7 @@ const SummaryDashboard = ({
     [summariesQuery.data],
   );
   const selectedSummary = summariesBySlug?.get(selectedSite.slug);
+  const summaryError = summariesQuery.isError ? presentDashboardError(summariesQuery.error) : null;
 
   const overview = summariesQuery.isPending ? (
     <div>
@@ -81,12 +81,12 @@ const SummaryDashboard = ({
   ) : summariesQuery.isError ? (
     <div>
       <SelectedForecastHeading forecastDate={forecastDate} siteName={selectedSite.name} />
-      <ContentState
-        message={describeError(summariesQuery.error)}
+      <DashboardErrorState
+        compatibilityTitle="Forecast response is incompatible"
+        error={summariesQuery.error}
         onRetry={() => void summariesQuery.refetch()}
         retryLabel="Retry selected forecast"
-        title="Forecast request failed"
-        variant="error"
+        requestTitle="Forecast request failed"
       />
     </div>
   ) : (
@@ -105,8 +105,16 @@ const SummaryDashboard = ({
     />
   ) : summariesQuery.isError ? (
     <ContentState
-      message="Other-location summaries are unavailable until the shared request succeeds."
-      title="Comparison unavailable"
+      message={
+        summaryError?.category === "api-compatibility"
+          ? "The shared forecast response could not be used. Diagnostic details are shown in the selected forecast region."
+          : "Other-location summaries are unavailable until the shared request succeeds. Use the selected forecast retry to request both regions again."
+      }
+      title={
+        summaryError?.category === "api-compatibility"
+          ? "Comparison response is incompatible"
+          : "Comparison unavailable"
+      }
       variant="info"
     />
   ) : (
@@ -192,12 +200,12 @@ const ResolvedDashboard = ({
       variant="loading"
     />
   ) : forecastDaysQuery.isError ? (
-    <ContentState
-      message={describeError(forecastDaysQuery.error)}
+    <DashboardErrorState
+      compatibilityTitle="Forecast dates response is incompatible"
+      error={forecastDaysQuery.error}
       onRetry={() => void forecastDaysQuery.refetch()}
       retryLabel="Retry forecast dates"
-      title="Forecast dates failed"
-      variant="error"
+      requestTitle="Forecast dates failed"
     />
   ) : selectedDate === undefined ? null : (
     <ForecastDateStrip
@@ -287,12 +295,12 @@ export const DashboardRoute = ({ dashboardApi }: DashboardRouteProps) => {
         announcement="The forecast location catalog could not be loaded."
         forecastDates={waitingForSites("Forecast dates require the location catalog.")}
         locationSelector={
-          <ContentState
-            message={describeError(sitesQuery.error)}
+          <DashboardErrorState
+            compatibilityTitle="Locations response is incompatible"
+            error={sitesQuery.error}
             onRetry={() => void sitesQuery.refetch()}
             retryLabel="Retry locations"
-            title="Locations request failed"
-            variant="error"
+            requestTitle="Locations request failed"
           />
         }
         otherLocations={waitingForSites("Comparison locations require the catalog.")}

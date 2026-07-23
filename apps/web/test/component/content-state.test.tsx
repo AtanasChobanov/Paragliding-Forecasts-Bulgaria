@@ -36,4 +36,18 @@ describe("ContentState", () => {
     await user.click(screen.getByRole("button", { name: "Try again" }));
     expect(onRetry).toHaveBeenCalledOnce();
   });
+
+  it("shows a support request ID and permits a non-retryable alert", () => {
+    render(
+      <ContentState
+        message="The response is incompatible."
+        requestId="request-support-123"
+        title="Compatibility error"
+        variant="error"
+      />,
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Request ID: request-support-123");
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
 });

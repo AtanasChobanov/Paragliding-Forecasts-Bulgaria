@@ -194,6 +194,23 @@ metrics remain in their original position, stay selectable, and show the API
 reason as unavailable rather than zero. The responsive grid changes from five
 columns to two and then one without adding horizontal page overflow.
 
+## Error and accessibility behavior
+
+Sites, summaries, days, and tiles own independent states. A sites failure keeps
+the stable four-panel shell; a days failure leaves the selected summary usable;
+a summaries failure leaves the selector/map and date strip usable; a tile
+failure does not become an API error. Retry controls are rendered only for
+retryable network and HTTP 5xx failures. HTTP Problem Details request IDs are
+shown for support, while malformed or mismatched successful payloads are named
+as dashboard/API compatibility errors and are never rendered as trusted data.
+
+The page uses one `h1`, semantic labelled sections, scoped `aria-busy`, one
+polite selection announcement, native select/buttons, visible focus rings,
+approximately 44-pixel controls, explicit units/status text, and reduced-motion
+handling. The date cards expose API today separately from URL selection. One
+shared summaries failure creates one alert and one restrained comparison-region
+explanation rather than duplicate alert spam.
+
 ## Testing expectations
 
 - API-client tests for URL encoding, success parsing, Problem Details, network
@@ -213,6 +230,9 @@ columns to two and then one without adding horizontal page overflow.
 - Component/unit tests for native location selection, fitted map bounds, OSM
   provider metadata, permanent site labels, pin selection, reduced motion, and
   tile-failure degradation.
+- Integration tests for sites/days/summaries retry recovery, request IDs,
+  compatibility failures, independent-region preservation, stale-selection
+  prevention, keyboard date activation, and polite selection announcements.
 - T-008 browser smoke test proving the dashboard and required cards render.
 
 V8 coverage counts all maintained `src/**/*.{ts,tsx}` files, including files a

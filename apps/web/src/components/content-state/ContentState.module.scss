@@ -21,6 +21,7 @@
   p {
     margin: 0;
     font-size: 0.875rem;
+    overflow-wrap: anywhere;
   }
 
   button {
@@ -39,6 +40,15 @@
     &:focus-visible {
       @include mixins.focus-ring;
     }
+  }
+}
+
+.reference {
+  margin-top: var(--space-2) !important;
+
+  code {
+    font-family: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+    font-size: 0.78rem;
   }
 }
 
