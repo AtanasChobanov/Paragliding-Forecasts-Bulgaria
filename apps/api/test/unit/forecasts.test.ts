@@ -40,6 +40,14 @@ describe("detailed forecast service", () => {
         chance300KmPct: { value: 13, dataStatus: "mock" },
         overdevelopmentRisk: { value: "medium", dataStatus: "mock" },
       },
+      forecastInputs: {
+        provenance: {
+          source: "t-006-t-007-mock-weather-provider",
+          version: "mock-weather-v1",
+        },
+        surfaceTemperatureC: { value: 28.2, dataStatus: "mock" },
+        capeJPerKg: { value: 685, dataStatus: "mock" },
+      },
       topDrivers: ["Synthetic thermal strength", "Synthetic boundary-layer depth"],
     });
   });

@@ -1,0 +1,325 @@
+.summary {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--layout-panel-padding);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-panel);
+}
+
+.summaryHeading {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+
+  h2 {
+    margin: 0;
+    color: var(--color-heading);
+    font-size: clamp(1.25rem, 2vw, 1.9rem);
+    line-height: 1.15;
+  }
+
+  p,
+  .panelMetadata,
+  .driverIntro {
+    margin: var(--space-1) 0 0;
+    color: var(--color-text-secondary);
+    font-size: 0.75rem;
+  }
+}
+
+.primaryChance {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-subtle);
+
+  > span {
+    color: var(--color-text-secondary);
+    font-size: 0.8rem;
+  }
+
+  > strong {
+    color: var(--color-primary);
+    font-size: clamp(1.65rem, 3.1vw, 2.8rem);
+    line-height: 1;
+  }
+
+  .primaryProgress {
+    grid-column: 1 / -1;
+  }
+}
+
+.outputGrid {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+}
+
+.outputMetric {
+  display: grid;
+  min-width: 0;
+  grid-template-rows: auto auto auto auto;
+  align-content: start;
+  justify-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  text-align: center;
+
+  & + & {
+    border-left: 1px solid var(--color-border);
+  }
+}
+
+.outputIcon {
+  color: var(--color-primary);
+
+  svg {
+    width: clamp(1.15rem, 1.6vw, 1.55rem);
+    height: clamp(1.15rem, 1.6vw, 1.55rem);
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.75;
+  }
+}
+
+.outputLabel,
+.reason {
+  color: var(--color-text-secondary);
+  font-size: 0.68rem;
+  line-height: 1.25;
+}
+
+.outputValue {
+  color: var(--color-heading);
+  font-size: clamp(0.95rem, 1.3vw, 1.3rem);
+  line-height: 1.1;
+}
+
+.unavailable {
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+}
+
+.panelMetadata,
+.driverIntro {
+  margin: 0 0 var(--space-3);
+}
+
+.inputGrid {
+  display: grid;
+  min-width: 0;
+  margin: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+}
+
+.inputMetric {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+
+  &:nth-child(odd) {
+    border-right: 1px solid var(--color-border);
+  }
+
+  &:nth-last-child(-n + 2) {
+    border-bottom: 0;
+  }
+
+  dt,
+  dd {
+    min-width: 0;
+    margin: 0;
+    font-size: clamp(0.68rem, 0.85vw, 0.8rem);
+  }
+
+  dt {
+    color: var(--color-text-secondary);
+  }
+
+  dd {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--space-1);
+    color: var(--color-heading);
+    text-align: right;
+
+    strong {
+      overflow-wrap: anywhere;
+    }
+  }
+}
+
+.drivers {
+  display: grid;
+  padding: 0;
+  margin: 0;
+  gap: var(--space-2);
+  list-style: none;
+
+  li {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    color: var(--color-heading);
+    font-size: 0.82rem;
+
+    &::before {
+      display: grid;
+      width: 1.1rem;
+      height: 1.1rem;
+      flex: 0 0 auto;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--color-primary);
+      color: var(--color-surface);
+      content: "✓";
+      font-size: 0.7rem;
+      font-weight: 700;
+    }
+  }
+}
+
+.comparison {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--layout-panel-padding);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-panel);
+
+  h2 {
+    flex: 0 0 auto;
+    margin: 0;
+    color: var(--color-heading);
+    font-size: 0.9rem;
+  }
+
+  ul {
+    display: grid;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    list-style: none;
+  }
+
+  li {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding: 0 var(--space-3);
+    color: var(--color-text-secondary);
+    font-size: 0.72rem;
+
+    & + li {
+      border-left: 1px solid var(--color-border);
+    }
+
+    strong {
+      color: var(--color-text-secondary);
+      font-size: 0.72rem;
+      font-weight: 600;
+    }
+  }
+}
+
+@media (min-width: 70rem) and (max-height: 52rem) {
+  .summary {
+    gap: var(--space-2);
+  }
+
+  .primaryChance {
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .outputMetric {
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .inputMetric {
+    padding-block: var(--space-1);
+  }
+}
+
+@media (max-width: 70rem) {
+  .outputGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .outputMetric {
+    border-bottom: 1px solid var(--color-border);
+
+    &:nth-child(odd) {
+      border-left: 0;
+    }
+
+    &:last-child {
+      grid-column: 1 / -1;
+      border-bottom: 0;
+    }
+  }
+
+  .comparison {
+    align-items: flex-start;
+    flex-direction: column;
+
+    ul {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--space-2);
+    }
+
+    li {
+      padding: 0;
+
+      & + li {
+        border-left: 0;
+      }
+    }
+  }
+}
+
+@media (max-width: 42rem) {
+  .summaryHeading,
+  .primaryChance {
+    align-items: flex-start;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .inputGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .inputMetric {
+    border-right: 0 !important;
+
+    &:nth-last-child(2) {
+      border-bottom: 1px solid var(--color-border);
+    }
+  }
+}

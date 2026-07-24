@@ -13,15 +13,16 @@ result as an inspectable daily dashboard.
 ## Project status
 
 - Delivery phase: **Takt 1**
-- Current tickets: **T-003-T-005 - Dashboard, site selector, and date selector**
+- Current tickets: **T-003-T-007 - Dashboard and detailed forecast view**
   (`In Progress`, pending manual browser/visual review)
 - Implemented: runnable React/Vite and Node.js/Express workspaces, shared runtime
   contracts, structured logging and errors, a map-ready seven-site catalog,
   deterministic date-aware mock forecasts, dashboard summary/day-preview read
   endpoints, canonical URL selection, forecast overview/comparison cards, an
-  interactive Leaflet site selector, a fixed five-day selector, and scoped
-  accessible request states
-- Not implemented: the detailed forecast view, Takt 1 browser smoke automation,
+  interactive Leaflet site selector, a fixed five-day selector, scoped
+  accessible request states, and a routed detailed site/date forecast view with
+  mock forecast inputs and drivers
+- Not implemented: Takt 1 browser smoke automation,
   SQLite schema or access layer, data ingestion, real forecasts, models, and
   alerts
 
@@ -34,7 +35,11 @@ The dashboard lets a user choose a forecast date and one of the initial
 Bulgarian areas: Sofia - Vitosha (Kominite), Zlatitsa, Sopot, Nevsha, Shumen,
 Pastrina, or the Dobrich region. It shows cloudbase, chances for 100+ km,
 200+ km, and 300+ km flights, and overdevelopment risk. Every value is labelled
-as `mock`, `manual`, `baseline`, `real`, or `missing`.
+as `mock`, `manual`, `baseline`, `real`, or `missing`. Its detailed action and
+each Other Locations card open `/forecast?site=<slug>&date=YYYY-MM-DD`. The
+detail view exposes all five output values with their own confidence/status,
+mock weather inputs and drivers, and a static previous-run placeholder until
+real model runs exist.
 
 ## Repository layout
 

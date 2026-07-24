@@ -10,6 +10,7 @@ import {
 import { createDashboardApi } from "../../src/services/api/dashboard-api.js";
 import {
   createForecastDaysResponse,
+  createForecastResponse,
   createForecastSummariesResponse,
   createInternalServerProblem,
   createSitesResponse,
@@ -21,6 +22,7 @@ const API_BASE_URL = "https://forecast-api.example.test/local";
 const SITES_URL = `${API_BASE_URL}/api/v1/sites`;
 const SUMMARIES_URL = `${API_BASE_URL}/api/v1/forecasts/summaries`;
 const DAYS_URL = `${API_BASE_URL}/api/v1/forecasts/days`;
+const FORECAST_URL = `${API_BASE_URL}/api/v1/forecasts`;
 
 const createTestApi = () => createDashboardApi(createApiClient({ baseUrl: API_BASE_URL }));
 const createSignal = () => new AbortController().signal;
@@ -80,6 +82,27 @@ describe("dashboard API client", () => {
       createTestApi().getForecastDays({ siteSlug: "sopot", signal: createSignal() }),
     ).resolves.toEqual(expected);
     expect(receivedUrl?.searchParams.getAll("siteSlug")).toEqual(["sopot"]);
+  });
+
+  it("encodes a detailed site/date lookup and validates the detailed response", async () => {
+    const expected = createForecastResponse();
+    let receivedUrl: URL | undefined;
+    server.use(
+      http.get(FORECAST_URL, ({ request }) => {
+        receivedUrl = new URL(request.url);
+        return HttpResponse.json(expected);
+      }),
+    );
+
+    await expect(
+      createTestApi().getForecastDetail({
+        date: "2026-07-18",
+        siteSlug: "sopot",
+        signal: createSignal(),
+      }),
+    ).resolves.toEqual(expected);
+    expect(receivedUrl?.searchParams.getAll("siteSlug")).toEqual(["sopot"]);
+    expect(receivedUrl?.searchParams.getAll("date")).toEqual(["2026-07-18"]);
   });
 
   it("retains validated Problem Details for a 4xx response without making it retryable", async () => {

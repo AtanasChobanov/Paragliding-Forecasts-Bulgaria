@@ -4,14 +4,29 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated | 2026-07-23 |
-| Current Git branch | `feature/T-003-T-005-dashboard` |
-| Branch relationship | Rebased onto `origin/main` at merge commit `d4167ff` after T-002 merged |
-| Current tasks | T-003, T-004, and T-005 — `In Progress`, pending manual browser/visual review |
-| Completed scope in this branch | Dashboard API/contracts foundation, runnable React/Vite workspace, validated queries/URL orchestration, responsive dashboard UI, forecast cards, Leaflet selector, five-day selector, state/accessibility hardening, automated validation, and setup/limitations documentation |
-| Expected working tree after the final documentation commit | Clean |
+| Last updated | 2026-07-24 |
+| Current Git branch | `feature/T-006-T007-forecast-details-page` |
+| Branch relationship | Extends the dashboard implementation at `e744bc5` |
+| Current tasks | T-003 through T-007 — `In Progress`, pending manual browser/visual review |
+| Completed scope in this branch | Dashboard foundation plus detailed site/date route, mock forecast-input contract/API mapping, dashboard-to-detail navigation, selected-site map focus, data-status treatment, automated validation, and setup/limitations documentation |
+| Expected working tree after the final documentation commit | Dirty until the user completes manual visual review and the work is committed |
 
 ## Current outcome
+
+T-006/T-007 now implement `/forecast?site=<slug>&date=YYYY-MM-DD`. It uses
+the existing site/date URL state, auto-fetches one detailed forecast on selector
+or map selection, and returns to the dashboard through `All sites` while
+preserving selection. The dashboard's selected action and all Other Locations
+cards are working links to that route. No browser or screenshot automation was
+run by explicit user instruction; manual visual review is still required.
+
+The detailed response now includes strict mock `forecastInputs`: source-run
+metadata plus explicit-status temperature, boundary-layer, wind, humidity,
+instability, cloud, precipitation, pressure, and convergence values. Each of
+the five outputs retains its own confidence/status. Top drivers remain strings,
+and the five `Unchanged` previous-run entries are deliberately static UI rather
+than API data. DEC-018 records that this is a provisional read model, not the
+final T-017/persistence weather-feature schema.
 
 The API now supplies the data shapes required by the approved dashboard design
 without changing the detailed-page contract into a dashboard endpoint. It adds
@@ -110,9 +125,8 @@ long-content wrapping are covered by the implementation and tests.
 - Forecast date-only labels are formatted with UTC calendar parts, while
   generation instants are rendered in `Europe/Sofia`; no naive date-only parse
   can move the visible forecast to a different day.
-- The dashboard renders the reference image's full-width detailed-forecast
-  button as an explicitly disabled visual-review control. T-006 still owns its
-  real route and activation behavior.
+- The dashboard's full-width detailed-forecast action is a working link, and
+  every Other Locations card is a whole-card link for its site/current date.
 - Leaflet is loaded through a separate production chunk. OSM Standard is a
   runtime internet dependency with no offline or SLA guarantee; the provider
   URL, linked attribution, maximum zoom, and policy URL are centralized.
@@ -144,8 +158,9 @@ GET /api/v1/forecasts/days?siteSlug=...
 
 ### Detailed forecast
 
-- Remains the single-site/date payload intended for the later detailed page.
-- Returns full outputs, provenance, and top drivers for a present fixture.
+- Powers `/forecast?site=<slug>&date=YYYY-MM-DD` through one detailed request.
+- Returns full outputs, per-output confidence/status, provenance, top drivers,
+  and strict mock forecast inputs with separate provenance/source-run time.
 - Returns `404 SITE_NOT_FOUND` for an unknown site and
   `404 FORECAST_NOT_FOUND` for a known site/date without a record.
 
@@ -190,9 +205,9 @@ data rather than fetching independently.
    the selected site is also a default card, reuse the same summary in both
    positions.
 5. Fetch `/api/v1/forecasts/days` when the selected site changes.
-6. Keep the visual-review detailed action explicitly disabled in T-003-T-005.
-   T-006 adds its real route, activation behavior, and later owns
-   `/api/v1/forecasts`; the current control must not imply working navigation.
+6. The dashboard action and Other Locations cards link to the detail route;
+   that route owns `/api/v1/forecasts` while dashboard cards retain their
+   summary/day-preview requests.
 
 This means the forecast portion of one dashboard state needs two requests, not
 one request per component.
@@ -229,7 +244,7 @@ Missing records deliberately differ by read model:
 | Summaries | `200` missing item |
 | Days | `200` fixed slot with missing p100 metric |
 
-Accepted design decisions are recorded as DEC-015 through DEC-017 in
+Accepted design decisions are recorded as DEC-015 through DEC-018 in
 [`decisions.md`](decisions.md).
 
 ## Validation
@@ -431,6 +446,21 @@ cards, and removal of the visible year. Web build, typecheck, lint, formatting,
 and all 17 web test files / 112 tests passed. Web coverage passed at 96.10%
 statements, 88.99% branches, 98.80% functions, and 96.12% lines. Manual visual
 acceptance is still pending.
+
+The T-006/T-007 implementation validation on 2026-07-24 passed:
+
+- `npm.cmd run build`
+- `npm.cmd run typecheck`
+- `npm.cmd run lint`
+- `npm.cmd run format:check`
+- `npm.cmd run repo:check`
+- `npm.cmd test`: contracts 15 tests, API 82 tests, web 120 tests
+- `npm.cmd run test:coverage`: web 95.67% statements, 85.30% branches,
+  97.34% functions, and 95.65% lines.
+
+The Vite build retained Leaflet as a separate 158.66 kB minified chunk and
+reported the existing non-blocking main-chunk-size warning. No headless browser,
+visual screenshot, or manual browser interaction was performed by design.
 
 The latest visual refinement gives Forecast Overview a larger fractional share
 of the left column than Other Locations, with separate tall- and short-viewport

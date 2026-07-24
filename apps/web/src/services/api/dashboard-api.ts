@@ -1,9 +1,11 @@
 import {
   forecastDaysResponseSchema,
   forecastSummariesResponseSchema,
+  forecastResponseSchema,
   sitesResponseSchema,
   type ForecastDate,
   type ForecastDaysResponse,
+  type ForecastResponse,
   type ForecastSummariesResponse,
   type SiteSlug,
   type SitesResponse,
@@ -22,10 +24,17 @@ export interface ForecastDaysRequest {
   readonly signal: AbortSignal;
 }
 
+export interface ForecastDetailRequest {
+  readonly date: ForecastDate;
+  readonly signal: AbortSignal;
+  readonly siteSlug: SiteSlug;
+}
+
 export interface DashboardApi {
   listSites(signal: AbortSignal): Promise<SitesResponse>;
   getForecastSummaries(request: ForecastSummariesRequest): Promise<ForecastSummariesResponse>;
   getForecastDays(request: ForecastDaysRequest): Promise<ForecastDaysResponse>;
+  getForecastDetail(request: ForecastDetailRequest): Promise<ForecastResponse>;
 }
 
 export const createDashboardApi = (apiClient: ApiClient): DashboardApi => ({
@@ -50,6 +59,16 @@ export const createDashboardApi = (apiClient: ApiClient): DashboardApi => ({
       endpoint: "api/v1/forecasts/days",
       schema: forecastDaysResponseSchema,
       searchParameters: [["siteSlug", siteSlug]],
+      signal,
+    }),
+  getForecastDetail: ({ date, siteSlug, signal }) =>
+    apiClient.get({
+      endpoint: "api/v1/forecasts",
+      schema: forecastResponseSchema,
+      searchParameters: [
+        ["siteSlug", siteSlug],
+        ["date", date],
+      ],
       signal,
     }),
 });

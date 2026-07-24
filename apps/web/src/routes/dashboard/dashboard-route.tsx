@@ -118,7 +118,11 @@ const SummaryDashboard = ({
       variant="info"
     />
   ) : (
-    <OtherLocationsSection sites={otherLocationSites} summariesBySlug={summariesBySlug} />
+    <OtherLocationsSection
+      forecastDate={forecastDate}
+      sites={otherLocationSites}
+      summariesBySlug={summariesBySlug}
+    />
   );
 
   return (

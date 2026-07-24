@@ -173,10 +173,25 @@ immediately after the minimum-ID default, ordered by numeric ID. The selected
 location is not filtered out when it is one of those cards. Missing summary
 items and missing metrics show their reasons without substituting zero. Below
 each chance bar, cloudbase and overdevelopment risk use a compact icon-and-value
-row without a metric divider, followed by the compact confidence meter. A
-full-width disabled
-detailed-forecast control is rendered for visual-review fidelity; T-006 still
-owns its working destination and activation behavior.
+row without a metric divider, followed by the compact confidence meter. The
+full-width detailed-forecast control now links to the selected site/date, and
+every Other Locations card is a full-card link to that same route for its site
+and the active dashboard date.
+
+## Detailed forecast view
+
+`/forecast?site=<slug>&date=YYYY-MM-DD` keeps selection in the same canonical
+URL parameters as the dashboard. Its native site/date selectors auto-fetch on
+change; there are no date-navigation arrows or confirmation control. `All sites`
+returns to the dashboard with the same selection.
+
+The desktop route is a fixed-height, no-page-scroll grid: outputs and a
+selected-site Leaflet view occupy the first row, mock forecast inputs and
+top-driver strings the second, then a static five-output `Unchanged`
+previous-run placeholder. It deliberately has no previous-run API field. On
+narrow screens the route stacks and scrolls normally. All seven provisional
+map pins remain clickable; the detail viewport begins focused on the selected
+site and adds a north-up compass. The final visual review remains manual.
 
 ## Map behavior and network dependency
 

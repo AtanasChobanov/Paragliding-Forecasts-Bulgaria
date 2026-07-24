@@ -22,6 +22,11 @@ const availableMetric = <Value>(value: Value) => ({
   confidence,
 });
 
+const availableInput = <Value>(value: Value) => ({
+  value,
+  dataStatus: "mock" as const,
+});
+
 const createForecast = (): ForecastResponse => ({
   siteId: 3,
   siteSlug: "sopot",
@@ -37,6 +42,30 @@ const createForecast = (): ForecastResponse => ({
     chance200KmPct: availableMetric(30),
     chance300KmPct: availableMetric(10),
     overdevelopmentRisk: availableMetric("medium" as const),
+  },
+  forecastInputs: {
+    provenance: {
+      source: "t-006-t-007-mock-weather-provider",
+      version: "mock-weather-v1",
+    },
+    sourceRunAt: "2026-07-17T12:00:00.000Z",
+    surfaceTemperatureC: availableInput(27.4),
+    dewPointC: availableInput(14.2),
+    boundaryLayerHeightM: availableInput(1_650),
+    thermalStrengthMps: availableInput(3.2),
+    boundaryLayerWindSpeedKmh: availableInput(18),
+    boundaryLayerWindDirectionDeg: availableInput(225),
+    windByAltitude: availableInput([{ altitudeMslM: 1_500, directionDeg: 230, speedKmh: 22 }]),
+    windShearMpsPerKm: availableInput(2.4),
+    relativeHumidityPct: availableInput(52),
+    capeJPerKg: availableInput(840),
+    cinJPerKg: availableInput(20),
+    lapseRateCPerKm: availableInput(6.5),
+    lowCloudCoverPct: availableInput(24),
+    totalCloudCoverPct: availableInput(38),
+    precipitationMm: availableInput(0),
+    surfacePressureHpa: availableInput(1_008),
+    convergenceSignal: availableInput("weak" as const),
   },
   topDrivers: ["Synthetic mock driver"],
 });

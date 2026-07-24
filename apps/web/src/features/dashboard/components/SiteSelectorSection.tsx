@@ -12,22 +12,32 @@ const LazySiteMap = lazy(async () => {
 export interface SiteSelectorSectionProps {
   readonly onSelectSite: (siteSlug: SiteSlug) => void;
   readonly selectedSite: Site;
+  readonly showCompass?: boolean;
+  readonly showInstructions?: boolean;
+  readonly showSelector?: boolean;
   readonly sites: readonly Site[];
+  readonly viewportMode?: "all-sites" | "selected-site";
 }
 
 export const SiteSelectorSection = ({
   onSelectSite,
   selectedSite,
+  showCompass = false,
+  showInstructions = true,
+  showSelector = true,
   sites,
+  viewportMode = "all-sites",
 }: SiteSelectorSectionProps) => (
   <div className={styles.content}>
-    <div className={styles.controls}>
-      <AccessibleSiteSelector
-        onSelectSite={onSelectSite}
-        selectedSite={selectedSite}
-        sites={sites}
-      />
-    </div>
+    {showSelector ? (
+      <div className={styles.controls}>
+        <AccessibleSiteSelector
+          onSelectSite={onSelectSite}
+          selectedSite={selectedSite}
+          sites={sites}
+        />
+      </div>
+    ) : null}
     <Suspense
       fallback={
         <div aria-busy="true" className={styles.mapFallback} role="status">
@@ -35,7 +45,14 @@ export const SiteSelectorSection = ({
         </div>
       }
     >
-      <LazySiteMap onSelectSite={onSelectSite} selectedSite={selectedSite} sites={sites} />
+      <LazySiteMap
+        onSelectSite={onSelectSite}
+        selectedSite={selectedSite}
+        showCompass={showCompass}
+        showInstructions={showInstructions}
+        sites={sites}
+        viewportMode={viewportMode}
+      />
     </Suspense>
   </div>
 );

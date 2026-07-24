@@ -2,6 +2,7 @@ import type {
   AvailableDataStatus,
   Confidence,
   ForecastDate,
+  ForecastInputs,
   Provenance,
   SiteId,
 } from "@paragliding-forecasts/contracts";
@@ -20,5 +21,6 @@ export interface ForecastPrediction {
   readonly probability200KmPct: number;
   readonly probability300KmPct: number;
   readonly overdevelopmentRisk: OverdevelopmentRisk;
+  readonly forecastInputs: ForecastInputs;
   readonly topDrivers: readonly string[];
 }

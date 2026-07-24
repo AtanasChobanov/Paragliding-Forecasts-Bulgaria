@@ -1,4 +1,4 @@
-import type { ForecastDate, SiteId } from "@paragliding-forecasts/contracts";
+import type { ForecastDate, ForecastInputs, SiteId } from "@paragliding-forecasts/contracts";
 
 import { addForecastDays, toForecastDate } from "./forecast-date.js";
 import type { ForecastPrediction, OverdevelopmentRisk } from "./forecast-prediction.js";
@@ -19,6 +19,47 @@ interface DayAdjustment {
   readonly probability200KmPct: number;
   readonly probability300KmPct: number;
 }
+
+const mockInputMetric = <Value>(value: Value) => ({
+  dataStatus: "mock" as const,
+  value,
+});
+
+const createMockForecastInputs = (
+  siteId: SiteId,
+  generatedAt: string,
+  adjustment: DayAdjustment,
+): ForecastInputs => {
+  const siteOffset = (siteId - 1) * 0.7;
+
+  return {
+    provenance: {
+      source: "t-006-t-007-mock-weather-provider",
+      version: "mock-weather-v1",
+    },
+    sourceRunAt: generatedAt,
+    surfaceTemperatureC: mockInputMetric(26 + siteOffset + adjustment.probability100KmPct / 10),
+    dewPointC: mockInputMetric(11 + siteOffset),
+    boundaryLayerHeightM: mockInputMetric(1_650 + siteId * 55 + adjustment.cloudbaseMslM),
+    thermalStrengthMps: mockInputMetric(2.8 + siteOffset / 4),
+    boundaryLayerWindSpeedKmh: mockInputMetric(14 + siteId * 1.5),
+    boundaryLayerWindDirectionDeg: mockInputMetric(210 + siteId * 8),
+    windByAltitude: mockInputMetric([
+      { altitudeMslM: 1_500, directionDeg: 205 + siteId * 4, speedKmh: 16 + siteId },
+      { altitudeMslM: 2_500, directionDeg: 225 + siteId * 4, speedKmh: 23 + siteId },
+    ]),
+    windShearMpsPerKm: mockInputMetric(2.1 + siteOffset / 5),
+    relativeHumidityPct: mockInputMetric(47 + siteId * 2),
+    capeJPerKg: mockInputMetric(550 + siteId * 45),
+    cinJPerKg: mockInputMetric(18 + siteId * 2),
+    lapseRateCPerKm: mockInputMetric(6.2 + siteOffset / 8),
+    lowCloudCoverPct: mockInputMetric(18 + siteId * 2),
+    totalCloudCoverPct: mockInputMetric(32 + siteId * 2),
+    precipitationMm: mockInputMetric(siteId % 3 === 0 ? 0.6 : 0),
+    surfacePressureHpa: mockInputMetric(1_012 - siteId * 1.5),
+    convergenceSignal: mockInputMetric(siteId % 2 === 0 ? "weak" : "moderate"),
+  };
+};
 
 const mockProfiles = new Map<SiteId, MockForecastProfile>([
   [
@@ -154,6 +195,17 @@ const clonePrediction = (prediction: ForecastPrediction): ForecastPrediction => 
   ...prediction,
   confidence: { ...prediction.confidence },
   provenance: { ...prediction.provenance },
+  forecastInputs: {
+    ...prediction.forecastInputs,
+    provenance: { ...prediction.forecastInputs.provenance },
+    windByAltitude:
+      prediction.forecastInputs.windByAltitude.dataStatus === "missing"
+        ? { ...prediction.forecastInputs.windByAltitude }
+        : {
+            ...prediction.forecastInputs.windByAltitude,
+            value: prediction.forecastInputs.windByAltitude.value.map((wind) => ({ ...wind })),
+          },
+  },
   topDrivers: [...prediction.topDrivers],
 });
 
@@ -192,6 +244,7 @@ export class MockForecastRepository implements ForecastRepository {
           probability200KmPct: metric(profile.probability200KmPct, adjustment.probability200KmPct),
           probability300KmPct: metric(profile.probability300KmPct, adjustment.probability300KmPct),
           overdevelopmentRisk: profile.overdevelopmentRisk,
+          forecastInputs: createMockForecastInputs(siteId, generatedAt, adjustment),
           topDrivers: [...profile.topDrivers],
         };
 

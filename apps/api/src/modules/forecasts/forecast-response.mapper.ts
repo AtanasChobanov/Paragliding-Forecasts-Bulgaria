@@ -34,6 +34,17 @@ export const mapPredictionToForecastResponse = (
   generatedAt: prediction.generatedAt,
   provenance: { ...prediction.provenance },
   outputs: mapPredictionOutputs(prediction),
+  forecastInputs: {
+    ...prediction.forecastInputs,
+    provenance: { ...prediction.forecastInputs.provenance },
+    windByAltitude:
+      prediction.forecastInputs.windByAltitude.dataStatus === "missing"
+        ? { ...prediction.forecastInputs.windByAltitude }
+        : {
+            ...prediction.forecastInputs.windByAltitude,
+            value: prediction.forecastInputs.windByAltitude.value.map((wind) => ({ ...wind })),
+          },
+  },
   topDrivers: [...prediction.topDrivers],
 });
 

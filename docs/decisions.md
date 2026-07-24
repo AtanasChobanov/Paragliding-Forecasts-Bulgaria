@@ -609,13 +609,48 @@ coordinates.
 [`../apps/web/README.md`](../apps/web/README.md),
 [`architecture.md`](architecture.md), [`../README.md`](../README.md).
 
+### DEC-018 — Add a provisional detailed forecast-input read model
+
+**Status:** Accepted
+
+**Date:** 2026-07-24
+
+**Context:** T-006/T-007 need to expose the weather and atmospheric context
+behind a detailed mock prediction before the persistence, ingestion, and final
+weather-feature work is implemented. The detailed page also needs a reliable
+way to distinguish mock, manually loaded, baseline, real, and missing inputs.
+
+**Decision:** Extend only the single-site/date `ForecastResponse` with strict
+`forecastInputs`. Each input is an available-or-missing value with explicit
+status and units in its field name; the object additionally carries source-run
+time and provenance. It covers the project brief's temperature, boundary-layer,
+wind, humidity, instability, cloud, precipitation, pressure, and convergence
+groups. The existing detailed route owns this request; dashboard summaries and
+five-day previews remain unchanged. `topDrivers` remains an ordered string
+array, and previous-run comparison values are deliberately not added to the API.
+
+**Rationale:** The screen can show inspectable mock evidence now without
+inventing storage, model-run history, driver categories, or a second browser
+endpoint. Field-level missing states prevent unavailable input from becoming a
+plausible numeric zero.
+
+**Consequences:** The contract is a browser read model, not a SQLite schema or
+the final weather-feature vocabulary. T-017 remains responsible for final
+feature definitions/units and a later persistence owner must map those values
+explicitly. The detail UI must label synthetic values and keep its five-output
+`Unchanged` comparison as a static placeholder until real repeated model runs
+exist.
+
+**Related files:** [`../packages/contracts/src/forecast.ts`](../packages/contracts/src/forecast.ts),
+[`../apps/api/src/modules/forecasts/mock-forecast.repository.ts`](../apps/api/src/modules/forecasts/mock-forecast.repository.ts),
+[`../apps/web/src/routes/forecast-details/forecast-details-route.tsx`](../apps/web/src/routes/forecast-details/forecast-details-route.tsx).
+
 ## Open decisions
 
 | Question | Options / constraints | Resolve by |
 | --- | --- | --- |
 | Which SQLite access layer and migration approach should be used? | Direct driver, query builder, or ORM are possible; keep persistence behind repositories and do not add storage solely for a health endpoint. | The first persistence/schema ticket, expected by T-012/T-018. |
 | Which task owns the persisted prediction schema and SQLite forecast adapter? | The backlog has flight and weather schema tasks but no explicit owner for storing T-022-T-024 outputs and replacing the T-002 mock adapter. Public units/status/provenance must be mapped deliberately. | Backlog planning before real predictions are connected to the API. |
-| Which task owns the underlying forecast-input panel and high/medium/low signal semantics? | Both appear in the project brief, but T-003-T-007 cover the initial screen/selectors/cards/status and T-025 covers confidence/top drivers only. | Backlog planning before claiming the full dashboard requirement. |
 | What are the final coordinates, aliases, and catchment radii for each site? | Current map points are provisional; Pastrina and the Dobrich regional model need particular confirmation. | T-009. |
 | What access methods, permissions, attribution, caching, and rate limits apply to flight sources? | XCContest and SkyNomad must be researched without assuming scraping permission. | T-010 and T-011. |
 | Which historical forecast/archive or reanalysis sources will be used? | Exact archived forecasts are preferred; reanalysis is the documented fallback. | T-016, with units refined in T-017. |

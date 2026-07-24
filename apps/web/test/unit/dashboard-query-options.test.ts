@@ -18,10 +18,17 @@ const createApiSpies = () => {
   const getForecastDays = vi
     .fn<DashboardApi["getForecastDays"]>()
     .mockResolvedValue(createForecastDaysResponse());
+  const getForecastDetail = vi.fn<DashboardApi["getForecastDetail"]>();
 
   return {
-    api: { listSites, getForecastSummaries, getForecastDays } satisfies DashboardApi,
+    api: {
+      listSites,
+      getForecastSummaries,
+      getForecastDays,
+      getForecastDetail,
+    } satisfies DashboardApi,
     getForecastDays,
+    getForecastDetail,
     getForecastSummaries,
     listSites,
   };
