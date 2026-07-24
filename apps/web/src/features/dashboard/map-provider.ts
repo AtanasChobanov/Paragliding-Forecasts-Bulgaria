@@ -31,7 +31,8 @@ const siteLabelOverrides: Readonly<Partial<Record<SiteSlug, SiteLabelPresentatio
   nevsha: { direction: "bottom", offset: [0, 18] },
   pastrina: { direction: "right", offset: [16, 2] },
   shumen: { direction: "left", offset: [-16, -2] },
-  "sofia-vitosha-kominite": { direction: "right", offset: [16, 2] },
+  "sofia-vitosha-kominite": { direction: "bottom", offset: [0, 18] },
+  zlatitsa: { direction: "top", offset: [0, -18] },
 };
 
 export const getSiteLabelPresentation = (siteSlug: SiteSlug): SiteLabelPresentation =>

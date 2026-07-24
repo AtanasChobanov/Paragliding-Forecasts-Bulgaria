@@ -461,6 +461,16 @@ all 17 test files / 112 tests, production build, lint, formatting, and
 repository structure validation passed. No browser automation or captured
 output was used.
 
+The map-pin follow-up rotates the CSS teardrop into the upright orientation and
+centers its inner dot geometrically for both idle and selected states. Sofia -
+Vitosha now places its permanent label below the pin and Zlatitsa places its
+label above the pin to reduce overlap at the fitted overview zoom. The focused
+map tests, all 17 web test files / 112 tests, typecheck, production build, lint,
+and formatting passed without browser automation.
+
+The matching pin inside the accessible location selector now uses the same
+upright orientation and geometric inner-dot centering as the map markers.
+
 ## Git checkpoints
 
 This branch contains these reviewable commits after the T-002 base:

@@ -69,15 +69,17 @@
   position: relative;
   width: 0.8rem;
   height: 0.8rem;
-  transform: rotate(45deg);
+  transform: rotate(-45deg);
   border-radius: 50% 50% 50% 0;
   background: currentColor;
 
   &::after {
     position: absolute;
+    top: 50%;
+    left: 50%;
     width: 0.28rem;
     height: 0.28rem;
-    transform: translate(0.26rem, 0.26rem);
+    transform: translate(-50%, -50%);
     border-radius: 50%;
     background: var(--color-surface);
     content: "";

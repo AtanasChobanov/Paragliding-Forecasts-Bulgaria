@@ -29,5 +29,13 @@ describe("dashboard map provider", () => {
       direction: "bottom",
       offset: [0, 18],
     });
+    expect(getSiteLabelPresentation("sofia-vitosha-kominite")).toEqual({
+      direction: "bottom",
+      offset: [0, 18],
+    });
+    expect(getSiteLabelPresentation("zlatitsa")).toEqual({
+      direction: "top",
+      offset: [0, -18],
+    });
   });
 });

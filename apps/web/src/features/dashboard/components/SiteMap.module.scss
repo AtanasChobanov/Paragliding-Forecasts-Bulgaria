@@ -59,7 +59,7 @@
     display: block;
     width: 1.75rem;
     height: 1.75rem;
-    transform: rotate(45deg);
+    transform: rotate(-45deg);
     border: 3px solid var(--color-surface);
     border-radius: 50% 50% 50% 0;
     background: #5b6873;
@@ -67,9 +67,11 @@
 
     &::after {
       position: absolute;
+      top: 50%;
+      left: 50%;
       width: 0.44rem;
       height: 0.44rem;
-      transform: translate(0.38rem, 0.38rem);
+      transform: translate(-50%, -50%);
       border-radius: 50%;
       background: var(--color-surface);
       content: "";
@@ -88,7 +90,6 @@
     &::after {
       width: 0.55rem;
       height: 0.55rem;
-      transform: translate(0.45rem, 0.45rem);
     }
   }
 }
