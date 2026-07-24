@@ -171,7 +171,7 @@ export const LocationSummaryCard = ({ forecastDate, site, summary }: LocationSum
           </div>
         </dl>
         <div className={styles.confidence}>
-          <ConfidenceIndicator compact confidence={confidence} />
+          <ConfidenceIndicator compact confidence={confidence} label="Conf." />
         </div>
       </article>
     </Link>

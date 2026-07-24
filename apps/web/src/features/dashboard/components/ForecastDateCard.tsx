@@ -44,6 +44,7 @@ export const ForecastDateCard = ({ day, onSelectDate, selected, today }: Forecas
           <ConfidenceIndicator
             compact
             confidence={{ level: "unavailable", notes: [metric.missingReason] }}
+            label="Conf."
           />
           <span className={styles.reason}>{metric.missingReason}</span>
         </>
@@ -54,6 +55,7 @@ export const ForecastDateCard = ({ day, onSelectDate, selected, today }: Forecas
           <ConfidenceIndicator
             compact
             confidence={{ level: metric.confidence.level, notes: [metric.confidence.note] }}
+            label="Conf."
           />
         </>
       )}

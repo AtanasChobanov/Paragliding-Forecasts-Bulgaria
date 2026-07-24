@@ -137,7 +137,7 @@ const AvailableOverview = ({ forecastDate, siteName, summary }: AvailableOvervie
         />
       </ul>
       <div className={styles.footer}>
-        <ConfidenceIndicator confidence={confidence} />
+        <ConfidenceIndicator confidence={confidence} label="Model confidence" />
         <p className={styles.metadata}>
           <span>{summary.provenance.version}</span>
           <span>generated {formatGeneratedAt(summary.generatedAt)}</span>
