@@ -501,6 +501,12 @@ and formatting passed without browser automation.
 The matching pin inside the accessible location selector now uses the same
 upright orientation and geometric inner-dot centering as the map markers.
 
+The Forecast Inputs detail panel now keeps its fixed desktop layout while
+placing the full input table inside a keyboard-focusable, vertically scrollable
+region. This prevents long input rows from escaping the panel and preserves the
+single-screen composition. Web tests (120), typecheck, and formatting checks
+passed; no browser automation was run.
+
 The 2026-07-24 detail-page refinement keeps `ConfidenceIndicator` as the one
 shared meter while making its visible label and supplementary note configurable.
 Forecast Overview and the main detail chance now say `Model confidence`; compact
