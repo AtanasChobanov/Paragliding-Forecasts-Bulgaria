@@ -501,6 +501,16 @@ and formatting passed without browser automation.
 The matching pin inside the accessible location selector now uses the same
 upright orientation and geometric inner-dot centering as the map markers.
 
+The 2026-07-24 detail-page refinement keeps `ConfidenceIndicator` as the one
+shared meter while making its visible label and supplementary note configurable.
+Forecast Overview and the main detail chance now say `Model confidence`; compact
+date and comparison cards say `Conf.`. Each detailed output has the compact
+meter in a separate subdued footer, matching the Other Locations treatment.
+The primary chance label is now class-scoped, so it cannot override the
+teal data-status badge colour. Web typecheck, lint, formatting, production
+build, and all 22 web test files / 120 tests passed. No browser automation or
+visual capture was run by request; manual visual acceptance remains pending.
+
 ## Git checkpoints
 
 This branch contains these reviewable commits after the T-002 base:

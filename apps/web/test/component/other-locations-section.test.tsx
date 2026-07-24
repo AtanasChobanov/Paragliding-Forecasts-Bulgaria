@@ -68,7 +68,7 @@ describe("OtherLocationsSection", () => {
     ]);
     expect(screen.getAllByText("Mock data")).toHaveLength(3);
     expect(screen.getAllByRole("progressbar")).toHaveLength(3);
-    expect(screen.getAllByText("Confidence")).toHaveLength(3);
+    expect(screen.getAllByText("Conf.")).toHaveLength(3);
     expect(screen.getAllByRole("link", { name: /View detailed forecast for/i })).toHaveLength(3);
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });

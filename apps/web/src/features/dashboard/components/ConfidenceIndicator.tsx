@@ -5,6 +5,10 @@ import styles from "./ConfidenceIndicator.module.scss";
 export interface ConfidenceIndicatorProps {
   readonly confidence: DisplayConfidence;
   readonly compact?: boolean;
+  /** Visible description for the meter; use null only when nearby copy is explicit. */
+  readonly label?: string | null;
+  /** Whether to render the supplementary confidence note. */
+  readonly showNote?: boolean;
 }
 
 const filledSegmentCount = (level: DisplayConfidence["level"]): number => {
@@ -21,7 +25,12 @@ const filledSegmentCount = (level: DisplayConfidence["level"]): number => {
   }
 };
 
-export const ConfidenceIndicator = ({ compact = false, confidence }: ConfidenceIndicatorProps) => {
+export const ConfidenceIndicator = ({
+  compact = false,
+  confidence,
+  label: prefix = "Confidence",
+  showNote = !compact,
+}: ConfidenceIndicatorProps) => {
   const label = formatConfidence(confidence.level);
   const note = confidence.notes.join(" ");
   const filled = filledSegmentCount(confidence.level);
@@ -29,7 +38,7 @@ export const ConfidenceIndicator = ({ compact = false, confidence }: ConfidenceI
   return (
     <div className={compact ? styles.compact : undefined} title={note || undefined}>
       <div className={styles.row}>
-        <span className={styles.prefix}>Confidence</span>
+        {prefix === null ? null : <span className={styles.prefix}>{prefix}</span>}
         <span aria-hidden="true" className={styles.segments}>
           {[1, 2, 3].map((segment) => (
             <span className={segment <= filled ? styles.filled : undefined} key={segment} />
@@ -37,7 +46,7 @@ export const ConfidenceIndicator = ({ compact = false, confidence }: ConfidenceI
         </span>
         <span className={styles.label}>{label.replace(" confidence", "")}</span>
       </div>
-      {compact || note.length === 0 ? null : <p className={styles.note}>{note}</p>}
+      {!showNote || note.length === 0 ? null : <p className={styles.note}>{note}</p>}
     </div>
   );
 };

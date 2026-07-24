@@ -22,6 +22,8 @@ describe("forecast detail content", () => {
     );
 
     expect(screen.getByRole("heading", { name: "Sopot · Saturday, 18 Jul" })).toBeVisible();
+    expect(screen.getByText("Model confidence")).toBeVisible();
+    expect(screen.getAllByText("Conf.")).toHaveLength(5);
     expect(screen.getAllByText("Mock data").length).toBeGreaterThanOrEqual(3);
     expect(screen.getByRole("progressbar", { name: /100 kilometres/i })).toHaveAttribute(
       "aria-valuenow",

@@ -68,7 +68,9 @@ const OutputMetric = ({
         <p className={styles.reason}>{metric.missingReason}</p>
       ) : null}
       <DataStatusBadge compact status={metric.dataStatus} />
-      <ConfidenceIndicator compact confidence={displayConfidence(metric)} />
+      <div className={styles.outputConfidence}>
+        <ConfidenceIndicator compact confidence={displayConfidence(metric)} label="Conf." />
+      </div>
     </article>
   );
 };
@@ -191,7 +193,7 @@ export const ForecastDetailSummary = ({
         ) : (
           <strong>{formatInteger(chance100.value)}%</strong>
         )}
-        <span>100+ km chance</span>
+        <span className={styles.primaryChanceLabel}>100+ km chance</span>
         <DataStatusBadge compact status={chance100.dataStatus} />
         {chance100.dataStatus === "missing" ? (
           <p className={styles.reason}>{chance100.missingReason}</p>
@@ -203,8 +205,13 @@ export const ForecastDetailSummary = ({
             />
           </div>
         )}
-        <span>Model confidence</span>
-        <ConfidenceIndicator compact confidence={displayConfidence(chance100)} />
+        <div className={styles.primaryConfidence}>
+          <ConfidenceIndicator
+            confidence={displayConfidence(chance100)}
+            label="Model confidence"
+            showNote={false}
+          />
+        </div>
       </div>
       <div aria-label="Detailed forecast outputs" className={styles.outputGrid}>
         <OutputMetric
