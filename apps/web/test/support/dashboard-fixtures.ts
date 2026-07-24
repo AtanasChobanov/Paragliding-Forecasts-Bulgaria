@@ -1,10 +1,12 @@
 import {
   forecastDaysResponseSchema,
+  forecastResponseSchema,
   forecastSummariesResponseSchema,
   problemDetailsSchema,
   sitesResponseSchema,
   type Confidence,
   type ForecastDaysResponse,
+  type ForecastResponse,
   type ForecastOutputs,
   type ForecastSummariesResponse,
   type ProblemDetails,
@@ -20,6 +22,11 @@ const availableMetric = <Value>(value: Value) => ({
   value,
   dataStatus: "mock" as const,
   confidence: mockConfidence,
+});
+
+const availableInput = <Value>(value: Value) => ({
+  value,
+  dataStatus: "mock" as const,
 });
 
 export const missingMetric = {
@@ -131,6 +138,44 @@ export const createForecastDaysResponse = (): ForecastDaysResponse =>
       { forecastDate: "2026-07-19", chance100KmPct: availableMetric(73) },
       { forecastDate: "2026-07-20", chance100KmPct: missingMetric },
     ],
+  });
+
+export const createForecastResponse = (): ForecastResponse =>
+  forecastResponseSchema.parse({
+    siteId: 3,
+    siteSlug: "sopot",
+    forecastDate: "2026-07-18",
+    generatedAt: "2026-07-17T20:00:00.000Z",
+    provenance: {
+      source: "t-003-t-005-mock-provider",
+      version: "mock-v2",
+    },
+    outputs: createForecastOutputs(),
+    forecastInputs: {
+      provenance: {
+        source: "t-006-t-007-mock-weather-provider",
+        version: "mock-weather-v1",
+      },
+      sourceRunAt: "2026-07-17T20:00:00.000Z",
+      surfaceTemperatureC: availableInput(27.4),
+      dewPointC: availableInput(14.2),
+      boundaryLayerHeightM: availableInput(1_750),
+      thermalStrengthMps: availableInput(3.2),
+      boundaryLayerWindSpeedKmh: availableInput(18),
+      boundaryLayerWindDirectionDeg: availableInput(225),
+      windByAltitude: availableInput([{ altitudeMslM: 1_500, directionDeg: 225, speedKmh: 18 }]),
+      windShearMpsPerKm: availableInput(2.4),
+      relativeHumidityPct: availableInput(52),
+      capeJPerKg: availableInput(840),
+      cinJPerKg: availableInput(20),
+      lapseRateCPerKm: availableInput(6.5),
+      lowCloudCoverPct: availableInput(24),
+      totalCloudCoverPct: availableInput(38),
+      precipitationMm: availableInput(0),
+      surfacePressureHpa: availableInput(1_008),
+      convergenceSignal: availableInput("weak" as const),
+    },
+    topDrivers: ["Synthetic thermal strength", "Synthetic boundary-layer depth"],
   });
 
 export const createValidationProblem = (): ProblemDetails =>

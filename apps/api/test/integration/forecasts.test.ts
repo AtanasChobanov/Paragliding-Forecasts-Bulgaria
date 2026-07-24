@@ -25,6 +25,14 @@ describe("GET /api/v1/forecasts", () => {
       chance300KmPct: { value: 13, dataStatus: "mock" },
       overdevelopmentRisk: { value: "medium", dataStatus: "mock" },
     });
+    expect(forecast.forecastInputs).toMatchObject({
+      provenance: {
+        source: "t-006-t-007-mock-weather-provider",
+        version: "mock-weather-v1",
+      },
+      surfaceTemperatureC: { value: 28.2, dataStatus: "mock" },
+      capeJPerKg: { value: 685, dataStatus: "mock" },
+    });
     expect(forecast.topDrivers.length).toBeGreaterThan(0);
     expect(forecast).not.toHaveProperty("qualityNotes");
   });

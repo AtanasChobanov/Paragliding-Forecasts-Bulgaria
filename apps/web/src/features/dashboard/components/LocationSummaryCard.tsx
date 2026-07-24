@@ -1,4 +1,5 @@
-import type { ForecastSummary, Site } from "@paragliding-forecasts/contracts";
+import type { ForecastDate, ForecastSummary, Site } from "@paragliding-forecasts/contracts";
+import { Link } from "react-router-dom";
 
 import {
   formatInteger,
@@ -8,9 +9,12 @@ import {
 } from "../forecast-presentation.js";
 import { ConfidenceIndicator } from "./ConfidenceIndicator.js";
 import { DataStatusBadge } from "./DataStatusBadge.js";
+import { ForecastChanceProgress } from "./ForecastChanceProgress.js";
 import styles from "./LocationSummaryCard.module.scss";
+import { createForecastDetailPath } from "../../forecast-details/forecast-detail-navigation.js";
 
 export interface LocationSummaryCardProps {
+  readonly forecastDate: ForecastDate;
   readonly site: Site;
   readonly summary: ForecastSummary | undefined;
 }
@@ -47,38 +51,51 @@ const UnavailableMetric = ({ reason }: { readonly reason: string }) => (
   </span>
 );
 
-export const LocationSummaryCard = ({ site, summary }: LocationSummaryCardProps) => {
+export const LocationSummaryCard = ({ forecastDate, site, summary }: LocationSummaryCardProps) => {
   const headingId = `other-location-${site.slug}`;
+  const detailPath = createForecastDetailPath(site.slug, forecastDate);
 
   if (summary === undefined) {
     return (
-      <article aria-labelledby={headingId} className={styles.card}>
-        <h3 id={headingId}>
-          <PinIcon />
-          {site.name}
-        </h3>
-        <div className={styles.missingSummary}>
-          <DataStatusBadge compact status="missing" />
-          <strong>No summary returned</strong>
-          <p>The service response omitted this comparison location.</p>
-        </div>
-      </article>
+      <Link
+        aria-label={`View detailed forecast for ${site.name}`}
+        className={styles.cardLink}
+        to={detailPath}
+      >
+        <article aria-labelledby={headingId} className={styles.card}>
+          <h3 id={headingId}>
+            <PinIcon />
+            {site.name}
+          </h3>
+          <div className={styles.missingSummary}>
+            <DataStatusBadge compact status="missing" />
+            <strong>No summary returned</strong>
+            <p>The service response omitted this comparison location.</p>
+          </div>
+        </article>
+      </Link>
     );
   }
 
   if (summary.availability === "missing") {
     return (
-      <article aria-labelledby={headingId} className={styles.card}>
-        <h3 id={headingId}>
-          <PinIcon />
-          {site.name}
-        </h3>
-        <div className={styles.missingSummary}>
-          <DataStatusBadge compact status="missing" />
-          <strong>Forecast unavailable</strong>
-          <p>{summary.missingReason}</p>
-        </div>
-      </article>
+      <Link
+        aria-label={`View detailed forecast for ${site.name}`}
+        className={styles.cardLink}
+        to={detailPath}
+      >
+        <article aria-labelledby={headingId} className={styles.card}>
+          <h3 id={headingId}>
+            <PinIcon />
+            {site.name}
+          </h3>
+          <div className={styles.missingSummary}>
+            <DataStatusBadge compact status="missing" />
+            <strong>Forecast unavailable</strong>
+            <p>{summary.missingReason}</p>
+          </div>
+        </article>
+      </Link>
     );
   }
 
@@ -91,72 +108,72 @@ export const LocationSummaryCard = ({ site, summary }: LocationSummaryCardProps)
   const risk = outputs.overdevelopmentRisk;
 
   return (
-    <article aria-labelledby={headingId} className={styles.card}>
-      <div className={styles.cardHeader}>
-        <h3 id={headingId}>
-          <PinIcon />
-          {site.name}
-        </h3>
-        <ChevronIcon />
-      </div>
-      <div className={styles.primaryMetric}>
-        {chance100.dataStatus === "missing" ? (
-          <div className={styles.valueRow}>
-            <UnavailableMetric reason={chance100.missingReason} />
-            <DataStatusBadge compact status={summaryStatus} />
-          </div>
-        ) : (
-          <>
+    <Link
+      aria-label={`View detailed forecast for ${site.name}`}
+      className={styles.cardLink}
+      to={detailPath}
+    >
+      <article aria-labelledby={headingId} className={styles.card}>
+        <div className={styles.cardHeader}>
+          <h3 id={headingId}>
+            <PinIcon />
+            {site.name}
+          </h3>
+          <ChevronIcon />
+        </div>
+        <div className={styles.primaryMetric}>
+          {chance100.dataStatus === "missing" ? (
             <div className={styles.valueRow}>
-              <strong>{formatInteger(chance100.value)}%</strong>
+              <UnavailableMetric reason={chance100.missingReason} />
               <DataStatusBadge compact status={summaryStatus} />
             </div>
-            <div
-              aria-label={`${String(chance100.value)} percent chance of 100 kilometres or more`}
-              aria-valuemax={100}
-              aria-valuemin={0}
-              aria-valuenow={chance100.value}
-              className={styles.progress}
-              role="progressbar"
-            >
-              <span style={{ width: `${String(chance100.value)}%` }} />
-            </div>
-          </>
-        )}
-        <span className={styles.metricLabel}>100+ km chance</span>
-        {chance100.dataStatus === "missing" ? (
-          <p>{chance100.missingReason}</p>
-        ) : showMetricStatus ? (
-          <DataStatusBadge compact status={chance100.dataStatus} />
-        ) : null}
-      </div>
-      <dl className={styles.secondaryMetrics}>
-        <div>
-          <dt className="visually-hidden">Cloudbase</dt>
-          <dd>
-            <CloudIcon />
-            {cloudbase.dataStatus === "missing" ? (
-              <UnavailableMetric reason={cloudbase.missingReason} />
-            ) : (
-              `${formatInteger(cloudbase.value)} m MSL`
-            )}
-          </dd>
+          ) : (
+            <>
+              <div className={styles.valueRow}>
+                <strong>{formatInteger(chance100.value)}%</strong>
+                <DataStatusBadge compact status={summaryStatus} />
+              </div>
+              <ForecastChanceProgress
+                label="chance of 100 kilometres or more"
+                value={chance100.value}
+              />
+            </>
+          )}
+          <span className={styles.metricLabel}>100+ km chance</span>
+          {chance100.dataStatus === "missing" ? (
+            <p>{chance100.missingReason}</p>
+          ) : showMetricStatus ? (
+            <DataStatusBadge compact status={chance100.dataStatus} />
+          ) : null}
         </div>
-        <div className={styles.riskMetric}>
-          <dt className="visually-hidden">OD risk</dt>
-          <dd>
-            <ShieldIcon />
-            {risk.dataStatus === "missing" ? (
-              <UnavailableMetric reason={risk.missingReason} />
-            ) : (
-              formatRisk(risk.value)
-            )}
-          </dd>
+        <dl className={styles.secondaryMetrics}>
+          <div>
+            <dt className="visually-hidden">Cloudbase</dt>
+            <dd>
+              <CloudIcon />
+              {cloudbase.dataStatus === "missing" ? (
+                <UnavailableMetric reason={cloudbase.missingReason} />
+              ) : (
+                `${formatInteger(cloudbase.value)} m MSL`
+              )}
+            </dd>
+          </div>
+          <div className={styles.riskMetric}>
+            <dt className="visually-hidden">OD risk</dt>
+            <dd>
+              <ShieldIcon />
+              {risk.dataStatus === "missing" ? (
+                <UnavailableMetric reason={risk.missingReason} />
+              ) : (
+                formatRisk(risk.value)
+              )}
+            </dd>
+          </div>
+        </dl>
+        <div className={styles.confidence}>
+          <ConfidenceIndicator compact confidence={confidence} />
         </div>
-      </dl>
-      <div className={styles.confidence}>
-        <ConfidenceIndicator compact confidence={confidence} />
-      </div>
-    </article>
+      </article>
+    </Link>
   );
 };

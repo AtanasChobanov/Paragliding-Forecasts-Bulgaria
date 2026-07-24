@@ -2,7 +2,7 @@
 
 ## Status
 
-The API foundation for T-003-T-005 is implemented on top of the T-002 local
+The API foundation for T-003-T-007 is implemented on top of the T-002 local
 server. It exposes a map-ready site catalog, detailed per-site forecasts, a
 batched dashboard summary read model, and a fixed five-day preview for the
 selected site. All current forecast values are deterministic `mock` fixtures;
@@ -29,7 +29,7 @@ npm.cmd run start:api
 | --- | --- |
 | `GET /health` | Service status, version, and current timestamp |
 | `GET /api/v1/sites` | All seven location-selector/map options, ordered by numeric ID |
-| `GET /api/v1/forecasts?siteSlug=sopot&date=YYYY-MM-DD` | Detailed forecast payload retained for the later detailed page |
+| `GET /api/v1/forecasts?siteSlug=sopot&date=YYYY-MM-DD` | Detailed location/date payload used by the routed detail page |
 | `GET /api/v1/forecasts/summaries?date=YYYY-MM-DD&siteSlugs=sopot,zlatitsa` | One batched set of dashboard overview cards for a date |
 | `GET /api/v1/forecasts/days?siteSlug=sopot` | Exactly five 100+ km preview slots centered on Sofia's current date |
 
@@ -49,12 +49,14 @@ and the existing numeric ID `6`.
 ### Detailed forecast
 
 `/api/v1/forecasts` requires one valid `siteSlug` and one real `YYYY-MM-DD`
-calendar date. It returns all five core outputs plus provenance and top drivers
-when the record exists. An unknown site returns `404 SITE_NOT_FOUND`; a known
+calendar date. It returns all five core outputs, per-output confidence/status,
+provenance, mock forecast inputs with their source-run metadata/status, and top
+drivers when the record exists. An unknown site returns `404 SITE_NOT_FOUND`; a known
 site/date with no record returns `404 FORECAST_NOT_FOUND`.
 
-This route remains the data source for the later detailed location/date page.
-The dashboard should not fetch it once per card. For an available mock example,
+This route is the data source for `/forecast?site=<slug>&date=YYYY-MM-DD`. The
+dashboard does not fetch it once per card; its selected action and comparison
+cards navigate to the detail route instead. For an available mock example,
 first call `/api/v1/forecasts/days?siteSlug=sopot` and use one of the returned
 `forecastDate` values; the finite fixture window moves with API startup date.
 
@@ -121,8 +123,8 @@ their own independent fetches.
    default cards.
 5. Fetch `/api/v1/forecasts/days` when the selected site changes. The date
    cards use only its five returned slots and do not paginate.
-6. The detailed-forecast button navigates with the selected slug/date; the
-   destination page later owns its detailed forecast request.
+6. The detailed-forecast button and Other Locations cards navigate with the
+   selected slug/date; the destination page owns its detailed forecast request.
 
 This produces two forecast requests for the dashboard state—one batched
 summary request and one five-day preview request—rather than one request per UI

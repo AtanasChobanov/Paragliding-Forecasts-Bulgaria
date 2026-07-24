@@ -1,0 +1,122 @@
+@use "../../styles/mixins";
+
+.main {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  grid-template-rows: auto minmax(0, 1.04fr) minmax(0, 0.9fr) auto;
+  gap: var(--layout-row-gap);
+  padding: var(--layout-row-gap) 0;
+  overflow: hidden;
+}
+
+.toolbar {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--layout-column-gap);
+
+  > :nth-child(n + 2) {
+    flex: 0 1 auto;
+  }
+
+  :global(.ContentState-module__state) {
+    padding: var(--space-2) var(--space-3);
+
+    p {
+      display: none;
+    }
+  }
+}
+
+.backLink {
+  display: inline-flex;
+  min-height: var(--control-min-size);
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-heading);
+  font-size: clamp(0.82rem, 1vw, 0.98rem);
+  font-weight: 600;
+  text-decoration: none;
+
+  svg {
+    width: 1.2rem;
+    height: 1.2rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.8;
+  }
+}
+
+.primaryGrid,
+.lowerGrid {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+  gap: var(--layout-column-gap);
+}
+
+.summaryRegion,
+.mapRegion,
+.lowerGrid > * {
+  min-width: 0;
+  min-height: 0;
+}
+
+.mapRegion {
+  overflow: hidden;
+  border-radius: var(--radius-panel);
+
+  > * {
+    height: 100%;
+  }
+}
+
+@media (min-width: 70rem) and (max-height: 52rem) {
+  .main {
+    grid-template-rows: auto minmax(0, 1fr) minmax(0, 0.86fr) auto;
+  }
+
+  .toolbar {
+    gap: var(--space-3);
+  }
+}
+
+@include mixins.compact {
+  .main {
+    height: auto;
+    min-height: 0;
+    grid-template-rows: auto;
+    padding: var(--layout-row-gap) 0;
+    overflow: visible;
+  }
+
+  .toolbar,
+  .primaryGrid,
+  .lowerGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .toolbar {
+    align-items: stretch;
+    flex-direction: column;
+
+    > * {
+      width: 100%;
+    }
+  }
+
+  .backLink {
+    min-height: var(--control-min-size);
+  }
+
+  .mapRegion {
+    min-height: 20rem;
+  }
+}

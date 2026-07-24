@@ -1,5 +1,7 @@
 import type { ForecastOutputs, ForecastSummary } from "@paragliding-forecasts/contracts";
 import { render, screen, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
 import { ForecastOverview } from "../../src/features/dashboard/components/ForecastOverview.js";
@@ -7,6 +9,8 @@ import { createForecastSummariesResponse, missingMetric } from "../support/dashb
 
 type AvailableSummary = Extract<ForecastSummary, { readonly availability: "available" }>;
 type MissingSummary = Extract<ForecastSummary, { readonly availability: "missing" }>;
+
+const renderWithRouter = (content: ReactNode) => render(<MemoryRouter>{content}</MemoryRouter>);
 
 const getAvailableSummary = (): AvailableSummary => {
   const summary = createForecastSummariesResponse().summaries.find(
@@ -34,7 +38,7 @@ const getMissingSummary = (): MissingSummary => {
 
 describe("ForecastOverview", () => {
   it("renders the selected site, five formatted metrics, mock provenance, and confidence", () => {
-    render(
+    renderWithRouter(
       <ForecastOverview
         forecastDate="2026-07-18"
         siteName="Sopot"
@@ -57,7 +61,10 @@ describe("ForecastOverview", () => {
     expect(screen.getByText("source t-003-t-005-mock-provider")).toBeVisible();
     expect(screen.getByText(/generated 23:00 EEST/)).toBeVisible();
     expect(screen.getByText("Synthetic demonstration value.")).toBeVisible();
-    expect(screen.getByRole("button", { name: "View detailed forecast" })).toBeDisabled();
+    expect(screen.getByRole("link", { name: "View detailed forecast" })).toHaveAttribute(
+      "href",
+      "/forecast?site=sopot&date=2026-07-18",
+    );
   });
 
   it("keeps available values while rendering a partial metric as unavailable", () => {
@@ -67,7 +74,7 @@ describe("ForecastOverview", () => {
       chance200KmPct: missingMetric,
     };
 
-    render(
+    renderWithRouter(
       <ForecastOverview
         forecastDate="2026-07-18"
         siteName="Sopot"
@@ -95,7 +102,7 @@ describe("ForecastOverview", () => {
       overdevelopmentRisk: missingMetric,
     };
 
-    render(
+    renderWithRouter(
       <ForecastOverview
         forecastDate="2026-07-18"
         siteName="Sopot"
@@ -110,7 +117,7 @@ describe("ForecastOverview", () => {
   });
 
   it("renders a summary-level missing reason without outputs or metadata", () => {
-    render(
+    renderWithRouter(
       <ForecastOverview
         forecastDate="2026-07-18"
         siteName="Zlatitsa"
@@ -125,7 +132,9 @@ describe("ForecastOverview", () => {
   });
 
   it("treats an omitted summary as partial service content", () => {
-    render(<ForecastOverview forecastDate="2026-07-18" siteName="Sopot" summary={undefined} />);
+    renderWithRouter(
+      <ForecastOverview forecastDate="2026-07-18" siteName="Sopot" summary={undefined} />,
+    );
 
     expect(screen.getByText("No summary was returned for the selected location.")).toBeVisible();
     expect(

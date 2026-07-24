@@ -103,10 +103,7 @@
   font-size: clamp(0.9rem, 1vw, 1.05rem);
   font-weight: 600;
 
-  &:disabled {
-    cursor: default;
-    opacity: 1;
-  }
+  text-decoration: none;
 
   svg {
     width: 1.35rem;

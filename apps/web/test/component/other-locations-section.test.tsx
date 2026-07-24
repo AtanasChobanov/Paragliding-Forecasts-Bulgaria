@@ -1,5 +1,7 @@
 import type { ForecastSummary, Site, SiteSlug } from "@paragliding-forecasts/contracts";
 import { render, screen, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
 import { LocationSummaryCard } from "../../src/features/dashboard/components/LocationSummaryCard.js";
@@ -11,6 +13,8 @@ import {
 } from "../support/dashboard-fixtures.js";
 
 type AvailableSummary = Extract<ForecastSummary, { readonly availability: "available" }>;
+
+const renderWithRouter = (content: ReactNode) => render(<MemoryRouter>{content}</MemoryRouter>);
 
 const availableSummary = (): AvailableSummary => {
   const summary = createForecastSummariesResponse().summaries.find(
@@ -52,7 +56,9 @@ describe("OtherLocationsSection", () => {
       [sofia.slug, summaryFor(sofia)],
     ]);
 
-    render(<OtherLocationsSection sites={sites} summariesBySlug={summaries} />);
+    renderWithRouter(
+      <OtherLocationsSection forecastDate="2026-07-18" sites={sites} summariesBySlug={summaries} />,
+    );
 
     const items = screen.getAllByRole("listitem");
     expect(items.map((item) => item.getAttribute("data-site-slug"))).toEqual([
@@ -63,14 +69,15 @@ describe("OtherLocationsSection", () => {
     expect(screen.getAllByText("Mock data")).toHaveLength(3);
     expect(screen.getAllByRole("progressbar")).toHaveLength(3);
     expect(screen.getAllByText("Confidence")).toHaveLength(3);
-    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: /View detailed forecast for/i })).toHaveLength(3);
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
   it("keeps a selected location when it is also configured as an Other card", () => {
     const selectedSite = requireSite("zlatitsa");
-    render(
+    renderWithRouter(
       <OtherLocationsSection
+        forecastDate="2026-07-18"
         sites={[selectedSite]}
         summariesBySlug={new Map([[selectedSite.slug, summaryFor(selectedSite)]])}
       />,
@@ -82,8 +89,9 @@ describe("OtherLocationsSection", () => {
   it("renders per-metric missing values without progress or zero substitution", () => {
     const site = requireSite("sopot");
     const summary = availableSummary();
-    render(
+    renderWithRouter(
       <LocationSummaryCard
+        forecastDate="2026-07-18"
         site={site}
         summary={{
           ...summary,
@@ -104,12 +112,18 @@ describe("OtherLocationsSection", () => {
     const missingSummary = createForecastSummariesResponse().summaries.find(
       (summary) => summary.availability === "missing",
     );
-    const { rerender } = render(<LocationSummaryCard site={zlatitsa} summary={missingSummary} />);
+    const { rerender } = renderWithRouter(
+      <LocationSummaryCard forecastDate="2026-07-18" site={zlatitsa} summary={missingSummary} />,
+    );
 
     expect(screen.getByText("Forecast unavailable")).toBeVisible();
     expect(screen.getByText("No forecast exists for Zlatitsa on 2026-07-18.")).toBeVisible();
 
-    rerender(<LocationSummaryCard site={zlatitsa} summary={undefined} />);
+    rerender(
+      <MemoryRouter>
+        <LocationSummaryCard forecastDate="2026-07-18" site={zlatitsa} summary={undefined} />
+      </MemoryRouter>,
+    );
     expect(screen.getByText("No summary returned")).toBeVisible();
     expect(
       screen.getByText("The service response omitted this comparison location."),

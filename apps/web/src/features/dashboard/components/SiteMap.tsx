@@ -9,7 +9,10 @@ import styles from "./SiteMap.module.scss";
 export interface SiteMapProps {
   readonly onSelectSite: (siteSlug: SiteSlug) => void;
   readonly selectedSite: Site;
+  readonly showCompass?: boolean;
+  readonly showInstructions?: boolean;
   readonly sites: readonly Site[];
+  readonly viewportMode?: "all-sites" | "selected-site";
 }
 
 export const createSiteBounds = (sites: readonly Site[]): LatLngBounds =>
@@ -39,9 +42,14 @@ const usePrefersReducedMotion = (): boolean => {
 interface MapViewportControllerProps {
   readonly selectedSite: Site;
   readonly sites: readonly Site[];
+  readonly viewportMode: "all-sites" | "selected-site";
 }
 
-const MapViewportController = ({ selectedSite, sites }: MapViewportControllerProps) => {
+const MapViewportController = ({
+  selectedSite,
+  sites,
+  viewportMode,
+}: MapViewportControllerProps) => {
   const map = useMap();
   const reducedMotion = usePrefersReducedMotion();
   const siteSignature = sites
@@ -49,21 +57,25 @@ const MapViewportController = ({ selectedSite, sites }: MapViewportControllerPro
     .join("|");
 
   useEffect(() => {
-    map.fitBounds(createSiteBounds(sites), {
+    map.fitBounds(createSiteBounds(viewportMode === "selected-site" ? [selectedSite] : sites), {
       animate: false,
-      maxZoom: 8,
+      maxZoom: viewportMode === "selected-site" ? 10 : 8,
       padding: [28, 28],
     });
     map.invalidateSize();
-  }, [map, siteSignature, sites]);
+  }, [map, selectedSite, siteSignature, sites, viewportMode]);
 
   useEffect(() => {
+    if (viewportMode === "selected-site") {
+      return;
+    }
+
     map.panInside([selectedSite.latitude, selectedSite.longitude], {
       animate: !reducedMotion,
       duration: reducedMotion ? 0 : 0.25,
       padding: [44, 44],
     });
-  }, [map, reducedMotion, selectedSite.latitude, selectedSite.longitude]);
+  }, [map, reducedMotion, selectedSite.latitude, selectedSite.longitude, viewportMode]);
 
   return null;
 };
@@ -129,7 +141,14 @@ const InstructionPin = () => (
   </svg>
 );
 
-export const SiteMap = ({ onSelectSite, selectedSite, sites }: SiteMapProps) => {
+export const SiteMap = ({
+  onSelectSite,
+  selectedSite,
+  showCompass = false,
+  showInstructions = true,
+  sites,
+  viewportMode = "all-sites",
+}: SiteMapProps) => {
   const [tileState, setTileState] = useState<TileState>("loading");
   const bounds = useMemo(() => createSiteBounds(sites), [sites]);
   const tileEventHandlers = useMemo<LeafletEventHandlerFnMap>(
@@ -167,7 +186,11 @@ export const SiteMap = ({ onSelectSite, selectedSite, sites }: SiteMapProps) => 
             maxZoom={openStreetMapStandardProvider.maximumZoom}
             url={openStreetMapStandardProvider.url}
           />
-          <MapViewportController selectedSite={selectedSite} sites={sites} />
+          <MapViewportController
+            selectedSite={selectedSite}
+            sites={sites}
+            viewportMode={viewportMode}
+          />
           {sites.map((site) => (
             <SiteMarker
               key={`${String(site.id)}:${site.slug === selectedSite.slug ? "selected" : "idle"}`}
@@ -187,15 +210,26 @@ export const SiteMap = ({ onSelectSite, selectedSite, sites }: SiteMapProps) => 
             The basemap could not be loaded. Location labels and the selector remain available.
           </p>
         ) : null}
+        {showCompass ? (
+          <span
+            aria-label="Map orientation: north is at the top"
+            className={styles.compass}
+            role="img"
+          >
+            <span aria-hidden="true">N</span>
+          </span>
+        ) : null}
       </div>
-      <p className={styles.instructions}>
-        <InstructionPin />
-        <span>Select a pin to update the dashboard</span>
-        <span className="visually-hidden">
-          For keyboard operation, use the location selector above. Scroll-wheel zoom is disabled;
-          use the visible map controls.
-        </span>
-      </p>
+      {showInstructions ? (
+        <p className={styles.instructions}>
+          <InstructionPin />
+          <span>Select a pin to update the dashboard</span>
+          <span className="visually-hidden">
+            For keyboard operation, use the location selector above. Scroll-wheel zoom is disabled;
+            use the visible map controls.
+          </span>
+        </p>
+      ) : null}
     </div>
   );
 };

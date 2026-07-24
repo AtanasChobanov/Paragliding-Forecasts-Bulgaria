@@ -5,7 +5,8 @@ import type {
   SiteSlug,
 } from "@paragliding-forecasts/contracts";
 
-export type DashboardCompatibilityResource = "forecast-days" | "forecast-summaries";
+export type DashboardCompatibilityResource =
+  "forecast-days" | "forecast-detail" | "forecast-summaries";
 
 export class DashboardCompatibilityError extends Error {
   readonly kind = "api-compatibility" as const;
