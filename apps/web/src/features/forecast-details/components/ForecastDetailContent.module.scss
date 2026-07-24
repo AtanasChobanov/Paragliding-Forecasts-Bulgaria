@@ -132,6 +132,14 @@
   margin: 0 0 var(--space-3);
 }
 
+.inputScroll {
+  min-height: 0;
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
 .inputGrid {
   display: grid;
   min-width: 0;

@@ -282,16 +282,23 @@ export const ForecastInputsPanel = ({
     <p className={styles.panelMetadata}>
       {forecastInputs.provenance.source} · updated {formatGeneratedAt(forecastInputs.sourceRunAt)}
     </p>
-    <dl className={styles.inputGrid}>
-      {forecastInputRows.map((row) => (
-        <InputMetric
-          format={row.format}
-          key={row.key}
-          label={row.label}
-          metric={forecastInputs[row.key]}
-        />
-      ))}
-    </dl>
+    <div
+      aria-label="Forecast input values"
+      className={styles.inputScroll}
+      role="region"
+      tabIndex={0}
+    >
+      <dl className={styles.inputGrid}>
+        {forecastInputRows.map((row) => (
+          <InputMetric
+            format={row.format}
+            key={row.key}
+            label={row.label}
+            metric={forecastInputs[row.key]}
+          />
+        ))}
+      </dl>
+    </div>
   </DashboardPanel>
 );
 
