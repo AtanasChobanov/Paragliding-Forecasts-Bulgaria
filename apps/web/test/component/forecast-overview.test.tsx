@@ -46,6 +46,7 @@ describe("ForecastOverview", () => {
     expect(screen.getByText("Mock data")).toBeVisible();
     const metrics = screen.getByRole("list", { name: "Forecast metrics" });
     expect(within(metrics).getAllByRole("listitem")).toHaveLength(5);
+    expect(metrics.querySelectorAll("svg")).toHaveLength(5);
     expect(within(metrics).getByText("2,400")).toBeVisible();
     expect(within(metrics).getByText("m MSL")).toBeVisible();
     expect(within(metrics).getByText("100+ km chance")).toBeVisible();
@@ -54,9 +55,9 @@ describe("ForecastOverview", () => {
     expect(within(metrics).getByText("Medium")).toBeVisible();
     expect(screen.getByText("mock-v2")).toBeVisible();
     expect(screen.getByText("source t-003-t-005-mock-provider")).toBeVisible();
-    expect(screen.getByText(/generated 23:00 EEST in Sofia/)).toBeVisible();
+    expect(screen.getByText(/generated 23:00 EEST/)).toBeVisible();
     expect(screen.getByText("Synthetic demonstration value.")).toBeVisible();
-    expect(screen.queryByRole("button", { name: /detailed forecast/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View detailed forecast" })).toBeDisabled();
   });
 
   it("keeps available values while rendering a partial metric as unavailable", () => {

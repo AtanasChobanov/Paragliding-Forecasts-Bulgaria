@@ -15,7 +15,6 @@ import {
   resolveSelectedSite,
 } from "../../src/features/dashboard/dashboard-search-params.js";
 import {
-  OTHER_LOCATION_SLUGS,
   createCanonicalSummarySiteSlugs,
   indexForecastSummariesBySlug,
   selectOtherLocationSites,
@@ -98,20 +97,26 @@ describe("dashboard URL selection", () => {
 });
 
 describe("dashboard summary selection", () => {
-  it("keeps the image-defined Other Locations order including a selected duplicate", () => {
-    expect(OTHER_LOCATION_SLUGS).toEqual(["zlatitsa", "sofia-vitosha-kominite", "dobrich-region"]);
-    expect(selectOtherLocationSites(sites).map((site) => site.slug)).toEqual(OTHER_LOCATION_SLUGS);
+  it("selects the three catalog locations after the minimum ID in ascending ID order", () => {
+    const unorderedSites = [sites[6], sites[3], sites[0], sites[2], sites[1]].filter(
+      (site): site is Site => site !== undefined,
+    );
+
+    expect(selectOtherLocationSites(unorderedSites).map((site) => site.slug)).toEqual([
+      "zlatitsa",
+      "sopot",
+      "nevsha",
+    ]);
   });
 
-  it("requests selected plus available configured sites, deduped by ID and sorted by ID", () => {
+  it("requests selected plus ID-derived comparison sites, deduped and sorted by ID", () => {
     const sopot = sites.find((site) => site.slug === "sopot");
     expect(sopot).toBeDefined();
 
     expect(createCanonicalSummarySiteSlugs(sites, sopot as Site)).toEqual([
-      "sofia-vitosha-kominite",
       "zlatitsa",
       "sopot",
-      "dobrich-region",
+      "nevsha",
     ]);
 
     const duplicatedIdCatalog = [
@@ -119,23 +124,22 @@ describe("dashboard summary selection", () => {
       { ...(sites.find((site) => site.slug === "dobrich-region") as Site), id: 2 },
     ];
     expect(createCanonicalSummarySiteSlugs(duplicatedIdCatalog, sopot as Site)).toEqual([
-      "dobrich-region",
+      "zlatitsa",
       "sopot",
     ]);
   });
 
-  it("filters absent configured sites without changing the remaining presentation order", () => {
+  it("derives the available comparison positions from a partial catalog", () => {
     const partialCatalog = sites.filter(
       (site) => site.slug === "sopot" || site.slug === "dobrich-region" || site.slug === "zlatitsa",
     );
     const selectedSite = partialCatalog.find((site) => site.slug === "sopot");
 
     expect(selectOtherLocationSites(partialCatalog).map((site) => site.slug)).toEqual([
-      "zlatitsa",
+      "sopot",
       "dobrich-region",
     ]);
     expect(createCanonicalSummarySiteSlugs(partialCatalog, selectedSite as Site)).toEqual([
-      "zlatitsa",
       "sopot",
       "dobrich-region",
     ]);

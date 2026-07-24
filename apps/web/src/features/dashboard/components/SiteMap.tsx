@@ -122,6 +122,13 @@ const SiteMarker = ({ onSelectSite, selected, site }: SiteMarkerProps) => {
 
 type TileState = "error" | "loading" | "ready";
 
+const InstructionPin = () => (
+  <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+    <path d="M12 22s7-6.1 7-13A7 7 0 0 0 5 9c0 6.9 7 13 7 13Z" />
+    <circle cx="12" cy="9" r="2.5" />
+  </svg>
+);
+
 export const SiteMap = ({ onSelectSite, selectedSite, sites }: SiteMapProps) => {
   const [tileState, setTileState] = useState<TileState>("loading");
   const bounds = useMemo(() => createSiteBounds(sites), [sites]);
@@ -163,7 +170,7 @@ export const SiteMap = ({ onSelectSite, selectedSite, sites }: SiteMapProps) => 
           <MapViewportController selectedSite={selectedSite} sites={sites} />
           {sites.map((site) => (
             <SiteMarker
-              key={site.id}
+              key={`${String(site.id)}:${site.slug === selectedSite.slug ? "selected" : "idle"}`}
               onSelectSite={onSelectSite}
               selected={site.slug === selectedSite.slug}
               site={site}
@@ -182,8 +189,12 @@ export const SiteMap = ({ onSelectSite, selectedSite, sites }: SiteMapProps) => 
         ) : null}
       </div>
       <p className={styles.instructions}>
-        Select a pin to update the dashboard. For keyboard operation, use the location selector
-        above. Scroll-wheel zoom is disabled; use the visible map controls.
+        <InstructionPin />
+        <span>Select a pin to update the dashboard</span>
+        <span className="visually-hidden">
+          For keyboard operation, use the location selector above. Scroll-wheel zoom is disabled;
+          use the visible map controls.
+        </span>
       </p>
     </div>
   );

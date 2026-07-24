@@ -35,15 +35,15 @@ supervised API/web development command now exist. The browser also has a
 shared-schema-validated fetch client, classified errors, TanStack Query
 provider/options, URL-owned Browser Router dashboard orchestration, and real
 Vitest/jsdom/RTL/MSW tests. The visual foundation adds self-hosted Inter with
-Cyrillic coverage, CSS theme tokens, a responsive framed layout, a semantic
+Cyrillic coverage, CSS theme tokens, a responsive viewport layout, a semantic
 application header, four stable dashboard regions, and reusable panel/content-
 state primitives. Forecast values remain explicitly synthetic `mock` data and
 must not be presented as aviation weather or flying advice.
 
 The selected overview now renders the five contracted metrics with explicit
 units plus generated-at, provenance, confidence, and data-status context. The
-Other Locations region renders Zlatitsa, Sofia - Vitosha, and Dobrich region in
-that fixed UI order without filtering a duplicate selected site. Summary-level
+Other Locations region renders the three catalog entries after the minimum-ID
+default in ascending ID order without filtering a duplicate selected site. Summary-level
 missing data, omitted content, partial missing metrics, and fully missing
 metrics remain visibly distinct and never become numeric zero.
 
@@ -60,6 +60,16 @@ pagination. API `todayDate` and URL selection are represented independently,
 date-only labels cannot shift through local timezone parsing, and each card
 retains explicit metric status/confidence context. A missing 100+ kilometre
 metric remains selectable in place with its reason and never becomes zero.
+
+The 2026-07-23 manual-review iteration rebuilt the wide dashboard around a
+single `100dvh` canvas. Header, overview, Other Locations, the full-height map,
+and the five-day strip now share one fixed viewport without page scrolling.
+The header spans the viewport independently of the dashboard body, which now
+uses a fluid `90vw` width, fractional columns, and viewport-relative rows
+without a fixed maximum. The location selector has a deliberate gap above the
+map, overview and comparison content are denser, and compact-height rules
+preserve the single-screen composition on shorter desktop viewports. Narrow
+stacked layouts continue to scroll normally.
 
 Cross-cutting hardening now distinguishes retryable request failures from API
 compatibility failures. HTTP Problem Details request IDs are visible, retry is
@@ -94,21 +104,22 @@ long-content wrapping are covered by the implementation and tests.
 - The visual shell keeps Overview, Other Locations, Site Selector, and Date
   Selector mounted across request states so content changes do not reconstruct
   the page hierarchy.
-- The visible header states `Decision support only` and `Not aviation weather`;
-  it intentionally omits the reference image's decorative bell and any broken
-  detailed-forecast action.
+- The header now follows the supplied visual reference with a bell mark while
+  retaining `Decision support only` and `Not aviation weather` as accessible
+  context.
 - Forecast date-only labels are formatted with UTC calendar parts, while
   generation instants are rendered in `Europe/Sofia`; no naive date-only parse
   can move the visible forecast to a different day.
-- The dashboard does not render the reference image's detailed-forecast button.
-  T-006 owns both the real route and its action, so this checkpoint does not
-  ship a disabled or misleading control.
+- The dashboard renders the reference image's full-width detailed-forecast
+  button as an explicitly disabled visual-review control. T-006 still owns its
+  real route and activation behavior.
 - Leaflet is loaded through a separate production chunk. OSM Standard is a
   runtime internet dependency with no offline or SLA guarantee; the provider
   URL, linked attribution, maximum zoom, and policy URL are centralized.
 - The five-card strip uses `aria-current="date"` for API today and
   `aria-pressed` for the URL-selected date. It has no hidden date expansion,
-  arrows, qualitative weather labels, or invented iconography.
+  arrows, qualitative weather labels, or invented iconography. The separate
+  year and weekday rows are no longer visible; cards show `Today` or day/month.
 - Request failures preserve Problem Details support identifiers. Invalid JSON,
   schema failures, and correlation mismatches are compatibility errors; their
   untrusted payloads are not rendered and retry is not presented as a fix.
@@ -172,15 +183,16 @@ data rather than fetching independently.
 
 1. Fetch `/api/v1/sites` once for the map and location selector.
 2. Derive selected site slug and date from canonical URL search parameters.
-3. Deduplicate the selected site plus the default Other Locations slugs and
-   fetch them through one summaries request.
+3. Select the three catalog entries after the minimum-ID default for Other
+   Locations, deduplicate them with the selected site, and fetch them through
+   one summaries request.
 4. Index summaries by slug because the API sorts by ID, not request order. If
    the selected site is also a default card, reuse the same summary in both
    positions.
 5. Fetch `/api/v1/forecasts/days` when the selected site changes.
-6. Omit the detailed action in T-003-T-005. T-006 adds the control together
-   with its real route and later owns `/api/v1/forecasts`; do not ship a broken,
-   disabled, or placeholder dashboard control now.
+6. Keep the visual-review detailed action explicitly disabled in T-003-T-005.
+   T-006 adds its real route, activation behavior, and later owns
+   `/api/v1/forecasts`; the current control must not imply working navigation.
 
 This means the forecast portion of one dashboard state needs two requests, not
 one request per component.
@@ -321,8 +333,9 @@ The Stage 5 forecast-presentation checkpoint passed:
   94.72% lines;
 - tests cover exact units and formatting, Sofia generation time, all five data
   statuses, homogeneous/mixed/unavailable confidence, partial/full missing
-  metrics, summary-level missing and omitted content, explicit Other Locations
-  order versus response-map order, and a selected site retained as a card;
+  metrics, summary-level missing and omitted content, ID-derived Other
+  Locations order versus response-map order, and a selected site retained as a
+  card;
 - repository lint, formatting, structure, and `git diff --check` passed after
   the final gate.
 
@@ -409,6 +422,45 @@ desktop/narrow visual fidelity, copied URL and browser history behavior,
 Leaflet tiles/pan/zoom/labels, keyboard focus, degraded requests/tiles, and the
 browser console.
 
+The follow-up visual iteration on 2026-07-23 also used no browser automation or
+captured output. Verified changes include the fixed-height wide shell,
+full-height map region, full-width independent header, fluid `90vw` dashboard,
+selector/map spacing, denser overview/comparison cards, a disabled visual
+detailed-forecast action, reference-style confidence segments in the date
+cards, and removal of the visible year. Web build, typecheck, lint, formatting,
+and all 17 web test files / 112 tests passed. Web coverage passed at 96.10%
+statements, 88.99% branches, 98.80% functions, and 96.12% lines. Manual visual
+acceptance is still pending.
+
+The latest visual refinement gives Forecast Overview a larger fractional share
+of the left column than Other Locations, with separate tall- and short-viewport
+ratios and a `20vh` date row instead of fixed panel heights. The selector stays
+on the same row as its heading, uses a shorter fluid height, and preserves a
+fluid gap before the map. Each overview metric now has its own line icon above
+the value. Comparison cards keep their existing chance treatment but use a
+compact, borderless icon-and-value row for cloudbase and overdevelopment risk,
+retain a compact confidence footer, and use right-pointing chevrons. Web build,
+typecheck, lint, formatting, repository structure validation, and all 17 web
+test files / 112 tests passed. Web coverage passed at 96.17% statements, 88.85%
+branches, 98.84% functions, and 96.19% lines. Manual visual acceptance remains
+pending.
+
+The 2026-07-24 follow-up removed the hard-coded comparison-location slugs.
+Other Locations now sorts the API catalog by numeric ID, leaves the minimum-ID
+entry as the default Overview location, and renders the following three catalog
+entries. The summaries request deduplicates those three against the current
+selection before sorting by ID. Comparison-card title-to-percentage spacing is
+controlled by `--location-title-metric-gap` in
+`LocationSummaryCard.module.scss`. The compact confidence meter was subsequently
+restored below the cloudbase/overdevelopment row on each available comparison
+card. A short-height wide-screen media query now reduces the comparison-card
+title-to-metric gap for laptop-height viewports while preserving the large
+monitor value. The location-panel heading is vertically centered against the
+selector on wide layouts through a panel-specific header class. Web typecheck,
+all 17 test files / 112 tests, production build, lint, formatting, and
+repository structure validation passed. No browser automation or captured
+output was used.
+
 ## Git checkpoints
 
 This branch contains these reviewable commits after the T-002 base:
@@ -437,7 +489,8 @@ been pushed and no pull request was created.
 
 ## Next implementation step
 
-Complete the manual desktop/narrow-screen and real-browser interaction review
-listed above. T-003-T-005 remain `In Progress` until that review is accepted;
-the implementation and automated validation are complete. T-008 still owns
-browser smoke-test tooling and must not be implied complete by this branch.
+Have the user review the updated desktop composition in their browser and
+provide a follow-up screenshot if spacing or visual fidelity still needs
+iteration. T-003-T-005 remain `In Progress` until that review is accepted;
+T-008 still owns browser smoke-test tooling and must not be implied complete by
+this branch.

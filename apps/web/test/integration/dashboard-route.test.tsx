@@ -237,7 +237,7 @@ describe("dashboard route URL orchestration", () => {
       expect(requests.summaries).toEqual([
         {
           date: "2026-07-18",
-          siteSlugs: ["sofia-vitosha-kominite", "zlatitsa", "dobrich-region"],
+          siteSlugs: ["sofia-vitosha-kominite", "zlatitsa", "sopot", "dobrich-region"],
         },
       ]);
     });
@@ -377,7 +377,7 @@ describe("dashboard route URL orchestration", () => {
 });
 
 describe("dashboard request and presentation selection", () => {
-  it("keeps Other Locations presentation order while requesting by numeric ID", async () => {
+  it("derives Other Locations from the three catalog entries after the minimum ID", async () => {
     const requests = installDashboardHandlers();
     renderDashboardRoute("/?site=sopot&date=2026-07-18");
 
@@ -391,27 +391,18 @@ describe("dashboard request and presentation selection", () => {
     const items = await within(requireElement(otherSection)).findAllByRole("listitem");
     expect(items.map((item) => item.getAttribute("data-site-slug"))).toEqual([
       "zlatitsa",
-      "sofia-vitosha-kominite",
-      "dobrich-region",
-    ]);
-    expect(requests.summaries[0]?.siteSlugs).toEqual([
-      "sofia-vitosha-kominite",
-      "zlatitsa",
       "sopot",
-      "dobrich-region",
+      "nevsha",
     ]);
+    expect(requests.summaries[0]?.siteSlugs).toEqual(["zlatitsa", "sopot", "nevsha"]);
   });
 
-  it("deduplicates a configured selected site in the request without removing its Other card", async () => {
+  it("deduplicates a selected comparison site in the request without removing its Other card", async () => {
     const requests = installDashboardHandlers();
     renderDashboardRoute("/?site=zlatitsa&date=2026-07-18");
 
     await screen.findByRole("heading", { name: "Zlatitsa · Saturday, 18 Jul" });
-    expect(requests.summaries[0]?.siteSlugs).toEqual([
-      "sofia-vitosha-kominite",
-      "zlatitsa",
-      "dobrich-region",
-    ]);
+    expect(requests.summaries[0]?.siteSlugs).toEqual(["zlatitsa", "sopot", "nevsha"]);
     const otherSection = screen
       .getByRole("heading", {
         name: "Other locations for this date",
@@ -420,20 +411,20 @@ describe("dashboard request and presentation selection", () => {
     expect(await within(requireElement(otherSection)).findByText("Zlatitsa")).toBeVisible();
   });
 
-  it("requests and presents only configured sites that exist in a partial catalog", async () => {
+  it("requests and presents only ID-derived sites that exist in a partial catalog", async () => {
     const catalog = fullCatalog.filter((site) => site.slug === "zlatitsa" || site.slug === "sopot");
     const requests = installDashboardHandlers({ catalog });
     renderDashboardRoute("/?site=sopot&date=2026-07-18");
 
     await screen.findByRole("heading", { name: "Sopot · Saturday, 18 Jul" });
-    expect(requests.summaries[0]?.siteSlugs).toEqual(["zlatitsa", "sopot"]);
+    expect(requests.summaries[0]?.siteSlugs).toEqual(["sopot"]);
     const otherSection = screen
       .getByRole("heading", {
         name: "Other locations for this date",
       })
       .closest("section");
     expect(await within(requireElement(otherSection)).findAllByRole("listitem")).toHaveLength(1);
-    expect(within(requireElement(otherSection)).getByText("Zlatitsa")).toBeVisible();
+    expect(within(requireElement(otherSection)).getByText("Sopot")).toBeVisible();
   });
 
   it("handles an empty catalog without issuing dependent requests", async () => {
@@ -465,7 +456,10 @@ describe("dashboard request and presentation selection", () => {
   it("does not retain a previous site's summary while a new selection loads", async () => {
     const sopotSummary = createDeferred();
     installDashboardHandlers({
-      summaryGate: (slugs) => (slugs.includes("sopot") ? sopotSummary.promise : undefined),
+      summaryGate: (slugs) =>
+        slugs.includes("sopot") && !slugs.includes("sofia-vitosha-kominite")
+          ? sopotSummary.promise
+          : undefined,
     });
     const user = userEvent.setup();
     renderDashboardRoute("/?site=sofia-vitosha-kominite&date=2026-07-18");
@@ -652,7 +646,7 @@ describe("dashboard independent failures", () => {
   it("surfaces a summary correlation mismatch without hiding the date strip", async () => {
     installDashboardHandlers({
       transformSummaries: () => {
-        const unrequestedSite = fullCatalog.find((site) => site.slug === "nevsha") as Site;
+        const unrequestedSite = fullCatalog.find((site) => site.slug === "shumen") as Site;
         return createSummaries(DEFAULT_TODAY, [unrequestedSite]);
       },
     });

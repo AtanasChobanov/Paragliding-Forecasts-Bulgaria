@@ -1,10 +1,7 @@
 import type { ForecastDate, ForecastDay } from "@paragliding-forecasts/contracts";
 
-import {
-  formatForecastDateDayMonth,
-  formatForecastDateWeekday,
-  formatInteger,
-} from "../forecast-presentation.js";
+import { formatForecastDateDayMonth, formatInteger } from "../forecast-presentation.js";
+import { ConfidenceIndicator } from "./ConfidenceIndicator.js";
 import { DataStatusBadge } from "./DataStatusBadge.js";
 import styles from "./ForecastDateCard.module.scss";
 
@@ -37,27 +34,27 @@ export const ForecastDateCard = ({ day, onSelectDate, selected, today }: Forecas
         onSelectDate(day.forecastDate);
       }}
     >
-      <span className={styles.context}>
-        {today ? "Today" : formatForecastDateWeekday(day.forecastDate)}
-      </span>
-      <time className={styles.date} dateTime={day.forecastDate}>
-        {formatForecastDateDayMonth(day.forecastDate)}
+      <time className={styles.context} dateTime={day.forecastDate}>
+        {today ? "Today" : formatForecastDateDayMonth(day.forecastDate)}
       </time>
       {metric.dataStatus === "missing" ? (
         <>
           <strong className={styles.unavailable}>Unavailable</strong>
-          <span className={styles.metricLabel}>100+ km chance</span>
           <DataStatusBadge compact status="missing" />
+          <ConfidenceIndicator
+            compact
+            confidence={{ level: "unavailable", notes: [metric.missingReason] }}
+          />
           <span className={styles.reason}>{metric.missingReason}</span>
         </>
       ) : (
         <>
           <strong className={styles.value}>{formatInteger(metric.value)}%</strong>
-          <span className={styles.metricLabel}>100+ km chance</span>
           <DataStatusBadge compact status={metric.dataStatus} />
-          <span className={styles.confidence} title={metric.confidence.note}>
-            {metric.confidence.level} confidence
-          </span>
+          <ConfidenceIndicator
+            compact
+            confidence={{ level: metric.confidence.level, notes: [metric.confidence.note] }}
+          />
         </>
       )}
       <span className="visually-hidden" id={descriptionId}>

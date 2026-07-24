@@ -11,10 +11,10 @@ const CanopyMark = () => (
   </svg>
 );
 
-const ShieldMark = () => (
-  <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24">
-    <path d="M12 3 19 6v5c0 4.6-2.8 8.1-7 10-4.2-1.9-7-5.4-7-10V6l7-3Z" />
-    <path d="M12 8v4m0 4h.01" />
+const BellMark = () => (
+  <svg aria-hidden="true" className={styles.bell} focusable="false" viewBox="0 0 24 24">
+    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9Z" />
+    <path d="M10 21h4" />
   </svg>
 );
 
@@ -26,12 +26,10 @@ export const AppHeader = () => (
     </div>
     <span aria-hidden="true" className={styles.divider} />
     <span className={styles.currentSection}>Dashboard</span>
-    <p className={styles.safetyContext}>
-      <ShieldMark />
-      <span>
-        <strong>Decision support only</strong>
-        <span className={styles.safetyDetail}>Not aviation weather</span>
-      </span>
+    <BellMark />
+    <p className="visually-hidden">
+      <strong>Decision support only</strong>
+      <span>Not aviation weather</span>
     </p>
   </header>
 );

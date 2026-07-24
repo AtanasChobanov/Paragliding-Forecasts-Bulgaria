@@ -2,10 +2,12 @@
 
 .header {
   display: flex;
-  min-height: 4.875rem;
+  width: 100%;
+  min-height: clamp(3.75rem, 8vh, 4.875rem);
+  flex: 0 0 auto;
   align-items: center;
-  gap: var(--space-6);
-  padding: var(--space-3) var(--space-6);
+  gap: clamp(0.75rem, 1.5vw, 1.5rem);
+  padding: clamp(0.5rem, 1.2vh, 0.75rem) 2.5vw;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-surface);
 }
@@ -15,15 +17,15 @@
   align-items: center;
   gap: var(--space-3);
   color: var(--color-heading);
-  font-size: clamp(1.35rem, 2vw, 1.75rem);
+  font-size: clamp(1.3rem, 1.8vw, 1.75rem);
   font-weight: 600;
   line-height: 1.1;
   white-space: nowrap;
 }
 
 .mark {
-  width: 3rem;
-  height: 3rem;
+  width: clamp(2.4rem, 3vw, 3rem);
+  height: clamp(2.4rem, 3vw, 3rem);
   flex: 0 0 auto;
   color: var(--color-primary);
 
@@ -61,35 +63,15 @@
   }
 }
 
-.safetyContext {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0 0 0 auto;
-  color: var(--color-heading);
-  font-size: 0.75rem;
-  line-height: 1.25;
-
-  > svg {
-    width: 1.5rem;
-    height: 1.5rem;
-    flex: 0 0 auto;
-    fill: none;
-    stroke: var(--color-primary);
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    stroke-width: 1.75;
-  }
-
-  strong,
-  span {
-    display: block;
-  }
-}
-
-.safetyDetail {
-  color: var(--color-text-secondary);
-  font-weight: 400;
+.bell {
+  width: 1.75rem;
+  height: 1.75rem;
+  margin-left: auto;
+  fill: none;
+  stroke: var(--color-heading);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.65;
 }
 
 @include mixins.compact {
@@ -117,10 +99,9 @@
     bottom: -0.7rem;
   }
 
-  .safetyContext {
-    width: 100%;
-    margin-left: 0;
-    padding-top: var(--space-2);
-    border-top: 1px solid var(--color-border);
+  .bell {
+    width: 1.5rem;
+    height: 1.5rem;
+    margin-left: auto;
   }
 }

@@ -17,7 +17,7 @@ describe("ForecastDateStrip", () => {
       />,
     );
 
-    expect(screen.getByText("2026")).toBeVisible();
+    expect(screen.queryByText("2026")).not.toBeInTheDocument();
     const list = screen.getByRole("list", { name: "Five-day forecast dates" });
     const items = within(list).getAllByRole("listitem");
     expect(items).toHaveLength(5);

@@ -2,7 +2,7 @@
   display: flex;
   min-height: 32rem;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--layout-row-gap);
 }
 
 .controls {
@@ -22,8 +22,28 @@
   font-size: 0.875rem;
 }
 
+@media (min-width: 70rem) {
+  .content {
+    height: 100%;
+    min-height: 0;
+    padding-top: 0;
+  }
+
+  .controls {
+    position: absolute;
+    z-index: 600;
+    top: var(--layout-panel-padding);
+    right: var(--layout-panel-padding);
+  }
+
+  .mapFallback {
+    min-height: 0;
+  }
+}
+
 @media (max-width: 42rem) {
   .content {
+    height: auto;
     min-height: 22rem;
   }
 

@@ -5,40 +5,32 @@ import type {
   SiteSlug,
 } from "@paragliding-forecasts/contracts";
 
-export const OTHER_LOCATION_SLUGS = [
-  "zlatitsa",
-  "sofia-vitosha-kominite",
-  "dobrich-region",
-] as const satisfies readonly SiteSlug[];
+const OTHER_LOCATION_COUNT = 3;
 
-export const selectOtherLocationSites = (sites: readonly Site[]): readonly Site[] => {
-  const sitesBySlug = new Map(sites.map((site) => [site.slug, site]));
+const compareSitesById = (left: Site, right: Site): number =>
+  left.id - right.id || left.slug.localeCompare(right.slug);
 
-  return OTHER_LOCATION_SLUGS.flatMap((slug) => {
-    const site = sitesBySlug.get(slug);
-    return site === undefined ? [] : [site];
-  });
-};
+export const selectOtherLocationSites = (sites: readonly Site[]): readonly Site[] =>
+  sites
+    .slice()
+    .sort(compareSitesById)
+    .slice(1, OTHER_LOCATION_COUNT + 1);
 
 export const createCanonicalSummarySiteSlugs = (
   sites: readonly Site[],
   selectedSite: Site,
 ): readonly SiteSlug[] => {
-  const requestedSlugs = new Set<SiteSlug>([selectedSite.slug, ...OTHER_LOCATION_SLUGS]);
-  const requestedSites = sites
-    .filter((site) => requestedSlugs.has(site.slug))
-    .slice()
-    .sort((left, right) => left.id - right.id || left.slug.localeCompare(right.slug));
   const seenSiteIds = new Set<number>();
-
-  return requestedSites.flatMap((site) => {
+  const requestedSites = [selectedSite, ...selectOtherLocationSites(sites)].filter((site) => {
     if (seenSiteIds.has(site.id)) {
-      return [];
+      return false;
     }
 
     seenSiteIds.add(site.id);
-    return [site.slug];
+    return true;
   });
+
+  return requestedSites.sort(compareSitesById).map((site) => site.slug);
 };
 
 export const indexForecastSummariesBySlug = (

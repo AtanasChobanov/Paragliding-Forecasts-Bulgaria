@@ -1,4 +1,5 @@
 import type { ForecastOutputs } from "@paragliding-forecasts/contracts";
+import type { ReactNode } from "react";
 
 import { DataStatusBadge } from "./DataStatusBadge.js";
 import styles from "./ForecastMetric.module.scss";
@@ -6,6 +7,7 @@ import styles from "./ForecastMetric.module.scss";
 export type ForecastMetricState = ForecastOutputs[keyof ForecastOutputs];
 
 export interface ForecastMetricProps {
+  readonly icon: ReactNode;
   readonly label: string;
   readonly metric: ForecastMetricState;
   readonly primary?: boolean;
@@ -15,6 +17,7 @@ export interface ForecastMetricProps {
 }
 
 export const ForecastMetric = ({
+  icon,
   label,
   metric,
   primary = false,
@@ -30,6 +33,9 @@ export const ForecastMetric = ({
         .filter((candidate): candidate is string => candidate !== undefined)
         .join(" ")}
     >
+      <span aria-hidden="true" className={styles.icon}>
+        {icon}
+      </span>
       <div className={styles.valueRow}>
         {missing ? (
           <strong className={styles.unavailable}>Unavailable</strong>

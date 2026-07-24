@@ -3,17 +3,21 @@
 .main {
   display: grid;
   min-width: 0;
+  min-height: 0;
+  flex: 1;
   grid-template-areas:
     "location"
     "overview"
     "other"
     "dates";
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-4);
-  padding: var(--space-4);
+  gap: var(--layout-row-gap);
+  padding: var(--layout-row-gap) 0;
+  overflow: auto;
 }
 
 .location {
+  position: relative;
   grid-area: location;
 }
 
@@ -31,36 +35,52 @@
 
 @include mixins.wide {
   .main {
+    height: 100%;
     grid-template-areas:
       "overview location"
       "other location"
       "dates dates";
-    grid-template-columns: minmax(0, 1.08fr) minmax(28rem, 0.92fr);
-    grid-template-rows: auto auto auto;
-    column-gap: var(--space-6);
-    row-gap: var(--space-4);
-    padding: var(--space-4) 2.125rem 1.75rem;
-  }
-
-  .overview {
-    min-height: 21.5rem;
-  }
-
-  .other {
-    min-height: 18rem;
-  }
-
-  .location {
-    min-height: 40.5rem;
+    grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+    grid-template-rows:
+      minmax(0, 1.2fr)
+      minmax(0, 0.8fr)
+      22vh;
+    column-gap: var(--layout-column-gap);
+    row-gap: var(--layout-row-gap);
+    padding: var(--layout-row-gap) 0;
+    overflow: hidden;
   }
 
   .dates {
-    min-height: 13.5rem;
+    padding: var(--layout-panel-padding);
+  }
+
+  .locationHeader {
+    min-height: var(--location-selector-height);
+    align-items: center;
+  }
+}
+
+@media (min-width: 70rem) and (min-height: 60rem) {
+  .main {
+    grid-template-rows:
+      minmax(0, 1.4fr)
+      minmax(0, 0.6fr)
+      20vh;
+  }
+}
+
+@media (min-width: 70rem) and (max-height: 52rem) {
+  .main {
+    grid-template-rows:
+      minmax(0, 1.1fr)
+      minmax(0, 0.9fr)
+      21vh;
   }
 }
 
 @include mixins.compact {
   .main {
-    padding: var(--space-3);
+    padding: var(--layout-row-gap) 0;
   }
 }

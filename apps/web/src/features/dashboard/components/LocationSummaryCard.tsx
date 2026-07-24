@@ -35,6 +35,12 @@ const ShieldIcon = () => (
   </svg>
 );
 
+const ChevronIcon = () => (
+  <svg aria-hidden="true" className={styles.chevron} viewBox="0 0 24 24">
+    <path d="m9 7 5 5-5 5" />
+  </svg>
+);
+
 const UnavailableMetric = ({ reason }: { readonly reason: string }) => (
   <span className={styles.unavailable} title={reason}>
     Unavailable
@@ -91,14 +97,20 @@ export const LocationSummaryCard = ({ site, summary }: LocationSummaryCardProps)
           <PinIcon />
           {site.name}
         </h3>
-        <DataStatusBadge compact status={summaryStatus} />
+        <ChevronIcon />
       </div>
       <div className={styles.primaryMetric}>
         {chance100.dataStatus === "missing" ? (
-          <UnavailableMetric reason={chance100.missingReason} />
+          <div className={styles.valueRow}>
+            <UnavailableMetric reason={chance100.missingReason} />
+            <DataStatusBadge compact status={summaryStatus} />
+          </div>
         ) : (
           <>
-            <strong>{formatInteger(chance100.value)}%</strong>
+            <div className={styles.valueRow}>
+              <strong>{formatInteger(chance100.value)}%</strong>
+              <DataStatusBadge compact status={summaryStatus} />
+            </div>
             <div
               aria-label={`${String(chance100.value)} percent chance of 100 kilometres or more`}
               aria-valuemax={100}
@@ -111,7 +123,7 @@ export const LocationSummaryCard = ({ site, summary }: LocationSummaryCardProps)
             </div>
           </>
         )}
-        <span>100+ km chance</span>
+        <span className={styles.metricLabel}>100+ km chance</span>
         {chance100.dataStatus === "missing" ? (
           <p>{chance100.missingReason}</p>
         ) : showMetricStatus ? (
@@ -120,30 +132,26 @@ export const LocationSummaryCard = ({ site, summary }: LocationSummaryCardProps)
       </div>
       <dl className={styles.secondaryMetrics}>
         <div>
-          <dt>
-            <CloudIcon /> Cloudbase
-          </dt>
+          <dt className="visually-hidden">Cloudbase</dt>
           <dd>
+            <CloudIcon />
             {cloudbase.dataStatus === "missing" ? (
               <UnavailableMetric reason={cloudbase.missingReason} />
             ) : (
               `${formatInteger(cloudbase.value)} m MSL`
             )}
           </dd>
-          {showMetricStatus ? <DataStatusBadge compact status={cloudbase.dataStatus} /> : null}
         </div>
-        <div>
-          <dt>
-            <ShieldIcon /> OD risk
-          </dt>
+        <div className={styles.riskMetric}>
+          <dt className="visually-hidden">OD risk</dt>
           <dd>
+            <ShieldIcon />
             {risk.dataStatus === "missing" ? (
               <UnavailableMetric reason={risk.missingReason} />
             ) : (
               formatRisk(risk.value)
             )}
           </dd>
-          {showMetricStatus ? <DataStatusBadge compact status={risk.dataStatus} /> : null}
         </div>
       </dl>
       <div className={styles.confidence}>

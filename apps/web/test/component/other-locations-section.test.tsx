@@ -62,6 +62,7 @@ describe("OtherLocationsSection", () => {
     ]);
     expect(screen.getAllByText("Mock data")).toHaveLength(3);
     expect(screen.getAllByRole("progressbar")).toHaveLength(3);
+    expect(screen.getAllByText("Confidence")).toHaveLength(3);
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });

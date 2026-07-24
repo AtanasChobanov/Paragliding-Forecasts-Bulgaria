@@ -7,15 +7,22 @@ validated dashboard HTTP/query foundation. The dashboard route coordinates
 canonical URL selection and the sites, days, and summaries queries inside a
 responsive visual shell with a semantic application header, stable dashboard
 panels, reusable content states, self-hosted Inter, and shared theme tokens. The
-selected overview and fixed-order Other Locations cards now render validated
-summary data with explicit status, confidence, provenance, units, and missing-
-data semantics. The Leaflet site selector now renders all API coordinates with
-permanent labels and a synchronized native control. The five-day selector is
-rendered from exactly the five API slots. Scoped failure/retry presentation,
-request IDs, compatibility errors, live announcements, focus behavior, reduced
-motion, and narrow-layout wrapping are implemented and covered by automated
-tests. T-003-T-005 remain in progress until the deliberately deferred manual
-browser/visual review is completed.
+selected overview now renders validated summary data with explicit status,
+confidence, provenance, units, and missing-data semantics. The fixed-order
+Other Locations cards retain status, units, and missing-data semantics in a
+more compact comparison treatment. The Leaflet site selector now renders all
+API coordinates with permanent labels and a synchronized native control. The
+five-day selector is rendered from exactly the five API slots. Scoped
+failure/retry presentation, request IDs, compatibility errors, live
+announcements, focus behavior, reduced motion, and narrow-layout wrapping are
+implemented and covered by automated tests. The wide desktop layout now uses
+the available viewport height as one fixed dashboard canvas: all four regions
+remain visible together and the page itself does not scroll. The header spans
+the full viewport independently, while the dashboard body uses a fluid `90vw`
+width with fractional columns and viewport-relative rows rather than a fixed
+maximum width. Compact widths retain document scrolling because the panels
+stack vertically. T-003-T-005 remain in progress until the deliberately
+deferred manual browser/visual review is completed.
 
 ## Responsibilities
 
@@ -148,9 +155,9 @@ and pasted deep links reconstruct the same query selection.
 
 The route explicitly selects the minimum numeric site ID as the catalog
 default, waits for the selected site's API-defined Sofia `todayDate` when the
-URL date is unusable, and handles an empty catalog. Summary requests deduplicate
-the selected site plus the configured Other Locations by numeric ID while the
-UI keeps its separate Zlatitsa, Sofia - Vitosha, Dobrich region order.
+URL date is unusable, and handles an empty catalog. Other Locations are the
+next three catalog entries in ascending numeric ID order. Summary requests
+deduplicate those comparison entries with the currently selected site.
 
 ## Forecast presentation behavior
 
@@ -161,11 +168,15 @@ shown in `Europe/Sofia`. Status labels preserve `mock`, `manual`, `baseline`,
 `real`, and `missing` distinctions, while mixed metrics retain per-metric status
 and confidence context.
 
-Other Locations remain static comparison cards in the explicit Zlatitsa,
-Sofia - Vitosha, and Dobrich region order. The selected location is not filtered
-out when it is one of those configured cards. Missing summary items and missing
-metrics show their reasons without substituting zero. No detailed-forecast
-control is rendered; T-006 owns both that control and its working destination.
+Other Locations remain static comparison cards for the three catalog entries
+immediately after the minimum-ID default, ordered by numeric ID. The selected
+location is not filtered out when it is one of those cards. Missing summary
+items and missing metrics show their reasons without substituting zero. Below
+each chance bar, cloudbase and overdevelopment risk use a compact icon-and-value
+row without a metric divider, followed by the compact confidence meter. A
+full-width disabled
+detailed-forecast control is rendered for visual-review fidelity; T-006 still
+owns its working destination and activation behavior.
 
 ## Map behavior and network dependency
 
@@ -193,7 +204,8 @@ site's days response. It has no arrows, pagination, browser-clock expansion, or
 historical navigation. `todayDate` from the API owns the visible `Today` state;
 `aria-pressed` independently identifies the URL-selected date. Labels are
 formatted from numeric date-only parts in UTC so local timezone conversion
-cannot move a Sofia calendar date.
+cannot move a Sofia calendar date. The strip deliberately omits a separate year
+heading and weekday row; non-today cards show only day and month.
 
 Each card exposes its ISO date as the control name and an explicit accessible
 description for the 100+ kilometre chance, data status, and confidence. Missing
@@ -252,4 +264,7 @@ T-008 still owns the browser smoke test. Until that ticket is implemented,
 manual review must verify real Leaflet tile rendering, pan/zoom, permanent-label
 collisions, full keyboard/focus behavior, copied URL/refresh/Back/Forward,
 desktop visual fidelity, and narrow-screen layout. No screenshot or automated
-pixel comparison is stored in this branch.
+pixel comparison is stored in this branch. The 2026-07-23 visual iteration was
+implemented from the supplied reference and screenshots without controlling or
+capturing a browser; its final visual acceptance remains the user's manual
+review.

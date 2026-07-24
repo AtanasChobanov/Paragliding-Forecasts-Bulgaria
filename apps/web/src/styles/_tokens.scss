@@ -3,7 +3,7 @@
   --color-surface: #ffffff;
   --color-heading: #17313b;
   --color-text: #202a2f;
-  --color-primary: #1f6f6a;
+  --color-primary: #27827c;
   --color-accent-sky: #3b82a0;
   --color-accent-nature: #5e7d63;
   --color-text-secondary: #64737a;
@@ -38,5 +38,8 @@
   --shadow-shell: 0 0.5rem 2rem rgb(23 49 59 / 7%);
 
   --control-min-size: 2.75rem;
-  --content-max: 96rem;
+  --location-selector-height: clamp(2rem, 2vh, 2rem);
+  --layout-panel-padding: clamp(0.7rem, min(1vw, 1.8vh), 1.125rem);
+  --layout-column-gap: clamp(0.875rem, 1.3vw, 1.5rem);
+  --layout-row-gap: clamp(0.625rem, 1.2vh, 1rem);
 }

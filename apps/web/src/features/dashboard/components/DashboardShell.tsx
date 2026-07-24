@@ -33,6 +33,7 @@ export const DashboardShell = ({
     <DashboardPanel
       busy={locationBusy}
       className={styles.location}
+      headerClassName={styles.locationHeader}
       headingId="site-selector-heading"
       title="Select a location"
     >

@@ -10,10 +10,12 @@ export interface AppProps {
 }
 
 export const App = ({ dashboardApi }: AppProps) => (
-  <div className={styles.frame}>
+  <div className={styles.app}>
     <AppHeader />
-    <BrowserRouter>
-      <AppRoutes dashboardApi={dashboardApi} />
-    </BrowserRouter>
+    <div className={styles.frame}>
+      <BrowserRouter>
+        <AppRoutes dashboardApi={dashboardApi} />
+      </BrowserRouter>
+    </div>
   </div>
 );
