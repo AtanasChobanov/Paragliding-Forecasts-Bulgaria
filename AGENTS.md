@@ -34,7 +34,7 @@ sufficient.
 ## Repository structure
 
 - `apps/api/` - runnable Node.js, Express, and TypeScript HTTP API.
-- `apps/web/` - scaffold for the React, Vite, and TypeScript dashboard.
+- `apps/web/` - runnable React, Vite, and TypeScript dashboard.
 - `packages/contracts/` - shared Zod runtime schemas and browser/API TypeScript
   contracts.
 - `services/ml/` - uv-managed Python project for ingestion, data/feature work,
@@ -50,8 +50,8 @@ sufficient.
 - Use Node.js 24.x and npm 11.x. The root is a private npm monorepo with
   workspaces `apps/*` and `packages/*`; commit `package-lock.json`.
 - TypeScript strict mode is the default for product-facing code. React/Vite is
-  the selected web direction; the web application is still a scaffold.
-  Node.js/Express is the implemented browser-facing API direction.
+  the implemented web direction. Node.js/Express is the implemented
+  browser-facing API direction.
 - Use Python 3.12 and uv only for `services/ml`; commit `services/ml/uv.lock`.
   Python initially produces language-neutral batch outputs and is not a second
   public HTTP service.
@@ -88,13 +88,16 @@ Currently supported repository commands:
 - `npm run start:api` / `npm.cmd run start:api` - build and start the compiled
   API.
 - `npm run build`, `typecheck`, `lint`, `format:check`, `test`, and
-  `test:coverage` - validate the implemented TypeScript contracts and API.
+  `test:coverage` - validate the implemented TypeScript workspaces.
+- `npm run test:browser:install` - download the Playwright Chromium binary.
+- `npm run test:browser`, `test:browser:headed`, and `test:browser:ui` - run
+  the local browser smoke suite headlessly, visibly, or interactively.
 - `npm run repo:check` / `npm.cmd run repo:check` - validate repository and
   runnable workspace structure.
 
-There are currently no runnable web, ingestion, training, prediction, or
-browser-test scripts. Add and document a command in the same ticket that
-implements its real behavior; never simulate success with placeholder logic.
+There are currently no runnable ingestion, training, or prediction scripts.
+Add and document a command in the same ticket that implements its real
+behavior; never simulate success with placeholder logic.
 
 ## Engineering conventions
 

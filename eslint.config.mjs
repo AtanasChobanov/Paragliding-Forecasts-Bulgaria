@@ -14,7 +14,11 @@ export default tseslint.config(
     languageOptions: {
       parserOptions: {
         projectService: {
-          allowDefaultProject: ["apps/web/vite.config.ts", "apps/web/vitest.config.ts"],
+          allowDefaultProject: [
+            "apps/web/playwright.config.ts",
+            "apps/web/vite.config.ts",
+            "apps/web/vitest.config.ts",
+          ],
         },
         tsconfigRootDir: import.meta.dirname,
       },
@@ -22,6 +26,14 @@ export default tseslint.config(
     rules: {
       "no-console": "error",
       "@typescript-eslint/consistent-type-imports": ["error", { fixStyle: "inline-type-imports" }],
+    },
+  },
+  {
+    files: ["apps/web/playwright.config.ts"],
+    rules: {
+      "@typescript-eslint/no-unsafe-assignment": "off",
+      "@typescript-eslint/no-unsafe-call": "off",
+      "@typescript-eslint/no-unsafe-member-access": "off",
     },
   },
   prettier,

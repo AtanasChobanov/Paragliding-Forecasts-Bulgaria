@@ -58,6 +58,10 @@ The runnable workspaces implement these root commands:
 | `npm run format:check` | Verify maintained TS/TSX/HTML/SCSS/config formatting |
 | `npm test` | Run contract, API, and web unit/integration/component suites |
 | `npm run test:coverage` | Run V8 coverage for contracts/API/web and enforce thresholds |
+| `npm run test:browser:install` | Download the Playwright Chromium binary used by browser smoke tests |
+| `npm run test:browser` | Start local API/Vite processes and run browser smoke tests headlessly |
+| `npm run test:browser:headed` | Run the same smoke tests with visible Chromium |
+| `npm run test:browser:ui` | Run browser smoke tests through Playwright's interactive UI |
 | `npm run repo:check` | Validate repository and runnable workspace structure |
 
 The root test commands include all three implemented TypeScript workspaces.
