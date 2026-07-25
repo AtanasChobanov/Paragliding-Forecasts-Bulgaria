@@ -98,7 +98,6 @@ const ForecastDetailBody = ({
           <SiteSelectorSection
             onSelectSite={selectSite}
             selectedSite={selectedSite}
-            showCompass
             showInstructions={false}
             showSelector={false}
             sites={sites}
@@ -210,10 +209,7 @@ export const ForecastDetailsRoute = ({ dashboardApi }: ForecastDetailsRouteProps
   );
 
   return (
-    <main aria-labelledby="forecast-details-page-heading" className={styles.main}>
-      <h1 className="visually-hidden" id="forecast-details-page-heading">
-        Detailed forecast
-      </h1>
+    <main aria-label="Detailed forecast" className={styles.main}>
       {toolbar}
       {sitesQuery.isError ? (
         <DashboardErrorState

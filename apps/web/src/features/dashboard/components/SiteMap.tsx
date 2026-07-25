@@ -9,7 +9,6 @@ import styles from "./SiteMap.module.scss";
 export interface SiteMapProps {
   readonly onSelectSite: (siteSlug: SiteSlug) => void;
   readonly selectedSite: Site;
-  readonly showCompass?: boolean;
   readonly showInstructions?: boolean;
   readonly sites: readonly Site[];
   readonly viewportMode?: "all-sites" | "selected-site";
@@ -144,7 +143,6 @@ const InstructionPin = () => (
 export const SiteMap = ({
   onSelectSite,
   selectedSite,
-  showCompass = false,
   showInstructions = true,
   sites,
   viewportMode = "all-sites",
@@ -210,15 +208,19 @@ export const SiteMap = ({
             The basemap could not be loaded. Location labels and the selector remain available.
           </p>
         ) : null}
-        {showCompass ? (
-          <span
-            aria-label="Map orientation: north is at the top"
-            className={styles.compass}
-            role="img"
-          >
-            <span aria-hidden="true">N</span>
+        <span
+          aria-label="Map orientation: north is at the top"
+          className={styles.compass}
+          role="img"
+        >
+          <span aria-hidden="true" className={styles.compassNorth}>
+            N
           </span>
-        ) : null}
+          <span aria-hidden="true" className={styles.compassNeedle}>
+            <span className={styles.northPointer} />
+            <span className={styles.southPointer} />
+          </span>
+        </span>
       </div>
       {showInstructions ? (
         <p className={styles.instructions}>

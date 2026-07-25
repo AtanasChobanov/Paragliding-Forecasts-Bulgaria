@@ -38,4 +38,16 @@ describe("DashboardPanel", () => {
     );
     expect(screen.getByRole("region", { name: "Busy panel" })).not.toHaveAttribute("aria-busy");
   });
+
+  it("can expose a labelled region without introducing a heading before a page h1", () => {
+    render(
+      <DashboardPanel headingId="overview-label" headingLevel={null} title="Forecast overview">
+        <h1>Selected forecast</h1>
+      </DashboardPanel>,
+    );
+
+    expect(screen.getByRole("region", { name: "Forecast overview" })).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "Forecast overview" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Selected forecast" })).toBeVisible();
+  });
 });

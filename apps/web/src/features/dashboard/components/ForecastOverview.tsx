@@ -48,9 +48,9 @@ export const SelectedForecastHeading = ({
   status,
 }: SelectedForecastHeadingProps) => (
   <div className={styles.headingRow}>
-    <h3 className={styles.heading}>
+    <h1 className={styles.heading}>
       {siteName} · {formatForecastDateLong(forecastDate)}
-    </h3>
+    </h1>
     {status === undefined ? null : <DataStatusBadge status={status} />}
   </div>
 );

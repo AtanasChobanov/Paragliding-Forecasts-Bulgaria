@@ -71,14 +71,17 @@ describe("ForecastDetailsRoute", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole("heading", { name: "Sopot · Saturday, 18 Jul" })).toBeVisible();
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Sopot · Saturday, 18 Jul" }),
+    ).toBeVisible();
+    expect(screen.getByRole("main", { name: "Detailed forecast" })).toBeVisible();
     expect(screen.getByRole("link", { name: "All sites" })).toHaveAttribute(
       "href",
       "/?site=sopot&date=2026-07-18",
     );
     expect(screen.getByTestId("forecast-detail-map")).toBeVisible();
     expect(siteSelectorSectionMock).toHaveBeenLastCalledWith(
-      expect.objectContaining({ showCompass: true, viewportMode: "selected-site" }),
+      expect.objectContaining({ viewportMode: "selected-site" }),
     );
 
     await userEvent.selectOptions(screen.getByLabelText("Location"), "zlatitsa");

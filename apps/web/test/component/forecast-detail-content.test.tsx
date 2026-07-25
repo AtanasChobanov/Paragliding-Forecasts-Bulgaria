@@ -21,7 +21,9 @@ describe("forecast detail content", () => {
       </>,
     );
 
-    expect(screen.getByRole("heading", { name: "Sopot · Saturday, 18 Jul" })).toBeVisible();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Sopot · Saturday, 18 Jul" }),
+    ).toBeVisible();
     expect(screen.getByText("Model confidence")).toBeVisible();
     expect(screen.getAllByText("Conf.")).toHaveLength(5);
     expect(screen.getAllByText("Mock data").length).toBeGreaterThanOrEqual(3);
@@ -36,12 +38,17 @@ describe("forecast detail content", () => {
     expect(screen.getByText("Surface temperature")).toBeVisible();
     expect(screen.getByText("Wind by altitude")).toBeVisible();
     expect(screen.getByText("Synthetic thermal strength")).toBeVisible();
+    expect(screen.getByRole("region", { name: "Forecast input values" })).toHaveAttribute(
+      "tabindex",
+      "0",
+    );
     const comparison = screen.getByRole("heading", {
       name: "Compared with previous run",
     }).parentElement;
     if (comparison === null) {
       throw new Error("Expected the previous-run comparison container.");
     }
+    expect(within(comparison).getAllByRole("listitem")[0]).toHaveTextContent("Cloudbase");
     expect(within(comparison).getAllByText("Unchanged")).toHaveLength(5);
   });
 

@@ -118,6 +118,8 @@ describe("SiteMap", () => {
       "-1",
     );
     expect(screen.getAllByText("Sopot").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole("img", { name: "Map orientation: north is at the top" })).toBeVisible();
+    expect(screen.getByText("N")).toBeVisible();
 
     await userEvent.click(screen.getByRole("button", { name: "Zlatitsa" }));
     expect(onSelectSite).toHaveBeenCalledWith("zlatitsa");

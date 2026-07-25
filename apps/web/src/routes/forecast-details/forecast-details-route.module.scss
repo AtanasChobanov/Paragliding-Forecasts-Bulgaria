@@ -6,10 +6,10 @@
   min-width: 0;
   min-height: 0;
   flex: 1;
-  grid-template-rows: auto minmax(0, 1.04fr) minmax(0, 0.9fr) auto;
+  grid-template-rows: auto;
   gap: var(--layout-row-gap);
   padding: var(--layout-row-gap) 0;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .toolbar {
@@ -58,8 +58,8 @@
   display: grid;
   min-width: 0;
   min-height: 0;
-  grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
-  gap: var(--layout-column-gap);
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--layout-row-gap);
 }
 
 .summaryRegion,
@@ -69,7 +69,16 @@
   min-height: 0;
 }
 
+.summaryRegion {
+  overflow: hidden;
+
+  > * {
+    height: 100%;
+  }
+}
+
 .mapRegion {
+  min-height: 20rem;
   overflow: hidden;
   border-radius: var(--radius-panel);
 
@@ -78,9 +87,36 @@
   }
 }
 
+@include mixins.wide {
+  .main {
+    --detail-column-tracks: minmax(0, 1.08fr) minmax(0, 0.92fr);
+
+    height: 100%;
+    grid-template-rows: auto minmax(0, 1.05fr) minmax(0, 0.95fr) auto;
+    overflow: hidden;
+  }
+
+  .primaryGrid,
+  .lowerGrid {
+    grid-template-columns: var(--detail-column-tracks);
+    column-gap: var(--layout-column-gap);
+    row-gap: 0;
+  }
+
+  .mapRegion {
+    min-height: 0;
+  }
+}
+
+@media (min-width: 70rem) and (min-height: 60rem) {
+  .main {
+    grid-template-rows: auto minmax(0, 1.5fr) minmax(0, 0.5fr) auto;
+  }
+}
+
 @media (min-width: 70rem) and (max-height: 52rem) {
   .main {
-    grid-template-rows: auto minmax(0, 1fr) minmax(0, 0.86fr) auto;
+    grid-template-rows: auto minmax(0, 1.35fr) minmax(0, 0.65fr) auto;
   }
 
   .toolbar {
@@ -89,20 +125,6 @@
 }
 
 @include mixins.compact {
-  .main {
-    height: auto;
-    min-height: 0;
-    grid-template-rows: auto;
-    padding: var(--layout-row-gap) 0;
-    overflow: visible;
-  }
-
-  .toolbar,
-  .primaryGrid,
-  .lowerGrid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .toolbar {
     align-items: stretch;
     flex-direction: column;
@@ -114,9 +136,5 @@
 
   .backLink {
     min-height: var(--control-min-size);
-  }
-
-  .mapRegion {
-    min-height: 20rem;
   }
 }

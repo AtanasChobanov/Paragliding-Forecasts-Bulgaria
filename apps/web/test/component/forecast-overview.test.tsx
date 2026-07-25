@@ -46,7 +46,9 @@ describe("ForecastOverview", () => {
       />,
     );
 
-    expect(screen.getByRole("heading", { name: "Sopot · Saturday, 18 Jul" })).toBeVisible();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Sopot · Saturday, 18 Jul" }),
+    ).toBeVisible();
     expect(screen.getByText("Mock data")).toBeVisible();
     const metrics = screen.getByRole("list", { name: "Forecast metrics" });
     expect(within(metrics).getAllByRole("listitem")).toHaveLength(5);

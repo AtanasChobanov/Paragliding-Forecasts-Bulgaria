@@ -178,9 +178,9 @@ export const ForecastDetailSummary = ({
     <section aria-labelledby="forecast-detail-heading" className={styles.summary}>
       <div className={styles.summaryHeading}>
         <div>
-          <h2 id="forecast-detail-heading">
+          <h1 id="forecast-detail-heading">
             {siteName} · {formatForecastDateLong(forecast.forecastDate)}
-          </h2>
+          </h1>
           <p>
             {forecast.provenance.version} · generated {formatGeneratedAt(forecast.generatedAt)}
           </p>
@@ -279,25 +279,27 @@ export const ForecastInputsPanel = ({
     headingId="forecast-inputs-heading"
     title="Forecast inputs"
   >
-    <p className={styles.panelMetadata}>
-      {forecastInputs.provenance.source} · updated {formatGeneratedAt(forecastInputs.sourceRunAt)}
-    </p>
-    <div
-      aria-label="Forecast input values"
-      className={styles.inputScroll}
-      role="region"
-      tabIndex={0}
-    >
-      <dl className={styles.inputGrid}>
-        {forecastInputRows.map((row) => (
-          <InputMetric
-            format={row.format}
-            key={row.key}
-            label={row.label}
-            metric={forecastInputs[row.key]}
-          />
-        ))}
-      </dl>
+    <div className={styles.inputPanelContent}>
+      <p className={styles.panelMetadata}>
+        {forecastInputs.provenance.source} · updated {formatGeneratedAt(forecastInputs.sourceRunAt)}
+      </p>
+      <div
+        aria-label="Forecast input values"
+        className={styles.inputScroll}
+        role="region"
+        tabIndex={0}
+      >
+        <dl className={styles.inputGrid}>
+          {forecastInputRows.map((row) => (
+            <InputMetric
+              format={row.format}
+              key={row.key}
+              label={row.label}
+              metric={forecastInputs[row.key]}
+            />
+          ))}
+        </dl>
+      </div>
     </div>
   </DashboardPanel>
 );
@@ -322,10 +324,10 @@ export const PreviousRunComparison = () => (
     <h2 id="previous-run-heading">Compared with previous run</h2>
     <ul>
       {[
+        "Cloudbase",
         "100+ km chance",
         "200+ km chance",
         "300+ km chance",
-        "Cloudbase",
         "Overdevelopment risk",
       ].map((label) => (
         <li key={label}>
