@@ -47,7 +47,7 @@ It consumes versioned HTTP contracts from `@paragliding-forecasts/contracts`.
 - Leaflet through React Leaflet with OpenStreetMap raster tiles for the local
   MVP
 - Vitest, React Testing Library, and MSW for unit/component/API-client tests
-- A browser-testing tool selected when T-008 is implemented
+- Playwright Test with Chromium for real-browser smoke coverage
 
 ## Current layout
 
@@ -112,6 +112,10 @@ npm.cmd run build --workspace @paragliding-forecasts/web
 npm.cmd run typecheck --workspace @paragliding-forecasts/web
 npm.cmd run test --workspace @paragliding-forecasts/web
 npm.cmd run test:coverage --workspace @paragliding-forecasts/web
+npm.cmd run test:browser:install
+npm.cmd run test:browser
+npm.cmd run test:browser:headed
+npm.cmd run test:browser:ui
 ```
 
 Use `npm.cmd run dev` to supervise the API and web servers together. Vite uses
@@ -131,9 +135,9 @@ Current variables:
 - `WEB_PORT` - Vite development port, default `5173`; changing it requires the
   exact matching `CORS_ORIGIN`
 
-Standalone web `dev`, `build`, `typecheck`, and test commands build the shared
-contracts first. The combined root `dev` supervisor builds contracts once and
-then starts the raw API and web watchers.
+Standalone web `dev`, `build`, `typecheck`, Vitest, and browser-test commands
+build the shared contracts first. The combined root `dev` supervisor builds
+contracts once and then starts the raw API and web watchers.
 
 ## API and query behavior
 
@@ -251,6 +255,9 @@ The repository-level `build`, `typecheck`, `lint`, `format:check`, `test`,
 `test:coverage`, and `repo:check` commands include this workspace. Web coverage
 enforces at least 80% statements, lines, and functions plus 75% branches across
 all maintained `src/**/*.{ts,tsx}` files, including files a test never imports.
+`test:browser` is intentionally separate because it needs a Playwright Chromium
+binary and starts the real local API and Vite processes on ports `3000` and
+`5173`; both ports must be free.
 
 Automated coverage includes:
 
@@ -274,12 +281,15 @@ Automated coverage includes:
 - Integration tests for sites/days/summaries retry recovery, request IDs,
   compatibility failures, independent-region preservation, stale-selection
   prevention, keyboard date activation, and polite selection announcements.
+- Playwright Chromium smoke tests that load the real dashboard, assert all five
+  required forecast outputs and mock status, then navigate to the detailed
+  forecast and assert its five outputs, inputs, drivers, and `All sites` return.
 
-T-008 still owns the browser smoke test. Until that ticket is implemented,
-manual review must verify real Leaflet tile rendering, pan/zoom, permanent-label
-collisions, full keyboard/focus behavior, copied URL/refresh/Back/Forward,
-desktop visual fidelity, and narrow-screen layout. No screenshot or automated
-pixel comparison is stored in this branch. The 2026-07-23 visual iteration was
-implemented from the supplied reference and screenshots without controlling or
-capturing a browser; its final visual acceptance remains the user's manual
-review.
+Playwright runs headlessly by default. `test:browser:headed` shows Chromium and
+`test:browser:ui` offers interactive debugging. Failure-only traces and
+screenshots are written to ignored test-artifact folders; no visual baselines or
+pixel comparisons are maintained. OSM tiles are deliberately blocked in this
+suite, so core local forecast behaviour does not depend on the public tile
+service. Manual review still owns real tile rendering, pan/zoom, label
+collisions, focus appearance, desktop/narrow visual fidelity, and browser
+console review.

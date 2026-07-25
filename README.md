@@ -13,18 +13,18 @@ result as an inspectable daily dashboard.
 ## Project status
 
 - Delivery phase: **Takt 1**
-- Current tickets: **T-003-T-007 - Dashboard and detailed forecast view**
-  (`In Progress`, pending manual browser/visual review)
+- Current tickets: **T-003-T-008 - Dashboard, detailed forecast view, and
+  browser smoke automation** (`Review`, pending manual visual review)
 - Implemented: runnable React/Vite and Node.js/Express workspaces, shared runtime
   contracts, structured logging and errors, a map-ready seven-site catalog,
   deterministic date-aware mock forecasts, dashboard summary/day-preview read
   endpoints, canonical URL selection, forecast overview/comparison cards, an
   interactive Leaflet site selector, a fixed five-day selector, scoped
   accessible request states, and a routed detailed site/date forecast view with
-  mock forecast inputs and drivers
-- Not implemented: Takt 1 browser smoke automation,
-  SQLite schema or access layer, data ingestion, real forecasts, models, and
-  alerts
+  mock forecast inputs/drivers, and Playwright Chromium smoke coverage for the
+  dashboard-to-detail happy path
+- Not implemented: SQLite schema or access layer, data ingestion, real
+  forecasts, models, and alerts
 
 Displayed mock responses are deliberately identified as `mock`; they are
 development fixtures, not forecasts or flying advice.
@@ -165,8 +165,29 @@ configured `VITE_API_BASE_URL` to load dashboard data.
 | `npm run format:check` | Check maintained TypeScript, TSX, HTML, SCSS, and config formatting |
 | `npm test` | Run contract, API, and web unit/integration/component tests |
 | `npm run test:coverage` | Run all three suites with V8 coverage and enforced thresholds |
+| `npm run test:browser:install` | Download the Playwright Chromium binary once per machine/version |
+| `npm run test:browser` | Run the dashboard and detail-page Chromium smoke suite headlessly |
+| `npm run test:browser:headed` | Run the same browser smoke suite with visible Chromium |
+| `npm run test:browser:ui` | Open Playwright UI mode for interactive browser-test debugging |
 | `npm run repo:check` | Validate repository structure and runnable workspace metadata |
 | `uv sync --project services/ml` | Sync the Python ML environment |
+
+## Run browser smoke tests
+
+After `npm.cmd install`, download the matching Chromium binary once:
+
+```powershell
+npm.cmd run test:browser:install
+npm.cmd run test:browser
+```
+
+The smoke suite starts the compiled local API and Vite dashboard on the normal
+`3000` and `5173` ports, so stop a local development session first. The default
+command is headless; use `test:browser:headed` to watch Chromium or
+`test:browser:ui` to inspect and re-run tests interactively. It verifies the
+dashboard's five required forecast outputs, then follows the detailed-forecast
+link and confirms its outputs, inputs, drivers, and return navigation. It is a
+browser end-to-end smoke test, not a visual-regression suite.
 
 ## Configuration and data
 

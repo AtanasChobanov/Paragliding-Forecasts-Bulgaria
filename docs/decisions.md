@@ -30,6 +30,8 @@ consequences. Temporary progress and Git state belong in
 | DEC-015 | Add dashboard-specific forecast read models | Accepted | 2026-07-21 |
 | DEC-016 | Expose provisional map coordinates and confirm Pastrina spelling | Accepted | 2026-07-21 |
 | DEC-017 | Use a focused React dashboard stack with Leaflet | Accepted | 2026-07-22 |
+| DEC-018 | Add a provisional detailed forecast-input read model | Accepted | 2026-07-24 |
+| DEC-019 | Use Playwright Chromium for local browser smoke coverage | Accepted | 2026-07-25 |
 
 ## Individual decisions
 
@@ -601,8 +603,8 @@ locked through the root npm lockfile. Route-level query ownership follows
 DEC-015; presentational cards do not fetch. URL normalization must distinguish
 history `replace` from user-navigation `push`. The browser must never duplicate
 shared response schemas. Public OSM tiles require network access, visible
-attribution, policy compliance, and have no availability guarantee. T-008 still
-owns selection of browser-test tooling, and T-009 still owns authoritative site
+attribution, policy compliance, and have no availability guarantee. T-008 owns
+the browser smoke implementation, while T-009 still owns authoritative site
 coordinates.
 
 **Related files:** [`handoff.md`](handoff.md),
@@ -645,6 +647,50 @@ exist.
 [`../apps/api/src/modules/forecasts/mock-forecast.repository.ts`](../apps/api/src/modules/forecasts/mock-forecast.repository.ts),
 [`../apps/web/src/routes/forecast-details/forecast-details-route.tsx`](../apps/web/src/routes/forecast-details/forecast-details-route.tsx).
 
+### DEC-019 — Use Playwright Chromium for local browser smoke coverage
+
+**Status:** Accepted
+
+**Date:** 2026-07-25
+
+**Context:** Vitest, React Testing Library, and MSW validate the web client's
+logic and rendered semantics, but cannot prove that the local API, Vite bundle,
+React application, browser routing, and HTTP requests work together in a real
+browser. T-008 requires a small Takt 1 browser proof for both the dashboard and
+the detailed forecast route.
+
+**Decision:** Add `@playwright/test` as an `apps/web` development dependency
+and run one Chromium project. Playwright starts the compiled local API and Vite
+separately on the normal local ports, waits for both to be ready, and runs two
+headless smoke scenarios: dashboard forecast cards, then dashboard-to-detail
+navigation and return. Provide separate `test:browser`, `test:browser:headed`,
+and `test:browser:ui` commands. Failure-only trace and screenshot artifacts are
+ignored; visual baselines, cross-browser coverage, map interaction, and pixel
+comparison are out of scope. Block OSM tile requests so the forecast smoke does
+not depend on the public tile service.
+
+**Rationale:** Playwright provides real Chromium execution, accessible
+role/label locators, automatic waiting, and lifecycle-managed local servers
+without a second test framework or a test-only application architecture. A
+focused smoke suite catches integration failures that jsdom cannot, while
+keeping the local Takt 1 gate small and deterministic.
+
+**Alternatives considered:** Cypress and Selenium would introduce a larger
+parallel test stack. Vitest browser mode would reuse the runner but does not
+offer the same focused local multi-process E2E workflow for this scope.
+
+**Consequences:** Contributors install the version-matched Chromium binary with
+`npm run test:browser:install` before running browser coverage. The regular
+`npm test` and V8 coverage commands remain separate from this browser suite.
+Ports `3000` and `5173` must be free. Browser smoke validation passed on
+2026-07-25 (`2 passed`) and moved T-008 from `In Progress` to `Review`; it
+remains a separate check from the regular unit, integration, and component test
+commands.
+
+**Related files:** [`../apps/web/playwright.config.ts`](../apps/web/playwright.config.ts),
+[`../apps/web/test/browser/dashboard.smoke.spec.ts`](../apps/web/test/browser/dashboard.smoke.spec.ts),
+[`../apps/web/README.md`](../apps/web/README.md).
+
 ## Open decisions
 
 | Question | Options / constraints | Resolve by |
@@ -654,7 +700,6 @@ exist.
 | What are the final coordinates, aliases, and catchment radii for each site? | Current map points are provisional; Pastrina and the Dobrich regional model need particular confirmation. | T-009. |
 | What access methods, permissions, attribution, caching, and rate limits apply to flight sources? | XCContest and SkyNomad must be researched without assuming scraping permission. | T-010 and T-011. |
 | Which historical forecast/archive or reanalysis sources will be used? | Exact archived forecasts are preferred; reanalysis is the documented fallback. | T-016, with units refined in T-017. |
-| Which browser test tool should be adopted? | Must support the local dashboard smoke test and avoid unneeded test infrastructure before the UI exists. | T-008. |
 | Which first alert channel should be implemented? | Dashboard watchlist, email, Telegram, or another agreed channel; alerts require at least one-day lead time and deduplication. | T-027/T-028. |
 | What deployment/distribution model is required beyond local development? | The MVP is local-first; cloud/distributed infrastructure needs a demonstrated requirement. | No task assigned; decide when deployment becomes an accepted scope item. |
 | What license should the repository use? | No open-source license is currently selected. | Repository owner decision; no task assigned. |

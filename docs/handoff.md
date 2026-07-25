@@ -5,11 +5,11 @@
 | Field | Value |
 | --- | --- |
 | Last updated | 2026-07-25 |
-| Current Git branch | `feature/T-006-T007-forecast-details-page` |
-| Branch relationship | Extends the dashboard implementation at `e744bc5` |
-| Current tasks | T-003 through T-007 — `In Progress`, pending manual browser/visual review |
-| Completed scope in this branch | Dashboard foundation plus detailed site/date route, mock forecast-input contract/API mapping, dashboard-to-detail navigation, selected-site map focus, data-status treatment, automated validation, and setup/limitations documentation |
-| Expected working tree after the final documentation commit | Dirty until the user completes manual visual review and the work is committed |
+| Current Git branch | `feature/T-008-browser-smoke-test` |
+| Branch relationship | Extends `feature/T-006-T007-forecast-details-page` at `922ceef`, which extends the dashboard implementation at `e744bc5` |
+| Current tasks | T-003 through T-008 — `Review`; T-003-T-007 still await manual visual review, while T-008 has passed its Chromium smoke suite |
+| Completed scope in this branch | Dashboard/detail implementation plus Playwright Chromium smoke-test configuration, dashboard and detail smoke scenarios, commands, and documentation |
+| Expected working tree after the final documentation commit | Clean after the T-008 implementation and validation checkpoint commit |
 
 ## Current outcome
 
@@ -19,6 +19,31 @@ or map selection, and returns to the dashboard through `All sites` while
 preserving selection. The dashboard's selected action and all Other Locations
 cards are working links to that route. No browser or screenshot automation was
 run by explicit user instruction; manual visual review is still required.
+
+T-008 now adds `@playwright/test` in the web workspace and a Chromium smoke
+suite. It starts the compiled API and Vite as separately readiness-checked local
+processes on the normal `3000` and `5173` ports. One test asserts the dashboard
+location selector, five dates, five required forecast metrics, and mock status;
+the second follows the detailed-forecast action, checks detailed outputs,
+inputs, drivers, and `All sites` return navigation. OSM tile requests are
+blocked so the core local smoke does not depend on the public tile service.
+Use `npm.cmd run test:browser` by default, `test:browser:headed` to see
+Chromium, and `test:browser:ui` for interactive debugging after installing the
+matching binary once with `test:browser:install`. The first local
+`test:browser` execution successfully started the compiled API, Vite, and
+Chromium and reached the dashboard API calls. After correcting the non-exact
+`getByLabel("Location")` locator and the dashboard action's prefix-matching
+`getByRole("link")` locator, the user reran the suite on 2026-07-25. Both
+Chromium scenarios passed (`2 passed (8.8s)`): the dashboard forecast-card
+assertions and the dashboard-to-detail return-navigation flow. T-008 is
+therefore in `Review`.
+
+`npm.cmd audit` on 2026-07-25 reports three high advisories in the existing
+dependency graph: direct `react-router-dom`/`react-router` and transitive
+`brace-expansion`. The report does not name Playwright. Its suggested router
+change is a semver-major downgrade, so T-008 deliberately does not make that
+unrelated dependency change; address it in a dedicated dependency/security
+ticket.
 
 The detailed response now includes strict mock `forecastInputs`: source-run
 metadata plus explicit-status temperature, boundary-layer, wind, humidity,
@@ -566,8 +591,10 @@ been pushed and no pull request was created.
 
 ## Next implementation step
 
-Have the user review the updated desktop composition in their browser and
-provide a follow-up screenshot if spacing or visual fidelity still needs
-iteration. T-003-T-005 remain `In Progress` until that review is accepted;
-T-008 still owns browser smoke-test tooling and must not be implied complete by
-this branch.
+Review the committed T-008 diff and complete the manual visual acceptance for
+T-003-T-007. The browser smoke suite has passed; rerun it when making later UI
+changes or when validating a clean checkout.
+Manual review still owns desktop/narrow visual fidelity, copied URLs/history,
+real Leaflet tiles/pan/zoom/labels, focus appearance, degraded requests/tiles,
+and the browser console. T-003-T-007 remain `In Progress` until that review is
+accepted.
