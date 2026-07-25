@@ -7,6 +7,7 @@ export interface DashboardPanelProps {
   readonly children: ReactNode;
   readonly className?: string | undefined;
   readonly headerClassName?: string | undefined;
+  readonly headingLevel?: 2 | null;
   readonly headingId: string;
   readonly title: string;
   readonly accessory?: ReactNode;
@@ -18,6 +19,7 @@ export const DashboardPanel = ({
   children,
   className,
   headerClassName,
+  headingLevel = 2,
   headingId,
   title,
 }: DashboardPanelProps) => {
@@ -31,7 +33,13 @@ export const DashboardPanel = ({
   return (
     <section aria-busy={busy || undefined} aria-labelledby={headingId} className={panelClassName}>
       <div className={panelHeaderClassName}>
-        <h2 id={headingId}>{title}</h2>
+        {headingLevel === null ? (
+          <div className={styles.title} id={headingId}>
+            {title}
+          </div>
+        ) : (
+          <h2 id={headingId}>{title}</h2>
+        )}
         {accessory === undefined ? null : <div className={styles.accessory}>{accessory}</div>}
       </div>
       <div className={styles.body}>{children}</div>

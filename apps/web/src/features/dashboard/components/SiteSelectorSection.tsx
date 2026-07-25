@@ -12,7 +12,6 @@ const LazySiteMap = lazy(async () => {
 export interface SiteSelectorSectionProps {
   readonly onSelectSite: (siteSlug: SiteSlug) => void;
   readonly selectedSite: Site;
-  readonly showCompass?: boolean;
   readonly showInstructions?: boolean;
   readonly showSelector?: boolean;
   readonly sites: readonly Site[];
@@ -22,7 +21,6 @@ export interface SiteSelectorSectionProps {
 export const SiteSelectorSection = ({
   onSelectSite,
   selectedSite,
-  showCompass = false,
   showInstructions = true,
   showSelector = true,
   sites,
@@ -48,7 +46,6 @@ export const SiteSelectorSection = ({
       <LazySiteMap
         onSelectSite={onSelectSite}
         selectedSite={selectedSite}
-        showCompass={showCompass}
         showInstructions={showInstructions}
         sites={sites}
         viewportMode={viewportMode}

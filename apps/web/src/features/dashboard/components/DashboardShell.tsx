@@ -26,10 +26,16 @@ export const DashboardShell = ({
   overview,
   overviewBusy = false,
 }: DashboardShellProps) => (
-  <main aria-labelledby="dashboard-heading" className={styles.main}>
-    <h1 className="visually-hidden" id="dashboard-heading">
-      XC Forecast dashboard
-    </h1>
+  <main aria-label="XC Forecast dashboard" className={styles.main}>
+    <DashboardPanel
+      busy={overviewBusy}
+      className={styles.overview}
+      headingLevel={null}
+      headingId="forecast-overview-heading"
+      title="Forecast overview"
+    >
+      {overview}
+    </DashboardPanel>
     <DashboardPanel
       busy={locationBusy}
       className={styles.location}
@@ -38,14 +44,6 @@ export const DashboardShell = ({
       title="Select a location"
     >
       {locationSelector}
-    </DashboardPanel>
-    <DashboardPanel
-      busy={overviewBusy}
-      className={styles.overview}
-      headingId="forecast-overview-heading"
-      title="Forecast overview"
-    >
-      {overview}
     </DashboardPanel>
     <DashboardPanel
       busy={otherBusy}

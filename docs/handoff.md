@@ -4,7 +4,7 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated | 2026-07-24 |
+| Last updated | 2026-07-25 |
 | Current Git branch | `feature/T-006-T007-forecast-details-page` |
 | Branch relationship | Extends the dashboard implementation at `e744bc5` |
 | Current tasks | T-003 through T-007 — `In Progress`, pending manual browser/visual review |
@@ -506,6 +506,27 @@ placing the full input table inside a keyboard-focusable, vertically scrollable
 region. This prevents long input rows from escaping the panel and preserves the
 single-screen composition. Web tests (120), typecheck, and formatting checks
 passed; no browser automation was run.
+
+The detail date selector now shares the location selector's primary-colour
+border. Forecast Inputs provenance metadata uses the same small muted treatment
+as the generated-at detail metadata, and its scroll region is flex-bounded with
+the panel body so the table ends above the panel's existing bottom padding.
+Previous-run comparison now lists Cloudbase first. Web tests (120), typecheck,
+and formatting checks passed.
+
+The 2026-07-25 semantic and responsive pass removes generic visually hidden page
+`h1` elements: the visible selected `site · date` is now the single page-level
+heading in both Dashboard Overview and Forecast Details. The detail layout now
+stacks below the shared wide breakpoint and, on wide screens, uses one shared
+column-track definition plus viewport-height-specific row ratios; constrained
+summary content can no longer overlap the lower panels. The reusable `SiteMap`
+always renders one compass on both dashboard and detail maps, with contrasting
+north and south pointers. Web build, lint, formatting, and all 22 web test files
+/ 121 tests passed; no browser or screenshot automation was run.
+
+The detail-page `h1` also follows Dashboard Overview's short-viewport override
+of `1.45rem`, so the selected site/date heading remains the same size on laptop
+and large-monitor layouts.
 
 The 2026-07-24 detail-page refinement keeps `ConfidenceIndicator` as the one
 shared meter while making its visible label and supplementary note configurable.

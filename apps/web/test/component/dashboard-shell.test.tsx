@@ -14,7 +14,7 @@ describe("dashboard visual shell", () => {
           forecastDates={<span>dates slot</span>}
           locationSelector={<span>location slot</span>}
           otherLocations={<span>other slot</span>}
-          overview={<span>overview slot</span>}
+          overview={<h1>Sopot · Saturday, 18 Jul</h1>}
         />
       </>,
     );
@@ -26,18 +26,14 @@ describe("dashboard visual shell", () => {
 
     const main = screen.getByRole("main", { name: "XC Forecast dashboard" });
     expect(within(main).getByRole("heading", { level: 1 })).toHaveTextContent(
-      "XC Forecast dashboard",
+      "Sopot · Saturday, 18 Jul",
     );
+    expect(within(main).getByRole("region", { name: "Forecast overview" })).toBeVisible();
     expect(
       within(main)
         .getAllByRole("heading", { level: 2 })
         .map((heading) => heading.textContent),
-    ).toEqual([
-      "Select a location",
-      "Forecast overview",
-      "Other locations for this date",
-      "Select forecast date",
-    ]);
+    ).toEqual(["Select a location", "Other locations for this date", "Select forecast date"]);
   });
 
   it("places every route-owned slot once and keeps a restrained live region", () => {
