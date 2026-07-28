@@ -8,7 +8,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "contracts:build": "npm --prefix ../.. run build --workspace @paragliding-forecasts/contracts",
-    "dev": "tsx watch src/main.ts",
+    "dev": "npm run dev:raw",
+    "dev:raw": "tsx watch src/main.ts",
     "prebuild": "npm run contracts:build",
     "predev": "npm run contracts:build",
     "pretest": "npm run contracts:build",

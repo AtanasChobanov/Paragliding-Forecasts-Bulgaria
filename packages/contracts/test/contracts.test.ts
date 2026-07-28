@@ -54,7 +54,15 @@ describe("shared HTTP contracts", () => {
 
     expect(
       sitesResponseSchema.parse({
-        sites: [{ id: 1, slug: "sofia-vitosha-kominite", name: "Sofia - Vitosha (Kominite)" }],
+        sites: [
+          {
+            id: 1,
+            slug: "sofia-vitosha-kominite",
+            name: "Sofia - Vitosha (Kominite)",
+            latitude: 42.60222,
+            longitude: 23.28927,
+          },
+        ],
       }),
     ).toBeDefined();
 
@@ -79,6 +87,24 @@ describe("shared HTTP contracts", () => {
     expect(siteIdSchema.safeParse(0).success).toBe(false);
     expect(siteSlugSchema.safeParse("new-site").success).toBe(true);
     expect(siteSlugSchema.safeParse("New Site").success).toBe(false);
+  });
+
+  it("requires valid geographic coordinates for sites", () => {
+    const site = {
+      id: 1,
+      slug: "sofia-vitosha-kominite",
+      name: "Sofia - Vitosha (Kominite)",
+      latitude: 42.60222,
+      longitude: 23.28927,
+    };
+
+    expect(sitesResponseSchema.safeParse({ sites: [site] }).success).toBe(true);
+    expect(sitesResponseSchema.safeParse({ sites: [{ ...site, latitude: 90.1 }] }).success).toBe(
+      false,
+    );
+    expect(sitesResponseSchema.safeParse({ sites: [{ ...site, longitude: -180.1 }] }).success).toBe(
+      false,
+    );
   });
 
   it("rejects dates that match the shape but are not real calendar dates", () => {

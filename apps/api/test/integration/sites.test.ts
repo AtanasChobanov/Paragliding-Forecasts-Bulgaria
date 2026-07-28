@@ -17,9 +17,27 @@ describe("GET /api/v1/sites", () => {
       "sopot",
       "nevsha",
       "shumen",
-      "pastrona",
+      "pastrina",
       "dobrich-region",
     ]);
-    expect(body.sites.every((site) => Object.keys(site).length === 3)).toBe(true);
+    expect(body.sites.map((site) => site.name)).toEqual([
+      "Sofia - Vitosha (Kominite)",
+      "Zlatitsa",
+      "Sopot",
+      "Nevsha",
+      "Shumen",
+      "Pastrina",
+      "Dobrich region",
+    ]);
+    expect(body.sites.map(({ latitude, longitude }) => ({ latitude, longitude }))).toEqual([
+      { latitude: 42.60222, longitude: 23.28927 },
+      { latitude: 42.71506, longitude: 24.13749 },
+      { latitude: 42.68776, longitude: 24.74996 },
+      { latitude: 43.27155, longitude: 27.29945 },
+      { latitude: 43.27667, longitude: 26.92917 },
+      { latitude: 43.42481, longitude: 23.30355 },
+      { latitude: 43.56667, longitude: 27.83333 },
+    ]);
+    expect(body.sites.every((site) => Object.keys(site).length === 5)).toBe(true);
   });
 });

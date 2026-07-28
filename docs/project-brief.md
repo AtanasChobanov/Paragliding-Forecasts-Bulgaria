@@ -83,7 +83,7 @@ begins.
 | Sopot | Central Balkan launch area | Known high-volume Bulgarian XC site; likely richer historical data. |
 | Nevsha | Northeast Bulgaria | Flatland and ridge/thermal patterns; useful regional contrast. |
 | Shumen | Northeast Bulgaria | Potentially relevant for flatland distance and convergence days. |
-| Pastrona | Site/area to confirm during kickoff | Name, coordinates, and radius should be confirmed before ingestion. |
+| Pastrina | Site/area to confirm during kickoff | Spelling is confirmed; coordinates and radius still require validation before ingestion. |
 | Dobrich region | Regional forecast area around Dobrich | Flatland XC potential; may need regional rather than single-launch modeling. |
 
 # 4. Data Collection Scope
@@ -312,7 +312,7 @@ features.
   probability estimates must show confidence and avoid false precision.
 
 - **Location definitions:** coordinates, launch aliases, and catchment
-  radius must be agreed early, especially for Pastrona and the Dobrich
+  radius must be agreed early, especially for Pastrina and the Dobrich
   region.
 
 - **Alert channel:** the initial alert mechanism should be agreed before
@@ -345,7 +345,7 @@ features.
   the README?
 
 - Can a user select Sofia - Vitosha, Zlatitsa, Sopot, Nevsha, Shumen,
-  Pastrona, and Dobrich region?
+  Pastrina, and Dobrich region?
 
 - Does the page show cloudbase, 100+/200+/300+ chances, and
   overdevelopment risk?

@@ -27,6 +27,9 @@ consequences. Temporary progress and Git state belong in
 | DEC-012 | Use TSX and Vitest for the initial API development loop | Accepted | 2026-07-17 |
 | DEC-013 | Use Pino logging and Problem Details HTTP errors | Accepted | 2026-07-17 |
 | DEC-014 | Separate internal numeric site IDs from public slugs | Accepted | 2026-07-20 |
+| DEC-015 | Add dashboard-specific forecast read models | Accepted | 2026-07-21 |
+| DEC-016 | Expose provisional map coordinates and confirm Pastrina spelling | Accepted | 2026-07-21 |
+| DEC-017 | Use a focused React dashboard stack with Leaflet | Accepted | 2026-07-22 |
 
 ## Individual decisions
 
@@ -470,6 +473,142 @@ does not select a SQLite access layer or implement schema/migrations.
 [`../packages/contracts/src/forecast.ts`](../packages/contracts/src/forecast.ts),
 [`../apps/api/src/modules/sites/in-memory-site.repository.ts`](../apps/api/src/modules/sites/in-memory-site.repository.ts).
 
+### DEC-015 — Add dashboard-specific forecast read models
+
+**Status:** Accepted
+
+**Date:** 2026-07-21
+
+**Context:** The approved dashboard needs one selected-location overview,
+several default location cards, and five compact date cards. Fetching the
+detailed forecast once per component would duplicate data and couple UI layout
+to storage queries. The date strip no longer needs arrows or historical
+pagination.
+
+**Decision:** Keep the detailed `GET /api/v1/forecasts` lookup for the later
+location/date page. Add `GET /api/v1/forecasts/summaries` with one date and one
+CSV list of one through seven unique site slugs, returning one item per site in
+numeric-ID order. Add `GET /api/v1/forecasts/days` with only a site slug,
+returning exactly the five Europe/Sofia calendar dates centered on today and
+only the 100+ km metric per slot. Do not add cursor, offset, limit, anchor, or
+direction fields to the dashboard date-preview contract.
+
+The React dashboard will own these requests at route level: fetch sites once,
+deduplicate the selected/default summary slugs into one request, index results
+by slug, and make one separate days request for the selected site. Cards receive
+data as props and do not issue their own requests.
+
+**Rationale:** These shapes match the information density and interactions of
+the approved dashboard while keeping network work bounded and storage details
+out of React components. Fixed calendar slots make missing dates visible
+without pagination state.
+
+**Alternatives considered:** One detailed request per card was rejected because
+it over-fetches top drivers and repeats HTTP work. A monolithic dashboard
+endpoint was rejected because site metadata, multi-site summaries, and the
+selected-site date strip have different cache and refresh triggers. Cursor- or
+offset-based date pagination was removed after client review.
+
+**Consequences:** Summary input is strict and duplicate-free; output order is
+ID-based rather than request-based. Missing detailed forecasts return `404`,
+missing summary records remain `200` items, and missing day records remain
+`200` metrics in their fixed slots. The mock snapshot's startup-date limitation
+must stay documented until persistence replaces it.
+
+**Related files:** [`architecture.md`](architecture.md),
+[`../apps/api/README.md`](../apps/api/README.md),
+[`../packages/contracts/src/dashboard-forecasts.ts`](../packages/contracts/src/dashboard-forecasts.ts).
+
+### DEC-016 — Expose provisional map coordinates and confirm Pastrina spelling
+
+**Status:** Accepted
+
+**Date:** 2026-07-21
+
+**Context:** T-004 needs all seven locations selectable from the dashboard map
+before T-009 performs field-grade coordinate and catchment validation. The
+earlier `Pastrona` label was confirmed to be misspelled.
+
+**Decision:** Add latitude and longitude directly to each site response, retain
+the existing numeric IDs, sort the catalog by `id ASC`, and do not add a
+`dashboardOrder` field. Rename site ID 6 to `Pastrina` with slug `pastrina`.
+Use the agreed provisional coordinates only for initial map placement.
+
+**Rationale:** Coordinates are domain metadata required by any map client,
+while a dashboard-specific ordering field would encode current presentation in
+the site model. Keeping ID 6 avoids unnecessary identity churn during the
+spelling correction.
+
+**Alternatives considered:** Hard-coding map coordinates in React and adding a
+separate dashboard order were rejected because both duplicate or leak domain
+metadata into presentation. Waiting for T-009 would block the initial selector.
+
+**Consequences:** The site contract now requires bounded geographic
+coordinates. T-009 must still verify exact points, aliases, and radii before
+ingestion or geographic matching treats them as authoritative.
+
+**Related files:** [`project-brief.md`](project-brief.md),
+[`../packages/contracts/src/sites.ts`](../packages/contracts/src/sites.ts),
+[`../apps/api/src/modules/sites/in-memory-site.repository.ts`](../apps/api/src/modules/sites/in-memory-site.repository.ts).
+
+### DEC-017 — Use a focused React dashboard stack with Leaflet
+
+**Status:** Accepted
+
+**Date:** 2026-07-22
+
+**Context:** T-003-T-005 need a shareable selected site/date, validated API
+data, a bespoke responsive visual system, and a real map with zoom, pan,
+labeled pins, and location selection. The dashboard has only two canonical
+selection values and three bounded server reads, so a general-purpose client
+state store or component framework would add more concepts than the current
+scope requires.
+
+**Decision:** Keep `site` and `date` in React Router search parameters and use
+TanStack Query for server state. Use native `fetch` and validate every
+successful response with the Zod schemas exported by
+`@paragliding-forecasts/contracts`. Keep transient UI state local rather than
+creating a Redux, Zustand, or custom global Context store.
+
+Style the application with SCSS Modules, Sass `@use`, and one CSS-custom-
+property theme. Use the self-hosted Inter family throughout the MVP. Build the
+interactive location selector with Leaflet through React Leaflet. Use
+OpenStreetMap Standard raster tiles only for the low-volume local MVP, keep the
+tile source and attribution centralized/configurable, follow the tile usage
+policy, and provide an accessible HTML location selector and tile-failure
+fallback.
+
+**Rationale:** This separates shareable browser navigation, cached server data,
+and transient presentation state without duplicating sources of truth. SCSS
+Modules support the supplied custom design while retaining component scope and
+reusable theme tokens. Leaflet provides the required map interactions and
+selectable named markers without Google Maps account, billing, or provider
+lock-in.
+
+**Alternatives considered:** Raw `useEffect`/`useState` fetching was not chosen
+because it would require custom cancellation, stale-response, cache, retry, and
+error logic. Redux, Zustand, and a custom dashboard Context were not chosen
+because the URL and TanStack Query already own the relevant state. Tailwind and
+Bootstrap were not chosen because the supplied visual language is small and
+bespoke; both would add a second styling vocabulary, and Bootstrap would also
+require substantial visual overrides. Google Maps was not chosen because it
+adds billing/account and vendor coupling. A hand-built SVG map was rejected
+because it would not provide a real navigable basemap. MapLibre remains a
+future option if vector maps become a concrete requirement.
+
+**Consequences:** Web dependencies belong to `apps/web` and must be version-
+locked through the root npm lockfile. Route-level query ownership follows
+DEC-015; presentational cards do not fetch. URL normalization must distinguish
+history `replace` from user-navigation `push`. The browser must never duplicate
+shared response schemas. Public OSM tiles require network access, visible
+attribution, policy compliance, and have no availability guarantee. T-008 still
+owns selection of browser-test tooling, and T-009 still owns authoritative site
+coordinates.
+
+**Related files:** [`handoff.md`](handoff.md),
+[`../apps/web/README.md`](../apps/web/README.md),
+[`architecture.md`](architecture.md), [`../README.md`](../README.md).
+
 ## Open decisions
 
 | Question | Options / constraints | Resolve by |
@@ -477,7 +616,7 @@ does not select a SQLite access layer or implement schema/migrations.
 | Which SQLite access layer and migration approach should be used? | Direct driver, query builder, or ORM are possible; keep persistence behind repositories and do not add storage solely for a health endpoint. | The first persistence/schema ticket, expected by T-012/T-018. |
 | Which task owns the persisted prediction schema and SQLite forecast adapter? | The backlog has flight and weather schema tasks but no explicit owner for storing T-022-T-024 outputs and replacing the T-002 mock adapter. Public units/status/provenance must be mapped deliberately. | Backlog planning before real predictions are connected to the API. |
 | Which task owns the underlying forecast-input panel and high/medium/low signal semantics? | Both appear in the project brief, but T-003-T-007 cover the initial screen/selectors/cards/status and T-025 covers confidence/top drivers only. | Backlog planning before claiming the full dashboard requirement. |
-| What are the final coordinates, aliases, and catchment radii for each site? | Pastrona and the Dobrich regional model need particular confirmation. | T-009. |
+| What are the final coordinates, aliases, and catchment radii for each site? | Current map points are provisional; Pastrina and the Dobrich regional model need particular confirmation. | T-009. |
 | What access methods, permissions, attribution, caching, and rate limits apply to flight sources? | XCContest and SkyNomad must be researched without assuming scraping permission. | T-010 and T-011. |
 | Which historical forecast/archive or reanalysis sources will be used? | Exact archived forecasts are preferred; reanalysis is the documented fallback. | T-016, with units refined in T-017. |
 | Which browser test tool should be adopted? | Must support the local dashboard smoke test and avoid unneeded test infrastructure before the UI exists. | T-008. |

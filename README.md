@@ -13,23 +13,28 @@ result as an inspectable daily dashboard.
 ## Project status
 
 - Delivery phase: **Takt 1**
-- Current ticket: **T-002 - Create local server skeleton** (`Review`)
-- Implemented: a runnable Node.js/Express/TypeScript API, shared runtime
-  contracts, structured logging and errors, seven-site catalog, and
-  deterministic per-site mock forecast values
-- Not implemented: the React dashboard, SQLite schema or access layer, data
-  ingestion, real forecasts, models, and alerts
+- Current tickets: **T-003-T-005 - Dashboard, site selector, and date selector**
+  (`In Progress`, pending manual browser/visual review)
+- Implemented: runnable React/Vite and Node.js/Express workspaces, shared runtime
+  contracts, structured logging and errors, a map-ready seven-site catalog,
+  deterministic date-aware mock forecasts, dashboard summary/day-preview read
+  endpoints, canonical URL selection, forecast overview/comparison cards, an
+  interactive Leaflet site selector, a fixed five-day selector, and scoped
+  accessible request states
+- Not implemented: the detailed forecast view, Takt 1 browser smoke automation,
+  SQLite schema or access layer, data ingestion, real forecasts, models, and
+  alerts
 
-Mock responses are deliberately identified as `mock`; they are development
-fixtures for the upcoming dashboard, not forecasts or flying advice.
+Displayed mock responses are deliberately identified as `mock`; they are
+development fixtures, not forecasts or flying advice.
 
-## Planned MVP
+## Current dashboard
 
-The first dashboard will let a user choose a forecast date and one of the
-initial Bulgarian areas: Sofia - Vitosha (Kominite), Zlatitsa, Sopot, Nevsha,
-Shumen, Pastrona, or the Dobrich region. It will show cloudbase, chances for
-100+ km, 200+ km, and 300+ km flights, and overdevelopment risk. Every value
-must be labelled as `mock`, `manual`, `baseline`, `real`, or `missing`.
+The dashboard lets a user choose a forecast date and one of the initial
+Bulgarian areas: Sofia - Vitosha (Kominite), Zlatitsa, Sopot, Nevsha, Shumen,
+Pastrina, or the Dobrich region. It shows cloudbase, chances for 100+ km,
+200+ km, and 300+ km flights, and overdevelopment risk. Every value is labelled
+as `mock`, `manual`, `baseline`, `real`, or `missing`.
 
 ## Repository layout
 
@@ -57,8 +62,8 @@ test notes in its README. Cross-project information belongs here or in `docs/`.
 
 | Area | Choice | Current state |
 | --- | --- | --- |
-| Web | React + Vite + TypeScript | Planned from T-003 |
-| API | Node.js + Express + TypeScript | Runnable in T-002 |
+| Web | React + Vite + TypeScript, Router, TanStack Query, SCSS Modules, and Leaflet | Dashboard implemented; manual browser/visual review pending |
+| API | Node.js + Express + TypeScript | Runnable with dashboard read endpoints |
 | Shared contracts | TypeScript + Zod | Runtime schemas and inferred types implemented |
 | Data and ML | Python managed by `uv` | Project boundary only |
 | MVP storage | SQLite | Direction accepted; schema and access layer deferred |
@@ -107,8 +112,18 @@ The default address is `http://127.0.0.1:3000`. Available endpoints are:
 ```text
 GET /health
 GET /api/v1/sites
-GET /api/v1/forecasts?siteSlug=sopot&date=2026-07-18
+GET /api/v1/forecasts?siteSlug=sopot&date=YYYY-MM-DD
+GET /api/v1/forecasts/summaries?date=YYYY-MM-DD&siteSlugs=sopot,zlatitsa
+GET /api/v1/forecasts/days?siteSlug=sopot
 ```
+
+The summary route supplies one or several dashboard cards for a selected date.
+The days route always supplies the five Sofia-calendar slots from today minus
+two days through today plus two days; it has no pagination or date-navigation
+parameters. During mock development, use one of its returned `forecastDate`
+values for an available detailed/summary example. See
+[`apps/api/README.md`](apps/api/README.md) for the exact missing-data and
+mock-snapshot behavior.
 
 Build and run the compiled server with:
 
@@ -119,33 +134,48 @@ npm.cmd run start:api
 See [`apps/api/README.md`](apps/api/README.md) for request, configuration,
 error, and data limitations.
 
+## Run web development
+
+Start the API and web development servers together:
+
+```powershell
+npm.cmd run dev
+```
+
+The dashboard origin is `http://localhost:5173` by default. To run only the
+React/Vite workspace, use `npm.cmd run dev:web`; keep the API running at the
+configured `VITE_API_BASE_URL` to load dashboard data.
+
 ## Commands
 
 | Command | Purpose |
 | --- | --- |
+| `npm run dev` | Supervise the API and web development servers together |
 | `npm run dev:api` | Build shared contracts and start the API in watch mode |
+| `npm run dev:web` | Start Vite on the configured strict web port |
 | `npm run start:api` | Build contracts/API and start compiled JavaScript |
-| `npm run build` | Build shared contracts, then the API |
-| `npm run typecheck` | Type-check contracts and API |
-| `npm run lint` | Build shared contract declarations, then lint TypeScript sources and tests |
-| `npm run format:check` | Check maintained TypeScript/config formatting |
-| `npm test` | Run contract and API unit/integration/smoke tests |
-| `npm run test:coverage` | Run the same suites with V8 coverage and enforced thresholds |
+| `npm run build` | Build contracts, API, and the production web bundle |
+| `npm run typecheck` | Type-check contracts, API, and web workspaces |
+| `npm run lint` | Build shared contract declarations, then lint TypeScript/TSX sources and tests |
+| `npm run format:check` | Check maintained TypeScript, TSX, HTML, SCSS, and config formatting |
+| `npm test` | Run contract, API, and web unit/integration/component tests |
+| `npm run test:coverage` | Run all three suites with V8 coverage and enforced thresholds |
 | `npm run repo:check` | Validate repository structure and runnable workspace metadata |
 | `uv sync --project services/ml` | Sync the Python ML environment |
 
-`npm run dev:web` and the combined `npm run dev` remain reserved for T-003;
-they are not reported as runnable yet.
-
 ## Configuration and data
 
-Copy `.env.example` to `.env` for local overrides. The API currently consumes
-only `NODE_ENV`, `LOG_LEVEL`, `API_HOST`, `API_PORT`, `CORS_ORIGIN`, and
-`FORECAST_DATA_MODE=mock`. It starts with safe defaults when `.env` is absent.
+Copy `.env.example` to `.env` for local overrides. Vite consumes `WEB_PORT` and
+the browser-exposed `VITE_API_BASE_URL`; the latter is validated as an absolute
+HTTP(S) URL before React renders. If `WEB_PORT` changes, `CORS_ORIGIN` must use
+the same dashboard origin. The API consumes `NODE_ENV`, `LOG_LEVEL`, `API_HOST`,
+`API_PORT`, `CORS_ORIGIN`, and `FORECAST_DATA_MODE=mock`.
+
+The API starts with safe defaults when `.env` is absent.
 The logger defaults to `info`; `.env.example` opts local development into
 `debug` explicitly.
 `DATABASE_URL` and `MODEL_ARTIFACT_DIR` are reserved for future persistence and
-model work and are not read by T-002.
+model work and are not read by the current API.
 
 Never commit `.env`, credentials, private pilot data, large weather files,
 trained model artifacts, generated output, or local databases. See
@@ -159,6 +189,7 @@ trained model artifacts, generated output, or local databases. See
 - [`docs/tasks.md`](docs/tasks.md) - task backlog and status
 - [`docs/handoff.md`](docs/handoff.md) - current operational snapshot
 - [`apps/api/README.md`](apps/api/README.md) - API operation and design
+- [`apps/web/README.md`](apps/web/README.md) - dashboard behavior, setup, tests, and limitations
 - [`packages/contracts/README.md`](packages/contracts/README.md) - public payload rules
 - [`services/ml/README.md`](services/ml/README.md) - Python/ML boundary
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) - branch, commit, and review conventions

@@ -1,0 +1,87 @@
+@use "../../../styles/mixins";
+
+.field {
+  display: grid;
+  width: 35vw;
+  max-width: 100%;
+  min-width: 0;
+  min-height: var(--location-selector-height);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+
+  &::after {
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-right: clamp(0.75rem, 1vw, 1rem);
+    transform: translateY(-0.15rem) rotate(45deg);
+    border-right: 2px solid var(--color-heading);
+    border-bottom: 2px solid var(--color-heading);
+    content: "";
+    pointer-events: none;
+  }
+
+  label {
+    display: grid;
+    min-width: var(--location-selector-height);
+    min-height: var(--location-selector-height);
+    place-items: center;
+    color: var(--color-primary);
+  }
+
+  select {
+    appearance: none;
+    width: 100%;
+    min-width: 0;
+    min-height: var(--location-selector-height);
+    padding: 0 clamp(0.5rem, 0.7vw, 0.875rem) 0 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--color-heading);
+    font-size: clamp(0.8rem, 0.85vw, 0.95rem);
+    font-weight: 600;
+
+    &:focus-visible {
+      @include mixins.focus-ring;
+
+      outline-offset: -3px;
+    }
+  }
+}
+
+@media (min-width: 70rem) {
+  .field {
+    width: 16vw;
+  }
+}
+
+@media (max-width: 42rem) {
+  .field {
+    width: 100%;
+  }
+}
+
+.pin {
+  position: relative;
+  width: 0.8rem;
+  height: 0.8rem;
+  transform: rotate(-45deg);
+  border-radius: 50% 50% 50% 0;
+  background: currentColor;
+
+  &::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0.28rem;
+    height: 0.28rem;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: var(--color-surface);
+    content: "";
+  }
+}

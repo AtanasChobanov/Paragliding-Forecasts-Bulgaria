@@ -44,23 +44,25 @@ workspaces.
 
 ## Command contract
 
-T-002 implements these root commands:
+The runnable workspaces implement these root commands:
 
 | Command | Contract |
 | --- | --- |
+| `npm run dev` | Supervise the API and Vite watchers; stop the sibling when either exits |
 | `npm run dev:api` | Build contracts and start the TypeScript API watcher |
+| `npm run dev:web` | Start Vite on the configured strict port |
 | `npm run start:api` | Build contracts/API and start compiled JavaScript |
-| `npm run build` | Emit ESM plus declarations for contracts, then API runtime ESM |
-| `npm run typecheck` | Strictly type-check contracts/API without emitting |
-| `npm run lint` | Lint TypeScript source and tests |
-| `npm run format:check` | Verify maintained TypeScript/config formatting |
-| `npm test` | Run contract and API unit/integration/smoke suites |
-| `npm run test:coverage` | Run V8 coverage for contracts/API and enforce thresholds |
+| `npm run build` | Build contracts/API and emit the production Vite bundle |
+| `npm run typecheck` | Strictly type-check contracts/API/web without emitting |
+| `npm run lint` | Lint TypeScript and TSX source/tests |
+| `npm run format:check` | Verify maintained TS/TSX/HTML/SCSS/config formatting |
+| `npm test` | Run contract, API, and web unit/integration/component suites |
+| `npm run test:coverage` | Run V8 coverage for contracts/API/web and enforce thresholds |
 | `npm run repo:check` | Validate repository and runnable workspace structure |
 
-T-003 must add `dev:web` and the combined `dev` command. Each executable
-command must perform real work, fail when its child check fails, and be tested
-and documented in the change that introduces it.
+The root test commands include all three implemented TypeScript workspaces.
+Each executable command must perform real work and fail when its child check
+fails.
 
 ## Environment variables
 

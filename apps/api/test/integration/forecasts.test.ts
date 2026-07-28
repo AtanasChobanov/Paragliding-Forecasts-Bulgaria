@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { FIXED_NOW, createTestApp } from "../support/create-test-app.js";
 
 describe("GET /api/v1/forecasts", () => {
-  it("returns a deterministic contract-valid mock forecast", async () => {
+  it("returns an available deterministic detailed forecast", async () => {
     const response = await request(createTestApp())
       .get("/api/v1/forecasts")
       .query({ siteSlug: "sopot", date: "2026-07-18" })
@@ -15,18 +15,32 @@ describe("GET /api/v1/forecasts", () => {
     expect(forecast).toMatchObject({ siteId: 3, siteSlug: "sopot" });
     expect(forecast.generatedAt).toBe(FIXED_NOW.toISOString());
     expect(forecast.provenance).toEqual({
-      source: "t-002-mock-provider",
-      version: "mock-v1",
+      source: "t-003-t-005-mock-provider",
+      version: "mock-v2",
     });
     expect(forecast.outputs).toMatchObject({
-      cloudbaseMslM: { value: 2_400, dataStatus: "mock" },
-      chance100KmPct: { value: 65, dataStatus: "mock" },
-      chance200KmPct: { value: 35, dataStatus: "mock" },
-      chance300KmPct: { value: 12, dataStatus: "mock" },
+      cloudbaseMslM: { value: 2_500, dataStatus: "mock" },
+      chance100KmPct: { value: 73, dataStatus: "mock" },
+      chance200KmPct: { value: 39, dataStatus: "mock" },
+      chance300KmPct: { value: 13, dataStatus: "mock" },
       overdevelopmentRisk: { value: "medium", dataStatus: "mock" },
     });
     expect(forecast.topDrivers.length).toBeGreaterThan(0);
     expect(forecast).not.toHaveProperty("qualityNotes");
+  });
+
+  it("returns FORECAST_NOT_FOUND outside the finite fixture window", async () => {
+    const response = await request(createTestApp())
+      .get("/api/v1/forecasts")
+      .query({ siteSlug: "sopot", date: "2026-07-20" })
+      .expect(404);
+    const problem = problemDetailsSchema.parse(response.body);
+
+    expect(problem).toMatchObject({
+      status: 404,
+      code: "FORECAST_NOT_FOUND",
+      detail: "No forecast exists for site 'sopot' on 2026-07-20.",
+    });
   });
 
   it.each([

@@ -10,10 +10,12 @@ export default tseslint.config(
   ...tseslint.configs.strictTypeChecked,
   ...tseslint.configs.stylisticTypeChecked,
   {
-    files: ["apps/api/**/*.ts", "packages/contracts/**/*.ts"],
+    files: ["apps/api/**/*.ts", "apps/web/**/*.{ts,tsx}", "packages/contracts/**/*.ts"],
     languageOptions: {
       parserOptions: {
-        projectService: true,
+        projectService: {
+          allowDefaultProject: ["apps/web/vite.config.ts", "apps/web/vitest.config.ts"],
+        },
         tsconfigRootDir: import.meta.dirname,
       },
     },

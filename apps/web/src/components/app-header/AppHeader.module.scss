@@ -1,0 +1,107 @@
+@use "../../styles/mixins";
+
+.header {
+  display: flex;
+  width: 100%;
+  min-height: clamp(3.75rem, 8vh, 4.875rem);
+  flex: 0 0 auto;
+  align-items: center;
+  gap: clamp(0.75rem, 1.5vw, 1.5rem);
+  padding: clamp(0.5rem, 1.2vh, 0.75rem) 2.5vw;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--color-heading);
+  font-size: clamp(1.3rem, 1.8vw, 1.75rem);
+  font-weight: 600;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.mark {
+  width: clamp(2.4rem, 3vw, 3rem);
+  height: clamp(2.4rem, 3vw, 3rem);
+  flex: 0 0 auto;
+  color: var(--color-primary);
+
+  path[stroke] {
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.75;
+  }
+}
+
+.divider {
+  width: 1px;
+  height: 2rem;
+  background: var(--color-border);
+}
+
+.currentSection {
+  position: relative;
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-primary);
+  font-size: 1.05rem;
+  font-weight: 600;
+
+  &::after {
+    position: absolute;
+    right: 0;
+    bottom: -0.8rem;
+    left: 0;
+    height: 0.25rem;
+    border-radius: var(--radius-pill);
+    background: var(--color-primary);
+    content: "";
+  }
+}
+
+.bell {
+  width: 1.75rem;
+  height: 1.75rem;
+  margin-left: auto;
+  fill: none;
+  stroke: var(--color-heading);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.65;
+}
+
+@include mixins.compact {
+  .header {
+    min-height: auto;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    padding: var(--space-3);
+  }
+
+  .brand {
+    font-size: 1.3rem;
+  }
+
+  .mark {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  .divider {
+    height: 1.75rem;
+  }
+
+  .currentSection::after {
+    bottom: -0.7rem;
+  }
+
+  .bell {
+    width: 1.5rem;
+    height: 1.5rem;
+    margin-left: auto;
+  }
+}

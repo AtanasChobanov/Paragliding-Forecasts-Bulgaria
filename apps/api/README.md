@@ -2,10 +2,11 @@
 
 ## Status
 
-T-002 provides a runnable Node.js 24, Express 5, and strict TypeScript API. It
-serves health, site-catalog, and deterministic per-site mock values for the next
-dashboard tickets. Response timestamps reflect request time. The API does not
-connect to SQLite or any weather/model source yet.
+The API foundation for T-003-T-005 is implemented on top of the T-002 local
+server. It exposes a map-ready site catalog, detailed per-site forecasts, a
+batched dashboard summary read model, and a fixed five-day preview for the
+selected site. All current forecast values are deterministic `mock` fixtures;
+there is no SQLite or weather/model integration yet.
 
 ## Run locally
 
@@ -24,33 +25,126 @@ npm.cmd run start:api
 
 ## Endpoints
 
-| Method and path | Result |
+| Method and path | Dashboard responsibility |
 | --- | --- |
 | `GET /health` | Service status, version, and current timestamp |
-| `GET /api/v1/sites` | Numeric IDs, unique public slugs, and display names for the seven initial areas |
-| `GET /api/v1/forecasts?siteSlug=sopot&date=2026-07-18` | Contract-validated forecast selected by slug with deterministic per-site mock values |
+| `GET /api/v1/sites` | All seven location-selector/map options, ordered by numeric ID |
+| `GET /api/v1/forecasts?siteSlug=sopot&date=YYYY-MM-DD` | Detailed forecast payload retained for the later detailed page |
+| `GET /api/v1/forecasts/summaries?date=YYYY-MM-DD&siteSlugs=sopot,zlatitsa` | One batched set of dashboard overview cards for a date |
+| `GET /api/v1/forecasts/days?siteSlug=sopot` | Exactly five 100+ km preview slots centered on Sofia's current date |
 
-The forecast query requires one syntactically valid `siteSlug` and one real
-calendar date in `YYYY-MM-DD` format. A valid but unknown slug returns `404`;
-malformed or missing query data returns `400`. Site IDs are positive safe
-integers reserved for internal identity and future persistence relationships;
-slugs are the stable human-readable API lookup key.
+All request and response payloads are validated with the shared strict Zod
+contracts. Malformed, missing, repeated, or unsupported query values return
+`400 VALIDATION_ERROR`. Errors use `application/problem+json` and responses
+carry `X-Request-Id` for correlation.
 
-Every forecast output is a value/status object. Present values include
-`dataStatus` and confidence; units are explicit in field names. Forecast-level
-provenance identifies the source/version, and missing values are represented
-explicitly rather than coerced to zero. The T-002 repository always returns
-`mock` values; `dataStatus` and `confidence.note` identify the payload as
-non-operational development data.
+### Site catalog
 
-The shared contract defines one canonical five-state `dataStatusSchema` and
-derives its non-missing subset for metrics that contain a value. A `missing`
-metric cannot contain a numeric/category value or confidence and must provide a
-reason; the current mock adapter only emits the non-missing `mock` branch.
+Each site has `{ id, slug, name, latitude, longitude }`. There is deliberately
+no `dashboardOrder`: the response is always sorted by `id ASC`. The current
+coordinates are provisional map positions and remain subject to T-009 field
+validation. The corrected location name is `Pastrina`, with slug `pastrina`
+and the existing numeric ID `6`.
 
-Errors use `application/problem+json` and a stable problem-details contract.
-Responses include an `X-Request-Id`, accepting a safe incoming value or
-generating one for correlation.
+### Detailed forecast
+
+`/api/v1/forecasts` requires one valid `siteSlug` and one real `YYYY-MM-DD`
+calendar date. It returns all five core outputs plus provenance and top drivers
+when the record exists. An unknown site returns `404 SITE_NOT_FOUND`; a known
+site/date with no record returns `404 FORECAST_NOT_FOUND`.
+
+This route remains the data source for the later detailed location/date page.
+The dashboard should not fetch it once per card. For an available mock example,
+first call `/api/v1/forecasts/days?siteSlug=sopot` and use one of the returned
+`forecastDate` values; the finite fixture window moves with API startup date.
+
+### Dashboard summaries
+
+`/api/v1/forecasts/summaries` accepts:
+
+- `date`: one real `YYYY-MM-DD` calendar date;
+- `siteSlugs`: one comma-separated string containing one through seven unique
+  site slugs.
+
+Empty segments, duplicate slugs, repeated `siteSlugs` query keys, more than
+seven slugs, and unknown query fields are rejected. Every site is resolved
+before forecast storage is queried; one valid but unknown slug therefore
+returns `404 SITE_NOT_FOUND` for the request.
+
+Successful summaries are sorted by `siteId ASC`, regardless of request order.
+Each requested site produces exactly one item:
+
+- `availability: "available"` includes identity, date, generation time,
+  provenance, and the five overview metrics;
+- `availability: "missing"` includes identity, date, and an explicit reason.
+
+A missing forecast does not fail the batch. The route returns `200` so the
+dashboard can render available and unavailable cards together. Metric-level
+`dataStatus` and confidence remain the source of truth; there is no duplicate
+top-level data-status field.
+
+### Five-day selected-site preview
+
+`/api/v1/forecasts/days` accepts only `siteSlug`. It intentionally has no date,
+anchor, cursor, direction, limit, offset, or pagination parameters.
+
+The response declares `timeZone: "Europe/Sofia"`, identifies `todayDate`, and
+always contains these five ordered calendar slots:
+
+```text
+today - 2, today - 1, today, today + 1, today + 2
+```
+
+Each slot contains only `forecastDate` and the existing `chance100KmPct` metric
+union. The metric preserves the numeric percentage,
+`mock`/`manual`/`baseline`/`real` status, and confidence when available. If a
+date has no prediction, the slot stays in place with a `missing` metric rather
+than disappearing, shifting, or becoming zero. A known site therefore receives
+`200` with five slots even when some forecast records are absent.
+
+Calendar arithmetic is date-only and DST-safe. The service derives the current
+date in `Europe/Sofia`, then shifts calendar dates through UTC construction;
+it does not add fixed 24-hour timestamp durations.
+
+## React data-loading boundary
+
+The initial dashboard should coordinate requests at the route/page level and
+pass data to presentational components. Individual cards should not perform
+their own independent fetches.
+
+1. Fetch `/api/v1/sites` once for the location selector and map pins.
+2. Keep selected site slug and selected date in dashboard state.
+3. Form one deduplicated slug set from the selected overview site plus the
+   default Other Locations cards, then make one summaries request.
+4. Index returned summaries by `siteSlug`; responses are ID-ordered, not
+   request-ordered. Reuse the same item if the selected site is also one of the
+   default cards.
+5. Fetch `/api/v1/forecasts/days` when the selected site changes. The date
+   cards use only its five returned slots and do not paginate.
+6. The detailed-forecast button navigates with the selected slug/date; the
+   destination page later owns its detailed forecast request.
+
+This produces two forecast requests for the dashboard state—one batched
+summary request and one five-day preview request—rather than one request per UI
+component.
+
+## Deliberate missing-data semantics
+
+| Read model | Missing forecast behavior |
+| --- | --- |
+| Detailed forecast | `404 FORECAST_NOT_FOUND` |
+| Batched summaries | `200` with an `availability: "missing"` item |
+| Five-day preview | `200` with a fixed slot whose metric is `missing` |
+
+## Mock snapshot limitation
+
+The in-memory mock repository creates 35 forecast records when the API starts:
+seven sites multiplied by the Sofia startup date minus two through plus two.
+Its values and `generatedAt` timestamp remain stable for that process. Because
+the five-day endpoint derives Sofia's current date per request, a development
+server kept running across Sofia midnight can outlive that synthetic snapshot.
+Restart the API after a local-date rollover. This limitation disappears when a
+date-aware persisted prediction repository replaces the mock adapter.
 
 ## Internal structure
 
@@ -68,44 +162,30 @@ apps/api/src/
 `-- server.ts                # TCP listen/close lifecycle
 ```
 
-The structure is feature-oriented with explicit layers inside features. This
-keeps related code together as the project grows while preserving transport,
-business, and persistence boundaries. Dependencies are wired manually in
-`main.ts`; a dependency-injection container would add complexity without a
-current lifecycle or binding requirement.
-
-`app.ts` never binds a port, so integration tests can exercise the complete
-HTTP pipeline in memory. Repository interfaces let later SQLite adapters
-replace the current in-memory/mock adapters without changing controllers.
+Controllers validate transport data, the service orchestrates site lookup,
+clock, and repository reads, and stateless mapper functions translate internal
+predictions into browser-facing response models. The repository port owns
+single, batched, and inclusive-range prediction reads. Services construct
+response order independently of repository result order. Dependencies remain
+manually wired in `main.ts`; no DI container or storage library is needed for
+the current scope.
 
 ## Configuration
 
-The API loads the root `.env` when present, validates only values it consumes,
-and otherwise uses safe local defaults.
+The API loads the root `.env` when present and validates only values it uses.
 
 | Variable | Default | Constraint |
 | --- | --- | --- |
 | `NODE_ENV` | `development` | `development`, `test`, or `production` |
-| `LOG_LEVEL` | `info` | Pino level or `silent`; `.env.example` explicitly uses local `debug` |
+| `LOG_LEVEL` | `info` | Pino level or `silent`; `.env.example` uses local `debug` |
 | `API_HOST` | `127.0.0.1` | Non-empty bind host |
 | `API_PORT` | `3000` | Integer from 1 through 65535 |
-| `CORS_ORIGIN` | `http://localhost:5173` | Exact HTTP(S) origin, without path or trailing slash |
-| `FORECAST_DATA_MODE` | `mock` | T-002 accepts only `mock` |
+| `CORS_ORIGIN` | `http://localhost:5173` | Exact HTTP(S) origin without path/trailing slash |
+| `FORECAST_DATA_MODE` | `mock` | The current API accepts only `mock` |
 
-`DATABASE_URL` and `MODEL_ARTIFACT_DIR` remain in `.env.example` as future
-repository/model settings. T-002 deliberately does not validate or consume
-them because it does not implement persistence.
-
-CORS allows GET/OPTIONS from the configured dashboard origin and non-browser
-requests without an `Origin` header. Credentials are disabled.
-
-## Logging and shutdown
-
-Pino emits structured logs; `pino-http` adds request/response records and
-correlation IDs. Authorization, cookie, and set-cookie fields are redacted.
-Development output is pretty-printed; production remains JSON. The process
-handles `SIGINT` and `SIGTERM`, stops accepting connections, and force-closes
-remaining connections after the grace period.
+`DATABASE_URL` and `MODEL_ARTIFACT_DIR` remain reserved and unused. CORS allows
+GET/OPTIONS from the configured dashboard origin and non-browser requests
+without an `Origin` header; credentials are disabled.
 
 ## Commands and tests
 
@@ -119,38 +199,19 @@ npm.cmd run test:coverage --workspace @paragliding-forecasts/api
 npm.cmd run test:watch --workspace @paragliding-forecasts/api
 ```
 
-The suite includes focused unit tests, in-memory HTTP integration tests, shared
-response-contract checks, a real `pino-http` credential-redaction test, and an
-ephemeral-port server smoke test. V8 coverage includes every `src/**/*.ts` file
-and enforces minimum global thresholds of 70% statements/lines/functions and
-75% branches. Database component tests and end-to-end browser tests are deferred
-until their owning persistence and dashboard tickets exist.
+Tests cover shared contracts, Sofia timezone/calendar boundaries, repository
+batch/range reads, missing records and slots, request ordering, strict query
+validation through Express, globally handled errors, logging, and real server
+lifecycle. Database component tests and browser tests remain deferred to their
+own implementation tickets.
 
-## Storage compatibility and limits
+## Storage and safety boundaries
 
-The mock repository returns an internal `ForecastPrediction` domain model
-aligned with the initial `predictions` proposal in `docs/project-brief.md`:
-numeric site identity, date, generation time, cloudbase, three probability
-bands, overdevelopment risk, confidence, and top drivers. It is deliberately
-not a database row or the public HTTP DTO. The service mapper adds the public
-site slug and explicit units/status structure required at the browser boundary.
+No database, migration, ORM/query builder, live weather source, or trained
+model is implemented. A future adapter must preserve explicit units, missing
+states, status, confidence, provenance, and source/model version when replacing
+the mock repository.
 
-No database, migrations, ORM/query builder, or persistence adapter is part of
-T-002. Before a real prediction schema is implemented, its owning ticket must
-make probability scale, cloudbase reference (`MSL` versus `AGL`), per-output
-missing/status semantics, provenance, and source/model version explicit rather
-than inferring them from the current draft table. A future `sites` table should
-use the numeric ID as its primary key and enforce a unique slug; forecast lookup
-continues to use the slug at the HTTP boundary.
-
-The current internal mock prediction requires every output and its repository
-port always returns a prediction. A future real adapter must refine that
-boundary for a missing site/date record and mixed per-output missing states;
-the public contract already represents missing metrics explicitly.
-
-## Responsibilities
-
-The API may validate browser requests and map repository records to stable
-contracts. It must not contain React presentation logic or Python training
-logic, and it must not present current mock values as observed or operational
-forecast data.
+The API is decision-support infrastructure, not an aviation weather or safety
+service. Mock values must never be presented as observed conditions, model
+predictions, or flying guarantees.

@@ -3,13 +3,25 @@ import type { Site, SiteId, SiteSlug } from "@paragliding-forecasts/contracts";
 import type { SiteRepository } from "./site.repository.js";
 
 export const initialSiteCatalog = [
-  { id: 1, slug: "sofia-vitosha-kominite", name: "Sofia - Vitosha (Kominite)" },
-  { id: 2, slug: "zlatitsa", name: "Zlatitsa" },
-  { id: 3, slug: "sopot", name: "Sopot" },
-  { id: 4, slug: "nevsha", name: "Nevsha" },
-  { id: 5, slug: "shumen", name: "Shumen" },
-  { id: 6, slug: "pastrona", name: "Pastrona" },
-  { id: 7, slug: "dobrich-region", name: "Dobrich region" },
+  {
+    id: 1,
+    slug: "sofia-vitosha-kominite",
+    name: "Sofia - Vitosha (Kominite)",
+    latitude: 42.60222,
+    longitude: 23.28927,
+  },
+  { id: 2, slug: "zlatitsa", name: "Zlatitsa", latitude: 42.71506, longitude: 24.13749 },
+  { id: 3, slug: "sopot", name: "Sopot", latitude: 42.68776, longitude: 24.74996 },
+  { id: 4, slug: "nevsha", name: "Nevsha", latitude: 43.27155, longitude: 27.29945 },
+  { id: 5, slug: "shumen", name: "Shumen", latitude: 43.27667, longitude: 26.92917 },
+  { id: 6, slug: "pastrina", name: "Pastrina", latitude: 43.42481, longitude: 23.30355 },
+  {
+    id: 7,
+    slug: "dobrich-region",
+    name: "Dobrich region",
+    latitude: 43.56667,
+    longitude: 27.83333,
+  },
 ] as const satisfies readonly Site[];
 
 export class InMemorySiteRepository implements SiteRepository {
@@ -36,7 +48,11 @@ export class InMemorySiteRepository implements SiteRepository {
   }
 
   list(): Promise<readonly Site[]> {
-    return Promise.resolve([...this.#sitesBySlug.values()].map((site) => ({ ...site })));
+    return Promise.resolve(
+      [...this.#sitesBySlug.values()]
+        .sort((left, right) => left.id - right.id)
+        .map((site) => ({ ...site })),
+    );
   }
 
   findBySlug(siteSlug: SiteSlug): Promise<Site | undefined> {

@@ -8,17 +8,20 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build --workspace @paragliding-forecasts/api",
+    "build": "npm run build --workspace @paragliding-forecasts/api && npm run build --workspace @paragliding-forecasts/web",
+    "predev": "npm run build --workspace @paragliding-forecasts/contracts",
+    "dev": "node ./scripts/dev.mjs",
     "dev:api": "npm run dev --workspace @paragliding-forecasts/api",
-    "format": "prettier --write \"{apps/api,packages/contracts}/**/*.{ts,json}\" \"scripts/**/*.mjs\" \"eslint.config.mjs\" \"package.json\" \"tsconfig.base.json\" \".prettierrc.json\"",
-    "format:check": "prettier --check \"{apps/api,packages/contracts}/**/*.{ts,json}\" \"scripts/**/*.mjs\" \"eslint.config.mjs\" \"package.json\" \"tsconfig.base.json\" \".prettierrc.json\"",
+    "dev:web": "npm run dev --workspace @paragliding-forecasts/web",
+    "format": "prettier --write \"{apps/api,apps/web,packages/contracts}/**/*.{ts,tsx,json,scss,html}\" \"scripts/**/*.mjs\" \"eslint.config.mjs\" \"package.json\" \"tsconfig.base.json\" \".prettierrc.json\"",
+    "format:check": "prettier --check \"{apps/api,apps/web,packages/contracts}/**/*.{ts,tsx,json,scss,html}\" \"scripts/**/*.mjs\" \"eslint.config.mjs\" \"package.json\" \"tsconfig.base.json\" \".prettierrc.json\"",
     "prelint": "npm run build --workspace @paragliding-forecasts/contracts",
-    "lint": "eslint \"{apps/api,packages/contracts}/**/*.ts\"",
+    "lint": "eslint \"{apps/api,apps/web,packages/contracts}/**/*.{ts,tsx}\"",
     "repo:check": "node ./scripts/check-structure.mjs",
-    "start:api": "npm run build && npm run start --workspace @paragliding-forecasts/api",
-    "test": "npm run test --workspace @paragliding-forecasts/contracts && npm run test --workspace @paragliding-forecasts/api",
-    "test:coverage": "npm run test:coverage --workspace @paragliding-forecasts/contracts && npm run test:coverage --workspace @paragliding-forecasts/api",
-    "typecheck": "npm run typecheck --workspace @paragliding-forecasts/contracts && npm run typecheck --workspace @paragliding-forecasts/api"
+    "start:api": "npm run build --workspace @paragliding-forecasts/api && npm run start --workspace @paragliding-forecasts/api",
+    "test": "npm run test --workspace @paragliding-forecasts/contracts && npm run test --workspace @paragliding-forecasts/api && npm run test --workspace @paragliding-forecasts/web",
+    "test:coverage": "npm run test:coverage --workspace @paragliding-forecasts/contracts && npm run test:coverage --workspace @paragliding-forecasts/api && npm run test:coverage --workspace @paragliding-forecasts/web",
+    "typecheck": "npm run typecheck --workspace @paragliding-forecasts/contracts && npm run typecheck --workspace @paragliding-forecasts/api && npm run typecheck --workspace @paragliding-forecasts/web"
   },
   "engines": {
     "node": ">=24 <25",

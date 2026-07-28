@@ -8,21 +8,81 @@ describe("site catalog", () => {
     const repository = new InMemorySiteRepository();
 
     await expect(repository.list()).resolves.toEqual([
-      { id: 1, slug: "sofia-vitosha-kominite", name: "Sofia - Vitosha (Kominite)" },
-      { id: 2, slug: "zlatitsa", name: "Zlatitsa" },
-      { id: 3, slug: "sopot", name: "Sopot" },
-      { id: 4, slug: "nevsha", name: "Nevsha" },
-      { id: 5, slug: "shumen", name: "Shumen" },
-      { id: 6, slug: "pastrona", name: "Pastrona" },
-      { id: 7, slug: "dobrich-region", name: "Dobrich region" },
+      {
+        id: 1,
+        slug: "sofia-vitosha-kominite",
+        name: "Sofia - Vitosha (Kominite)",
+        latitude: 42.60222,
+        longitude: 23.28927,
+      },
+      {
+        id: 2,
+        slug: "zlatitsa",
+        name: "Zlatitsa",
+        latitude: 42.71506,
+        longitude: 24.13749,
+      },
+      {
+        id: 3,
+        slug: "sopot",
+        name: "Sopot",
+        latitude: 42.68776,
+        longitude: 24.74996,
+      },
+      {
+        id: 4,
+        slug: "nevsha",
+        name: "Nevsha",
+        latitude: 43.27155,
+        longitude: 27.29945,
+      },
+      {
+        id: 5,
+        slug: "shumen",
+        name: "Shumen",
+        latitude: 43.27667,
+        longitude: 26.92917,
+      },
+      {
+        id: 6,
+        slug: "pastrina",
+        name: "Pastrina",
+        latitude: 43.42481,
+        longitude: 23.30355,
+      },
+      {
+        id: 7,
+        slug: "dobrich-region",
+        name: "Dobrich region",
+        latitude: 43.56667,
+        longitude: 27.83333,
+      },
     ]);
+  });
+
+  it("sorts custom site catalogs by numeric identifier", async () => {
+    const repository = new InMemorySiteRepository([
+      { id: 7, slug: "last", name: "Last", latitude: 43, longitude: 27 },
+      { id: 1, slug: "first", name: "First", latitude: 42, longitude: 23 },
+      { id: 4, slug: "middle", name: "Middle", latitude: 43, longitude: 26 },
+    ]);
+
+    const sites = await repository.list();
+
+    expect(sites.map((site) => site.id)).toEqual([1, 4, 7]);
   });
 
   it("looks up a known site without exposing mutable repository state", async () => {
     const repository = new InMemorySiteRepository();
     const first = await repository.findBySlug("sopot");
 
-    expect(first).toEqual({ id: 3, slug: "sopot", name: "Sopot" });
+    expect(first).toEqual({
+      id: 3,
+      slug: "sopot",
+      name: "Sopot",
+      latitude: 42.68776,
+      longitude: 24.74996,
+    });
     if (first !== undefined) {
       first.name = "Changed outside the repository";
     }
@@ -31,6 +91,8 @@ describe("site catalog", () => {
       id: 3,
       slug: "sopot",
       name: "Sopot",
+      latitude: 42.68776,
+      longitude: 24.74996,
     });
   });
 
@@ -38,8 +100,14 @@ describe("site catalog", () => {
     expect(
       () =>
         new InMemorySiteRepository([
-          { id: 3, slug: "sopot", name: "Sopot" },
-          { id: 3, slug: "other-sopot", name: "Duplicate Sopot" },
+          { id: 3, slug: "sopot", name: "Sopot", latitude: 42, longitude: 24 },
+          {
+            id: 3,
+            slug: "other-sopot",
+            name: "Duplicate Sopot",
+            latitude: 43,
+            longitude: 25,
+          },
         ]),
     ).toThrow("Duplicate site ID: 3");
   });
@@ -48,14 +116,26 @@ describe("site catalog", () => {
     expect(
       () =>
         new InMemorySiteRepository([
-          { id: 3, slug: "sopot", name: "Sopot" },
-          { id: 8, slug: "sopot", name: "Duplicate Sopot" },
+          { id: 3, slug: "sopot", name: "Sopot", latitude: 42, longitude: 24 },
+          {
+            id: 8,
+            slug: "sopot",
+            name: "Duplicate Sopot",
+            latitude: 43,
+            longitude: 25,
+          },
         ]),
     ).toThrow("Duplicate site slug: sopot");
   });
 
   it("keeps the service dependent on the repository port", async () => {
-    const site = { id: 3, slug: "sopot", name: "Sopot" };
+    const site = {
+      id: 3,
+      slug: "sopot",
+      name: "Sopot",
+      latitude: 42.68776,
+      longitude: 24.74996,
+    };
     const list = vi.fn().mockResolvedValue([site]);
     const findBySlug = vi.fn().mockResolvedValue(site);
     const repository: SiteRepository = {
