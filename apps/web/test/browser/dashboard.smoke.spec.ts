@@ -28,9 +28,7 @@ const openDashboard = async (page: Page, request: APIRequestContext): Promise<vo
 };
 
 const expectDashboardForecast = async (page: Page): Promise<void> => {
-  await expect(page.getByLabel("Location", { exact: true })).toHaveValue(
-    "sofia-vitosha-kominite"
-  );
+  await expect(page.getByLabel("Location", { exact: true })).toHaveValue("sofia-vitosha-kominite");
 
   const dates = page.getByRole("list", { name: "Five-day forecast dates" });
   await expect(dates.getByRole("button")).toHaveCount(5);
@@ -78,9 +76,7 @@ test("opens the detailed forecast from the dashboard and returns with the select
     throw new Error("The dashboard did not resolve a canonical site and forecast date.");
   }
 
-  await page
-    .getByRole("link", { name: "View detailed forecast", exact: true })
-    .click();
+  await page.getByRole("link", { name: "View detailed forecast", exact: true }).click();
   await expect(page).toHaveURL(
     new RegExp(`/forecast\\?site=${selectedSite}&date=${selectedDate}$`, "u"),
   );

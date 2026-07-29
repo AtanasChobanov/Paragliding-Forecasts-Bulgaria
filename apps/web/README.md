@@ -257,7 +257,10 @@ enforces at least 80% statements, lines, and functions plus 75% branches across
 all maintained `src/**/*.{ts,tsx}` files, including files a test never imports.
 `test:browser` is intentionally separate because it needs a Playwright Chromium
 binary and starts the real local API and Vite processes on ports `3000` and
-`5173`; both ports must be free.
+`5173`; both ports must be free. The browser-test configuration pins its API
+host/port, web port, CORS origin, API base URL, mock data mode, and test runtime
+environment explicitly, so local `.env` overrides cannot redirect the managed
+test processes away from those readiness-checked origins.
 
 Automated coverage includes:
 

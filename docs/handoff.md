@@ -4,12 +4,12 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated | 2026-07-25 |
+| Last updated | 2026-07-29 |
 | Current Git branch | `feature/T-008-browser-smoke-test` |
 | Branch relationship | Extends `feature/T-006-T007-forecast-details-page` at `922ceef`, which extends the dashboard implementation at `e744bc5` |
-| Current tasks | T-003 through T-008 — `Review`; T-003-T-007 still await manual visual review, while T-008 has passed its Chromium smoke suite |
+| Current tasks | T-003 through T-008 — `Review`; T-003-T-007 still await manual visual review, while T-008's environment hardening and Chromium smoke suite have passed in plain PowerShell |
 | Completed scope in this branch | Dashboard/detail implementation plus Playwright Chromium smoke-test configuration, dashboard and detail smoke scenarios, commands, and documentation |
-| Expected working tree after the final documentation commit | Clean after the T-008 implementation and validation checkpoint commit |
+| Current working tree note | Contains the T-008 Prettier/env hardening changes plus unrelated untracked T-010/T-011 research reports that must remain untouched |
 
 ## Current outcome
 
@@ -37,6 +37,20 @@ Chromium and reached the dashboard API calls. After correcting the non-exact
 Chromium scenarios passed (`2 passed (8.8s)`): the dashboard forecast-card
 assertions and the dashboard-to-detail return-navigation flow. T-008 is
 therefore in `Review`.
+
+The Playwright-managed API and Vite processes now receive explicit test
+environment values for the fixed API host/port, web port, CORS origin, browser
+API base URL, mock data mode, and `NODE_ENV=test`. Local `.env` or shell
+overrides therefore cannot move the processes away from Playwright's fixed
+readiness URLs.
+
+Validation on 2026-07-29 passed `format:check`, the web workspace typecheck,
+`repo:check`, and Playwright test discovery. Both Chromium scenarios reached
+`ok` in Codex, but its managed command did not exit while closing Vite. The
+same `npm.cmd run test:browser` command was then run from a normal PowerShell
+terminal with no listeners on ports 3000/5173: it completed successfully with
+`2 passed (19.4s)` and returned to the prompt. Treat the Codex-only teardown
+hang as an execution-wrapper limitation, not a failing T-008 browser test.
 
 `npm.cmd audit` on 2026-07-25 reports three high advisories in the existing
 dependency graph: direct `react-router-dom`/`react-router` and transitive
@@ -591,9 +605,10 @@ been pushed and no pull request was created.
 
 ## Next implementation step
 
-Review the committed T-008 diff and complete the manual visual acceptance for
-T-003-T-007. The browser smoke suite has passed; rerun it when making later UI
-changes or when validating a clean checkout.
+Review the T-008 env-hardening diff and complete the manual visual acceptance
+for T-003-T-007. The browser assertions and normal-PowerShell teardown have
+passed; rerun the suite when making later UI changes or when validating a clean
+checkout.
 Manual review still owns desktop/narrow visual fidelity, copied URLs/history,
 real Leaflet tiles/pan/zoom/labels, focus appearance, degraded requests/tiles,
 and the browser console. T-003-T-007 remain `In Progress` until that review is
