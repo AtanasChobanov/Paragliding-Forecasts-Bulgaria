@@ -24,7 +24,7 @@
     "test:browser:headed": "npm run test:browser:headed --workspace @paragliding-forecasts/web",
     "test:browser:install": "npm run test:browser:install --workspace @paragliding-forecasts/web",
     "test:browser:ui": "npm run test:browser:ui --workspace @paragliding-forecasts/web",
-    "test:coverage": "npm run test:coverage --workspace @paragliding-forecasts/contracts && npm run test:coverage --workspace @paragliding-forecasts/api && npm run test:coverage --workspace @paragliding-forecasts/web",
+    "test:coverage": "npm run test:coverage --workspace @paragliding-forecasts/database && npm run test:coverage --workspace @paragliding-forecasts/contracts && npm run test:coverage --workspace @paragliding-forecasts/api && npm run test:coverage --workspace @paragliding-forecasts/web",
     "typecheck": "npm run typecheck --workspace @paragliding-forecasts/database && npm run typecheck --workspace @paragliding-forecasts/contracts && npm run typecheck --workspace @paragliding-forecasts/api && npm run typecheck --workspace @paragliding-forecasts/web"
   },
   "engines": {

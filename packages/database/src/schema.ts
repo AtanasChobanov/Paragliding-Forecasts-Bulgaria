@@ -11,7 +11,8 @@ import {
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
-const utcTimestampGlob = "[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z";
+const utcTimestampGlob =
+  "[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z";
 
 export const flightSources = sqliteTable(
   "flight_sources",
@@ -63,22 +64,10 @@ export const sites = sqliteTable(
         AND substr(${table.slug}, -1) <> '-'`,
     ),
     check("sites_name_non_empty_check", sql`length(trim(${table.name})) > 0`),
-    check(
-      "sites_country_code_iso2_check",
-      sql`${table.countryCodeIso2} GLOB '[A-Z][A-Z]'`,
-    ),
-    check(
-      "sites_site_type_check",
-      sql`${table.siteType} IN ('launch_area', 'region')`,
-    ),
-    check(
-      "sites_latitude_deg_range_check",
-      sql`${table.latitudeDeg} BETWEEN -90 AND 90`,
-    ),
-    check(
-      "sites_longitude_deg_range_check",
-      sql`${table.longitudeDeg} BETWEEN -180 AND 180`,
-    ),
+    check("sites_country_code_iso2_check", sql`${table.countryCodeIso2} GLOB '[A-Z][A-Z]'`),
+    check("sites_site_type_check", sql`${table.siteType} IN ('launch_area', 'region')`),
+    check("sites_latitude_deg_range_check", sql`${table.latitudeDeg} BETWEEN -90 AND 90`),
+    check("sites_longitude_deg_range_check", sql`${table.longitudeDeg} BETWEEN -180 AND 180`),
     check(
       "sites_catchment_radius_km_range_check",
       sql`${table.catchmentRadiusKm} IS NULL
@@ -228,7 +217,10 @@ export const ingestionRuns = sqliteTable(
         'pilot_provided'
       )`,
     ),
-    check("ingestion_runs_status_check", sql`${table.status} IN ('running', 'succeeded', 'failed')`),
+    check(
+      "ingestion_runs_status_check",
+      sql`${table.status} IN ('running', 'succeeded', 'failed')`,
+    ),
     check("ingestion_runs_source_url_non_empty_check", sql`length(trim(${table.sourceUrl})) > 0`),
     check(
       "ingestion_runs_permission_basis_check",

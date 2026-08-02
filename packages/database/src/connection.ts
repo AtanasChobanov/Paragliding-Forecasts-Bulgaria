@@ -25,7 +25,9 @@ export const resolveDatabaseFilePath = (
 
   const rawPath = databaseUrl.slice("file:".length);
   if (rawPath.length === 0 || rawPath.includes("?") || rawPath.includes("#")) {
-    throw new Error("DATABASE_URL must identify a local file without query or fragment components.");
+    throw new Error(
+      "DATABASE_URL must identify a local file without query or fragment components.",
+    );
   }
 
   const filePath = rawPath.replaceAll("/", sep);
@@ -61,6 +63,8 @@ export const openDatabase = (
     databasePath,
     db: drizzle({ client: sqlite }),
     sqlite,
-    close: () => sqlite.close(),
+    close: () => {
+      sqlite.close();
+    },
   };
 };
