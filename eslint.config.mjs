@@ -10,7 +10,12 @@ export default tseslint.config(
   ...tseslint.configs.strictTypeChecked,
   ...tseslint.configs.stylisticTypeChecked,
   {
-    files: ["apps/api/**/*.ts", "apps/web/**/*.{ts,tsx}", "packages/contracts/**/*.ts"],
+    files: [
+      "apps/api/**/*.ts",
+      "apps/web/**/*.{ts,tsx}",
+      "packages/contracts/**/*.ts",
+      "packages/database/**/*.ts",
+    ],
     languageOptions: {
       parserOptions: {
         projectService: {
