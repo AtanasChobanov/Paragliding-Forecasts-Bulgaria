@@ -12,7 +12,7 @@ result as an inspectable daily dashboard.
 
 ## Project status
 
-- Delivery phase: **Takt 1**
+- Delivery phase: **Takt 2**
 - Current tickets: **T-003-T-008 - Dashboard, detailed forecast view, and
   browser smoke automation** (`Review`, pending manual visual review)
 - Implemented: runnable React/Vite and Node.js/Express workspaces, shared runtime
@@ -22,9 +22,8 @@ result as an inspectable daily dashboard.
   interactive Leaflet site selector, a fixed five-day selector, scoped
   accessible request states, and a routed detailed site/date forecast view with
   mock forecast inputs/drivers, and Playwright Chromium smoke coverage for the
-  dashboard-to-detail happy path
-- Not implemented: SQLite schema or access layer, data ingestion, real
-  forecasts, models, and alerts
+  dashboard-to-detail happy path; and a Drizzle-owned SQLite flight-data foundation with reviewed, reproducible migrations
+- Not implemented: data ingestion, API persistence integration, real forecasts, models, and alerts
 
 Displayed mock responses are deliberately identified as `mock`; they are
 development fixtures, not forecasts or flying advice.
@@ -49,7 +48,8 @@ real model runs exist.
 |   |-- web/                 # React dashboard boundary (T-003 onward)
 |   `-- api/                 # Runnable Express HTTP API
 |-- packages/
-|   `-- contracts/           # Shared runtime schemas and TypeScript contracts
+|   |-- contracts/           # Shared runtime schemas and TypeScript contracts
+|   `-- database/            # Drizzle schema, migrations, and SQLite boundary
 |-- services/
 |   `-- ml/                  # Python data/ML workflows managed with uv
 |-- data/                    # Local data zones; generated data is ignored
@@ -71,7 +71,7 @@ test notes in its README. Cross-project information belongs here or in `docs/`.
 | API | Node.js + Express + TypeScript | Runnable with dashboard read endpoints |
 | Shared contracts | TypeScript + Zod | Runtime schemas and inferred types implemented |
 | Data and ML | Python managed by `uv` | Project boundary only |
-| MVP storage | SQLite | Direction accepted; schema and access layer deferred |
+| MVP storage | SQLite + Drizzle | Flight foundation and migration boundary implemented; API integration deferred |
 | JavaScript packages | npm workspaces | One root lockfile and install |
 
 Python is deliberately limited to ingestion, weather-feature engineering,
@@ -159,16 +159,19 @@ configured `VITE_API_BASE_URL` to load dashboard data.
 | `npm run dev:api` | Build shared contracts and start the API in watch mode |
 | `npm run dev:web` | Start Vite on the configured strict web port |
 | `npm run start:api` | Build contracts/API and start compiled JavaScript |
-| `npm run build` | Build contracts, API, and the production web bundle |
-| `npm run typecheck` | Type-check contracts, API, and web workspaces |
-| `npm run lint` | Build shared contract declarations, then lint TypeScript/TSX sources and tests |
+| `npm run build` | Build database, contracts, API, and the production web bundle |
+| `npm run typecheck` | Type-check database, contracts, API, and web workspaces |
+| `npm run lint` | Build shared contract declarations, then lint TypeScript/TSX sources and tests, including database |
 | `npm run format:check` | Check maintained TypeScript, TSX, HTML, SCSS, and config formatting |
-| `npm test` | Run contract, API, and web unit/integration/component tests |
-| `npm run test:coverage` | Run all three suites with V8 coverage and enforced thresholds |
+| `npm test` | Run database, contract, API, and web unit/integration/component tests |
+| `npm run test:coverage` | Run all four suites with V8 coverage and enforced thresholds |
 | `npm run test:browser:install` | Download the Playwright Chromium binary once per machine/version |
 | `npm run test:browser` | Run the dashboard and detail-page Chromium smoke suite headlessly |
 | `npm run test:browser:headed` | Run the same browser smoke suite with visible Chromium |
 | `npm run test:browser:ui` | Open Playwright UI mode for interactive browser-test debugging |
+| `npm run db:generate --workspace @paragliding-forecasts/database -- --name <lower_snake_case_name>` | Generate a database migration for SQL review |
+| `npm run db:check --workspace @paragliding-forecasts/database` | Check Drizzle schema and committed migration metadata |
+| `npm run db:migrate --workspace @paragliding-forecasts/database` | Apply reviewed committed migrations to the configured local SQLite file |
 | `npm run repo:check` | Validate repository structure and runnable workspace metadata |
 | `uv sync --project services/ml` | Sync the Python ML environment |
 

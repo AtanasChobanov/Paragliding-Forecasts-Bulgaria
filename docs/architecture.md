@@ -91,10 +91,51 @@ should be introduced only if a measured runtime requirement justifies it.
 ## Storage
 
 SQLite remains the MVP direction because it is local, inspectable, and easy to
-back up, but T-002 does not implement a database. Repository interfaces in the
-API prevent storage details from leaking into HTTP handlers. The first owning
-schema/persistence ticket must select an access and migration approach with
-evidence; no ORM has been chosen implicitly.
+back up. Repository interfaces in the API prevent storage details from leaking
+into HTTP handlers.
+
+T-012 owns the first persistence foundation. It uses a new TypeScript workspace
+under `packages/database` for the Drizzle schema, generated/reviewed SQL
+migrations, and Node-side database connection primitives. Drizzle/Drizzle Kit
+are the sole owners of schema DDL and migration history. The API imports the
+schema through repository adapters; it does not expose SQLite details to HTTP
+handlers.
+
+T-012 is deliberately limited to the Takt 2 flight-data foundation, not the
+whole eventual product schema. It creates only the tables required to persist
+validated flight evidence and its relationship to the existing site catalog:
+
+- canonical `sites` records, retaining the current numeric IDs and public
+  slugs;
+- source-specific site aliases/takeoff mappings for later XCContest matching;
+- `ingestion_runs` provenance for an import execution;
+- canonical `flight_records` with source identity, raw takeoff evidence,
+  canonical site relationship, selected distance, track link, validation, and
+  provenance fields.
+
+Exact columns, types, indexes, checks, nullable rules, and migration names are
+an explicit T-012 design deliverable. Weather features, soundings, processed
+feature sets, model runs, predictions, and alerts are deferred to their owning
+tasks; T-012 must not pre-create speculative tables for them.
+
+The physical SQLite schema is a language-neutral boundary. Python batch code
+may read/write the migrated file through a non-migrating persistence adapter,
+but must not create tables or run a second migration system. A T-013 run has
+the following durable flow:
+
+```text
+permitted XCContest input/export
+  -> immutable raw artifact
+  -> source parser
+  -> normalized/validated staging record
+  -> site matching and duplicate decision
+  -> SQLite flight_records transaction
+```
+
+Raw acquisition artifacts are not database rows and are not committed. They
+enable repeatable parsing, auditability, and reprocessing without another
+source request. Canonical accepted flight records are written to SQLite;
+ambiguous or rejected candidates remain in ignored interim/quarantine outputs.
 
 The initial project-brief prediction fields map to the T-002 internal
 `ForecastPrediction` domain model: numeric site identity/date, generation
@@ -142,7 +183,8 @@ reason, preventing contradictory combinations at the HTTP boundary.
 - Exact external forecast and historical archive providers
 - Source-specific ingestion permissions and rate limits
 - Final launch coordinates, aliases, and catchment radii
-- SQLite schema, migration, and ORM/query approach
+- Exact T-012 physical column types, constraints, indexes, and migration
+  details within the accepted Takt 2 persistence scope
 - Alert delivery channel
 - Deployment or cloud infrastructure
 

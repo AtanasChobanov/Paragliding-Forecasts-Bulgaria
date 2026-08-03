@@ -4,12 +4,222 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated | 2026-07-29 |
+| Last updated | 2026-08-02 |
 | Current Git branch | `feature/T-008-browser-smoke-test` |
 | Branch relationship | Extends `feature/T-006-T007-forecast-details-page` at `922ceef`, which extends the dashboard implementation at `e744bc5` |
-| Current tasks | T-003 through T-008 — `Review`; T-003-T-007 still await manual visual review, while T-008's environment hardening and Chromium smoke suite have passed in plain PowerShell |
+| Current tasks | T-009 through T-012 — `Review` |
 | Completed scope in this branch | Dashboard/detail implementation plus Playwright Chromium smoke-test configuration, dashboard and detail smoke scenarios, commands, and documentation |
-| Current working tree note | Contains the T-008 Prettier/env hardening changes plus unrelated untracked T-010/T-011 research reports that must remain untouched |
+| Current working tree note | T-009–T-011 and the five T-012 foundation checkpoints are committed; local database files remain ignored |
+
+## T-010 and T-011 flight-source research - read before T-012/T-013
+
+T-010 research is complete and the report is available at
+`T-010-xccontest-research-report.md` (updated 2026-07-28). Treat its result as
+**Review**, not as permission to implement a collector.
+
+Key decisions and constraints:
+
+- XCContest is still the strongest candidate for historical positive XC labels,
+  but automated collection is blocked pending written permission, an official
+  API/export, or an explicitly authorised low-rate workflow.
+- The dynamic public flights table is populated by internal query-string
+  requests (for example `/api/data/?flights/world/<year>...`). These are not a
+  documented public API and fall under the current `robots.txt` rule
+  `Disallow: /*?`. Playwright that merely waits for/reads the rendered table
+  still makes those XHR/fetch requests; it is not a policy workaround.
+- Do not hard-code, publish or reuse browser session keys/cookies/tokens. Do
+  not bypass login, verification challenges, Cloudflare or CAPTCHA.
+- Anonymising display names is desirable data minimisation, but it does not
+  create reuse rights or necessarily make dated coordinate/track data anonymous.
+  A future paid product must not rely on a bulk-scraped XCContest dataset
+  without written permission/licensing and focused IP/GDPR review.
+- `airspace.xcontest.org` is a separate documented API for current airspace
+  geometry and activations (NOTAM, TMA/CTR, danger areas, TRA). It has no
+  historical flights, tracks, launch/landing points, distance, duration or
+  100+/200+/300+ labels, so it cannot replace XCContest or SkyNomad for Takt 2.
+  If later added, expose it as a distinct operational/safety constraint rather
+  than changing meteorological XC potential. Its current API has no documented
+  historical activation archive for backtesting.
+
+### T-011 completed result - SkyNomad
+
+T-011 is complete and the report is available at
+`T-011-skynomad-research-report.md` (2026-07-28). Its status is **Review**.
+It established that SkyNomad has three materially different surfaces:
+
+- `www.skynomad.com` is a live WordPress site. Its public unauthenticated REST
+  API and sitemap are usable at low volume for discovery and manual
+  corroboration of articles, aliases, dates, named locations, route narratives
+  and links to flight records. This is not a complete flight database, and
+  WordPress posts are not flight counts.
+- `forum.skynomad.net` has a phpBB forum, which is potentially useful only as
+  unstructured narrative/context evidence.
+- `forum.skynomad.net/leonardo/` is the important potential structured source:
+  the Leonardo GPS flight database. SkyNomad's current WordPress articles link
+  to Leonardo flight IDs in 2025, so it must not be treated as a dead archive.
+  The Leonardo open-source code documents likely flight/list/detail fields,
+  URL patterns, filters and candidate selectors, but these are **not** a
+  confirmed contract for SkyNomad's deployed version.
+
+Live access and policy decision:
+
+- Automated requests to the forum and Leonardo host currently receive a
+  Cloudflare managed JavaScript/cookie challenge (`403`) before content can be
+  inspected. Do not bypass Cloudflare, CAPTCHA, login or session controls.
+- Forum `robots.txt` allows `/`, but its content signals specify
+  `ai-train=no` and `use=reference`. It has no `Crawl-delay` and no published
+  numeric quota. `Allow: /` is not permission to collect flight records for
+  ML training.
+- No verified public SkyNomad developer API, data licence, bulk export, terms
+  authorising ML reuse, registration requirement, or request-rate limit was
+  found. No load testing was performed or should be performed to infer a limit.
+- Therefore **do not implement, schedule or run a Leonardo scraper, automated
+  IGC/KML download, or ML-training import**. T-011 intentionally contains no
+  scraper implementation. The preferred next action is a written request to
+  SkyNomad for a project-specific licence/permission, supported export or API,
+  approved endpoints, rate/concurrency, attribution and retention/privacy
+  conditions.
+
+T-013 decision and data contract implications:
+
+- SkyNomad may support only a small manually validated, cited **reference**
+  sample while the present policy remains in effect. It is not a cleared
+  training-data fallback. It can become one only with explicit written
+  permission or an owner-provided/licensed export; otherwise the product owner
+  must expressly limit any sample to non-training validation use.
+- After permission, discover records primarily by authoritative T-009 takeoff
+  IDs/aliases, paraglider category, date range and minimum optimized/scored
+  distance. Use a permitted coordinate-radius query only if SkyNomad confirms
+  its endpoint and private-record behaviour. Do not rely only on free text or
+  fixed place categories.
+- T-012 must be able to represent source/provenance and validation fields in
+  addition to the base flight record: `source_system`, `source_flight_id`,
+  canonical/source URLs, flight date/time/duration, takeoff ID/name and
+  coordinates, optimized/scored and linear distances separately, route type,
+  PG category, track links/availability, validation notes/status, retrieval
+  time, `permission_basis`, and optional raw-artifact hash. Pilot identity is
+  not an ML feature and must not be retained unless the permission explicitly
+  allows it.
+- Use optimized/scored Leonardo `FLIGHT_KM`/OLC distance for the proposed
+  100-199 / 200-299 / 300+ bands while preserving other distance measures;
+  product-owner and T-012 confirmation is still required before labels freeze.
+- Raw external responses, IGC/KML files and unsanitized HARs stay outside Git;
+  only sanitized, permitted fixtures may be committed. Web/API request handlers
+  must never scrape SkyNomad.
+
+Before any future collector is built, manually verify normal browser access,
+registration/free-account requirements, public-versus-private records, one
+list/search result and several detail pages, category/distance/date filters,
+track-download authorization, and a sanitized HAR/screenshots without cookies,
+tokens or account identifiers. Replace source-code-derived selectors/endpoints
+only with this approved live evidence. T-009 still owns authoritative location
+coordinates, aliases and radii; T-012 owns the persistence schema.
+
+## T-012 persistence planning decision - read before implementation
+
+DEC-020 accepts a deliberately phased persistence approach. T-012 must **not**
+create every table named in the initial project brief. Its scope is only the
+Takt 2 foundation required to store and audit validated flight evidence:
+
+- canonical `sites`, preserving current numeric IDs and public slugs;
+- source-specific site aliases/takeoff mappings for XCContest matching;
+- `ingestion_runs` for import provenance;
+- canonical `flight_records` for accepted records.
+
+T-012 owns Drizzle/Drizzle Kit setup in a new `packages/database` workspace,
+the first reviewed SQL migrations, database-path configuration, and tests that
+prove an empty local database can be migrated. It does not implement a source
+client, scraper, parser, normalizer, Python writer, real sample import, or
+browser/API persistence switch. The formerly open physical design is now
+accepted in the task handoff; implement and test it rather than
+reopening its field set.
+
+The Takt 2 ingestion flow is fixed conceptually:
+
+```text
+permitted XCContest input/export
+  -> data/raw/xccontest/<run-id>/ exact immutable input + metadata
+  -> T-013 source parser and normalized staging
+  -> validation, site match, duplicate decision
+  -> accepted record written to data/local/paragliding.db
+  -> rejected/ambiguous record kept under data/interim/xccontest/<run-id>/
+```
+
+The raw artifact is not browser cache or a database replacement. It is the
+unaltered evidence received from the source, kept so a parser can be retested
+or corrected without another source request. A new retrieval creates a new
+artifact instead of overwriting the old one. T-013 implements the pipeline and
+persists an accepted sample; T-014 proves idempotency and traceability; T-015
+adds small committed sanitized fixtures for offline parser tests.
+
+For site assignment, do not choose between a string and a foreign key.
+`flight_records` must preserve the source takeoff name/ID exactly as received
+and, once successfully matched, reference canonical `sites.id`. Match priority
+is source takeoff ID, then approved alias, then approved geographic catchment,
+then manual review. Canonical accepted flight records require a site relation;
+ambiguous candidates are quarantined rather than assigned a guessed ID.
+
+The selected Takt 2 source is XCContest. Its storage remains source-neutral so
+future sources do not force a second flight table. The current access decision
+still prohibits an unapproved automated collector: T-013 may use a permitted
+manual export/capture first, and can add an approved XCContest client later
+without changing the downstream pipeline.
+
+## T-012 final implementation plan — read before coding
+
+The complete accepted plan was supplied in the task handoff, with the accepted ERD in [`T-012-flight-schema.drawio`](T-012-flight-schema.drawio).
+This supersedes earlier handoff wording that treated physical T-012 fields as
+open design work.
+
+The first foundation has five tables: `flight_sources`, `sites`,
+`source_site_mappings`, `ingestion_runs`, and `flight_records`. It is strictly
+normalised: mappings preserve source identity/evidence and point to canonical
+sites; accepted flights point to one mapping and do not duplicate site, source
+takeoff name/token, match method/distance, or distance band.
+
+The final flight time is `takeoff_at_utc`; do not add local date/time or UTC
+offset columns. Convert for display/weather grouping with the linked site's
+IANA timezone. `scored_distance_km` is the only stored distance metric for
+T-012. There is no `track_status`; the nullable `track_url` records a captured
+link. Validation levels are `metadata` and `track`.
+
+`source_id` remains on `flight_records` with the unique external identity
+`(source_id, source_flight_id)`, because a uniqueness constraint cannot reach
+the source through `ingestion_runs` in SQLite. Composite foreign keys enforce
+that the flight, mapping, and two provenance runs share the same source.
+
+Ingestion provenance stores a raw manifest path/hash, permission evidence,
+pipeline version, lifecycle, and counters. Per-file retrieval times and ETags
+belong in the manifest, not in `ingestion_runs`. Raw inputs stay under
+`data/raw/<source>/<run-key>/`; canonical accepted records later go to the
+ignored local SQLite file, while rejected/ambiguous candidates remain in
+`data/interim/`.
+
+Implementation uses generated/reviewed Drizzle migrations only: first create
+the foundation, then seed the seven sites and XCContest source. Do not use
+`drizzle-kit push`, modify an applied migration, or add Python migrations.
+
+## T-012 verified migration foundation
+
+The reviewed T-012 SQL migrations were explicitly approved before execution and
+applied twice to a fresh ignored SQLite file; the second run recorded no
+additional migration work. The foundation defines only `flight_sources`,
+`sites`, `source_site_mappings`, `ingestion_runs`, and `flight_records`, then
+seeds XCContest and the seven canonical sites. Composite foreign keys guarantee
+that each flight, its source mapping, and both provenance runs share one source;
+the supporting `(id, source_id)` unique keys exist solely because SQLite requires
+an exact unique parent key for such foreign keys.
+
+The implementation is ready for review. Verified on 2026-08-02:
+
+- database coverage: 4 files / 16 tests; 100% statements, functions, and lines;
+  96.66% branches;
+- root typecheck, build, lint, format check, and repository structure check;
+- root coverage: database 16, contracts 15, API 82, and web 121 tests.
+
+Do not use `drizzle-kit push`, edit an applied migration, or add another DDL
+owner. T-013 remains blocked until a permitted XCContest input/export method is
+available; it owns importing real records, not altering this foundation.
 
 ## Current outcome
 
@@ -605,11 +815,12 @@ been pushed and no pull request was created.
 
 ## Next implementation step
 
-Review the T-008 env-hardening diff and complete the manual visual acceptance
-for T-003-T-007. The browser assertions and normal-PowerShell teardown have
-passed; rerun the suite when making later UI changes or when validating a clean
-checkout.
+The browser smoke suite has passed; rerun it when making later UI
+changes or when validating a clean checkout.
 Manual review still owns desktop/narrow visual fidelity, copied URLs/history,
 real Leaflet tiles/pan/zoom/labels, focus appearance, degraded requests/tiles,
-and the browser console. T-003-T-007 remain `In Progress` until that review is
-accepted.
+and the browser console.
+
+T-012 can proceed with a source-neutral schema that preserves
+permission/provenance/validation status, but its 100+/200+/300+ distance rule
+must be confirmed before sample labels are final.

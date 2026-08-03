@@ -21,6 +21,30 @@ T-002 add API health endpoint
 
 Do not mix unrelated refactors, formatting, and product behavior in one commit.
 
+## Database migrations
+
+Drizzle schema declarations, generated SQL migrations, and Drizzle metadata are
+one reviewable unit. When a ticket changes the SQLite schema:
+
+1. change the owning `packages/database` schema declaration;
+2. generate a named migration with Drizzle Kit;
+3. review the generated SQL, checks, foreign keys, indexes, and seed changes;
+4. commit the schema, SQL migration, and `drizzle/meta` files together;
+5. prove the migration against a fresh local test database.
+
+Use a concise lowercase `snake_case` migration name, such as
+`create_flight_foundation`. Never edit, rename, delete, or regenerate a
+migration that has been applied outside a disposable local test database; add a
+new migration instead. Do not use `drizzle-kit push`, ad-hoc DDL, or a second
+migration system.
+
+Keep migration commits ticket-prefixed and imperative, for example:
+
+```text
+T-012 add initial flight database migrations
+T-018 add weather feature migration
+```
+
 ## Documentation ownership
 
 - Update the root `README.md` for repository-wide setup, architecture links,

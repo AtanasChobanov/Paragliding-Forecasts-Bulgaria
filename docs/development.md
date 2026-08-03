@@ -42,6 +42,33 @@ Avoid adding application dependencies to the npm workspace root. Root-level
 dependencies are reserved for tooling used across multiple TypeScript
 workspaces.
 
+## SQLite schema and migrations
+
+T-012 introduces `packages/database` as the single owner of SQLite schema
+declarations, Drizzle Kit generation, reviewed SQL migrations, and migration
+history. Python may use the migrated SQLite file through a non-migrating
+adapter; it must not create tables or use Alembic/another migration system.
+
+The following T-012 command contract is implemented and verified:
+
+```powershell
+npm.cmd run db:generate --workspace @paragliding-forecasts/database -- --name <lower_snake_case_name>
+npm.cmd run db:check --workspace @paragliding-forecasts/database
+npm.cmd run db:migrate --workspace @paragliding-forecasts/database
+```
+
+Use `db:generate` to create committed SQL migration files from the Drizzle
+schema, review the result, then apply it through `db:migrate`. Never use
+`drizzle-kit push`: this repository requires a reviewed, reproducible migration
+history. Commit the schema declaration, generated SQL, and `drizzle/meta`
+snapshot/journal files together.
+
+Migration names passed to Drizzle Kit are concise lower `snake_case`, for
+example `create_flight_foundation`. Never edit or rename a migration that has
+been applied outside a disposable local test database; create a new migration.
+Migration tests must start with a fresh ignored SQLite file and prove the
+migrator can be run again safely.
+
 ## Command contract
 
 The runnable workspaces implement these root commands:
@@ -52,19 +79,22 @@ The runnable workspaces implement these root commands:
 | `npm run dev:api` | Build contracts and start the TypeScript API watcher |
 | `npm run dev:web` | Start Vite on the configured strict port |
 | `npm run start:api` | Build contracts/API and start compiled JavaScript |
-| `npm run build` | Build contracts/API and emit the production Vite bundle |
-| `npm run typecheck` | Strictly type-check contracts/API/web without emitting |
-| `npm run lint` | Lint TypeScript and TSX source/tests |
+| `npm run build` | Build database, contracts/API, and emit the production Vite bundle |
+| `npm run typecheck` | Strictly type-check database/contracts/API/web without emitting |
+| `npm run lint` | Lint TypeScript and TSX source/tests, including database |
 | `npm run format:check` | Verify maintained TS/TSX/HTML/SCSS/config formatting |
-| `npm test` | Run contract, API, and web unit/integration/component suites |
-| `npm run test:coverage` | Run V8 coverage for contracts/API/web and enforce thresholds |
+| `npm test` | Run database, contract, API, and web unit/integration/component suites |
+| `npm run test:coverage` | Run V8 coverage for database/contracts/API/web and enforce thresholds |
 | `npm run test:browser:install` | Download the Playwright Chromium binary used by browser smoke tests |
 | `npm run test:browser` | Start local API/Vite processes and run browser smoke tests headlessly |
 | `npm run test:browser:headed` | Run the same smoke tests with visible Chromium |
 | `npm run test:browser:ui` | Run browser smoke tests through Playwright's interactive UI |
+| `npm run db:generate --workspace @paragliding-forecasts/database -- --name <lower_snake_case_name>` | Generate a named migration for review |
+| `npm run db:check --workspace @paragliding-forecasts/database` | Validate Drizzle schema/migration metadata |
+| `npm run db:migrate --workspace @paragliding-forecasts/database` | Apply reviewed committed migrations to the configured local database |
 | `npm run repo:check` | Validate repository and runnable workspace structure |
 
-The root test commands include all three implemented TypeScript workspaces.
+The root test commands include all four implemented TypeScript workspaces.
 Each executable command must perform real work and fail when its child check
 fails.
 
@@ -99,7 +129,7 @@ Current and planned checks by area are:
 | Web | typecheck, unit/component tests, production build, browser smoke test |
 | API | build, lint, format, typecheck, unit/integration tests, real-socket smoke test |
 | Contracts | build, schema/type tests, invariant and compatibility checks |
-| ML | Ruff, pytest, schema/data-quality checks, reproducible backtests |
+| Database | fresh-file migrations, migration idempotence, schema/constraint integrity, and connection-path checks |`n| ML | Ruff, pytest, schema/data-quality checks, reproducible backtests |
 
 Do not make the root command report success by swallowing failed child checks.
 
