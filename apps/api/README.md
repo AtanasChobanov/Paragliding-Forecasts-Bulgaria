@@ -25,13 +25,13 @@ npm.cmd run start:api
 
 ## Endpoints
 
-| Method and path | Dashboard responsibility |
-| --- | --- |
-| `GET /health` | Service status, version, and current timestamp |
-| `GET /api/v1/sites` | All seven location-selector/map options, ordered by numeric ID |
-| `GET /api/v1/forecasts?siteSlug=sopot&date=YYYY-MM-DD` | Detailed location/date payload used by the routed detail page |
-| `GET /api/v1/forecasts/summaries?date=YYYY-MM-DD&siteSlugs=sopot,zlatitsa` | One batched set of dashboard overview cards for a date |
-| `GET /api/v1/forecasts/days?siteSlug=sopot` | Exactly five 100+ km preview slots centered on Sofia's current date |
+| Method and path                                                            | Dashboard responsibility                                            |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `GET /health`                                                              | Service status, version, and current timestamp                      |
+| `GET /api/v1/sites`                                                        | All seven location-selector/map options, ordered by numeric ID      |
+| `GET /api/v1/forecasts?siteSlug=sopot&date=YYYY-MM-DD`                     | Detailed location/date payload used by the routed detail page       |
+| `GET /api/v1/forecasts/summaries?date=YYYY-MM-DD&siteSlugs=sopot,zlatitsa` | One batched set of dashboard overview cards for a date              |
+| `GET /api/v1/forecasts/days?siteSlug=sopot`                                | Exactly five 100+ km preview slots centered on Sofia's current date |
 
 All request and response payloads are validated with the shared strict Zod
 contracts. Malformed, missing, repeated, or unsupported query values return
@@ -41,9 +41,7 @@ carry `X-Request-Id` for correlation.
 ### Site catalog
 
 Each site has `{ id, slug, name, latitude, longitude }`. There is deliberately
-no `dashboardOrder`: the response is always sorted by `id ASC`. The current
-coordinates are provisional map positions and remain subject to T-009 field
-validation. The corrected location name is `Pastrina`, with slug `pastrina`
+no `dashboardOrder`: the response is always sorted by `id ASC`. The coordinates were confirmed in T-009. The corrected location name is `Pastrina`, with slug `pastrina`
 and the existing numeric ID `6`.
 
 ### Detailed forecast
@@ -132,11 +130,11 @@ component.
 
 ## Deliberate missing-data semantics
 
-| Read model | Missing forecast behavior |
-| --- | --- |
-| Detailed forecast | `404 FORECAST_NOT_FOUND` |
-| Batched summaries | `200` with an `availability: "missing"` item |
-| Five-day preview | `200` with a fixed slot whose metric is `missing` |
+| Read model        | Missing forecast behavior                         |
+| ----------------- | ------------------------------------------------- |
+| Detailed forecast | `404 FORECAST_NOT_FOUND`                          |
+| Batched summaries | `200` with an `availability: "missing"` item      |
+| Five-day preview  | `200` with a fixed slot whose metric is `missing` |
 
 ## Mock snapshot limitation
 
@@ -176,14 +174,14 @@ the current scope.
 
 The API loads the root `.env` when present and validates only values it uses.
 
-| Variable | Default | Constraint |
-| --- | --- | --- |
-| `NODE_ENV` | `development` | `development`, `test`, or `production` |
-| `LOG_LEVEL` | `info` | Pino level or `silent`; `.env.example` uses local `debug` |
-| `API_HOST` | `127.0.0.1` | Non-empty bind host |
-| `API_PORT` | `3000` | Integer from 1 through 65535 |
-| `CORS_ORIGIN` | `http://localhost:5173` | Exact HTTP(S) origin without path/trailing slash |
-| `FORECAST_DATA_MODE` | `mock` | The current API accepts only `mock` |
+| Variable             | Default                 | Constraint                                                |
+| -------------------- | ----------------------- | --------------------------------------------------------- |
+| `NODE_ENV`           | `development`           | `development`, `test`, or `production`                    |
+| `LOG_LEVEL`          | `info`                  | Pino level or `silent`; `.env.example` uses local `debug` |
+| `API_HOST`           | `127.0.0.1`             | Non-empty bind host                                       |
+| `API_PORT`           | `3000`                  | Integer from 1 through 65535                              |
+| `CORS_ORIGIN`        | `http://localhost:5173` | Exact HTTP(S) origin without path/trailing slash          |
+| `FORECAST_DATA_MODE` | `mock`                  | The current API accepts only `mock`                       |
 
 `DATABASE_URL` and `MODEL_ARTIFACT_DIR` remain reserved and unused. CORS allows
 GET/OPTIONS from the configured dashboard origin and non-browser requests

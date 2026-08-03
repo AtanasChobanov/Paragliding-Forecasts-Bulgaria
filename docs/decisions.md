@@ -32,6 +32,8 @@ consequences. Temporary progress and Git state belong in
 | DEC-017 | Use a focused React dashboard stack with Leaflet | Accepted | 2026-07-22 |
 | DEC-018 | Add a provisional detailed forecast-input read model | Accepted | 2026-07-24 |
 | DEC-019 | Use Playwright Chromium for local browser smoke coverage | Accepted | 2026-07-25 |
+| DEC-020 | Use a phased Drizzle-owned SQLite foundation for flight data | Accepted | 2026-07-30 |
+| DEC-021 | Finalize the normalized T-012 flight foundation schema | Accepted | 2026-08-02 |
 
 ## Individual decisions
 
@@ -691,11 +693,117 @@ commands.
 [`../apps/web/test/browser/dashboard.smoke.spec.ts`](../apps/web/test/browser/dashboard.smoke.spec.ts),
 [`../apps/web/README.md`](../apps/web/README.md).
 
+### DEC-020 - Use a phased Drizzle-owned SQLite foundation for flight data
+
+**Status:** Accepted
+
+**Date:** 2026-07-30
+
+**Context:** T-012 is the first persistence task. The product is TypeScript-
+first at its browser/API boundary, while Python owns permitted ingestion and ML
+batch work. The next task must establish a durable SQLite schema without
+prematurely freezing weather, prediction, model, or alert structures that have
+their own later discovery/design tasks.
+
+**Decision:** Use Drizzle ORM and Drizzle Kit in a new
+`packages/database` TypeScript workspace as the sole owner of SQLite schema
+DDL and migration history. T-012 creates only the Takt 2 persistence
+foundation: `sites`, source-specific site aliases/takeoff mappings,
+`ingestion_runs`, and canonical `flight_records`. The exact physical field
+design remains a T-012 deliverable and must be documented and tested before the
+task is completed.
+
+Do not create weather features, soundings, processed feature sets, model runs,
+predictions, alerts, or a generic future-data schema in T-012. Their owning
+tasks add migrations later. The selected flight source for Takt 2 is XCContest,
+but the storage schema remains source-neutral through fields such as source
+system, source record identity, canonical URL, raw takeoff evidence, and
+permission/provenance metadata.
+
+Python ingestion/ML code may write to the migrated SQLite file through a
+non-migrating batch persistence adapter after validation. It must not run
+Alembic or any other migration tool, declare a competing schema, or become a
+public HTTP service. The API reads through feature repository adapters and
+continues to own browser-facing contracts.
+
+**Rationale:** This keeps one migration history and one physical schema while
+letting Python use the data/scientific ecosystem where it has clear value. A
+phased schema keeps the T-012 reviewable, enables T-013 to persist a validated
+flight sample, and avoids inventing final weather/model fields before T-017,
+T-018, and the modeling tasks define them.
+
+**Alternatives considered:** Creating every table from the initial project
+brief now was rejected because it would make unvalidated weather, prediction,
+and alert assumptions durable too early. A separate Python ORM/migration system
+was rejected because two DDL authorities could drift. Sending every Python
+batch output through a TypeScript importer was rejected for the MVP because it
+adds an unnecessary process boundary; validated Python batch writes can use the
+same SQLite schema directly.
+
+**Consequences:** A T-013 collector/importer must preserve an immutable raw
+artifact, normalize and validate it, resolve a canonical project site, decide
+duplicates, and then write accepted records to `flight_records`. A canonical
+accepted record retains both the raw XCContest takeoff name/ID and a foreign key
+to `sites`; ambiguous records go to an interim quarantine rather than receiving
+a guessed site ID. T-014 owns duplicate/traceability behavior and T-015 owns
+sanitized frozen parser fixtures. The local SQLite file stays ignored under
+`data/local`.
+
+**Related files:** [`architecture.md`](architecture.md),
+[`handoff.md`](handoff.md), [`tasks.md`](tasks.md),
+[`../data/README.md`](../data/README.md),
+[`../services/ml/README.md`](../services/ml/README.md).
+
+### DEC-021 — Finalize the normalized T-012 flight foundation schema
+
+**Status:** Accepted
+
+**Date:** 2026-08-02
+
+**Context:** DEC-020 selected Drizzle-owned SQLite and bounded the T-012 scope,
+but left the physical schema as a ticket deliverable. The source research,
+confirmed seven-site coordinates, supplied XCContest list-page evidence, and
+schema review established the needed normalisation and provenance rules.
+
+**Decision:** T-012 creates only `flight_sources`, `sites`,
+`source_site_mappings`, `ingestion_runs`, and `flight_records`, as specified in
+the accepted T-012 implementation plan supplied during the task. The model is
+3NF: source takeoff identity and matching evidence live in an immutable mapping
+row; a canonical flight stores the mapping foreign key rather than repeating
+site, token, source name, match method, match distance, or distance band.
+
+Accepted flights use `(source_id, source_flight_id)` as their unique external
+identity, `takeoff_at_utc` as the single stored event time, canonical scored
+distance in kilometres, an optional track URL, and metadata/track validation
+level. A source ID remains on the flight row so that the cross-run unique
+constraint and composite source-consistency foreign keys are enforceable in
+SQLite. `distance_band` is derived at read time.
+
+Run provenance uses an immutable raw-artifact manifest outside SQLite. The run
+stores the manifest path/hash, permission flags/reference, source scope URL,
+pipeline version, lifecycle timestamps, and outcome counters. Per-artifact
+retrieval times and optional ETags remain inside that manifest; no run-level
+ETag or retrieval timestamp is stored.
+
+Drizzle/Drizzle Kit remain the sole DDL and migration authority. Python uses
+standard-library `sqlite3` only after migration and never owns schema history.
+
+**Consequences:** The first migration creates the five tables and their
+constraints/indexes; a second seed migration inserts the seven canonical sites
+and XCContest source. There are no speculative weather/model/alert tables,
+source aliases without approved evidence, raw payload rows, pilot data,
+landing coordinates, score points, linear/tracklog distances, or track-status
+column.
+
+**Related files:** [`T-012-flight-schema.drawio`](T-012-flight-schema.drawio),
+[`architecture.md`](architecture.md), [`handoff.md`](handoff.md),
+[`../data/README.md`](../data/README.md), [`../CONTRIBUTING.md`](../CONTRIBUTING.md).
+
 ## Open decisions
 
 | Question | Options / constraints | Resolve by |
 | --- | --- | --- |
-| Which SQLite access layer and migration approach should be used? | Direct driver, query builder, or ORM are possible; keep persistence behind repositories and do not add storage solely for a health endpoint. | The first persistence/schema ticket, expected by T-012/T-018. |
+| What exact T-012 field types, nullability, indexes, constraints, and migration layout should be used? | Must implement DEC-020's bounded Takt 2 tables, preserve source/provenance/validation data, retain numeric site IDs, and keep accepted flights distinct from quarantined candidates. | T-012 design and implementation. |
 | Which task owns the persisted prediction schema and SQLite forecast adapter? | The backlog has flight and weather schema tasks but no explicit owner for storing T-022-T-024 outputs and replacing the T-002 mock adapter. Public units/status/provenance must be mapped deliberately. | Backlog planning before real predictions are connected to the API. |
 | What are the final coordinates, aliases, and catchment radii for each site? | Current map points are provisional; Pastrina and the Dobrich regional model need particular confirmation. | T-009. |
 | What access methods, permissions, attribution, caching, and rate limits apply to flight sources? | XCContest and SkyNomad must be researched without assuming scraping permission. | T-010 and T-011. |

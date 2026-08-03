@@ -30,12 +30,12 @@ describe("GET /api/v1/sites", () => {
       "Dobrich region",
     ]);
     expect(body.sites.map(({ latitude, longitude }) => ({ latitude, longitude }))).toEqual([
-      { latitude: 42.60222, longitude: 23.28927 },
-      { latitude: 42.71506, longitude: 24.13749 },
-      { latitude: 42.68776, longitude: 24.74996 },
-      { latitude: 43.27155, longitude: 27.29945 },
-      { latitude: 43.27667, longitude: 26.92917 },
-      { latitude: 43.42481, longitude: 23.30355 },
+      { latitude: 42.6013, longitude: 23.2844 },
+      { latitude: 42.7302, longitude: 24.0923 },
+      { latitude: 42.68733, longitude: 24.749962 },
+      { latitude: 43.2622, longitude: 27.2846 },
+      { latitude: 43.2575, longitude: 26.9258 },
+      { latitude: 43.4282, longitude: 23.3032 },
       { latitude: 43.56667, longitude: 27.83333 },
     ]);
     expect(body.sites.every((site) => Object.keys(site).length === 5)).toBe(true);

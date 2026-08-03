@@ -46,9 +46,12 @@ uv add --project services/ml --dev pytest
 services/ml/
 |-- src/paragliding_forecasts_ml/
 |   |-- ingestion/
+|   |   |-- common/
+|   |   `-- xccontest/
 |   |-- features/
 |   |-- models/
 |   |-- prediction/
+|   |-- storage/
 |   `-- validation/
 |-- tests/
 |-- pyproject.toml
@@ -74,6 +77,18 @@ Python outputs must carry source, units, timestamps, site identifiers, model or
 pipeline version, confidence, and data status. Prefer language-neutral storage
 or serialization. Avoid coupling the Node API to Python internals or pickled
 objects.
+
+For Takt 2, Python reads permitted XCContest inputs into immutable raw artifacts,
+parses them into source records, normalizes and validates them, resolves a
+canonical project site, and writes accepted flight records to the SQLite schema
+owned by `packages/database`. Python is a non-migrating client of that schema:
+Drizzle/Drizzle Kit own all DDL and migrations. Ambiguous or rejected records
+remain as ignored interim/quarantine outputs rather than entering the canonical
+flight table.
+
+T-013 owns the first parser/import pipeline. T-014 hardens duplicate and source
+traceability behavior. T-015 adds small, sanitized, permitted frozen fixtures
+that test the parser offline; fixtures are not the live/raw dataset.
 
 ## Reproducibility and data safety
 

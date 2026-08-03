@@ -1,0 +1,1265 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "id": "6e1f9d1e-e3c7-483e-9fb0-66c8cd87cd28",
+  "prevIds": ["00000000-0000-0000-0000-000000000000"],
+  "ddl": [
+    {
+      "name": "flight_records",
+      "entityType": "tables"
+    },
+    {
+      "name": "flight_sources",
+      "entityType": "tables"
+    },
+    {
+      "name": "ingestion_runs",
+      "entityType": "tables"
+    },
+    {
+      "name": "sites",
+      "entityType": "tables"
+    },
+    {
+      "name": "source_site_mappings",
+      "entityType": "tables"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "flight_records"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_id",
+      "entityType": "columns",
+      "table": "flight_records"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_flight_id",
+      "entityType": "columns",
+      "table": "flight_records"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_flight_url",
+      "entityType": "columns",
+      "table": "flight_records"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_site_mapping_id",
+      "entityType": "columns",
+      "table": "flight_records"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "takeoff_at_utc",
+      "entityType": "columns",
+      "table": "flight_records"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "duration_seconds",
+      "entityType": "columns",
+      "table": "flight_records"
+    },
+    {
+      "type": "real",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "scored_distance_km",
+      "entityType": "columns",
+      "table": "flight_records"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "route_type",
+      "entityType": "columns",
+      "table": "flight_records"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "track_url",
+      "entityType": "columns",
+      "table": "flight_records"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "validation_level",
+      "entityType": "columns",
+      "table": "flight_records"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "validation_notes",
+      "entityType": "columns",
+      "table": "flight_records"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "validated_at_utc",
+      "entityType": "columns",
+      "table": "flight_records"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_by_ingestion_run_id",
+      "entityType": "columns",
+      "table": "flight_records"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "last_validated_by_ingestion_run_id",
+      "entityType": "columns",
+      "table": "flight_records"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_at_utc",
+      "entityType": "columns",
+      "table": "flight_records"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at_utc",
+      "entityType": "columns",
+      "table": "flight_records"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "flight_sources"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "code",
+      "entityType": "columns",
+      "table": "flight_sources"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "name",
+      "entityType": "columns",
+      "table": "flight_sources"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "base_url",
+      "entityType": "columns",
+      "table": "flight_sources"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "1",
+      "generated": null,
+      "name": "is_active",
+      "entityType": "columns",
+      "table": "flight_sources"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "ingestion_runs"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "run_key",
+      "entityType": "columns",
+      "table": "ingestion_runs"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_id",
+      "entityType": "columns",
+      "table": "ingestion_runs"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "ingestion_method",
+      "entityType": "columns",
+      "table": "ingestion_runs"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "status",
+      "entityType": "columns",
+      "table": "ingestion_runs"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_url",
+      "entityType": "columns",
+      "table": "ingestion_runs"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "permission_basis",
+      "entityType": "columns",
+      "table": "ingestion_runs"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "permission_reference",
+      "entityType": "columns",
+      "table": "ingestion_runs"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "model_training_allowed",
+      "entityType": "columns",
+      "table": "ingestion_runs"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "operational_use_allowed",
+      "entityType": "columns",
+      "table": "ingestion_runs"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "raw_manifest_path",
+      "entityType": "columns",
+      "table": "ingestion_runs"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "raw_manifest_sha256",
+      "entityType": "columns",
+      "table": "ingestion_runs"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "pipeline_version",
+      "entityType": "columns",
+      "table": "ingestion_runs"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "started_at_utc",
+      "entityType": "columns",
+      "table": "ingestion_runs"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "completed_at_utc",
+      "entityType": "columns",
+      "table": "ingestion_runs"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "records_seen",
+      "entityType": "columns",
+      "table": "ingestion_runs"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "records_accepted",
+      "entityType": "columns",
+      "table": "ingestion_runs"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "records_rejected",
+      "entityType": "columns",
+      "table": "ingestion_runs"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "records_quarantined",
+      "entityType": "columns",
+      "table": "ingestion_runs"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "records_deduplicated",
+      "entityType": "columns",
+      "table": "ingestion_runs"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "error_summary",
+      "entityType": "columns",
+      "table": "ingestion_runs"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "notes",
+      "entityType": "columns",
+      "table": "ingestion_runs"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "sites"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "slug",
+      "entityType": "columns",
+      "table": "sites"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "name",
+      "entityType": "columns",
+      "table": "sites"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'BG'",
+      "generated": null,
+      "name": "country_code_iso2",
+      "entityType": "columns",
+      "table": "sites"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "site_type",
+      "entityType": "columns",
+      "table": "sites"
+    },
+    {
+      "type": "real",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "latitude_deg",
+      "entityType": "columns",
+      "table": "sites"
+    },
+    {
+      "type": "real",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "longitude_deg",
+      "entityType": "columns",
+      "table": "sites"
+    },
+    {
+      "type": "real",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "catchment_radius_km",
+      "entityType": "columns",
+      "table": "sites"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'Europe/Sofia'",
+      "generated": null,
+      "name": "time_zone",
+      "entityType": "columns",
+      "table": "sites"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "1",
+      "generated": null,
+      "name": "is_active",
+      "entityType": "columns",
+      "table": "sites"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "source_site_mappings"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_id",
+      "entityType": "columns",
+      "table": "source_site_mappings"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "site_id",
+      "entityType": "columns",
+      "table": "source_site_mappings"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "key_type",
+      "entityType": "columns",
+      "table": "source_site_mappings"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "key_value",
+      "entityType": "columns",
+      "table": "source_site_mappings"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_display_name",
+      "entityType": "columns",
+      "table": "source_site_mappings"
+    },
+    {
+      "type": "real",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "point_latitude_deg",
+      "entityType": "columns",
+      "table": "source_site_mappings"
+    },
+    {
+      "type": "real",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "point_longitude_deg",
+      "entityType": "columns",
+      "table": "source_site_mappings"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "status",
+      "entityType": "columns",
+      "table": "source_site_mappings"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "verification_reference",
+      "entityType": "columns",
+      "table": "source_site_mappings"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "verified_at_utc",
+      "entityType": "columns",
+      "table": "source_site_mappings"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "notes",
+      "entityType": "columns",
+      "table": "source_site_mappings"
+    },
+    {
+      "columns": ["source_id"],
+      "tableTo": "flight_sources",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_flight_records_source_id_flight_sources_id_fk",
+      "entityType": "fks",
+      "table": "flight_records"
+    },
+    {
+      "columns": ["source_site_mapping_id", "source_id"],
+      "tableTo": "source_site_mappings",
+      "columnsTo": ["id", "source_id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": true,
+      "name": "flight_records_mapping_source_fk",
+      "entityType": "fks",
+      "table": "flight_records"
+    },
+    {
+      "columns": ["created_by_ingestion_run_id", "source_id"],
+      "tableTo": "ingestion_runs",
+      "columnsTo": ["id", "source_id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": true,
+      "name": "flight_records_created_run_source_fk",
+      "entityType": "fks",
+      "table": "flight_records"
+    },
+    {
+      "columns": ["last_validated_by_ingestion_run_id", "source_id"],
+      "tableTo": "ingestion_runs",
+      "columnsTo": ["id", "source_id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": true,
+      "name": "flight_records_last_validated_run_source_fk",
+      "entityType": "fks",
+      "table": "flight_records"
+    },
+    {
+      "columns": ["source_id"],
+      "tableTo": "flight_sources",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_ingestion_runs_source_id_flight_sources_id_fk",
+      "entityType": "fks",
+      "table": "ingestion_runs"
+    },
+    {
+      "columns": ["source_id"],
+      "tableTo": "flight_sources",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_source_site_mappings_source_id_flight_sources_id_fk",
+      "entityType": "fks",
+      "table": "source_site_mappings"
+    },
+    {
+      "columns": ["site_id"],
+      "tableTo": "sites",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_source_site_mappings_site_id_sites_id_fk",
+      "entityType": "fks",
+      "table": "source_site_mappings"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "flight_records_pk",
+      "table": "flight_records",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "flight_sources_pk",
+      "table": "flight_sources",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "ingestion_runs_pk",
+      "table": "ingestion_runs",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "sites_pk",
+      "table": "sites",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "source_site_mappings_pk",
+      "table": "source_site_mappings",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        {
+          "value": "source_site_mapping_id",
+          "isExpression": false
+        },
+        {
+          "value": "takeoff_at_utc",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "flight_records_mapping_takeoff_at_index",
+      "entityType": "indexes",
+      "table": "flight_records"
+    },
+    {
+      "columns": [
+        {
+          "value": "takeoff_at_utc",
+          "isExpression": false
+        },
+        {
+          "value": "\"scored_distance_km\" desc",
+          "isExpression": true
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "flight_records_takeoff_distance_index",
+      "entityType": "indexes",
+      "table": "flight_records"
+    },
+    {
+      "columns": [
+        {
+          "value": "created_by_ingestion_run_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "flight_records_created_by_ingestion_run_index",
+      "entityType": "indexes",
+      "table": "flight_records"
+    },
+    {
+      "columns": [
+        {
+          "value": "source_id",
+          "isExpression": false
+        },
+        {
+          "value": "\"started_at_utc\" desc",
+          "isExpression": true
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "ingestion_runs_source_started_at_index",
+      "entityType": "indexes",
+      "table": "ingestion_runs"
+    },
+    {
+      "columns": [
+        {
+          "value": "source_id",
+          "isExpression": false
+        },
+        {
+          "value": "key_type",
+          "isExpression": false
+        },
+        {
+          "value": "key_value",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "\"source_site_mappings\".\"status\" <> 'retired' AND \"source_site_mappings\".\"key_type\" <> 'source_point'",
+      "origin": "manual",
+      "name": "source_site_mappings_active_key_unique",
+      "entityType": "indexes",
+      "table": "source_site_mappings"
+    },
+    {
+      "columns": [
+        {
+          "value": "source_id",
+          "isExpression": false
+        },
+        {
+          "value": "point_latitude_deg",
+          "isExpression": false
+        },
+        {
+          "value": "point_longitude_deg",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "\"source_site_mappings\".\"status\" <> 'retired' AND \"source_site_mappings\".\"key_type\" = 'source_point'",
+      "origin": "manual",
+      "name": "source_site_mappings_active_point_unique",
+      "entityType": "indexes",
+      "table": "source_site_mappings"
+    },
+    {
+      "columns": [
+        {
+          "value": "site_id",
+          "isExpression": false
+        },
+        {
+          "value": "source_id",
+          "isExpression": false
+        },
+        {
+          "value": "status",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "source_site_mappings_site_source_status_index",
+      "entityType": "indexes",
+      "table": "source_site_mappings"
+    },
+    {
+      "columns": ["source_id", "source_flight_id"],
+      "nameExplicit": true,
+      "name": "flight_records_source_flight_unique",
+      "entityType": "uniques",
+      "table": "flight_records"
+    },
+    {
+      "columns": ["code"],
+      "nameExplicit": true,
+      "name": "flight_sources_code_unique",
+      "entityType": "uniques",
+      "table": "flight_sources"
+    },
+    {
+      "columns": ["run_key"],
+      "nameExplicit": true,
+      "name": "ingestion_runs_run_key_unique",
+      "entityType": "uniques",
+      "table": "ingestion_runs"
+    },
+    {
+      "columns": ["id", "source_id"],
+      "nameExplicit": true,
+      "name": "ingestion_runs_id_source_id_parent_key_unique",
+      "entityType": "uniques",
+      "table": "ingestion_runs"
+    },
+    {
+      "columns": ["slug"],
+      "nameExplicit": true,
+      "name": "sites_slug_unique",
+      "entityType": "uniques",
+      "table": "sites"
+    },
+    {
+      "columns": ["id", "source_id"],
+      "nameExplicit": true,
+      "name": "source_site_mappings_id_source_id_parent_key_unique",
+      "entityType": "uniques",
+      "table": "source_site_mappings"
+    },
+    {
+      "value": "length(trim(\"source_flight_id\")) > 0",
+      "name": "flight_records_source_flight_id_non_empty_check",
+      "entityType": "checks",
+      "table": "flight_records"
+    },
+    {
+      "value": "length(trim(\"source_flight_url\")) > 0",
+      "name": "flight_records_source_flight_url_non_empty_check",
+      "entityType": "checks",
+      "table": "flight_records"
+    },
+    {
+      "value": "\"takeoff_at_utc\" GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'",
+      "name": "flight_records_takeoff_at_utc_shape_check",
+      "entityType": "checks",
+      "table": "flight_records"
+    },
+    {
+      "value": "\"duration_seconds\" IS NULL\n        OR \"duration_seconds\" BETWEEN 1 AND 86400",
+      "name": "flight_records_duration_seconds_range_check",
+      "entityType": "checks",
+      "table": "flight_records"
+    },
+    {
+      "value": "\"scored_distance_km\" BETWEEN 100 AND 2000",
+      "name": "flight_records_scored_distance_km_range_check",
+      "entityType": "checks",
+      "table": "flight_records"
+    },
+    {
+      "value": "\"route_type\" IN (\n        'free_flight',\n        'free_triangle',\n        'fai_triangle',\n        'closed_free_triangle',\n        'closed_fai_triangle',\n        'other',\n        'unknown'\n      )",
+      "name": "flight_records_route_type_check",
+      "entityType": "checks",
+      "table": "flight_records"
+    },
+    {
+      "value": "\"validation_level\" IN ('metadata', 'track')",
+      "name": "flight_records_validation_level_check",
+      "entityType": "checks",
+      "table": "flight_records"
+    },
+    {
+      "value": "length(trim(\"validation_notes\")) > 0",
+      "name": "flight_records_validation_notes_non_empty_check",
+      "entityType": "checks",
+      "table": "flight_records"
+    },
+    {
+      "value": "\"validated_at_utc\" GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'",
+      "name": "flight_records_validated_at_utc_shape_check",
+      "entityType": "checks",
+      "table": "flight_records"
+    },
+    {
+      "value": "\"created_at_utc\" GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'",
+      "name": "flight_records_created_at_utc_shape_check",
+      "entityType": "checks",
+      "table": "flight_records"
+    },
+    {
+      "value": "\"updated_at_utc\" GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'",
+      "name": "flight_records_updated_at_utc_shape_check",
+      "entityType": "checks",
+      "table": "flight_records"
+    },
+    {
+      "value": "\"updated_at_utc\" >= \"created_at_utc\"",
+      "name": "flight_records_updated_not_before_created_check",
+      "entityType": "checks",
+      "table": "flight_records"
+    },
+    {
+      "value": "length(\"code\") BETWEEN 1 AND 80\n        AND substr(\"code\", 1, 1) GLOB '[a-z]'\n        AND \"code\" NOT GLOB '*[^a-z0-9_]*'\n        AND \"code\" NOT GLOB '*__*'\n        AND substr(\"code\", -1) <> '_'",
+      "name": "flight_sources_code_lower_snake_case_check",
+      "entityType": "checks",
+      "table": "flight_sources"
+    },
+    {
+      "value": "length(trim(\"name\")) > 0",
+      "name": "flight_sources_name_non_empty_check",
+      "entityType": "checks",
+      "table": "flight_sources"
+    },
+    {
+      "value": "length(trim(\"base_url\")) > 0",
+      "name": "flight_sources_base_url_non_empty_check",
+      "entityType": "checks",
+      "table": "flight_sources"
+    },
+    {
+      "value": "\"is_active\" IN (0, 1)",
+      "name": "flight_sources_is_active_boolean_check",
+      "entityType": "checks",
+      "table": "flight_sources"
+    },
+    {
+      "value": "\"run_key\" GLOB\n        '[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]-[0-9a-f][0-9a-f][0-9a-f][0-9a-f]-4[0-9a-f][0-9a-f][0-9a-f]-[89ab][0-9a-f][0-9a-f][0-9a-f]-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]'",
+      "name": "ingestion_runs_run_key_uuid_v4_check",
+      "entityType": "checks",
+      "table": "ingestion_runs"
+    },
+    {
+      "value": "\"ingestion_method\" IN (\n        'manual_export',\n        'owner_export',\n        'official_api',\n        'authorized_http',\n        'pilot_provided'\n      )",
+      "name": "ingestion_runs_ingestion_method_check",
+      "entityType": "checks",
+      "table": "ingestion_runs"
+    },
+    {
+      "value": "\"status\" IN ('running', 'succeeded', 'failed')",
+      "name": "ingestion_runs_status_check",
+      "entityType": "checks",
+      "table": "ingestion_runs"
+    },
+    {
+      "value": "length(trim(\"source_url\")) > 0",
+      "name": "ingestion_runs_source_url_non_empty_check",
+      "entityType": "checks",
+      "table": "ingestion_runs"
+    },
+    {
+      "value": "\"permission_basis\" IN (\n        'written_permission',\n        'source_terms',\n        'owner_export',\n        'official_api_terms',\n        'pilot_provided'\n      )",
+      "name": "ingestion_runs_permission_basis_check",
+      "entityType": "checks",
+      "table": "ingestion_runs"
+    },
+    {
+      "value": "length(trim(\"permission_reference\")) > 0",
+      "name": "ingestion_runs_permission_reference_non_empty_check",
+      "entityType": "checks",
+      "table": "ingestion_runs"
+    },
+    {
+      "value": "\"model_training_allowed\" IN (0, 1)",
+      "name": "ingestion_runs_model_training_allowed_boolean_check",
+      "entityType": "checks",
+      "table": "ingestion_runs"
+    },
+    {
+      "value": "\"operational_use_allowed\" IN (0, 1)",
+      "name": "ingestion_runs_operational_use_allowed_boolean_check",
+      "entityType": "checks",
+      "table": "ingestion_runs"
+    },
+    {
+      "value": "\"raw_manifest_path\" LIKE 'data/raw/%' AND \"raw_manifest_path\" NOT LIKE '%..%'",
+      "name": "ingestion_runs_raw_manifest_path_check",
+      "entityType": "checks",
+      "table": "ingestion_runs"
+    },
+    {
+      "value": "length(\"raw_manifest_sha256\") = 64\n        AND \"raw_manifest_sha256\" NOT GLOB '*[^0-9a-f]*'",
+      "name": "ingestion_runs_raw_manifest_sha256_check",
+      "entityType": "checks",
+      "table": "ingestion_runs"
+    },
+    {
+      "value": "length(trim(\"pipeline_version\")) > 0",
+      "name": "ingestion_runs_pipeline_version_non_empty_check",
+      "entityType": "checks",
+      "table": "ingestion_runs"
+    },
+    {
+      "value": "\"started_at_utc\" GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'",
+      "name": "ingestion_runs_started_at_utc_shape_check",
+      "entityType": "checks",
+      "table": "ingestion_runs"
+    },
+    {
+      "value": "\"completed_at_utc\" IS NULL\n        OR \"completed_at_utc\" GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'",
+      "name": "ingestion_runs_completed_at_utc_shape_check",
+      "entityType": "checks",
+      "table": "ingestion_runs"
+    },
+    {
+      "value": "(\n          \"status\" = 'running'\n          AND \"completed_at_utc\" IS NULL\n        )\n        OR (\n          \"status\" IN ('succeeded', 'failed')\n          AND \"completed_at_utc\" IS NOT NULL\n          AND \"completed_at_utc\" >= \"started_at_utc\"\n        )",
+      "name": "ingestion_runs_completion_lifecycle_check",
+      "entityType": "checks",
+      "table": "ingestion_runs"
+    },
+    {
+      "value": "\"records_seen\" >= 0\n        AND \"records_accepted\" >= 0\n        AND \"records_rejected\" >= 0\n        AND \"records_quarantined\" >= 0\n        AND \"records_deduplicated\" >= 0",
+      "name": "ingestion_runs_counters_non_negative_check",
+      "entityType": "checks",
+      "table": "ingestion_runs"
+    },
+    {
+      "value": "\"records_accepted\" + \"records_rejected\" + \"records_quarantined\"\n        <= \"records_seen\"",
+      "name": "ingestion_runs_counter_outcomes_check",
+      "entityType": "checks",
+      "table": "ingestion_runs"
+    },
+    {
+      "value": "length(\"slug\") BETWEEN 1 AND 80\n        AND substr(\"slug\", 1, 1) GLOB '[a-z0-9]'\n        AND \"slug\" NOT GLOB '*[^a-z0-9-]*'\n        AND \"slug\" NOT GLOB '*--*'\n        AND substr(\"slug\", -1) <> '-'",
+      "name": "sites_slug_lower_kebab_case_check",
+      "entityType": "checks",
+      "table": "sites"
+    },
+    {
+      "value": "length(trim(\"name\")) > 0",
+      "name": "sites_name_non_empty_check",
+      "entityType": "checks",
+      "table": "sites"
+    },
+    {
+      "value": "\"country_code_iso2\" GLOB '[A-Z][A-Z]'",
+      "name": "sites_country_code_iso2_check",
+      "entityType": "checks",
+      "table": "sites"
+    },
+    {
+      "value": "\"site_type\" IN ('launch_area', 'region')",
+      "name": "sites_site_type_check",
+      "entityType": "checks",
+      "table": "sites"
+    },
+    {
+      "value": "\"latitude_deg\" BETWEEN -90 AND 90",
+      "name": "sites_latitude_deg_range_check",
+      "entityType": "checks",
+      "table": "sites"
+    },
+    {
+      "value": "\"longitude_deg\" BETWEEN -180 AND 180",
+      "name": "sites_longitude_deg_range_check",
+      "entityType": "checks",
+      "table": "sites"
+    },
+    {
+      "value": "\"catchment_radius_km\" IS NULL\n        OR (\"catchment_radius_km\" > 0 AND \"catchment_radius_km\" <= 250)",
+      "name": "sites_catchment_radius_km_range_check",
+      "entityType": "checks",
+      "table": "sites"
+    },
+    {
+      "value": "length(trim(\"time_zone\")) > 0",
+      "name": "sites_time_zone_non_empty_check",
+      "entityType": "checks",
+      "table": "sites"
+    },
+    {
+      "value": "\"is_active\" IN (0, 1)",
+      "name": "sites_is_active_boolean_check",
+      "entityType": "checks",
+      "table": "sites"
+    },
+    {
+      "value": "\"key_type\" IN (\n        'source_takeoff_id',\n        'source_site_token',\n        'normalized_name',\n        'source_point'\n      )",
+      "name": "source_site_mappings_key_type_check",
+      "entityType": "checks",
+      "table": "source_site_mappings"
+    },
+    {
+      "value": "(\n          \"key_type\" IN ('source_takeoff_id', 'source_site_token', 'normalized_name')\n          AND \"key_value\" IS NOT NULL\n          AND length(trim(\"key_value\")) > 0\n          AND \"point_latitude_deg\" IS NULL\n          AND \"point_longitude_deg\" IS NULL\n        )\n        OR (\n          \"key_type\" = 'source_point'\n          AND \"key_value\" IS NULL\n          AND \"point_latitude_deg\" IS NOT NULL\n          AND \"point_longitude_deg\" IS NOT NULL\n        )",
+      "name": "source_site_mappings_key_shape_check",
+      "entityType": "checks",
+      "table": "source_site_mappings"
+    },
+    {
+      "value": "\"point_latitude_deg\" IS NULL\n        OR \"point_latitude_deg\" BETWEEN -90 AND 90",
+      "name": "source_site_mappings_point_latitude_deg_range_check",
+      "entityType": "checks",
+      "table": "source_site_mappings"
+    },
+    {
+      "value": "\"point_longitude_deg\" IS NULL\n        OR \"point_longitude_deg\" BETWEEN -180 AND 180",
+      "name": "source_site_mappings_point_longitude_deg_range_check",
+      "entityType": "checks",
+      "table": "source_site_mappings"
+    },
+    {
+      "value": "\"status\" IN ('provisional', 'approved', 'retired')",
+      "name": "source_site_mappings_status_check",
+      "entityType": "checks",
+      "table": "source_site_mappings"
+    },
+    {
+      "value": "\"verified_at_utc\" IS NULL OR \"verified_at_utc\" GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'",
+      "name": "source_site_mappings_verified_at_utc_shape_check",
+      "entityType": "checks",
+      "table": "source_site_mappings"
+    },
+    {
+      "value": "\"status\" <> 'approved'\n        OR (\n          \"verification_reference\" IS NOT NULL\n          AND length(trim(\"verification_reference\")) > 0\n          AND \"verified_at_utc\" IS NOT NULL\n        )",
+      "name": "source_site_mappings_approved_evidence_check",
+      "entityType": "checks",
+      "table": "source_site_mappings"
+    }
+  ],
+  "renames": []
+}

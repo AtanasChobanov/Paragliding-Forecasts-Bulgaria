@@ -117,6 +117,22 @@ const requiredPaths = [
   "packages/contracts/src/index.ts",
   "packages/contracts/test/contracts.test.ts",
   "packages/contracts/tsconfig.build.json",
+  "packages/database/package.json",
+  "packages/database/README.md",
+  "packages/database/drizzle/20260802104316_create_flight_foundation/migration.sql",
+  "packages/database/drizzle/20260802104333_seed_initial_sites_and_xccontest_source/migration.sql",
+  "packages/database/drizzle.config.ts",
+  "packages/database/src/connection.ts",
+  "packages/database/src/index.ts",
+  "packages/database/src/migrate.ts",
+  "packages/database/src/schema.ts",
+  "packages/database/test/connection.test.ts",
+  "packages/database/test/migrate.test.ts",
+  "packages/database/test/migration-foundation.test.ts",
+  "packages/database/test/schema.test.ts",
+  "packages/database/tsconfig.build.json",
+  "packages/database/tsconfig.json",
+  "packages/database/vitest.config.ts",
   "scripts/dev.mjs",
   "services/ml/README.md",
   "services/ml/.python-version",
@@ -129,6 +145,7 @@ const expectedWorkspaceNames = new Map([
   ["apps/api/package.json", "@paragliding-forecasts/api"],
   ["apps/web/package.json", "@paragliding-forecasts/web"],
   ["packages/contracts/package.json", "@paragliding-forecasts/contracts"],
+  ["packages/database/package.json", "@paragliding-forecasts/database"],
 ]);
 
 const requiredScripts = new Map([
@@ -186,6 +203,10 @@ const requiredScripts = new Map([
     ],
   ],
   ["packages/contracts/package.json", ["build", "test", "test:coverage", "typecheck"]],
+  [
+    "packages/database/package.json",
+    ["build", "db:check", "db:generate", "db:migrate", "test", "test:coverage", "typecheck"],
+  ],
 ]);
 
 const requiredDependencies = new Map([
@@ -194,6 +215,7 @@ const requiredDependencies = new Map([
     ["@paragliding-forecasts/contracts", "cors", "express", "pino", "pino-http", "zod"],
   ],
   ["packages/contracts/package.json", ["zod"]],
+  ["packages/database/package.json", ["drizzle-orm"]],
   [
     "apps/web/package.json",
     [
@@ -212,6 +234,7 @@ const requiredDependencies = new Map([
 
 const requiredDevDependencies = new Map([
   ["package.json", ["@vitest/coverage-v8"]],
+  ["packages/database/package.json", ["@types/node", "drizzle-kit", "tsx"]],
   [
     "apps/web/package.json",
     [

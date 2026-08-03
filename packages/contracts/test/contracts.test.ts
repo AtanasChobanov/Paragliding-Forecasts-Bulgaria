@@ -88,8 +88,8 @@ describe("shared HTTP contracts", () => {
             id: 1,
             slug: "sofia-vitosha-kominite",
             name: "Sofia - Vitosha (Kominite)",
-            latitude: 42.60222,
-            longitude: 23.28927,
+            latitude: 42.6013,
+            longitude: 23.2844,
           },
         ],
       }),
@@ -123,8 +123,8 @@ describe("shared HTTP contracts", () => {
       id: 1,
       slug: "sofia-vitosha-kominite",
       name: "Sofia - Vitosha (Kominite)",
-      latitude: 42.60222,
-      longitude: 23.28927,
+      latitude: 42.6013,
+      longitude: 23.2844,
     };
 
     expect(sitesResponseSchema.safeParse({ sites: [site] }).success).toBe(true);
