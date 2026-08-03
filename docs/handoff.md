@@ -2,20 +2,19 @@
 
 ## Handoff metadata
 
-| Field | Value |
-| --- | --- |
-| Last updated | 2026-08-02 |
-| Current Git branch | `feature/T-008-browser-smoke-test` |
-| Branch relationship | Extends `feature/T-006-T007-forecast-details-page` at `922ceef`, which extends the dashboard implementation at `e744bc5` |
-| Current tasks | T-009 through T-012 — `Review` |
-| Completed scope in this branch | Dashboard/detail implementation plus Playwright Chromium smoke-test configuration, dashboard and detail smoke scenarios, commands, and documentation |
-| Current working tree note | T-009–T-011 and the five T-012 foundation checkpoints are committed; local database files remain ignored |
+| Field                          | Value                                                                                                                                                      |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Last updated                   | 2026-08-03                                                                                                                                                 |
+| Current Git branch             | `feature/T-012-flight-schema` (tracks `origin/feature/T-012-flight-schema`)                                                                                |
+| Branch relationship            | Extends the completed T-008 baseline at `e67bd5b` (`origin/main`) with T-009 through T-012 work                                                            |
+| Current tasks                  | T-001 through T-011 — `Done`; T-012 — `Review`; T-013 — `To Do`                                                                                            |
+| Completed scope in this branch | T-009 coordinate/source research and the reviewed, migrated T-012 SQLite flight-data foundation, in addition to the completed dashboard/browser-smoke work |
+| Current working tree note      | Contains the user-updated task statuses and this aligned handoff update; local databases remain ignored                                                    |
 
 ## T-010 and T-011 flight-source research - read before T-012/T-013
 
 T-010 research is complete and the report is available at
-`T-010-xccontest-research-report.md` (updated 2026-07-28). Treat its result as
-**Review**, not as permission to implement a collector.
+`T-010-xccontest-research-report.md` (updated 2026-07-28). Its status is **Done**; this is not permission to implement a collector.
 
 Key decisions and constraints:
 
@@ -44,7 +43,7 @@ Key decisions and constraints:
 ### T-011 completed result - SkyNomad
 
 T-011 is complete and the report is available at
-`T-011-skynomad-research-report.md` (2026-07-28). Its status is **Review**.
+`T-011-skynomad-research-report.md` (2026-07-28). Its status is **Done**.
 It established that SkyNomad has three materially different surfaces:
 
 - `www.skynomad.com` is a live WordPress site. Its public unauthenticated REST
@@ -487,11 +486,11 @@ before real model output is connected.
 
 Missing records deliberately differ by read model:
 
-| Read model | Behavior |
-| --- | --- |
-| Detailed | `404 FORECAST_NOT_FOUND` |
-| Summaries | `200` missing item |
-| Days | `200` fixed slot with missing p100 metric |
+| Read model | Behavior                                  |
+| ---------- | ----------------------------------------- |
+| Detailed   | `404 FORECAST_NOT_FOUND`                  |
+| Summaries  | `200` missing item                        |
+| Days       | `200` fixed slot with missing p100 metric |
 
 Accepted design decisions are recorded as DEC-015 through DEC-018 in
 [`decisions.md`](decisions.md).
@@ -787,40 +786,27 @@ teal data-status badge colour. Web typecheck, lint, formatting, production
 build, and all 22 web test files / 120 tests passed. No browser automation or
 visual capture was run by request; manual visual acceptance remains pending.
 
-## Git checkpoints
+## Current branch checkpoints
 
-This branch contains these reviewable commits after the T-002 base:
+`feature/T-012-flight-schema` tracks
+`origin/feature/T-012-flight-schema`. The committed T-009 through T-012 work is:
 
-- `3c7283b T-004 add provisional site map coordinates`
-- `34dabe5 T-003-T-005 define dashboard forecast contracts`
-- `e0d07e8 T-003-T-005 add date-aware forecast fixtures`
-- `035ba8e T-003-T-005 add forecast summary endpoint`
-- `af54e88 T-005 add five-day forecast preview endpoint`
-- `5aa3250 T-003-T-005 harden dashboard API implementation`
-- `1519111 T-003-T-005 document dashboard API foundation`
-- `6eb8352 T-003-T-005 extract forecast response mapper`
-- `ac6adf9 T-003-T-005 complete dashboard contract preflight`
-- `9cea79b T-003 scaffold runnable React dashboard workspace`
-- `5abe401 T-003-T-005 add validated dashboard API queries`
-- `71bbc4f T-003-T-005 coordinate dashboard URL state`
-- `ce068f8 T-003 establish dashboard visual foundation`
-- `ee517d5 T-003 render dashboard forecast overview`
-- `3d362a8 T-004 add interactive Leaflet site selector`
-- `3fe4557 T-005 add five-day forecast selector`
-- `9644d30 T-003-T-005 harden dashboard states and accessibility`
-- final checkpoint: `T-003-T-005 document dashboard setup and limitations`
-
-The branch was rebased onto the T-002 merge in current `origin/main`. It has not
-been pushed and no pull request was created.
+- `8923525 T-009-T-011 confirm site references and source research`
+- `2a5d7e4 T-012 add Drizzle SQLite workspace`
+- `6e5ff3f T-012 define flight foundation schema`
+- `d04dd97 T-012 add initial flight database migrations`
+- `fa07b87 T-012 verify flight migration foundation`
+- `522db8d T-012 document database migration workflow`
 
 ## Next implementation step
 
-The browser smoke suite has passed; rerun it when making later UI
-changes or when validating a clean checkout.
-Manual review still owns desktop/narrow visual fidelity, copied URLs/history,
-real Leaflet tiles/pan/zoom/labels, focus appearance, degraded requests/tiles,
-and the browser console.
+Prepare T-013; do not implement or run an automated collector yet. Start by
+reading this handoff, T-013 in `docs/tasks.md`, the T-010 XCContest report, and
+the current decisions. Confirm a permitted input/export method and its allowed
+scope before making source requests or retaining raw records.
 
-T-012 can proceed with a source-neutral schema that preserves
-permission/provenance/validation status, but its 100+/200+/300+ distance rule
-must be confirmed before sample labels are final.
+When permission and a permitted sample are available, use the existing
+`packages/database` schema and the local database selected by `DATABASE_URL`.
+Keep raw inputs and rejected/ambiguous candidates out of Git, preserve
+permission/provenance, and leave Drizzle as the sole DDL and migration owner.
+T-012 is verified and awaiting review; do not alter its applied migrations.

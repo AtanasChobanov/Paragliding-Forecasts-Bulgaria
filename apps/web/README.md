@@ -193,9 +193,7 @@ The desktop route is a fixed-height, no-page-scroll grid: outputs and a
 selected-site Leaflet view occupy the first row, mock forecast inputs and
 top-driver strings the second, then a static five-output `Unchanged`
 previous-run placeholder. It deliberately has no previous-run API field. On
-narrow screens the route stacks and scrolls normally. All seven provisional
-map pins remain clickable; the detail viewport begins focused on the selected
-site and adds a north-up compass. The final visual review remains manual.
+narrow screens the route stacks and scrolls normally. All seven confirmed-site map pins remain clickable; the detail viewport begins focused on the selected site and adds a north-up compass.
 
 ## Map behavior and network dependency
 
@@ -213,8 +211,7 @@ dependency and is best effort, not an offline or production-SLA tile service.
 The URL, linked attribution, maximum zoom, and policy URL are kept in one
 provider descriptor. The app does not prefetch or offer offline downloads. If
 tiles fail, site labels, the native selector, selected forecast, and an explicit
-degraded-map message remain available. Site coordinates are provisional until
-T-009 verifies them.
+degraded-map message remain available. Site coordinates were confirmed in T-009.
 
 ## Forecast date behavior
 
