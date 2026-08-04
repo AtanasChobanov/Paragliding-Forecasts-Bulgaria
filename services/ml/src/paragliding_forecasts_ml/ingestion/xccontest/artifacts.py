@@ -1,0 +1,147 @@
+"""Ignored raw-artifact and interim-state handling for the collector."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from datetime import UTC, datetime
+from pathlib import Path
+from uuid import uuid4
+
+from .models import ArtifactEntry, PageObservation
+
+
+def repository_root() -> Path:
+    """Locate the repository from the installed source-tree package layout."""
+
+    return Path(__file__).resolve().parents[6]
+
+
+def safe_failure_summary(error: Exception) -> str:
+    """Keep a compact operational error without persisting source content."""
+
+    message = " ".join(str(error).splitlines()).strip()
+    error_type = type(error).__name__
+    if not message:
+        return error_type
+    return f"{error_type}: {message[:300]}"
+
+
+class RawArtifactStore:
+    """Writes immutable flight-list fragments and mutable local run state."""
+
+    def __init__(self, *, project_root: Path | None = None, run_key: str | None = None) -> None:
+        self._project_root = project_root or repository_root()
+        self.run_key = run_key or str(uuid4())
+        self.raw_dir = self._project_root / "data" / "raw" / "xccontest" / self.run_key
+        self.interim_dir = self._project_root / "data" / "interim" / "xccontest" / self.run_key
+        self.raw_dir.mkdir(parents=True, exist_ok=False)
+        self.interim_dir.mkdir(parents=True, exist_ok=False)
+        self._entries: list[ArtifactEntry] = []
+
+    @property
+    def entries(self) -> tuple[ArtifactEntry, ...]:
+        return tuple(self._entries)
+
+    def write_page(self, page: PageObservation) -> ArtifactEntry:
+        """Save the unmodified rendered ``#flights`` fragment exactly once."""
+
+        artifact_path = self.raw_dir / f"season-{page.season}-page-{page.page_number:04d}.html"
+        if artifact_path.exists():
+            raise FileExistsError(f"Refusing to overwrite immutable artifact: {artifact_path}")
+
+        encoded_fragment = page.fragment_html.encode("utf-8")
+        with artifact_path.open("xb") as artifact_file:
+            artifact_file.write(encoded_fragment)
+
+        entry = ArtifactEntry(
+            relative_path=artifact_path.relative_to(self._project_root).as_posix(),
+            sha256=hashlib.sha256(encoded_fragment).hexdigest(),
+            season=page.season,
+            page_number=page.page_number,
+            retrieved_at_utc=datetime.now(UTC),
+            first_flight_id=page.first_flight_id,
+            last_flight_id=page.last_flight_id,
+            first_distance_km=page.first_distance_km,
+            last_distance_km=page.last_distance_km,
+        )
+        self._entries.append(entry)
+        return entry
+
+    def write_checkpoint(self, *, season: int, page_number: int, status: str) -> Path:
+        """Record local progress without modifying raw artifacts."""
+
+        checkpoint_path = self.interim_dir / "checkpoint.json"
+        checkpoint_path.write_text(
+            json.dumps(
+                {
+                    "run_key": self.run_key,
+                    "season": season,
+                    "page_number": page_number,
+                    "status": status,
+                    "updated_at_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return checkpoint_path
+
+    def write_failure_report(self, *, error: str) -> Path:
+        """Store collector state only; never include page HTML or credentials."""
+
+        report_path = self.interim_dir / "collection-report.json"
+        report_path.write_text(
+            json.dumps(
+                {
+                    "run_key": self.run_key,
+                    "status": "failed",
+                    "error": error,
+                    "artifacts_written": len(self._entries),
+                    "updated_at_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return report_path
+
+    def finalize_manifest(self, *, completed_seasons: tuple[int, ...]) -> Path:
+        """Write the run manifest once after every requested season completes."""
+
+        manifest_path = self.raw_dir / "manifest.json"
+        if manifest_path.exists():
+            raise FileExistsError(f"Refusing to overwrite immutable manifest: {manifest_path}")
+
+        manifest = {
+            "source": "xccontest",
+            "run_key": self.run_key,
+            "scope": {
+                "country": "BG",
+                "glider_category": "FAI3",
+                "minimum_scored_distance_km": 100,
+                "completed_seasons": list(completed_seasons),
+            },
+            "artifacts": [
+                {
+                    "path": entry.relative_path,
+                    "sha256": entry.sha256,
+                    "season": entry.season,
+                    "page_number": entry.page_number,
+                    "retrieved_at_utc": entry.retrieved_at_utc.isoformat().replace("+00:00", "Z"),
+                    "first_flight_id": entry.first_flight_id,
+                    "last_flight_id": entry.last_flight_id,
+                    "first_distance_km": entry.first_distance_km,
+                    "last_distance_km": entry.last_distance_km,
+                }
+                for entry in self._entries
+            ],
+        }
+        with manifest_path.open("x", encoding="utf-8", newline="\n") as manifest_file:
+            json.dump(manifest, manifest_file, ensure_ascii=False, indent=2)
+            manifest_file.write("\n")
+        return manifest_path
