@@ -2,9 +2,11 @@
 
 ## Status
 
-The Python project metadata and source boundary are scaffolded. Data ingestion,
-feature engineering, training, and prediction entry points start in later
-Takts.
+The XCContest collector boundary is implemented for the explicitly permitted
+browser UI workflow. It captures immutable rendered-list artifacts only; it
+does not parse flights, normalize records, assign sites, deduplicate, or write
+to SQLite. Feature engineering, training, and prediction entry points start in
+later Takts.
 
 ## Why Python exists in a TypeScript-first repository
 
@@ -58,9 +60,31 @@ services/ml/
 `-- uv.lock
 ```
 
-## Planned commands
+## Commands
 
-Exact commands will be added with their executable modules. Expected patterns:
+Run the collector for one or more explicitly selected XCContest seasons:
+
+```powershell
+uv sync --project services/ml
+uv run --project services/ml xccontest-collect --season 2025
+uv run --project services/ml xccontest-collect --season 2025 --season 2024
+```
+
+It is headless by default. Use `--headed` (optionally with `--slow-mo-ms`) for
+local UI inspection. The collector selects the season, `BG` country and `FAI3`
+(`PG *`) through rendered controls, proves descending distance order, follows
+the source's Next pager, and stops after saving the first page containing a
+row below 100 km. It writes exact rendered `#flights` fragments under ignored
+`data/raw/xccontest/<run-key>/` and progress/failure state under ignored
+`data/interim/xccontest/<run-key>/`. `--max-pages` is a safety cap: reaching it
+while results remain at least 100 km fails rather than silently truncating.
+
+Automated tests use a fake UI driver; they do not make live XCContest requests.
+When a developer's browser environment cannot render the list table, stop and
+run the command manually with `--headed`; do not bypass consent, Cloudflare,
+CAPTCHA, login, or call undocumented backend endpoints directly.
+
+Other Python modules remain planned:
 
 ```powershell
 uv run --project services/ml pytest
@@ -86,9 +110,12 @@ Drizzle/Drizzle Kit own all DDL and migrations. Ambiguous or rejected records
 remain as ignored interim/quarantine outputs rather than entering the canonical
 flight table.
 
-T-013 owns the first parser/import pipeline. T-014 hardens duplicate and source
-traceability behavior. T-015 adds small, sanitized, permitted frozen fixtures
-that test the parser offline; fixtures are not the live/raw dataset.
+T-013's collector slice owns source UI control and raw artifact retention. Its
+parser, normalizer, validation, site assignment, and SQLite import must be
+implemented as a later explicitly planned T-013 slice. T-014 owns canonical
+duplicate and persisted source-traceability behavior. T-015 owns small,
+sanitized, permitted frozen fixtures that test the parser offline; fixtures are
+not the live/raw dataset.
 
 ## Reproducibility and data safety
 

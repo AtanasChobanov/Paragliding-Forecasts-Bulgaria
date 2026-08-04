@@ -34,7 +34,7 @@ consequences. Temporary progress and Git state belong in
 | DEC-019 | Use Playwright Chromium for local browser smoke coverage | Accepted | 2026-07-25 |
 | DEC-020 | Use a phased Drizzle-owned SQLite foundation for flight data | Accepted | 2026-07-30 |
 | DEC-021 | Finalize the normalized T-012 flight foundation schema | Accepted | 2026-08-02 |
-
+| DEC-022 | Collect XCContest list pages through the permitted rendered UI boundary | Accepted | 2026-08-04 |
 ## Individual decisions
 
 ### DEC-001 — Use one repository with bounded subprojects
@@ -799,6 +799,64 @@ column.
 [`architecture.md`](architecture.md), [`handoff.md`](handoff.md),
 [`../data/README.md`](../data/README.md), [`../CONTRIBUTING.md`](../CONTRIBUTING.md).
 
+
+### DEC-022 - Collect XCContest list pages through the permitted rendered UI boundary
+
+**Status:** Accepted
+
+**Date:** 2026-08-04
+
+**Context:** T-010 established that XCContest flight-list data is dynamically
+rendered and that undocumented backend calls, session values and challenge
+bypass must not be used. For the present T-013 work, the project owner has
+confirmed an ordinary, low-volume browser workflow for the public flights page.
+The first implementation needs raw evidence without prematurely owning the
+parser, validation, matching, duplicate or persistence responsibilities.
+
+**Decision:** The T-013 collector uses Playwright Chromium only through the
+rendered XCContest controls and table. For every requested season it selects
+the `BG` country and `FAI3` (`PG *`) category, establishes non-increasing
+scored distance order through the rendered length control, then uses the
+rendered Next pager rather than calculating page URLs. It paces source state
+transitions by at least three seconds, captures the exact rendered `#flights`
+fragment once per page, and stops after the first captured page containing a
+distance below 100 km. A full raw page is retained even when its final rows
+are below the threshold; a later parser must exclude those rows from the
+accepted dataset.
+
+The command defaults to headless execution and offers `--headed` and
+`--slow-mo-ms` for manual local inspection. It accepts one or more explicit
+`--season` values and a fail-closed `--max-pages` safety cap. It does not accept
+or persist a permission-reference argument. The later database-import slice
+owns the `ingestion_runs` placeholder required by the accepted schema.
+
+The collector writes ignored immutable raw fragments and a manifest under
+`data/raw/xccontest/<run-key>/`, with ignored local progress or failure state
+under `data/interim/xccontest/<run-key>/`. It must not call undocumented
+backend endpoints, retain cookies/tokens, bypass login/consent/Cloudflare or
+CAPTCHA, download IGC/track files, retain pilot identity, parse/normalize
+flights, assign sites, decide canonical duplicates, or write SQLite records.
+
+**Rationale:** Browser control interaction follows the scope explicitly
+authorised for this project, while preserving exact source evidence for a
+separate parser run. A source-provided pager avoids a brittle dependence on the
+current hash/offset convention. The threshold and page cap reduce collection
+volume without silently dropping potentially qualifying pages.
+
+**Consequences:** Collector tests use a fake UI driver and synthetic fragments,
+not a frozen source fixture. T-014 remains responsible for canonical duplicate
+and persisted source-traceability behavior; T-015 remains responsible for
+sanitized frozen parser fixtures. On 2026-08-04, the available headless browser
+did not render a visible flight table, so live success is unverified. A
+developer must perform a permitted `--headed` run in a normal browser
+environment; an interstitial or challenge must be handled only by the ordinary
+user flow, never bypassed.
+
+**Related files:** [`../services/ml/README.md`](../services/ml/README.md),
+
+[`handoff.md`](handoff.md), [`tasks.md`](tasks.md),
+[`T-010-xccontest-research-report.md`](T-010-xccontest-research-report.md).
+
 ## Open decisions
 
 | Question | Options / constraints | Resolve by |
@@ -806,7 +864,7 @@ column.
 | What exact T-012 field types, nullability, indexes, constraints, and migration layout should be used? | Must implement DEC-020's bounded Takt 2 tables, preserve source/provenance/validation data, retain numeric site IDs, and keep accepted flights distinct from quarantined candidates. | T-012 design and implementation. |
 | Which task owns the persisted prediction schema and SQLite forecast adapter? | The backlog has flight and weather schema tasks but no explicit owner for storing T-022-T-024 outputs and replacing the T-002 mock adapter. Public units/status/provenance must be mapped deliberately. | Backlog planning before real predictions are connected to the API. |
 | What are the final coordinates, aliases, and catchment radii for each site? | Current map points are provisional; Pastrina and the Dobrich regional model need particular confirmation. | T-009. |
-| What access methods, permissions, attribution, caching, and rate limits apply to flight sources? | XCContest and SkyNomad must be researched without assuming scraping permission. | T-010 and T-011. |
+| What retention, attribution, licensing, and rate limits apply beyond the current XCContest browser workflow? | T-013 has a project-owner-confirmed ordinary low-volume UI workflow; do not extend it to bulk/commercial use or SkyNomad without explicit terms. | Before broader collection or product use. |
 | Which historical forecast/archive or reanalysis sources will be used? | Exact archived forecasts are preferred; reanalysis is the documented fallback. | T-016, with units refined in T-017. |
 | Which first alert channel should be implemented? | Dashboard watchlist, email, Telegram, or another agreed channel; alerts require at least one-day lead time and deduplication. | T-027/T-028. |
 | What deployment/distribution model is required beyond local development? | The MVP is local-first; cloud/distributed infrastructure needs a demonstrated requirement. | No task assigned; decide when deployment becomes an accepted scope item. |

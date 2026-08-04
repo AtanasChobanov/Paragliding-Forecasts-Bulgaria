@@ -4,12 +4,67 @@
 
 | Field                          | Value                                                                                                                                                      |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Last updated                   | 2026-08-03                                                                                                                                                 |
-| Current Git branch             | `feature/T-012-flight-schema` (tracks `origin/feature/T-012-flight-schema`)                                                                                |
+| Last updated                   | 2026-08-04                                                                                                                                                 |
+| Current Git branch             | `feature/T-013-xccontest-collector`                                                                                                                         |
 | Branch relationship            | Extends the completed T-008 baseline at `e67bd5b` (`origin/main`) with T-009 through T-012 work                                                            |
 | Current tasks                  | T-001 through T-011 — `Done`; T-012 — `Review`; T-013 — `To Do`                                                                                            |
 | Completed scope in this branch | T-009 coordinate/source research and the reviewed, migrated T-012 SQLite flight-data foundation, in addition to the completed dashboard/browser-smoke work |
 | Current working tree note      | Contains the user-updated task statuses and this aligned handoff update; local databases remain ignored                                                    |
+
+## T-013 collector slice - current (2026-08-04)
+
+This section supersedes the older T-013 availability/blocking statements below
+for the explicitly allowed XCContest flights-page browser workflow. T-013 is
+**In Progress** on `feature/T-013-xccontest-collector`; T-012 remains in
+`Review`. The task is not complete: this change implements the collector
+boundary only, not the parser/import pipeline or a validated stored flight
+sample.
+
+The project owner confirmed normal, low-volume browser use of
+`https://www.xcontest.org/world/en/flights/` for this work. The collector
+uses Playwright only through visible rendered controls: selected season, `BG`
+country, `FAI3` (`PG *`) glider category, descending length control, and the
+source-provided Next pager. It does not construct page-offset URLs or call an
+undocumented backend endpoint. It waits at least three seconds between source
+state transitions, captures exact rendered `#flights` fragments as ignored
+immutable raw artifacts, stops after saving the first page containing a result
+below 100 km, and fails closed if `--max-pages` is reached while rows remain at
+least 100 km. A raw page that crosses the threshold may contain shorter rows;
+the later parser must discard those from accepted records.
+
+Command contract:
+
+```powershell
+uv sync --project services/ml
+uv run --project services/ml xccontest-collect --season 2025
+uv run --project services/ml xccontest-collect --season 2025 --season 2024
+uv run --project services/ml xccontest-collect --season 2025 --headed
+```
+
+It is headless by default; `--headed` and `--slow-mo-ms` are local inspection
+fallbacks. There is deliberately no `--permission-reference` argument and no
+permission value in the raw manifest. A later database-import slice owns the
+`ingestion_runs` placeholder required by the accepted schema.
+
+Implemented files live in
+`services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/`. The collector
+writes under ignored `data/raw/xccontest/<run-key>/` and
+`data/interim/xccontest/<run-key>/`. It does not parse/normalize records, match
+sites, decide canonical duplicates, persist SQLite rows, retain pilot identity,
+or download IGC/track files. Those T-013 responsibilities require their own
+follow-up plan; canonical duplicate/source traceability remains T-014 and
+sanitized frozen parser fixtures remain T-015.
+
+Verification: `uv run --project services/ml ruff format --check`,
+`uv run --project services/ml ruff check`, and `uv run --project services/ml
+pytest` pass (9 tests). `xccontest-collect --help` passes. Chromium is
+installed locally, but two allowed headless 2025 live attempts did not render
+a visible `#flights` table and timed out before writing an artifact. This is an
+unverified browser-environment limitation, not a successful collection. A
+developer must manually run the permitted `--headed` command in a normal
+desktop environment, check the selected controls/table/pager and only follow
+ordinary consent/login/challenge flow; do not bypass any of them.
+
 
 ## T-010 and T-011 flight-source research - read before T-012/T-013
 
