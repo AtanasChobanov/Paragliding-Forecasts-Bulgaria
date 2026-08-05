@@ -140,7 +140,7 @@ class PlaywrightFlightListDriver:
                     const first = document.querySelector("#flights table.XClist tbody tr[id^='flight-']");
                     return first !== null && first.id.replace(/^flight-/, '') !== previousId;
                 }""",
-                previous_first_flight_id,
+                arg=previous_first_flight_id,
             )
         except TimeoutError as error:
             raise BrowserCollectionError(
@@ -189,7 +189,7 @@ class PlaywrightFlightListDriver:
     def _wait_for_selected_value(self, selector: str, expected_value: str) -> None:
         self._active_page.wait_for_function(
             "([selector, expectedValue]) => document.querySelector(selector)?.value === expectedValue",
-            [selector, expected_value],
+            arg=[selector, expected_value],
         )
         self._wait_for_flights_container()
 

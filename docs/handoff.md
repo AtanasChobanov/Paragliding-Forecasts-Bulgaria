@@ -57,7 +57,7 @@ sanitized frozen parser fixtures remain T-015.
 
 Verification: `uv run --project services/ml ruff format --check`,
 `uv run --project services/ml ruff check`, and `uv run --project services/ml
-pytest` pass (9 tests). `xccontest-collect --help` passes. Chromium is
+pytest` pass (10 tests). `xccontest-collect --help` passes. Chromium is
 installed locally, but two allowed headless 2025 live attempts did not render
 a visible `#flights` table and timed out before writing an artifact. This is an
 unverified browser-environment limitation, not a successful collection. A
