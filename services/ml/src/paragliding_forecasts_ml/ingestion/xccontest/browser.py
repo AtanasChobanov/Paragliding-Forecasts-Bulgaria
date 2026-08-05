@@ -18,7 +18,7 @@ from playwright.sync_api import (
 from .models import COUNTRY_CODE, GLIDER_CATEGORY, CollectorConfig, PageObservation, RowObservation
 
 ROOT_URL = "https://www.xcontest.org/world/en/flights/"
-SEASON_SELECTOR = "div.under-bar select"
+SEASON_SELECTOR = 'div.under-bar select[onchange*="document.location.replace"]'
 COUNTRY_SELECTOR = 'select[name="filter[country]"]'
 GLIDER_SELECTOR = 'select[name="filter[detail_glider_catg]"]'
 DISTANCE_SORT_SELECTOR = 'a[href*="flights[sort]=distance"]'
