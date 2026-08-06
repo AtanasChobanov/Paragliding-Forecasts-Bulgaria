@@ -92,6 +92,11 @@ interim checkpoint explicitly record those unresolved scopes. Tests are offline
 fake-driver tests and must not be mistaken for a live-data validation. Manual
 headed verification remains required before treating a real collected sample as
 validated.
+
+XCContest seasons span two calendar years. For a selected season `Y`, the date
+control is valid from `Y-1-10-01` through `Y-09-30`; collector validation must
+use this range rather than requiring every source-offered date to begin with
+`Y-`.
 ## T-010 and T-011 flight-source research - read before T-012/T-013
 
 T-010 research is complete and the report is available at

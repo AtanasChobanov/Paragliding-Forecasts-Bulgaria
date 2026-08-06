@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import date
 from itertools import pairwise
 from typing import Self
 
@@ -87,13 +88,28 @@ class PlaywrightFlightListDriver:
             """selects => Array.from(selects[0].options).map(option => option.value)"""
         )
         dates = tuple(value for value in options if value)
-        if any(not value.startswith(f"{season}-") for value in dates):
-            raise BrowserCollectionError(
-                "XCContest date selector exposed a date outside the selected season."
-            )
+        self._validate_season_dates(season, dates)
         if len(set(dates)) != len(dates):
             raise BrowserCollectionError("XCContest date selector exposed duplicate date values.")
         return dates
+
+    @staticmethod
+    def _validate_season_dates(season: int, dates: tuple[str, ...]) -> None:
+        """Require dates within XCContest's Oct. 1 through Sept. 30 season."""
+
+        season_start = date(season - 1, 10, 1)
+        season_end = date(season, 9, 30)
+        for value in dates:
+            try:
+                selected_date = date.fromisoformat(value)
+            except ValueError as error:
+                raise BrowserCollectionError(
+                    "XCContest date selector exposed a non-ISO date value."
+                ) from error
+            if not season_start <= selected_date <= season_end:
+                raise BrowserCollectionError(
+                    "XCContest date selector exposed a date outside the selected season."
+                )
 
     def read_page(self, season: int, scope: FlightListScope) -> PageObservation:
         """Read control fields and retain only the rendered list fragment."""

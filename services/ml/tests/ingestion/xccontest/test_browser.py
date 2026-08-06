@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from paragliding_forecasts_ml.ingestion.xccontest.browser import PlaywrightFlightListDriver
+import pytest
+
+from paragliding_forecasts_ml.ingestion.xccontest.browser import (
+    BrowserCollectionError,
+    PlaywrightFlightListDriver,
+)
 from paragliding_forecasts_ml.ingestion.xccontest.models import CollectorConfig
 
 
@@ -37,3 +42,16 @@ def test_passes_wait_for_function_values_by_keyword_argument() -> None:
             ['select[name="filter[country]"]', "BG"],
         )
     ]
+
+
+def test_accepts_dates_from_both_calendar_years_of_an_xccontest_season() -> None:
+    PlaywrightFlightListDriver._validate_season_dates(
+        2025,
+        ("2024-10-01", "2024-12-31", "2025-01-01", "2025-09-30"),
+    )
+
+
+@pytest.mark.parametrize("value", ("2024-09-30", "2025-10-01", "not-a-date"))
+def test_rejects_dates_outside_or_invalid_for_an_xccontest_season(value: str) -> None:
+    with pytest.raises(BrowserCollectionError):
+        PlaywrightFlightListDriver._validate_season_dates(2025, (value,))
