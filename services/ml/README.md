@@ -85,8 +85,19 @@ Every state transition is sequential and paced by at least three seconds; this
 collector intentionally does not open parallel tabs. It writes nonempty exact
 rendered `#flights` fragments under ignored `data/raw/xccontest/<run-key>/` and
 progress/failure state under ignored `data/interim/xccontest/<run-key>/`. The
-manifest records the category, date and sort for every artifact. `--max-views`
-is a fail-closed cap across the full run, rather than a pagination cap.
+browser observation keeps the raw flight date, displayed takeoff time and UTC
+offset, launch name/country/search URL, route label, distance, duration, numeric
+flight ID, and canonical detail URL needed by the next parser slice. Optional
+values remain missing for short source rows; the collector does not normalize
+them or accept them as database records.
+
+The versioned manifest records source URL, collector lifecycle timestamps,
+completion/coverage status, category/date/sort scope, artifact hashes, per-view
+row counts, qualifying-distance counts, and run-wide observed/distinct/repeated
+flight-ID counts. The CLI also returns the repository-relative manifest path
+and SHA-256 needed by the later `ingestion_runs` write. The checkpoint and
+failure report carry the available observation counters. `--max-views` is a
+fail-closed cap across the full run, rather than a pagination cap.
 
 A run reports `incomplete` when a category/date view remains saturated after
 all supplementary sort views. Those views can discover additional flight IDs,
@@ -124,12 +135,17 @@ Drizzle/Drizzle Kit own all DDL and migrations. Ambiguous or rejected records
 remain as ignored interim/quarantine outputs rather than entering the canonical
 flight table.
 
-T-013's collector slice owns source UI control and raw artifact retention. Its
-parser, normalizer, validation, site assignment, and SQLite import must be
-implemented as a later explicitly planned T-013 slice. T-014 owns canonical
-duplicate and persisted source-traceability behavior. T-015 owns small,
-sanitized, permitted frozen fixtures that test the parser offline; fixtures are
-not the live/raw dataset.
+T-013's collector slice owns source UI control and raw artifact retention. It
+does not drop repeated flight IDs because the umbrella PG view deliberately
+overlaps exact-category and rescue-sort views; its repeated-observation count
+is operational coverage metadata, not a canonical duplicate decision. The
+T-013 parser/normalizer must collapse same-run observations by XCContest
+`source_flight_id` before site assignment while retaining every contributing
+artifact reference. Validation, site assignment, and SQLite import remain later
+explicitly planned T-013 slices. T-014 owns hardened cross-run idempotency,
+conflicting-duplicate detection, and persisted source traceability. T-015 owns
+small, sanitized, permitted frozen fixtures that test the parser offline;
+fixtures are not the live/raw dataset.
 
 ## Reproducibility and data safety
 

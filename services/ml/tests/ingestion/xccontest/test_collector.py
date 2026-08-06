@@ -122,6 +122,13 @@ def test_completes_from_primary_pg_view_when_it_reaches_the_threshold(tmp_path) 
     assert report.season_statuses[0].status == "complete_primary"
     assert report.season_statuses[0].unresolved_scopes == ()
     assert len(report.artifacts) == 1
+    assert report.status == "complete"
+    assert report.manifest_relative_path == "data/raw/xccontest/test-run/manifest.json"
+    assert len(report.manifest_sha256) == 64
+    assert report.started_at_utc <= report.completed_at_utc
+    assert report.row_observations_seen == 3
+    assert report.distinct_source_flights_seen == 3
+    assert report.repeated_source_flight_observations == 0
     checkpoint = json.loads((artifacts.interim_dir / "checkpoint.json").read_text())
     assert checkpoint["status"] == "complete_primary"
 

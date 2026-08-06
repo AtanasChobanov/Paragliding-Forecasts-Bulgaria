@@ -9,9 +9,16 @@ from typing import Self
 
 from playwright.sync_api import Browser, BrowserContext, Page, Playwright, sync_playwright
 
-from .models import COUNTRY_CODE, CollectorConfig, FlightListScope, PageObservation, RowObservation
+from .models import (
+    COUNTRY_CODE,
+    SOURCE_LIST_URL,
+    CollectorConfig,
+    FlightListScope,
+    PageObservation,
+    RowObservation,
+)
 
-ROOT_URL = "https://www.xcontest.org/world/en/flights/"
+ROOT_URL = SOURCE_LIST_URL
 SEASON_SELECTOR = 'div.under-bar select[onchange*="document.location.replace"]'
 COUNTRY_SELECTOR = 'select[name="filter[country]"]'
 GLIDER_SELECTOR = 'select[name="filter[detail_glider_catg]"]'
@@ -119,21 +126,30 @@ class PlaywrightFlightListDriver:
         fragment_html = page.locator("#flights").evaluate("element => element.outerHTML")
         raw_rows = page.locator(ROW_SELECTOR).evaluate_all(
             """rows => rows.map(row => {
+                const cells = Array.from(row.querySelectorAll(':scope > td'));
+                const takeoffCell = cells[1];
                 const distance = row.querySelector('td.km strong')?.textContent?.trim() ?? '';
                 const launchLink = row.querySelector('a.lau');
                 const launchCell = launchLink?.closest('td');
                 const launchCountry = launchCell?.querySelector('.cic')?.textContent?.trim() ?? '';
-                return { id: row.id.replace(/^flight-/, ''), distance, launchCountry };
+                const route = launchCell?.nextElementSibling?.querySelector('[title]');
+                const detailLink = row.querySelector('a.detail');
+                return {
+                    id: row.id.replace(/^flight-/, ''),
+                    distance,
+                    launchCountry,
+                    flightDate: takeoffCell?.querySelector('div.full')?.firstChild?.textContent?.trim() || null,
+                    takeoffTime: takeoffCell?.querySelector('em')?.textContent?.trim() || null,
+                    utcOffset: takeoffCell?.querySelector('.XCutcOffset')?.textContent?.trim() || null,
+                    launchName: launchLink?.getAttribute('title')?.trim() || null,
+                    launchSearchUrl: launchLink?.href || null,
+                    routeType: route?.getAttribute('title')?.trim() || null,
+                    duration: row.querySelector('td.dur strong')?.textContent?.trim() || null,
+                    detailUrl: detailLink?.href || null,
+                };
             })"""
         )
-        rows = tuple(
-            RowObservation(
-                source_flight_id=str(row["id"]),
-                distance_km=float(str(row["distance"]).replace(",", ".")),
-                launch_country_code=str(row["launchCountry"]),
-            )
-            for row in raw_rows
-        )
+        rows = tuple(self._row_observation(row) for row in raw_rows)
         next_link = page.locator(".XCpager a[title='next page']")
         next_href = next_link.get_attribute("href") if next_link.count() else None
         return PageObservation(
@@ -145,6 +161,31 @@ class PlaywrightFlightListDriver:
             rows=rows,
             fragment_html=fragment_html,
             has_next_page=bool(next_href and next_href != "#"),
+        )
+
+    @staticmethod
+    def _row_observation(raw_row: dict[str, object]) -> RowObservation:
+        """Keep source strings raw while converting only the distance used for collection."""
+
+        def optional_text(key: str) -> str | None:
+            value = raw_row.get(key)
+            if value is None:
+                return None
+            text = str(value).strip()
+            return text or None
+
+        return RowObservation(
+            source_flight_id=str(raw_row["id"]),
+            distance_km=float(str(raw_row["distance"]).replace(",", ".")),
+            launch_country_code=str(raw_row["launchCountry"]),
+            flight_date_raw=optional_text("flightDate"),
+            takeoff_time_raw=optional_text("takeoffTime"),
+            utc_offset_raw=optional_text("utcOffset"),
+            launch_name_raw=optional_text("launchName"),
+            launch_search_url=optional_text("launchSearchUrl"),
+            route_type_raw=optional_text("routeType"),
+            duration_raw=optional_text("duration"),
+            source_flight_url=optional_text("detailUrl"),
         )
 
     def _season_option_value(self, season: int) -> str:

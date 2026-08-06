@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import replace
 from itertools import pairwise
 from typing import Protocol
@@ -69,6 +70,15 @@ class FlightListCollector:
                 completed_seasons=tuple(completed_seasons),
                 season_statuses=tuple(season_statuses),
             )
+            manifest_sha256 = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+            completed_at_utc = self._artifacts.completed_at_utc
+            if completed_at_utc is None:
+                raise CollectionError("XCContest manifest did not record a completion time.")
+            run_status = (
+                "incomplete"
+                if any(status.unresolved_scopes for status in season_statuses)
+                else "complete"
+            )
             return CollectionReport(
                 run_key=self._artifacts.run_key,
                 artifact_root=self._artifacts.raw_dir,
@@ -76,6 +86,18 @@ class FlightListCollector:
                 season_statuses=tuple(season_statuses),
                 artifacts=self._artifacts.entries,
                 manifest_path=manifest_path,
+                manifest_relative_path=manifest_path.relative_to(
+                    self._artifacts.project_root
+                ).as_posix(),
+                manifest_sha256=manifest_sha256,
+                status=run_status,
+                started_at_utc=self._artifacts.started_at_utc,
+                completed_at_utc=completed_at_utc,
+                row_observations_seen=self._artifacts.row_observations_seen,
+                distinct_source_flights_seen=self._artifacts.distinct_source_flights_seen,
+                repeated_source_flight_observations=(
+                    self._artifacts.repeated_source_flight_observations
+                ),
             )
         except Exception as error:
             self._artifacts.write_failure_report(error=safe_failure_summary(error))

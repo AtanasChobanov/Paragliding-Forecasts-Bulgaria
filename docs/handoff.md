@@ -9,7 +9,7 @@
 | Branch relationship            | Extends the completed T-008 baseline at `e67bd5b` (`origin/main`) with T-009 through T-012 work                                                            |
 | Current tasks                  | T-001 through T-011 — `Done`; T-012 — `Review`; T-013 — `In Progress`                                                                                     |
 | Completed scope in this branch | T-009 coordinate/source research and the reviewed, migrated T-012 SQLite flight-data foundation, in addition to the completed dashboard/browser-smoke work |
-| Current working tree note      | Contains the user-updated task statuses and this aligned handoff update; local databases remain ignored                                                    |
+| Current working tree note      | Contains T-013 raw-row/manifest contract hardening and focused tests; local raw data and databases remain ignored                                         |
 
 ## T-013 collector slice - current (2026-08-04)
 
@@ -97,6 +97,57 @@ XCContest seasons span two calendar years. For a selected season `Y`, the date
 control is valid from `Y-1-10-01` through `Y-09-30`; collector validation must
 use this range rather than requiring every source-offered date to begin with
 `Y-`.
+
+## T-013 collector data-contract audit - current (2026-08-06)
+
+The completed local run
+`fe8a32a0-03c7-4963-8931-1dc7c614c451` was compared against the accepted
+T-012 Drizzle schema and every representative XCContest list-row field. Each
+of its six 100-row raw fragments contains numeric flight ID, displayed date and
+takeoff time, UTC offset, launch name/country/search URL (including the source
+point token), route label, scored distance, duration, and canonical detail URL.
+The list page does not provide a separate permitted track download URL; the
+T-012 `track_url` column is nullable.
+
+Future collector runs now keep those values as optional raw
+`RowObservation` fields without normalizing or accepting them. Short rows
+remain collectable and must be rejected or quarantined by the parser. The
+versioned raw manifest now carries source URL, collector version, start/end
+times, completion/coverage status, per-artifact row/threshold counts, and
+run-wide observed/distinct/repeated flight-ID counts. The collection report
+returns the repository-relative manifest path and SHA-256 needed by
+`ingestion_runs`; checkpoint and failure state include the available counters.
+Existing ignored manifests are immutable and are not rewritten.
+
+The inspected run has 600 row observations / 500 distinct IDs / 100 repeated
+observations. At the 100 km threshold it has 324 observations / 224 distinct
+IDs / 100 repeated observations. The 100 repeats are the expected overlap
+between the initial PG umbrella view and the exact-category partitions.
+Collector artifacts therefore remain untouched. The next T-013
+parser/normalizer must collapse same-run rows by numeric XCContest
+`source_flight_id` before site matching and preserve all contributing artifact
+references. T-014 then hardens cross-run idempotency, conflicting-duplicate
+handling, and persisted traceability.
+
+Schema-to-pipeline ownership remains:
+
+- parser/normalizer derives `takeoff_at_utc` from raw date/time/offset, parses
+  launch point/name evidence, maps route and duration, applies the 100 km
+  threshold, and canonicalizes the detail URL;
+- validation accepts only approved `source_site_mappings` for priority sites
+  and quarantines unknown or ambiguous launch evidence;
+- persistence supplies source/method/permission policy, usage flags, full
+  pipeline version, validation timestamps/notes and database timestamps, then
+  writes one `ingestion_runs` row plus accepted `flight_records` in a
+  transaction with outcome counters;
+- no permission basis/reference may be invented from the collector manifest.
+  A truthful value matching the T-012 enum remains a required import gate.
+
+Verification passed: Ruff formatting and lint; 19 Python tests; an offline
+Playwright DOM smoke over the saved 100-row primary fragment; collector CLI
+help; repository Prettier check; repository structure check; and
+`git diff --check`. No new live source request was made.
+
 ## T-010 and T-011 flight-source research - read before T-012/T-013
 
 T-010 research is complete and the report is available at

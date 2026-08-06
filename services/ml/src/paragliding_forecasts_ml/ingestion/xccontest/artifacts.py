@@ -4,11 +4,22 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from .models import ArtifactEntry, FlightListScope, PageObservation, SeasonCollectionStatus
+from .models import (
+    COLLECTOR_VERSION,
+    MIN_DISTANCE_KM,
+    RAW_MANIFEST_SCHEMA_VERSION,
+    SOURCE_CODE,
+    SOURCE_LIST_URL,
+    ArtifactEntry,
+    FlightListScope,
+    PageObservation,
+    SeasonCollectionStatus,
+)
 
 
 def repository_root() -> Path:
@@ -42,18 +53,51 @@ def scope_metadata(scope: FlightListScope) -> dict[str, str | None]:
 class RawArtifactStore:
     """Writes immutable flight-list fragments and mutable local run state."""
 
-    def __init__(self, *, project_root: Path | None = None, run_key: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        project_root: Path | None = None,
+        run_key: str | None = None,
+        clock: Callable[[], datetime] | None = None,
+    ) -> None:
         self._project_root = project_root or repository_root()
+        self._clock = clock or (lambda: datetime.now(UTC))
         self.run_key = run_key or str(uuid4())
+        self.started_at_utc = self._now()
+        self.completed_at_utc: datetime | None = None
         self.raw_dir = self._project_root / "data" / "raw" / "xccontest" / self.run_key
         self.interim_dir = self._project_root / "data" / "interim" / "xccontest" / self.run_key
         self.raw_dir.mkdir(parents=True, exist_ok=False)
         self.interim_dir.mkdir(parents=True, exist_ok=False)
         self._entries: list[ArtifactEntry] = []
+        self._row_observations_seen = 0
+        self._source_flight_ids: set[str] = set()
+
+    @property
+    def project_root(self) -> Path:
+        return self._project_root
 
     @property
     def entries(self) -> tuple[ArtifactEntry, ...]:
         return tuple(self._entries)
+
+    @property
+    def row_observations_seen(self) -> int:
+        return self._row_observations_seen
+
+    @property
+    def distinct_source_flights_seen(self) -> int:
+        return len(self._source_flight_ids)
+
+    @property
+    def repeated_source_flight_observations(self) -> int:
+        return self._row_observations_seen - self.distinct_source_flights_seen
+
+    def _now(self) -> datetime:
+        value = self._clock()
+        if value.tzinfo is None:
+            raise ValueError("Artifact clock must return a timezone-aware datetime.")
+        return value.astimezone(UTC).replace(microsecond=0)
 
     def write_page(self, page: PageObservation) -> ArtifactEntry:
         """Save the unmodified rendered ``#flights`` fragment exactly once."""
@@ -78,13 +122,19 @@ class RawArtifactStore:
             date_filter=scope.date_filter,
             sort_key=scope.sort_key,
             sort_direction=scope.sort_direction,
-            retrieved_at_utc=datetime.now(UTC),
+            retrieved_at_utc=self._now(),
             first_flight_id=page.first_flight_id,
             last_flight_id=page.last_flight_id,
             first_distance_km=page.first_distance_km,
             last_distance_km=page.last_distance_km,
+            row_observation_count=len(page.rows),
+            qualifying_row_observation_count=sum(
+                row.distance_km >= MIN_DISTANCE_KM for row in page.rows
+            ),
         )
         self._entries.append(entry)
+        self._row_observations_seen += len(page.rows)
+        self._source_flight_ids.update(row.source_flight_id for row in page.rows)
         return entry
 
     def write_checkpoint(
@@ -106,7 +156,13 @@ class RawArtifactStore:
                     "status": status,
                     "scope": scope_metadata(scope),
                     "unresolved_scopes": [scope_metadata(item) for item in unresolved_scopes],
-                    "updated_at_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+                    "artifacts_written": len(self._entries),
+                    "row_observations_seen": self.row_observations_seen,
+                    "distinct_source_flights_seen": self.distinct_source_flights_seen,
+                    "repeated_source_flight_observations": (
+                        self.repeated_source_flight_observations
+                    ),
+                    "updated_at_utc": self._now().isoformat().replace("+00:00", "Z"),
                 },
                 ensure_ascii=False,
                 indent=2,
@@ -120,6 +176,7 @@ class RawArtifactStore:
         """Store collector state only; never include page HTML or credentials."""
 
         report_path = self.interim_dir / "collection-report.json"
+        failed_at_utc = self._now()
         report_path.write_text(
             json.dumps(
                 {
@@ -127,7 +184,14 @@ class RawArtifactStore:
                     "status": "failed",
                     "error": error,
                     "artifacts_written": len(self._entries),
-                    "updated_at_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+                    "row_observations_seen": self.row_observations_seen,
+                    "distinct_source_flights_seen": self.distinct_source_flights_seen,
+                    "repeated_source_flight_observations": (
+                        self.repeated_source_flight_observations
+                    ),
+                    "started_at_utc": self.started_at_utc.isoformat().replace("+00:00", "Z"),
+                    "failed_at_utc": failed_at_utc.isoformat().replace("+00:00", "Z"),
+                    "updated_at_utc": failed_at_utc.isoformat().replace("+00:00", "Z"),
                 },
                 ensure_ascii=False,
                 indent=2,
@@ -149,9 +213,21 @@ class RawArtifactStore:
         if manifest_path.exists():
             raise FileExistsError(f"Refusing to overwrite immutable manifest: {manifest_path}")
 
+        self.completed_at_utc = self._now()
+        run_status = (
+            "incomplete"
+            if any(status.unresolved_scopes for status in season_statuses)
+            else "complete"
+        )
         manifest = {
-            "source": "xccontest",
+            "manifest_schema_version": RAW_MANIFEST_SCHEMA_VERSION,
+            "collector_version": COLLECTOR_VERSION,
+            "source": SOURCE_CODE,
+            "source_url": SOURCE_LIST_URL,
             "run_key": self.run_key,
+            "status": run_status,
+            "started_at_utc": self.started_at_utc.isoformat().replace("+00:00", "Z"),
+            "completed_at_utc": self.completed_at_utc.isoformat().replace("+00:00", "Z"),
             "scope": {
                 "country": "BG",
                 "primary_glider_category": "FAI3",
@@ -168,6 +244,12 @@ class RawArtifactStore:
                 }
                 for status in season_statuses
             ],
+            "observation_counts": {
+                "views_written": len(self._entries),
+                "row_observations_seen": self.row_observations_seen,
+                "distinct_source_flights_seen": self.distinct_source_flights_seen,
+                "repeated_source_flight_observations": (self.repeated_source_flight_observations),
+            },
             "artifacts": [
                 {
                     "path": entry.relative_path,
@@ -182,6 +264,8 @@ class RawArtifactStore:
                     "last_flight_id": entry.last_flight_id,
                     "first_distance_km": entry.first_distance_km,
                     "last_distance_km": entry.last_distance_km,
+                    "row_observation_count": entry.row_observation_count,
+                    "qualifying_row_observation_count": (entry.qualifying_row_observation_count),
                 }
                 for entry in self._entries
             ],

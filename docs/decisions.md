@@ -897,11 +897,15 @@ records without relying on a prohibited navigation mechanism, but it is not a
 completeness proof.
 
 **Consequences:** `--max-pages` is replaced by a fail-closed `--max-views` cap
-for all rendered views in a run. The raw collector still does not parse,
-normalize, retain pilot identity as an accepted field, deduplicate canonical
-records, assign sites, or write SQLite. T-014 and T-015 scope remains unchanged.
-A developer must manually verify a permitted headed run in a normal desktop
-browser before treating any live sample as validated.
+for all rendered views in a run. The raw collector still does not normalize,
+retain pilot identity as an accepted field, deduplicate canonical records,
+assign sites, or write SQLite. It may retain raw visible-row evidence and count
+repeated source IDs so downstream parsing can prove coverage; it must not drop
+overlapping raw observations. The T-013 parser/normalizer owns same-run collapse
+by XCContest source flight ID before site assignment, while T-014 hardens
+cross-run idempotency, conflict detection, and persisted traceability. T-015
+scope remains unchanged. A developer must manually verify a permitted headed
+run in a normal desktop browser before treating any live sample as validated.
 
 **Related files:** [`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/collector.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/collector.py),
 [`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/browser.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/browser.py),

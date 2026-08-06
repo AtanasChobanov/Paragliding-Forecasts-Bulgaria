@@ -7,6 +7,10 @@ from datetime import datetime
 from pathlib import Path
 
 COUNTRY_CODE = "BG"
+SOURCE_CODE = "xccontest"
+SOURCE_LIST_URL = "https://www.xcontest.org/world/en/flights/"
+RAW_MANIFEST_SCHEMA_VERSION = 1
+COLLECTOR_VERSION = "xccontest-collector/1"
 MIN_DISTANCE_KM = 100.0
 DEFAULT_DELAY_SECONDS = 3.0
 DEFAULT_MAX_VIEWS = 2_000
@@ -91,11 +95,19 @@ class CollectorConfig:
 
 @dataclass(frozen=True)
 class RowObservation:
-    """Minimal data needed to control collection, not a parsed flight record."""
+    """Raw visible-row evidence, before parsing, normalization, or site matching."""
 
     source_flight_id: str
     distance_km: float
     launch_country_code: str
+    flight_date_raw: str | None = None
+    takeoff_time_raw: str | None = None
+    utc_offset_raw: str | None = None
+    launch_name_raw: str | None = None
+    launch_search_url: str | None = None
+    route_type_raw: str | None = None
+    duration_raw: str | None = None
+    source_flight_url: str | None = None
 
     def __post_init__(self) -> None:
         if not self.source_flight_id:
@@ -162,6 +174,8 @@ class ArtifactEntry:
     last_flight_id: str | None
     first_distance_km: float | None
     last_distance_km: float | None
+    row_observation_count: int
+    qualifying_row_observation_count: int
 
 
 @dataclass(frozen=True)
@@ -183,3 +197,11 @@ class CollectionReport:
     season_statuses: tuple[SeasonCollectionStatus, ...]
     artifacts: tuple[ArtifactEntry, ...]
     manifest_path: Path
+    manifest_relative_path: str
+    manifest_sha256: str
+    status: str
+    started_at_utc: datetime
+    completed_at_utc: datetime
+    row_observations_seen: int
+    distinct_source_flights_seen: int
+    repeated_source_flight_observations: int
