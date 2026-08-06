@@ -36,6 +36,7 @@ consequences. Temporary progress and Git state belong in
 | DEC-021 | Finalize the normalized T-012 flight foundation schema | Accepted | 2026-08-02 |
 | DEC-022 | Collect XCContest list pages through the permitted rendered UI boundary | Superseded | 2026-08-04 |
 | DEC-023 | Partition saturated XCContest first-page views through visible filters | Accepted | 2026-08-06 |
+| DEC-024 | Derive XCContest country scope from all canonical sites | Accepted | 2026-08-06 |
 ## Individual decisions
 
 ### DEC-001 — Use one repository with bounded subprojects
@@ -911,6 +912,58 @@ run in a normal desktop browser before treating any live sample as validated.
 [`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/browser.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/browser.py),
 [`../services/ml/README.md`](../services/ml/README.md),
 [`handoff.md`](handoff.md).
+
+### DEC-024 - Derive XCContest country scope from all canonical sites
+
+**Status:** Accepted
+
+**Date:** 2026-08-06
+
+**Supersedes:** the hard-coded `BG` country selection in DEC-022 and DEC-023.
+
+**Context:** The collector originally fixed its visible XCContest country filter to
+Bulgaria. The canonical `sites` table already carries ISO2 country codes and is the
+authoritative project scope. Future sites in other countries must expand source collection
+without a collector code edit, while inactive sites remain relevant historical evidence.
+
+**Decision:** Before a collector run creates a browser or raw-artifact directory, Python
+uses only standard-library `sqlite3` to open the Drizzle-migrated SQLite file read-only.
+It accepts only a relative `file:` URL below repository `data/`, opens it with `mode=ro`,
+enables foreign keys, and neither creates a database nor runs DDL or migrations. URL
+precedence is CLI `--database-url`, then `DATABASE_URL`, then
+`file:./data/local/paragliding.db`. It reads every distinct country using
+`SELECT DISTINCT country_code_iso2 FROM sites ORDER BY country_code_iso2`; `is_active`
+does not filter this scope. An empty, invalid, unreadable, or unmigrated result fails
+closed before browser interaction or artifact creation.
+
+The collector processes each requested `season × country` target sequentially in one
+browser session. Country is explicitly selected through the rendered source UI and is
+verified against the selected filter and each row launch country. The global `--max-views`
+cap remains fail-closed across the complete multi-country run. Manifest schema v2 records
+the `all_sites` country scope, per-target statuses, and country-aware artifacts/checkpoints;
+the collector version is `xccontest-collector/2`. Existing ignored raw evidence stays
+immutable, and later parser work must accept legacy BG-only manifests as well as v2.
+
+**Version policy:** Every change to collector behaviour, browser/source interaction, raw
+evidence, run metadata, or CLI contract must increment `collector_version`. Every change
+to manifest fields, shape, semantics, or compatibility must increment
+`manifest_schema_version`. A collector change without the applicable version bump, focused
+tests, and README/decision update is incomplete.
+
+**Rationale:** Reusing the canonical database scope makes country expansion data-driven
+without introducing another migration authority or Python dependency. Read-only discovery
+prevents an attempted collection from silently creating an empty database or collecting an
+accidental fallback scope. Explicit country provenance makes a multi-country raw run
+auditable before parsing and persistence exist.
+
+**Consequences:** Adding a site in a new country intentionally expands subsequent source
+workload. The collector still does not parse, normalize, match sites, deduplicate, or write
+accepted records. T-013 remains in progress; T-014 and T-015 retain their existing scopes.
+
+**Related files:** [`../services/ml/README.md`](../services/ml/README.md),
+[`../services/ml/src/paragliding_forecasts_ml/storage/sqlite.py`](../services/ml/src/paragliding_forecasts_ml/storage/sqlite.py),
+[`handoff.md`](handoff.md), [`tasks.md`](tasks.md).
+
 ## Open decisions
 
 | Question | Options / constraints | Resolve by |

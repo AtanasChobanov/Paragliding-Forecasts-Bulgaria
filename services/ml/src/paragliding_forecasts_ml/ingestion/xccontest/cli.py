@@ -10,6 +10,11 @@ from collections.abc import Sequence
 
 from playwright.sync_api import Error as PlaywrightError
 
+from ...storage.sqlite import (
+    DatabaseConfigurationError,
+    configured_database_url,
+    load_site_country_codes,
+)
 from .artifacts import RawArtifactStore, safe_failure_summary
 from .browser import BrowserCollectionError, PlaywrightFlightListDriver
 from .collector import CollectionError, FlightListCollector
@@ -22,7 +27,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="xccontest-collect",
         description=(
-            "Collect rendered XCContest Bulgarian PG flight-list views through the source UI. "
+            "Collect rendered XCContest country-scoped PG flight-list views through the source UI. "
             "This command writes raw artifacts only; it does not parse or import flights."
         ),
     )
@@ -33,6 +38,14 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         metavar="YEAR",
         help="XCContest season to collect; repeat the option for multiple seasons.",
+    )
+    parser.add_argument(
+        "--database-url",
+        metavar="FILE_URL",
+        help=(
+            "Optional local SQLite file URL. Defaults to DATABASE_URL or "
+            "file:./data/local/paragliding.db."
+        ),
     )
     parser.add_argument(
         "--headed",
@@ -63,27 +76,37 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def parse_config(arguments: Sequence[str] | None = None) -> CollectorConfig:
-    """Parse arguments and make invalid collection scope fail before browser startup."""
+def _collector_config(
+    namespace: argparse.Namespace, country_codes: tuple[str, ...]
+) -> CollectorConfig:
+    """Build a validated collector scope after database discovery succeeds."""
 
-    parser = build_parser()
-    namespace = parser.parse_args(arguments)
-    try:
-        return CollectorConfig(
-            seasons=tuple(namespace.season),
-            headed=namespace.headed,
-            slow_mo_ms=namespace.slow_mo_ms,
-            timeout_seconds=namespace.timeout_seconds,
-            max_views=namespace.max_views,
-        )
-    except ValueError as error:
-        parser.error(str(error))
+    return CollectorConfig(
+        seasons=tuple(namespace.season),
+        country_codes=country_codes,
+        headed=namespace.headed,
+        slow_mo_ms=namespace.slow_mo_ms,
+        timeout_seconds=namespace.timeout_seconds,
+        max_views=namespace.max_views,
+    )
 
 
 def main(arguments: Sequence[str] | None = None) -> int:
     """Run a collection and report artifact locations without exposing source data."""
 
-    config = parse_config(arguments)
+    parser = build_parser()
+    namespace = parser.parse_args(arguments)
+    database_url = configured_database_url(namespace.database_url)
+    try:
+        country_codes = load_site_country_codes(database_url)
+        config = _collector_config(namespace, country_codes)
+    except (DatabaseConfigurationError, ValueError) as error:
+        print(
+            f"XCContest collection could not resolve its database country scope: {error}",
+            file=sys.stderr,
+        )
+        return 1
+
     artifacts = RawArtifactStore()
     try:
         with PlaywrightFlightListDriver(config, sleeper=time.sleep) as driver:
@@ -101,7 +124,7 @@ def main(arguments: Sequence[str] | None = None) -> int:
         )
         return 1
 
-    unresolved_scopes = sum(len(status.unresolved_scopes) for status in report.season_statuses)
+    unresolved_scopes = sum(len(status.unresolved_scopes) for status in report.target_statuses)
     print(
         json.dumps(
             {
@@ -113,7 +136,9 @@ def main(arguments: Sequence[str] | None = None) -> int:
                 "manifest_sha256": report.manifest_sha256,
                 "started_at_utc": report.started_at_utc.isoformat().replace("+00:00", "Z"),
                 "completed_at_utc": report.completed_at_utc.isoformat().replace("+00:00", "Z"),
+                "country_codes": list(report.country_codes),
                 "completed_seasons": list(report.completed_seasons),
+                "completed_target_count": report.completed_target_count,
                 "unresolved_scope_count": unresolved_scopes,
                 "artifact_count": len(report.artifacts),
                 "row_observations_seen": report.row_observations_seen,

@@ -10,7 +10,6 @@ from typing import Self
 from playwright.sync_api import Browser, BrowserContext, Page, Playwright, sync_playwright
 
 from .models import (
-    COUNTRY_CODE,
     SOURCE_LIST_URL,
     CollectorConfig,
     FlightListScope,
@@ -68,7 +67,7 @@ class PlaywrightFlightListDriver:
         return self._page
 
     def prepare_season(self, season: int) -> None:
-        """Select the season and BG through their rendered controls."""
+        """Select one XCContest season through the rendered control."""
 
         page = self._active_page
         page.goto(ROOT_URL, wait_until="domcontentloaded")
@@ -79,7 +78,10 @@ class PlaywrightFlightListDriver:
         page.wait_for_load_state("domcontentloaded")
         self._wait_for_flights_container()
 
-        self._select_option(COUNTRY_SELECTOR, COUNTRY_CODE)
+    def select_country(self, country_code: str) -> None:
+        """Select one discovered ISO2 country through the rendered control."""
+
+        self._select_option(COUNTRY_SELECTOR, country_code)
 
     def select_scope(self, scope: FlightListScope) -> None:
         """Change only rendered category, date and table-order controls."""

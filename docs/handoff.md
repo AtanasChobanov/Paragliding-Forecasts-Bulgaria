@@ -9,7 +9,7 @@
 | Branch relationship            | Extends the completed T-008 baseline at `e67bd5b` (`origin/main`) with T-009 through T-012 work                                                            |
 | Current tasks                  | T-001 through T-011 — `Done`; T-012 — `Review`; T-013 — `In Progress`                                                                                     |
 | Completed scope in this branch | T-009 coordinate/source research and the reviewed, migrated T-012 SQLite flight-data foundation, in addition to the completed dashboard/browser-smoke work |
-| Current working tree note      | Contains T-013 raw-row/manifest contract hardening and focused tests; local raw data and databases remain ignored                                         |
+| Current working tree note      | Contains T-013 raw-row/manifest v2 hardening and DB-driven multi-country collection; local raw data and databases remain ignored                       |
 
 ## T-013 collector slice - current (2026-08-04)
 
@@ -147,6 +147,47 @@ Verification passed: Ruff formatting and lint; 19 Python tests; an offline
 Playwright DOM smoke over the saved 100-row primary fragment; collector CLI
 help; repository Prettier check; repository structure check; and
 `git diff --check`. No new live source request was made.
+
+
+## T-013 DB-driven multi-country collection - current (2026-08-06)
+
+This section supersedes the remaining hard-coded `BG` collector wording above. Before
+browser or artifact creation, the CLI reads distinct, sorted ISO2 codes from every `sites`
+row in the Drizzle-migrated SQLite database, including inactive sites. Python uses only
+read-only standard-library `sqlite3`; it neither runs migrations nor creates a file or table.
+The accepted URL precedence is `--database-url`, `DATABASE_URL`, then
+`file:./data/local/paragliding.db`; only relative `file:` paths inside repository `data/`
+are allowed. Missing schema, empty scope, invalid ISO2 code, or unavailable database fail
+closed before any source interaction or raw output.
+
+Each requested `season × country` target runs sequentially in one browser session. The
+visible country filter and all row launch countries are verified for the current target; the
+2,000-view cap remains global for the whole run. The current local database returns only
+`BG`, while adding a site in another country intentionally expands a later run automatically.
+
+Use the root `.env` without adding a dotenv dependency:
+
+```powershell
+uv sync --project services/ml
+uv run --env-file .env --project services/ml xccontest-collect --season 2025
+```
+
+Manifest schema is now v2 and `collector_version` is `xccontest-collector/2`. Scope records
+`country_codes`, `requested_seasons`, and `country_scope_source: "all_sites"`; target
+statuses, checkpoint records, artifact metadata, and fragment filenames include country, for
+example `season-2025-country-BG-category-pg-...html`. Existing ignored raw manifests are
+immutable; future parser work must support legacy BG-only and v2 country-aware manifests.
+
+Version policy is durable in DEC-024 and `services/ml/README.md`: any change to collector
+behaviour, browser/source interaction, raw evidence, run metadata, or CLI contract must
+increase `collector_version`; any change to manifest fields, shape, semantics, or
+compatibility must also increase `manifest_schema_version`. The corresponding tests and
+documentation updates are required for a complete collector change.
+
+Verification for this change: `uv run --project services/ml ruff format --check`, Ruff
+lint, and all 41 Python tests pass; `uv run --env-file .env --project services/ml
+xccontest-collect --help`, repository Prettier/structure checks, and `git diff --check`
+also pass. No live XCContest request was made.
 
 ## T-010 and T-011 flight-source research - read before T-012/T-013
 

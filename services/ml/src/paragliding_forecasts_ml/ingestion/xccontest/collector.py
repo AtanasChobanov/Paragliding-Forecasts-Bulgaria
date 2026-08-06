@@ -9,7 +9,6 @@ from typing import Protocol
 
 from .artifacts import RawArtifactStore, safe_failure_summary
 from .models import (
-    COUNTRY_CODE,
     EXACT_GLIDER_CATEGORIES,
     PRIMARY_GLIDER_CATEGORY,
     RESCUE_SORTS,
@@ -17,7 +16,7 @@ from .models import (
     CollectorConfig,
     FlightListScope,
     PageObservation,
-    SeasonCollectionStatus,
+    TargetCollectionStatus,
 )
 
 
@@ -29,7 +28,10 @@ class FlightListDriver(Protocol):
     """Small UI-driver contract, deliberately independent of Playwright."""
 
     def prepare_season(self, season: int) -> None:
-        """Select the requested season and Bulgarian launch-country filter."""
+        """Select the requested season."""
+
+    def select_country(self, country_code: str) -> None:
+        """Select one requested launch-country filter."""
 
     def select_scope(self, scope: FlightListScope) -> None:
         """Select the category, optional date, and requested visible sort."""
@@ -60,15 +62,20 @@ class FlightListCollector:
         """Collect requested seasons without using XCContest pagination controls."""
 
         completed_seasons: list[int] = []
-        season_statuses: list[SeasonCollectionStatus] = []
+        target_statuses: list[TargetCollectionStatus] = []
         try:
             for season in self._config.seasons:
-                season_statuses.append(self._collect_season(season))
+                self._driver.prepare_season(season)
+                for country_code in self._config.country_codes:
+                    self._driver.select_country(country_code)
+                    target_statuses.append(self._collect_target(season, country_code))
                 completed_seasons.append(season)
 
             manifest_path = self._artifacts.finalize_manifest(
+                requested_seasons=self._config.seasons,
+                country_codes=self._config.country_codes,
                 completed_seasons=tuple(completed_seasons),
-                season_statuses=tuple(season_statuses),
+                target_statuses=tuple(target_statuses),
             )
             manifest_sha256 = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
             completed_at_utc = self._artifacts.completed_at_utc
@@ -76,14 +83,15 @@ class FlightListCollector:
                 raise CollectionError("XCContest manifest did not record a completion time.")
             run_status = (
                 "incomplete"
-                if any(status.unresolved_scopes for status in season_statuses)
+                if any(status.unresolved_scopes for status in target_statuses)
                 else "complete"
             )
             return CollectionReport(
                 run_key=self._artifacts.run_key,
                 artifact_root=self._artifacts.raw_dir,
+                country_codes=self._config.country_codes,
                 completed_seasons=tuple(completed_seasons),
-                season_statuses=tuple(season_statuses),
+                target_statuses=tuple(target_statuses),
                 artifacts=self._artifacts.entries,
                 manifest_path=manifest_path,
                 manifest_relative_path=manifest_path.relative_to(
@@ -103,17 +111,17 @@ class FlightListCollector:
             self._artifacts.write_failure_report(error=safe_failure_summary(error))
             raise
 
-    def _collect_season(self, season: int) -> SeasonCollectionStatus:
-        self._driver.prepare_season(season)
+    def _collect_target(self, season: int, country_code: str) -> TargetCollectionStatus:
         primary_scope = FlightListScope(category=PRIMARY_GLIDER_CATEGORY)
-        primary_page = self._capture_scope(season, primary_scope, require_rows=True)
+        primary_page = self._capture_scope(season, country_code, primary_scope, require_rows=True)
         if not primary_page.is_distance_saturated:
             self._artifacts.write_checkpoint(
                 season=season,
+                country_code=country_code,
                 status="complete_primary",
                 scope=primary_scope,
             )
-            return SeasonCollectionStatus(season, "complete_primary", ())
+            return TargetCollectionStatus(season, country_code, "complete_primary", ())
 
         dates = self._driver.available_dates(season)
         if not dates:
@@ -124,13 +132,17 @@ class FlightListCollector:
         unresolved_scopes: list[FlightListScope] = []
         for category in EXACT_GLIDER_CATEGORIES:
             category_scope = FlightListScope(category=category)
-            category_page = self._capture_scope(season, category_scope, require_rows=False)
+            category_page = self._capture_scope(
+                season, country_code, category_scope, require_rows=False
+            )
             if not category_page.is_distance_saturated:
                 continue
 
             for date_filter in dates:
                 date_scope = FlightListScope(category=category, date_filter=date_filter)
-                date_page = self._capture_scope(season, date_scope, require_rows=False)
+                date_page = self._capture_scope(
+                    season, country_code, date_scope, require_rows=False
+                )
                 if not date_page.is_distance_saturated:
                     continue
 
@@ -138,6 +150,7 @@ class FlightListCollector:
                 for rescue_sort in RESCUE_SORTS:
                     self._capture_scope(
                         season,
+                        country_code,
                         replace(
                             rescue_sort,
                             category=category,
@@ -149,15 +162,17 @@ class FlightListCollector:
         status = "complete_partitioned" if not unresolved_scopes else "saturated_unresolved"
         self._artifacts.write_checkpoint(
             season=season,
+            country_code=country_code,
             status=status,
             scope=primary_scope,
             unresolved_scopes=tuple(unresolved_scopes),
         )
-        return SeasonCollectionStatus(season, status, tuple(unresolved_scopes))
+        return TargetCollectionStatus(season, country_code, status, tuple(unresolved_scopes))
 
     def _capture_scope(
         self,
         season: int,
+        country_code: str,
         scope: FlightListScope,
         *,
         require_rows: bool,
@@ -171,7 +186,11 @@ class FlightListCollector:
         page = self._driver.read_page(season, scope)
         self._view_count += 1
         self._validate_page(
-            page, expected_season=season, expected_scope=scope, require_rows=require_rows
+            page,
+            expected_season=season,
+            expected_country_code=country_code,
+            expected_scope=scope,
+            require_rows=require_rows,
         )
         if page.rows:
             self._artifacts.write_page(page)
@@ -182,6 +201,7 @@ class FlightListCollector:
         page: PageObservation,
         *,
         expected_season: int,
+        expected_country_code: str,
         expected_scope: FlightListScope,
         require_rows: bool,
     ) -> None:
@@ -191,16 +211,20 @@ class FlightListCollector:
             raise CollectionError("XCContest page was read under an unexpected selected scope.")
         if require_rows and not page.rows:
             raise CollectionError("XCContest rendered no flight rows for the primary PG scope.")
-        if page.country_filter != COUNTRY_CODE:
-            raise CollectionError("XCContest country control no longer reports the BG filter.")
+        if page.country_filter != expected_country_code:
+            raise CollectionError(
+                "XCContest country control no longer reports the expected country filter."
+            )
         if page.glider_category_filter != expected_scope.category.filter_value:
             raise CollectionError(
                 "XCContest glider control no longer reports the expected category."
             )
         if page.date_filter != (expected_scope.date_filter or ""):
             raise CollectionError("XCContest date control no longer reports the expected date.")
-        if any(row.launch_country_code != COUNTRY_CODE for row in page.rows):
-            raise CollectionError("XCContest rendered a flight whose launch country is outside BG.")
+        if any(row.launch_country_code != expected_country_code for row in page.rows):
+            raise CollectionError(
+                "XCContest rendered a flight whose launch country is outside the selected country."
+            )
 
         if expected_scope.sort_key == "distance" and expected_scope.sort_direction == "descending":
             distances = tuple(row.distance_km for row in page.rows)

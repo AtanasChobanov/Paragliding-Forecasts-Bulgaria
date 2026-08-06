@@ -6,11 +6,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-COUNTRY_CODE = "BG"
 SOURCE_CODE = "xccontest"
 SOURCE_LIST_URL = "https://www.xcontest.org/world/en/flights/"
-RAW_MANIFEST_SCHEMA_VERSION = 1
-COLLECTOR_VERSION = "xccontest-collector/1"
+RAW_MANIFEST_SCHEMA_VERSION = 2
+COLLECTOR_VERSION = "xccontest-collector/2"
 MIN_DISTANCE_KM = 100.0
 DEFAULT_DELAY_SECONDS = 3.0
 DEFAULT_MAX_VIEWS = 2_000
@@ -70,6 +69,7 @@ class CollectorConfig:
     """Explicit, deliberately narrow source scope for one collection run."""
 
     seasons: tuple[int, ...]
+    country_codes: tuple[str, ...]
     headed: bool = False
     slow_mo_ms: int = 0
     timeout_seconds: int = 30
@@ -83,6 +83,16 @@ class CollectorConfig:
             raise ValueError("Each XCContest season may be requested only once.")
         if any(season < 2000 or season > 2100 for season in self.seasons):
             raise ValueError("XCContest seasons must be four-digit years.")
+        if not self.country_codes:
+            raise ValueError("At least one XCContest country code is required.")
+        if len(set(self.country_codes)) != len(self.country_codes):
+            raise ValueError("Each XCContest country code may be requested only once.")
+        if any(
+            len(country_code) != 2
+            or any(character < "A" or character > "Z" for character in country_code)
+            for country_code in self.country_codes
+        ):
+            raise ValueError("XCContest country codes must be uppercase ISO2 values.")
         if self.slow_mo_ms < 0:
             raise ValueError("slow_mo_ms must be zero or greater.")
         if self.timeout_seconds < 1:
@@ -165,6 +175,7 @@ class ArtifactEntry:
     relative_path: str
     sha256: str
     season: int
+    country_code: str
     category: str
     date_filter: str | None
     sort_key: str
@@ -179,10 +190,11 @@ class ArtifactEntry:
 
 
 @dataclass(frozen=True)
-class SeasonCollectionStatus:
-    """Coverage result for one season without claiming parser-level deduplication."""
+class TargetCollectionStatus:
+    """Coverage result for one season/country target without parser-level deduplication."""
 
     season: int
+    country_code: str
     status: str
     unresolved_scopes: tuple[FlightListScope, ...]
 
@@ -193,8 +205,9 @@ class CollectionReport:
 
     run_key: str
     artifact_root: Path
+    country_codes: tuple[str, ...]
     completed_seasons: tuple[int, ...]
-    season_statuses: tuple[SeasonCollectionStatus, ...]
+    target_statuses: tuple[TargetCollectionStatus, ...]
     artifacts: tuple[ArtifactEntry, ...]
     manifest_path: Path
     manifest_relative_path: str
@@ -205,3 +218,7 @@ class CollectionReport:
     row_observations_seen: int
     distinct_source_flights_seen: int
     repeated_source_flight_observations: int
+
+    @property
+    def completed_target_count(self) -> int:
+        return len(self.target_statuses)

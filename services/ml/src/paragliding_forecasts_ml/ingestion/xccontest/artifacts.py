@@ -18,7 +18,7 @@ from .models import (
     ArtifactEntry,
     FlightListScope,
     PageObservation,
-    SeasonCollectionStatus,
+    TargetCollectionStatus,
 )
 
 
@@ -104,7 +104,8 @@ class RawArtifactStore:
 
         scope = page.scope
         artifact_path = self.raw_dir / (
-            f"season-{page.season}-category-{scope.category.key}-date-{scope.date_key}"
+            f"season-{page.season}-country-{page.country_filter}-category-{scope.category.key}"
+            f"-date-{scope.date_key}"
             f"-sort-{scope.sort_key}-{scope.sort_direction}.html"
         )
         if artifact_path.exists():
@@ -118,6 +119,7 @@ class RawArtifactStore:
             relative_path=artifact_path.relative_to(self._project_root).as_posix(),
             sha256=hashlib.sha256(encoded_fragment).hexdigest(),
             season=page.season,
+            country_code=page.country_filter,
             category=scope.category.key,
             date_filter=scope.date_filter,
             sort_key=scope.sort_key,
@@ -141,6 +143,7 @@ class RawArtifactStore:
         self,
         *,
         season: int,
+        country_code: str,
         status: str,
         scope: FlightListScope,
         unresolved_scopes: tuple[FlightListScope, ...] = (),
@@ -153,6 +156,7 @@ class RawArtifactStore:
                 {
                     "run_key": self.run_key,
                     "season": season,
+                    "country_code": country_code,
                     "status": status,
                     "scope": scope_metadata(scope),
                     "unresolved_scopes": [scope_metadata(item) for item in unresolved_scopes],
@@ -204,8 +208,10 @@ class RawArtifactStore:
     def finalize_manifest(
         self,
         *,
+        requested_seasons: tuple[int, ...],
+        country_codes: tuple[str, ...],
         completed_seasons: tuple[int, ...],
-        season_statuses: tuple[SeasonCollectionStatus, ...],
+        target_statuses: tuple[TargetCollectionStatus, ...],
     ) -> Path:
         """Write the run manifest once after every requested season completes."""
 
@@ -216,7 +222,7 @@ class RawArtifactStore:
         self.completed_at_utc = self._now()
         run_status = (
             "incomplete"
-            if any(status.unresolved_scopes for status in season_statuses)
+            if any(status.unresolved_scopes for status in target_statuses)
             else "complete"
         )
         manifest = {
@@ -229,20 +235,23 @@ class RawArtifactStore:
             "started_at_utc": self.started_at_utc.isoformat().replace("+00:00", "Z"),
             "completed_at_utc": self.completed_at_utc.isoformat().replace("+00:00", "Z"),
             "scope": {
-                "country": "BG",
+                "country_codes": list(country_codes),
+                "country_scope_source": "all_sites",
+                "requested_seasons": list(requested_seasons),
                 "primary_glider_category": "FAI3",
                 "minimum_scored_distance_km": 100,
                 "completed_seasons": list(completed_seasons),
             },
-            "season_statuses": [
+            "target_statuses": [
                 {
                     "season": status.season,
+                    "country_code": status.country_code,
                     "status": status.status,
                     "unresolved_scopes": [
                         scope_metadata(scope) for scope in status.unresolved_scopes
                     ],
                 }
-                for status in season_statuses
+                for status in target_statuses
             ],
             "observation_counts": {
                 "views_written": len(self._entries),
@@ -255,6 +264,7 @@ class RawArtifactStore:
                     "path": entry.relative_path,
                     "sha256": entry.sha256,
                     "season": entry.season,
+                    "country_code": entry.country_code,
                     "category": entry.category,
                     "date_filter": entry.date_filter,
                     "sort_key": entry.sort_key,

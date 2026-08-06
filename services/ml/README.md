@@ -66,13 +66,20 @@ Run the collector for one or more explicitly selected XCContest seasons:
 
 ```powershell
 uv sync --project services/ml
-uv run --project services/ml xccontest-collect --season 2025
-uv run --project services/ml xccontest-collect --season 2025 --season 2024
+uv run --env-file .env --project services/ml xccontest-collect --season 2025
+uv run --env-file .env --project services/ml xccontest-collect --season 2025 --season 2024
 ```
 
 It is headless by default. Use `--headed` (optionally with `--slow-mo-ms`) for
-local UI inspection. The collector selects the season and `BG` country, then
-starts with `FAI3` (`PG *`) sorted by descending distance. If the first view is
+local UI inspection. Before creating a browser or artifact directory, the command opens the
+Drizzle-migrated SQLite database in read-only mode and derives distinct ISO2 codes from
+all `sites` rows, including inactive sites. `DATABASE_URL` precedence is `--database-url`,
+then the process environment, then `file:./data/local/paragliding.db`; only relative
+`file:` URLs below repository `data/` are accepted. The root `.env` is loaded by
+`uv run --env-file .env`, not by a Python dotenv dependency.
+
+The collector processes every requested `season × country` target sequentially in one
+browser session, starting each target with `FAI3` (`PG *`) sorted by descending distance. If the first view is
 saturated — a source-provided next page exists and its last distance is at least
 100 km — it does not activate the pager or construct an offset URL. Instead it
 uses the rendered exact `CCC`, `EN D`, `EN C`, `EN B`, and `EN A` controls. A
@@ -91,7 +98,7 @@ flight ID, and canonical detail URL needed by the next parser slice. Optional
 values remain missing for short source rows; the collector does not normalize
 them or accept them as database records.
 
-The versioned manifest records source URL, collector lifecycle timestamps,
+Manifest schema v2 records the database-derived `all_sites` country scope, per-target country statuses, country-aware artifact paths, source URL, collector lifecycle timestamps,
 completion/coverage status, category/date/sort scope, artifact hashes, per-view
 row counts, qualifying-distance counts, and run-wide observed/distinct/repeated
 flight-ID counts. The CLI also returns the repository-relative manifest path
@@ -147,6 +154,18 @@ conflicting-duplicate detection, and persisted source traceability. T-015 owns
 small, sanitized, permitted frozen fixtures that test the parser offline;
 fixtures are not the live/raw dataset.
 
+## Collector versioning policy
+
+Every edit that changes collector behaviour, browser/source interaction, retained raw
+evidence, run metadata, or the CLI contract must increment `collector_version`. Every
+edit that changes manifest fields, shape, semantics, or compatibility must increment
+`manifest_schema_version` as well. A collector commit or pull request without the
+applicable version bump, focused tests, and corresponding README/decision update is
+incomplete. Current values are `xccontest-collector/2` and manifest schema v2.
+
+Ignored raw artifacts and their manifests are immutable: later parser work must support
+legacy BG-only manifests as well as v2 country-aware manifests rather than rewriting
+historical evidence.
 ## Reproducibility and data safety
 
 - Pin resolved dependencies in `uv.lock`.

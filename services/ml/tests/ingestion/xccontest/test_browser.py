@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from paragliding_forecasts_ml.ingestion.xccontest.browser import (
+    COUNTRY_SELECTOR,
     BrowserCollectionError,
     PlaywrightFlightListDriver,
 )
@@ -31,7 +32,9 @@ class FakePage:
 
 def test_passes_wait_for_function_values_by_keyword_argument() -> None:
     page = FakePage()
-    driver = PlaywrightFlightListDriver(CollectorConfig(seasons=(2025,)), sleeper=lambda _: None)
+    driver = PlaywrightFlightListDriver(
+        CollectorConfig(seasons=(2025,), country_codes=("BG",)), sleeper=lambda _: None
+    )
     driver._page = page
 
     driver._wait_for_selected_value('select[name="filter[country]"]', "BG")
@@ -108,3 +111,19 @@ def test_accepts_dates_from_both_calendar_years_of_an_xccontest_season() -> None
 def test_rejects_dates_outside_or_invalid_for_an_xccontest_season(value: str) -> None:
     with pytest.raises(BrowserCollectionError):
         PlaywrightFlightListDriver._validate_season_dates(2025, (value,))
+
+
+def test_select_country_uses_the_rendered_country_control(monkeypatch) -> None:
+    driver = PlaywrightFlightListDriver(
+        CollectorConfig(seasons=(2025,), country_codes=("BG",)), sleeper=lambda _: None
+    )
+    selected: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        driver,
+        "_select_option",
+        lambda selector, value: selected.append((selector, value)),
+    )
+
+    driver.select_country("RS")
+
+    assert selected == [(COUNTRY_SELECTOR, "RS")]
