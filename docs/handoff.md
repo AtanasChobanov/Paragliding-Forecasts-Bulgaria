@@ -4,10 +4,10 @@
 
 | Field                          | Value                                                                                                                                                      |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Last updated                   | 2026-08-04                                                                                                                                                 |
+| Last updated                   | 2026-08-06                                                                                                                                                 |
 | Current Git branch             | `feature/T-013-xccontest-collector`                                                                                                                         |
 | Branch relationship            | Extends the completed T-008 baseline at `e67bd5b` (`origin/main`) with T-009 through T-012 work                                                            |
-| Current tasks                  | T-001 through T-011 — `Done`; T-012 — `Review`; T-013 — `To Do`                                                                                            |
+| Current tasks                  | T-001 through T-011 — `Done`; T-012 — `Review`; T-013 — `In Progress`                                                                                     |
 | Completed scope in this branch | T-009 coordinate/source research and the reviewed, migrated T-012 SQLite flight-data foundation, in addition to the completed dashboard/browser-smoke work |
 | Current working tree note      | Contains the user-updated task statuses and this aligned handoff update; local databases remain ignored                                                    |
 
@@ -21,16 +21,17 @@ boundary only, not the parser/import pipeline or a validated stored flight
 sample.
 
 The project owner confirmed normal, low-volume browser use of
-`https://www.xcontest.org/world/en/flights/` for this work. The collector
-uses Playwright only through visible rendered controls: selected season, `BG`
-country, `FAI3` (`PG *`) glider category, descending length control, and the
-source-provided Next pager. It does not construct page-offset URLs or call an
-undocumented backend endpoint. It waits at least three seconds between source
-state transitions, captures exact rendered `#flights` fragments as ignored
-immutable raw artifacts, stops after saving the first page containing a result
-below 100 km, and fails closed if `--max-pages` is reached while rows remain at
-least 100 km. A raw page that crosses the threshold may contain shorter rows;
-the later parser must discard those from accepted records.
+`https://www.xcontest.org/world/en/flights/` for this work. The collector uses
+Playwright only through visible rendered controls: selected season, `BG`
+country, `FAI3` (`PG *`) glider category, exact solo-PG category controls,
+source-offered dates, and table sorting. It does not activate the pager,
+construct page-offset URLs, or call an undocumented backend endpoint. It waits
+at least three seconds between source state transitions, captures exact rendered
+`#flights` fragments as ignored immutable raw artifacts, and expands a
+saturated first page through exact categories and only then dates. An individual
+category/date that remains saturated after alternate sort orders is reported as
+incomplete coverage rather than silently treated as exhaustive. A raw page may
+contain shorter rows; the later parser must discard those from accepted records.
 
 Command contract:
 
@@ -66,6 +67,31 @@ desktop environment, check the selected controls/table/pager and only follow
 ordinary consent/login/challenge flow; do not bypass any of them.
 
 
+## T-013 collector strategy update (2026-08-06)
+
+This section supersedes the older pager and `--max-pages` wording above. The
+source-provided pager is not part of the current collector flow, because in a
+permitted headed browser run XCContest changed the fragment URL but did not
+refresh the rendered table. Do not construct an offset URL or bypass an
+interstitial/challenge.
+
+For each requested season, the collector uses the rendered controls to select
+`BG`, begins with `PG *` and descending distance, then only expands saturated
+first-page views. It partitions with exact `CCC`, `EN D`, `EN C`, `EN B`, and
+`EN A` categories. A saturated exact category is evaluated once for every date
+provided by the source date selector. A saturated `category + date` then gets
+pilot, points, and airtime, each in ascending and descending source order. It
+is sequential, paced by at least three seconds, does not use parallel tabs, and
+writes separate nonempty raw fragments with category/date/sort metadata.
+
+The command uses `--max-views` rather than `--max-pages`, with a fail-closed
+cap of 2,000 rendered views per run. A run is `incomplete` if any category/date
+view remains saturated after the six supplementary sort views; those views may
+find additional records but do not prove full coverage. The manifest and
+interim checkpoint explicitly record those unresolved scopes. Tests are offline
+fake-driver tests and must not be mistaken for a live-data validation. Manual
+headed verification remains required before treating a real collected sample as
+validated.
 ## T-010 and T-011 flight-source research - read before T-012/T-013
 
 T-010 research is complete and the report is available at

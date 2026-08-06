@@ -71,13 +71,27 @@ uv run --project services/ml xccontest-collect --season 2025 --season 2024
 ```
 
 It is headless by default. Use `--headed` (optionally with `--slow-mo-ms`) for
-local UI inspection. The collector selects the season, `BG` country and `FAI3`
-(`PG *`) through rendered controls, proves descending distance order, follows
-the source's Next pager, and stops after saving the first page containing a
-row below 100 km. It writes exact rendered `#flights` fragments under ignored
-`data/raw/xccontest/<run-key>/` and progress/failure state under ignored
-`data/interim/xccontest/<run-key>/`. `--max-pages` is a safety cap: reaching it
-while results remain at least 100 km fails rather than silently truncating.
+local UI inspection. The collector selects the season and `BG` country, then
+starts with `FAI3` (`PG *`) sorted by descending distance. If the first view is
+saturated — a source-provided next page exists and its last distance is at least
+100 km — it does not activate the pager or construct an offset URL. Instead it
+uses the rendered exact `CCC`, `EN D`, `EN C`, `EN B`, and `EN A` controls. A
+saturated exact category is split through every date offered by XCContest's
+visible date control. If a category/date view is still saturated, the collector
+captures the visible pilot, points, and airtime orderings in both directions as
+best-effort supplementary evidence.
+
+Every state transition is sequential and paced by at least three seconds; this
+collector intentionally does not open parallel tabs. It writes nonempty exact
+rendered `#flights` fragments under ignored `data/raw/xccontest/<run-key>/` and
+progress/failure state under ignored `data/interim/xccontest/<run-key>/`. The
+manifest records the category, date and sort for every artifact. `--max-views`
+is a fail-closed cap across the full run, rather than a pagination cap.
+
+A run reports `incomplete` when a category/date view remains saturated after
+all supplementary sort views. Those views can discover additional flight IDs,
+but cannot prove that every qualifying row was exposed. Treat that manifest
+status as a coverage warning, not as a successful complete sample.
 
 Automated tests use a fake UI driver; they do not make live XCContest requests.
 When a developer's browser environment cannot render the list table, stop and

@@ -34,7 +34,8 @@ consequences. Temporary progress and Git state belong in
 | DEC-019 | Use Playwright Chromium for local browser smoke coverage | Accepted | 2026-07-25 |
 | DEC-020 | Use a phased Drizzle-owned SQLite foundation for flight data | Accepted | 2026-07-30 |
 | DEC-021 | Finalize the normalized T-012 flight foundation schema | Accepted | 2026-08-02 |
-| DEC-022 | Collect XCContest list pages through the permitted rendered UI boundary | Accepted | 2026-08-04 |
+| DEC-022 | Collect XCContest list pages through the permitted rendered UI boundary | Superseded | 2026-08-04 |
+| DEC-023 | Partition saturated XCContest first-page views through visible filters | Accepted | 2026-08-06 |
 ## Individual decisions
 
 ### DEC-001 — Use one repository with bounded subprojects
@@ -857,6 +858,55 @@ user flow, never bypassed.
 [`handoff.md`](handoff.md), [`tasks.md`](tasks.md),
 [`T-010-xccontest-research-report.md`](T-010-xccontest-research-report.md).
 
+### DEC-023 - Partition saturated XCContest first-page views through visible filters
+
+**Status:** Accepted
+
+**Date:** 2026-08-06
+
+**Supersedes:** the pagination portion of DEC-022.
+
+**Context:** In the permitted ordinary browser workflow, XCContest rendered the
+first BG/PG list successfully but did not refresh its table after the
+source-provided pager action. Opening its offset fragment directly or attempting
+to work around an interstitial/challenge is outside the approved boundary.
+However, the rendered category, date, and sortable-table controls continue to
+operate normally. A first page contains at most 100 rows, so a distance-sorted
+page whose final row is still at least 100 km may omit qualifying flights.
+
+**Decision:** For each selected season, collect one `BG` + `PG *` view in
+descending distance order. If it is saturated, collect the exact disjoint solo
+PG classes `CCC`, `EN D`, `EN C`, `EN B`, and `EN A`, again in descending
+distance order. Only a saturated exact class is further divided by every date
+offered in the rendered date control. For every still-saturated
+class-and-date view, collect pilot, points, and airtime in both source-provided
+orders as a best-effort supplement. Do not use the pager, calculate offset
+URLs, call undocumented endpoints, or open concurrent tabs.
+
+All source state transitions remain paced by at least three seconds. The
+collector stores a separate raw fragment per nonempty category/date/sort view,
+and the manifest records its scope. It records a `saturated_unresolved` season
+status when a class-and-date view remains saturated even after supplementary
+sorts; a successful command must surface that status as incomplete coverage.
+It must not claim that alternate sort orders establish exhaustive collection.
+
+**Rationale:** Exact classes create a smaller, non-overlapping partition than
+the nested starred classes. Date partitioning is used only when necessary, which
+keeps normal low-volume runs small. Alternate sorting may expose additional
+records without relying on a prohibited navigation mechanism, but it is not a
+completeness proof.
+
+**Consequences:** `--max-pages` is replaced by a fail-closed `--max-views` cap
+for all rendered views in a run. The raw collector still does not parse,
+normalize, retain pilot identity as an accepted field, deduplicate canonical
+records, assign sites, or write SQLite. T-014 and T-015 scope remains unchanged.
+A developer must manually verify a permitted headed run in a normal desktop
+browser before treating any live sample as validated.
+
+**Related files:** [`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/collector.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/collector.py),
+[`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/browser.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/browser.py),
+[`../services/ml/README.md`](../services/ml/README.md),
+[`handoff.md`](handoff.md).
 ## Open decisions
 
 | Question | Options / constraints | Resolve by |

@@ -6,24 +6,17 @@ from collections.abc import Callable
 from itertools import pairwise
 from typing import Self
 
-from playwright.sync_api import (
-    Browser,
-    BrowserContext,
-    Page,
-    Playwright,
-    TimeoutError,
-    sync_playwright,
-)
+from playwright.sync_api import Browser, BrowserContext, Page, Playwright, sync_playwright
 
-from .models import COUNTRY_CODE, GLIDER_CATEGORY, CollectorConfig, PageObservation, RowObservation
+from .models import COUNTRY_CODE, CollectorConfig, FlightListScope, PageObservation, RowObservation
 
 ROOT_URL = "https://www.xcontest.org/world/en/flights/"
 SEASON_SELECTOR = 'div.under-bar select[onchange*="document.location.replace"]'
 COUNTRY_SELECTOR = 'select[name="filter[country]"]'
 GLIDER_SELECTOR = 'select[name="filter[detail_glider_catg]"]'
-DISTANCE_SORT_SELECTOR = 'a[href*="flights[sort]=distance"]'
+DATE_SELECTOR = 'select[name="filter[date]"]'
 ROW_SELECTOR = "#flights table.XClist tbody tr[id^='flight-']"
-NEXT_PAGE_SELECTOR = ".XCpager a[title='next page']"
+SORT_SELECTOR_TEMPLATE = "#flights table.XClist thead a[href*='flights[sort]={sort_key}']"
 
 
 class BrowserCollectionError(RuntimeError):
@@ -66,8 +59,8 @@ class PlaywrightFlightListDriver:
             raise BrowserCollectionError("Browser driver was used before it was started.")
         return self._page
 
-    def prepare_scope(self, season: int) -> None:
-        """Select season, Bulgarian launch country, PG, and descending length."""
+    def prepare_season(self, season: int) -> None:
+        """Select the season and BG through their rendered controls."""
 
         page = self._active_page
         page.goto(ROOT_URL, wait_until="domcontentloaded")
@@ -78,18 +71,32 @@ class PlaywrightFlightListDriver:
         page.wait_for_load_state("domcontentloaded")
         self._wait_for_flights_container()
 
-        self._pace_source_transition()
-        page.locator(COUNTRY_SELECTOR).select_option(COUNTRY_CODE)
-        self._wait_for_selected_value(COUNTRY_SELECTOR, COUNTRY_CODE)
+        self._select_option(COUNTRY_SELECTOR, COUNTRY_CODE)
 
-        self._pace_source_transition()
-        page.locator(GLIDER_SELECTOR).select_option(GLIDER_CATEGORY)
-        self._wait_for_selected_value(GLIDER_SELECTOR, GLIDER_CATEGORY)
+    def select_scope(self, scope: FlightListScope) -> None:
+        """Change only rendered category, date and table-order controls."""
 
-        self._sort_distance_descending()
+        self._select_option(GLIDER_SELECTOR, scope.category.filter_value)
+        self._select_option(DATE_SELECTOR, scope.date_filter or "")
+        self._ensure_sort(scope.sort_key, scope.sort_direction)
 
-    def read_page(self, season: int) -> PageObservation:
-        """Read collector control fields and retain only the rendered list fragment."""
+    def available_dates(self, season: int) -> tuple[str, ...]:
+        """Read source-offered ISO dates; never invent a calendar or URL filter."""
+
+        options = self._active_page.locator(DATE_SELECTOR).evaluate_all(
+            """selects => Array.from(selects[0].options).map(option => option.value)"""
+        )
+        dates = tuple(value for value in options if value)
+        if any(not value.startswith(f"{season}-") for value in dates):
+            raise BrowserCollectionError(
+                "XCContest date selector exposed a date outside the selected season."
+            )
+        if len(set(dates)) != len(dates):
+            raise BrowserCollectionError("XCContest date selector exposed duplicate date values.")
+        return dates
+
+    def read_page(self, season: int, scope: FlightListScope) -> PageObservation:
+        """Read control fields and retain only the rendered list fragment."""
 
         page = self._active_page
         self._wait_for_flights_container()
@@ -111,41 +118,18 @@ class PlaywrightFlightListDriver:
             )
             for row in raw_rows
         )
-        page_marker = page.locator("#flights .XCpager > strong")
-        page_number = int(page_marker.text_content() or "1") if page_marker.count() else 1
-        next_link = page.locator(NEXT_PAGE_SELECTOR)
+        next_link = page.locator(".XCpager a[title='next page']")
         next_href = next_link.get_attribute("href") if next_link.count() else None
         return PageObservation(
             season=season,
-            page_number=page_number,
+            scope=scope,
             country_filter=page.locator(COUNTRY_SELECTOR).input_value(),
             glider_category_filter=page.locator(GLIDER_SELECTOR).input_value(),
+            date_filter=page.locator(DATE_SELECTOR).input_value(),
             rows=rows,
             fragment_html=fragment_html,
             has_next_page=bool(next_href and next_href != "#"),
         )
-
-    def next_page(self, previous_first_flight_id: str) -> None:
-        """Follow the source-provided next control and prove that the table advanced."""
-
-        page = self._active_page
-        next_link = page.locator(NEXT_PAGE_SELECTOR)
-        if not next_link.count() or next_link.get_attribute("href") in {None, "#"}:
-            raise BrowserCollectionError("XCContest did not expose a usable next-page control.")
-        self._pace_source_transition()
-        next_link.click()
-        try:
-            page.wait_for_function(
-                """previousId => {
-                    const first = document.querySelector("#flights table.XClist tbody tr[id^='flight-']");
-                    return first !== null && first.id.replace(/^flight-/, '') !== previousId;
-                }""",
-                arg=previous_first_flight_id,
-            )
-        except TimeoutError as error:
-            raise BrowserCollectionError(
-                "XCContest next-page action did not change the first flight row."
-            ) from error
 
     def _season_option_value(self, season: int) -> str:
         options = self._active_page.locator(SEASON_SELECTOR).evaluate_all(
@@ -159,38 +143,76 @@ class PlaywrightFlightListDriver:
             f"XCContest did not offer season {season} in its season selector."
         )
 
-    def _sort_distance_descending(self) -> None:
+    def _select_option(self, selector: str, value: str) -> None:
         page = self._active_page
-        for _ in range(2):
-            self._pace_source_transition()
-            page.locator(DISTANCE_SORT_SELECTOR).click()
-            page.wait_for_timeout(500)
-            observation = self.read_page_for_sort_check()
-            if self._is_non_increasing(observation):
+        if page.locator(selector).input_value() == value:
+            return
+        previous_fragment = page.locator("#flights").evaluate("element => element.outerHTML")
+        self._pace_source_transition()
+        page.locator(selector).select_option(value)
+        self._wait_for_selected_value(selector, value, previous_fragment)
+
+    def _ensure_sort(self, sort_key: str, sort_direction: str) -> None:
+        page = self._active_page
+        selector = SORT_SELECTOR_TEMPLATE.format(sort_key=sort_key)
+        sort_link = page.locator(selector)
+        expected_class = "down" if sort_direction == "descending" else "up"
+        for _ in range(3):
+            class_names = sort_link.evaluate("element => Array.from(element.classList)")
+            if expected_class in class_names:
+                if sort_key == "distance" and sort_direction == "descending":
+                    self._assert_distance_descending()
                 return
+            previous_fragment = page.locator("#flights").evaluate("element => element.outerHTML")
+            self._pace_source_transition()
+            sort_link.click()
+            page.wait_for_function(
+                """([selector, className, previousHtml]) => {
+                    const link = document.querySelector(selector);
+                    const flights = document.querySelector("#flights");
+                    return link?.classList.contains(className) && flights?.outerHTML !== previousHtml;
+                }""",
+                arg=[selector, expected_class, previous_fragment],
+            )
+            self._wait_for_flights_container()
         raise BrowserCollectionError(
-            "XCContest length column did not produce descending distances."
+            f"XCContest {sort_key} column did not produce {sort_direction} order."
         )
 
-    def read_page_for_sort_check(self) -> tuple[float, ...]:
+    def _assert_distance_descending(self) -> None:
         raw_distances = self._active_page.locator(ROW_SELECTOR).evaluate_all(
             "rows => rows.map(row => row.querySelector('td.km strong')?.textContent?.trim() ?? '')"
         )
-        return tuple(float(str(value).replace(",", ".")) for value in raw_distances)
-
-    @staticmethod
-    def _is_non_increasing(distances: tuple[float, ...]) -> bool:
-        return all(left >= right for left, right in pairwise(distances))
+        distances = tuple(float(str(value).replace(",", ".")) for value in raw_distances)
+        if any(left < right for left, right in pairwise(distances)):
+            raise BrowserCollectionError(
+                "XCContest length column did not produce descending distances."
+            )
 
     def _wait_for_flights_container(self) -> None:
         self._active_page.locator("#flights").wait_for(state="visible")
         self._active_page.wait_for_timeout(250)
 
-    def _wait_for_selected_value(self, selector: str, expected_value: str) -> None:
-        self._active_page.wait_for_function(
-            "([selector, expectedValue]) => document.querySelector(selector)?.value === expectedValue",
-            arg=[selector, expected_value],
-        )
+    def _wait_for_selected_value(
+        self,
+        selector: str,
+        expected_value: str,
+        previous_fragment: str | None = None,
+    ) -> None:
+        if previous_fragment is None:
+            self._active_page.wait_for_function(
+                "([selector, expectedValue]) => document.querySelector(selector)?.value === expectedValue",
+                arg=[selector, expected_value],
+            )
+        else:
+            self._active_page.wait_for_function(
+                """([selector, expectedValue, previousHtml]) => {
+                    const flights = document.querySelector("#flights");
+                    return document.querySelector(selector)?.value === expectedValue
+                        && flights?.outerHTML !== previousHtml;
+                }""",
+                arg=[selector, expected_value, previous_fragment],
+            )
         self._wait_for_flights_container()
 
     def _pace_source_transition(self) -> None:

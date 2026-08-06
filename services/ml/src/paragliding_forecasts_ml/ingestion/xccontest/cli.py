@@ -22,7 +22,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="xccontest-collect",
         description=(
-            "Collect rendered XCContest Bulgarian PG flight-list pages through the source UI. "
+            "Collect rendered XCContest Bulgarian PG flight-list views through the source UI. "
             "This command writes raw artifacts only; it does not parse or import flights."
         ),
     )
@@ -54,11 +54,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Per browser-operation timeout (default: 30).",
     )
     parser.add_argument(
-        "--max-pages",
+        "--max-views",
         type=int,
-        default=10,
+        default=2_000,
         metavar="COUNT",
-        help="Safety cap per season; fail instead of silently truncating (default: 10).",
+        help=("Fail-closed cap for rendered category/date/sort views per run (default: 2000)."),
     )
     return parser
 
@@ -74,7 +74,7 @@ def parse_config(arguments: Sequence[str] | None = None) -> CollectorConfig:
             headed=namespace.headed,
             slow_mo_ms=namespace.slow_mo_ms,
             timeout_seconds=namespace.timeout_seconds,
-            max_pages=namespace.max_pages,
+            max_views=namespace.max_views,
         )
     except ValueError as error:
         parser.error(str(error))
@@ -101,13 +101,17 @@ def main(arguments: Sequence[str] | None = None) -> int:
         )
         return 1
 
+    unresolved_scopes = sum(len(status.unresolved_scopes) for status in report.season_statuses)
+    run_status = "incomplete" if unresolved_scopes else "complete"
     print(
         json.dumps(
             {
                 "run_key": report.run_key,
+                "status": run_status,
                 "artifact_root": str(report.artifact_root),
                 "manifest_path": str(report.manifest_path),
                 "completed_seasons": list(report.completed_seasons),
+                "unresolved_scope_count": unresolved_scopes,
                 "artifact_count": len(report.artifacts),
             },
             indent=2,

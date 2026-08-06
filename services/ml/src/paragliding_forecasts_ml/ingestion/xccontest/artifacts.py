@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from .models import ArtifactEntry, PageObservation
+from .models import ArtifactEntry, FlightListScope, PageObservation, SeasonCollectionStatus
 
 
 def repository_root() -> Path:
@@ -25,6 +25,18 @@ def safe_failure_summary(error: Exception) -> str:
     if not message:
         return error_type
     return f"{error_type}: {message[:300]}"
+
+
+def scope_metadata(scope: FlightListScope) -> dict[str, str | None]:
+    """Serialize a collector scope without embedding source rows in run state."""
+
+    return {
+        "category": scope.category.key,
+        "category_filter": scope.category.filter_value,
+        "date_filter": scope.date_filter,
+        "sort_key": scope.sort_key,
+        "sort_direction": scope.sort_direction,
+    }
 
 
 class RawArtifactStore:
@@ -46,7 +58,11 @@ class RawArtifactStore:
     def write_page(self, page: PageObservation) -> ArtifactEntry:
         """Save the unmodified rendered ``#flights`` fragment exactly once."""
 
-        artifact_path = self.raw_dir / f"season-{page.season}-page-{page.page_number:04d}.html"
+        scope = page.scope
+        artifact_path = self.raw_dir / (
+            f"season-{page.season}-category-{scope.category.key}-date-{scope.date_key}"
+            f"-sort-{scope.sort_key}-{scope.sort_direction}.html"
+        )
         if artifact_path.exists():
             raise FileExistsError(f"Refusing to overwrite immutable artifact: {artifact_path}")
 
@@ -58,7 +74,10 @@ class RawArtifactStore:
             relative_path=artifact_path.relative_to(self._project_root).as_posix(),
             sha256=hashlib.sha256(encoded_fragment).hexdigest(),
             season=page.season,
-            page_number=page.page_number,
+            category=scope.category.key,
+            date_filter=scope.date_filter,
+            sort_key=scope.sort_key,
+            sort_direction=scope.sort_direction,
             retrieved_at_utc=datetime.now(UTC),
             first_flight_id=page.first_flight_id,
             last_flight_id=page.last_flight_id,
@@ -68,7 +87,14 @@ class RawArtifactStore:
         self._entries.append(entry)
         return entry
 
-    def write_checkpoint(self, *, season: int, page_number: int, status: str) -> Path:
+    def write_checkpoint(
+        self,
+        *,
+        season: int,
+        status: str,
+        scope: FlightListScope,
+        unresolved_scopes: tuple[FlightListScope, ...] = (),
+    ) -> Path:
         """Record local progress without modifying raw artifacts."""
 
         checkpoint_path = self.interim_dir / "checkpoint.json"
@@ -77,8 +103,9 @@ class RawArtifactStore:
                 {
                     "run_key": self.run_key,
                     "season": season,
-                    "page_number": page_number,
                     "status": status,
+                    "scope": scope_metadata(scope),
+                    "unresolved_scopes": [scope_metadata(item) for item in unresolved_scopes],
                     "updated_at_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
                 },
                 ensure_ascii=False,
@@ -110,7 +137,12 @@ class RawArtifactStore:
         )
         return report_path
 
-    def finalize_manifest(self, *, completed_seasons: tuple[int, ...]) -> Path:
+    def finalize_manifest(
+        self,
+        *,
+        completed_seasons: tuple[int, ...],
+        season_statuses: tuple[SeasonCollectionStatus, ...],
+    ) -> Path:
         """Write the run manifest once after every requested season completes."""
 
         manifest_path = self.raw_dir / "manifest.json"
@@ -122,16 +154,29 @@ class RawArtifactStore:
             "run_key": self.run_key,
             "scope": {
                 "country": "BG",
-                "glider_category": "FAI3",
+                "primary_glider_category": "FAI3",
                 "minimum_scored_distance_km": 100,
                 "completed_seasons": list(completed_seasons),
             },
+            "season_statuses": [
+                {
+                    "season": status.season,
+                    "status": status.status,
+                    "unresolved_scopes": [
+                        scope_metadata(scope) for scope in status.unresolved_scopes
+                    ],
+                }
+                for status in season_statuses
+            ],
             "artifacts": [
                 {
                     "path": entry.relative_path,
                     "sha256": entry.sha256,
                     "season": entry.season,
-                    "page_number": entry.page_number,
+                    "category": entry.category,
+                    "date_filter": entry.date_filter,
+                    "sort_key": entry.sort_key,
+                    "sort_direction": entry.sort_direction,
                     "retrieved_at_utc": entry.retrieved_at_utc.isoformat().replace("+00:00", "Z"),
                     "first_flight_id": entry.first_flight_id,
                     "last_flight_id": entry.last_flight_id,
