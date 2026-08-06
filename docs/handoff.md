@@ -9,7 +9,7 @@
 | Branch relationship            | Extends the completed T-008 baseline at `e67bd5b` (`origin/main`) with T-009 through T-012 work                                                            |
 | Current tasks                  | T-001 through T-011 — `Done`; T-012 — `Review`; T-013 — `In Progress`                                                                                     |
 | Completed scope in this branch | T-009 coordinate/source research and the reviewed, migrated T-012 SQLite flight-data foundation, in addition to the completed dashboard/browser-smoke work |
-| Current working tree note      | Contains T-013 raw-row/manifest v2 hardening and DB-driven multi-country collection; local raw data and databases remain ignored                       |
+| Current working tree note      | Contains T-013 collector hardening plus the verified offline parser/normalizer boundary; local raw data, staging, and databases remain ignored                       |
 
 ## T-013 collector slice - current (2026-08-04)
 
@@ -189,6 +189,40 @@ lint, and all 41 Python tests pass; `uv run --env-file .env --project services/m
 xccontest-collect --help`, repository Prettier/structure checks, and `git diff --check`
 also pass. No live XCContest request was made.
 
+## T-013 parser/normalizer slice - current (2026-08-06)
+
+The offline parser/normalizer boundary is implemented; T-013 remains **In
+Progress** because validation/site matching and persistence are still separate
+slices. Use an existing immutable raw run only:
+
+```powershell
+uv run --project services/ml xccontest-parse --run-key <uuid>
+```
+
+The command makes no browser or network request, opens no SQLite database, and
+does not read, propose, approve, or write `source_site_mappings`. It supports
+legacy BG-only manifests and manifest v2, verifies the manifest source/run key,
+constrains artifacts to the matching raw run, and checks every SHA-256 before
+parsing. It then writes non-overwritable ignored outputs under
+`data/interim/xccontest/<run-key>/parser-v1/`:
+`normalized-flights.jsonl`, `parse-rejections.jsonl`, and `parse-report.json`.
+
+Each normalized candidate carries numeric XCContest flight ID, launch name,
+country, point token and coordinates when available, UTC takeoff timestamp,
+route type/raw label, scored kilometres, duration seconds, canonical detail URL,
+and all contributing artifact references. Pilot identity is not emitted.
+Candidates below 100 km, above 2,000 km, or malformed are rejected. Identical
+same-run IDs produce exactly one normalized record; conflicting same-ID
+observations produce one `conflicted` candidate with all variants and fields in
+conflict, without choosing a value. Cross-run idempotency remains T-014.
+
+Validation: `uv run --project services/ml ruff format --check`, Ruff lint, and
+all 46 Python tests pass; `xccontest-parse --help`, repository Prettier and
+structure checks, and `git diff --check` pass. The parser completed an offline
+legacy-manifest run `fe8a32a0-03c7-4963-8931-1dc7c614c451`: 600 observations,
+324 qualifying normalized observations, 224 unique candidates, 100 duplicate
+observations removed, zero conflicts, and 276 below-threshold rejections. No
+new live source request was made. T-015 still owns sanitized frozen fixtures.
 ## T-010 and T-011 flight-source research - read before T-012/T-013
 
 T-010 research is complete and the report is available at

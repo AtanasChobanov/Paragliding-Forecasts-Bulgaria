@@ -2,11 +2,11 @@
 
 ## Status
 
-The XCContest collector boundary is implemented for the explicitly permitted
-browser UI workflow. It captures immutable rendered-list artifacts only; it
-does not parse flights, normalize records, assign sites, deduplicate, or write
-to SQLite. Feature engineering, training, and prediction entry points start in
-later Takts.
+The permitted XCContest browser collector and its offline parser/normalizer are
+implemented. The parser turns immutable rendered list artifacts into deduplicated
+local staging records only; it does not match sites, update mappings, write
+SQLite, or make source requests. Feature engineering, training, and prediction
+entry points start in later Takts.
 
 ## Why Python exists in a TypeScript-first repository
 
@@ -116,6 +116,20 @@ When a developer's browser environment cannot render the list table, stop and
 run the command manually with `--headed`; do not bypass consent, Cloudflare,
 CAPTCHA, login, or call undocumented backend endpoints directly.
 
+Parse an already collected raw run without browser or network access:
+
+```powershell
+uv run --project services/ml xccontest-parse --run-key <uuid>
+```
+
+The parser accepts only immutable XCContest manifests and fragments below the
+matching `data/raw/xccontest/<uuid>/` run directory. It normalizes the numeric
+flight ID, takeoff UTC timestamp, launch token/name/country, route, distance,
+duration, and canonical detail URL. It applies the 100--2000 km staging range,
+removes identical same-run duplicate records, and keeps every contributing raw
+artifact reference. Unknown/ambiguous launch evidence, site mapping approval,
+and all SQLite persistence are intentionally outside this command.
+
 Other Python modules remain planned:
 
 ```powershell
@@ -145,14 +159,18 @@ flight table.
 T-013's collector slice owns source UI control and raw artifact retention. It
 does not drop repeated flight IDs because the umbrella PG view deliberately
 overlaps exact-category and rescue-sort views; its repeated-observation count
-is operational coverage metadata, not a canonical duplicate decision. The
-T-013 parser/normalizer must collapse same-run observations by XCContest
-`source_flight_id` before site assignment while retaining every contributing
-artifact reference. Validation, site assignment, and SQLite import remain later
-explicitly planned T-013 slices. T-014 owns hardened cross-run idempotency,
-conflicting-duplicate detection, and persisted source traceability. T-015 owns
-small, sanitized, permitted frozen fixtures that test the parser offline;
-fixtures are not the live/raw dataset.
+is operational coverage metadata. The offline `xccontest-parse --run-key <uuid>`
+command validates legacy BG-only and v2 manifests plus every artifact hash, then
+writes non-overwritable `parser-v1` outputs under
+`data/interim/xccontest/<run-key>/`: deduplicated `normalized-flights.jsonl`,
+`parse-rejections.jsonl`, and `parse-report.json`. Equal same-run IDs become one
+record with all artifact references; conflicting IDs become one conflicted
+candidate without a selected value. It never writes or proposes
+`source_site_mappings`, retains pilot identity, calls XCContest, or writes
+SQLite. Validation, site assignment, and SQLite import remain later T-013
+slices. T-014 owns cross-run idempotency and persisted traceability. T-015 owns
+small, sanitized, permitted frozen fixtures; fixtures are not the live/raw
+dataset.
 
 ## Collector versioning policy
 
