@@ -6,10 +6,12 @@ readme = "README.md"
 requires-python = ">=3.12,<3.14"
 dependencies = [
     "playwright>=1.62.0",
+    "selectolax>=0.4.11",
 ]
 
 [project.scripts]
 xccontest-collect = "paragliding_forecasts_ml.ingestion.xccontest.cli:main"
+xccontest-parse = "paragliding_forecasts_ml.ingestion.xccontest.parser_cli:main"
 
 [build-system]
 requires = ["uv_build>=0.12.1,<0.13"]
