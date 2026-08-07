@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 from collections import defaultdict
@@ -14,9 +13,21 @@ from urllib.parse import parse_qs, urlsplit, urlunsplit
 
 from selectolax.parser import HTMLParser
 
+from .manifest import ManifestValidationError, load_manifest
 from .models import MIN_DISTANCE_KM, SOURCE_CODE
+from .selectors import (
+    DETAIL_LINK_SELECTOR,
+    DISTANCE_SELECTOR,
+    DURATION_SELECTOR,
+    LAUNCH_COUNTRY_SELECTOR,
+    LAUNCH_LINK_SELECTOR,
+    ROUTE_SELECTOR,
+    ROW_SELECTOR,
+    TAKEOFF_CELL_SELECTOR,
+)
 
-PARSER_VERSION = "xccontest-parser/1"
+PARSER_VERSION = "xccontest-parser/2"
+PARSER_OUTPUT_DIRECTORY = "parser-v2"
 MAX_DISTANCE_KM = 2_000.0
 FLIGHT_ID_PATTERN = re.compile(r"^flight-([0-9]+)$")
 DATE_PATTERN = re.compile(r"^(\d{2})\.(\d{2})\.(\d{2})$")
@@ -133,7 +144,9 @@ def _parse_takeoff_at_utc(takeoff_cell: Any, season: int) -> str:
 
 
 def _parse_distance(row: Any) -> float:
-    value = _required_text(_cell(row, "td.km strong", "scored distance").text(), "scored distance")
+    value = _required_text(
+        _cell(row, DISTANCE_SELECTOR, "scored distance").text(), "scored distance"
+    )
     if NUMBER_PATTERN.fullmatch(value) is None:
         raise ParseError("Scored distance must be a decimal number in kilometres.")
     distance = float(value.replace(",", "."))
@@ -145,7 +158,7 @@ def _parse_distance(row: Any) -> float:
 
 
 def _parse_duration_seconds(row: Any) -> int:
-    value = _required_text(_cell(row, "td.dur strong", "duration").text(), "duration")
+    value = _required_text(_cell(row, DURATION_SELECTOR, "duration").text(), "duration")
     match = DURATION_PATTERN.fullmatch(value)
     if match is None:
         raise ParseError("Duration must use XCContest hour or hour:minute notation.")
@@ -159,7 +172,7 @@ def _parse_duration_seconds(row: Any) -> int:
 
 
 def _canonical_detail_url(row: Any) -> str:
-    link = _cell(row, "a.detail", "canonical detail URL")
+    link = _cell(row, DETAIL_LINK_SELECTOR, "canonical detail URL")
     raw_url = _required_text(link.attributes.get("href"), "canonical detail URL")
     parts = urlsplit(raw_url)
     if (
@@ -169,15 +182,17 @@ def _canonical_detail_url(row: Any) -> str:
         or parts.username is not None
         or parts.password is not None
         or parts.query
-        or not re.match(r"^/\d{4}/world/en/flights/detail:[^/]+/[^/]+/[^/]+$", parts.path)
+        or not re.match(r"^/(?:\d{4}/)?world/en/flights/detail:[^/]+/[^/]+/[^/]+$", parts.path)
     ):
         raise ParseError("Canonical detail URL is not a supported XCContest detail URL.")
     return urlunsplit(("https", "www.xcontest.org", parts.path, "", ""))
 
 
 def _launch_evidence(row: Any) -> dict[str, Any]:
-    launch_link = _cell(row, "a.lau", "launch evidence")
-    country_node = launch_link.parent.css_first(".cic") if launch_link.parent else None
+    launch_link = _cell(row, LAUNCH_LINK_SELECTOR, "launch evidence")
+    country_node = (
+        launch_link.parent.css_first(LAUNCH_COUNTRY_SELECTOR) if launch_link.parent else None
+    )
     country_code = _required_text(
         country_node.text() if country_node is not None else None, "launch country code"
     )
@@ -214,7 +229,7 @@ def _launch_evidence(row: Any) -> dict[str, Any]:
 
 
 def _route_evidence(row: Any) -> tuple[str, str | None]:
-    route_node = row.css_first("div.disc-vp[title]")
+    route_node = row.css_first(ROUTE_SELECTOR)
     route_raw = _clean_text(route_node.attributes.get("title") if route_node else None)
     if route_raw is None:
         return "unknown", None
@@ -228,7 +243,7 @@ def _normalize_row(row: Any, artifact: dict[str, Any], row_index: int) -> dict[s
         "source_flight_id": _source_flight_id(row),
         "source_flight_url": _canonical_detail_url(row),
         "takeoff_at_utc": _parse_takeoff_at_utc(
-            _cell(row, "td:nth-child(2)", "takeoff"), artifact["season"]
+            _cell(row, TAKEOFF_CELL_SELECTOR, "takeoff"), artifact["season"]
         ),
         "scored_distance_km": _parse_distance(row),
         "duration_seconds": _parse_duration_seconds(row),
@@ -243,53 +258,6 @@ def _core_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in candidate.items() if key != "artifact_references"}
 
 
-def _validate_manifest(
-    run_key: str, project_root: Path
-) -> tuple[Path, dict[str, Any], list[dict[str, Any]]]:
-    raw_run_dir = project_root / "data" / "raw" / SOURCE_CODE / run_key
-    manifest_path = raw_run_dir / "manifest.json"
-    try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except FileNotFoundError as error:
-        raise ParseError(f"Raw manifest does not exist: {manifest_path}") from error
-    except json.JSONDecodeError as error:
-        raise ParseError("Raw manifest is not valid JSON.") from error
-    if not isinstance(manifest, dict) or manifest.get("source") != SOURCE_CODE:
-        raise ParseError("Raw manifest must identify XCContest as its source.")
-    if manifest.get("run_key") != run_key:
-        raise ParseError("Raw manifest run_key does not match the requested run.")
-    if manifest.get("manifest_schema_version") not in (None, 1, 2):
-        raise ParseError("Raw manifest schema version is unsupported.")
-    artifacts = manifest.get("artifacts")
-    if not isinstance(artifacts, list) or not artifacts:
-        raise ParseError("Raw manifest must contain at least one artifact.")
-    manifest_country = manifest.get("scope", {}).get("country")
-    validated: list[dict[str, Any]] = []
-    raw_root = (project_root / "data" / "raw").resolve()
-    for artifact in artifacts:
-        required = ("path", "sha256", "season", "category", "sort_key", "sort_direction")
-        if not isinstance(artifact, dict) or any(not artifact.get(key) for key in required):
-            raise ParseError("Raw manifest artifact is missing required metadata.")
-        artifact_path = (project_root / artifact["path"]).resolve()
-        try:
-            artifact_path.relative_to(raw_run_dir.resolve())
-            artifact_path.relative_to(raw_root)
-        except ValueError as error:
-            raise ParseError("Raw manifest artifact path escapes its run directory.") from error
-        if not artifact_path.is_file():
-            raise ParseError(f"Raw manifest artifact does not exist: {artifact['path']}")
-        if hashlib.sha256(artifact_path.read_bytes()).hexdigest() != artifact["sha256"]:
-            raise ParseError(f"Raw artifact SHA-256 does not match manifest: {artifact['path']}")
-        country_code = artifact.get("country_code") or manifest_country
-        if (
-            not isinstance(country_code, str)
-            or COUNTRY_CODE_PATTERN.fullmatch(country_code) is None
-        ):
-            raise ParseError("Raw manifest artifact must provide an uppercase ISO2 country code.")
-        validated.append({**artifact, "manifest_country_code": country_code})
-    return manifest_path, manifest, validated
-
-
 def _write_jsonl(path: Path, records: list[dict[str, Any]]) -> None:
     with path.open("x", encoding="utf-8", newline="\n") as output:
         for record in records:
@@ -301,13 +269,21 @@ def parse_run(run_key: str, *, project_root: Path | None = None) -> ParsedRun:
     """Parse one immutable raw run into deduplicated local staging outputs."""
 
     root = (project_root or repository_root()).resolve()
-    manifest_path, manifest, artifacts = _validate_manifest(run_key, root)
+    try:
+        manifest_path, _manifest, artifacts, manifest_contract = load_manifest(run_key, root)
+    except ManifestValidationError as error:
+        raise ParseError(str(error)) from error
     candidates_by_id: dict[str, list[dict[str, Any]]] = defaultdict(list)
     rejections: list[dict[str, Any]] = []
     observations_seen = threshold_exclusions = 0
+    raw_source_flight_ids: list[str] = []
     for artifact in artifacts:
         document = HTMLParser((root / artifact["path"]).read_text(encoding="utf-8"))
-        rows = document.css('#flights table.XClist tbody tr[id^="flight-"]')
+        rows = document.css(ROW_SELECTOR)
+        try:
+            raw_source_flight_ids.extend(manifest_contract.verify_artifact_rows(artifact, rows))
+        except ManifestValidationError as error:
+            raise ParseError(str(error)) from error
         for row_index, row in enumerate(rows, start=1):
             observations_seen += 1
             source_flight_id: str | None = None
@@ -327,6 +303,11 @@ def parse_run(run_key: str, *, project_root: Path | None = None) -> ParsedRun:
                 )
                 continue
             candidates_by_id[source_flight_id].append(candidate)
+
+    try:
+        manifest_contract.verify_run_rows(raw_source_flight_ids)
+    except ManifestValidationError as error:
+        raise ParseError(str(error)) from error
 
     normalized: list[dict[str, Any]] = []
     duplicate_observations_removed = conflict_candidates = 0
@@ -380,7 +361,7 @@ def parse_run(run_key: str, *, project_root: Path | None = None) -> ParsedRun:
             }
         )
 
-    output_dir = root / "data" / "interim" / SOURCE_CODE / run_key / "parser-v1"
+    output_dir = root / "data" / "interim" / SOURCE_CODE / run_key / PARSER_OUTPUT_DIRECTORY
     if output_dir.exists():
         raise FileExistsError(f"Refusing to overwrite parser staging output: {output_dir}")
     output_dir.mkdir(parents=True, exist_ok=False)
@@ -394,7 +375,8 @@ def parse_run(run_key: str, *, project_root: Path | None = None) -> ParsedRun:
         "source": SOURCE_CODE,
         "run_key": run_key,
         "raw_manifest_path": manifest_path.relative_to(root).as_posix(),
-        "raw_manifest_schema_version": manifest.get("manifest_schema_version", 1),
+        "raw_manifest_schema_version": manifest_contract.schema_version,
+        **manifest_contract.report_fields(),
         "artifact_count": len(artifacts),
         "row_observations_seen": observations_seen,
         "normalized_observations": sum(len(items) for items in candidates_by_id.values()),

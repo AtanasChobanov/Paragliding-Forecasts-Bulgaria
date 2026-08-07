@@ -16,14 +16,20 @@ from .models import (
     PageObservation,
     RowObservation,
 )
+from .selectors import (
+    COUNTRY_SELECTOR,
+    DATE_SELECTOR,
+    DISTANCE_SELECTOR,
+    FLIGHTS_CONTAINER_SELECTOR,
+    GLIDER_SELECTOR,
+    LAUNCH_COUNTRY_SELECTOR,
+    LAUNCH_LINK_SELECTOR,
+    ROW_SELECTOR,
+    SEASON_SELECTOR,
+    SORT_SELECTOR_TEMPLATE,
+)
 
 ROOT_URL = SOURCE_LIST_URL
-SEASON_SELECTOR = 'div.under-bar select[onchange*="document.location.replace"]'
-COUNTRY_SELECTOR = 'select[name="filter[country]"]'
-GLIDER_SELECTOR = 'select[name="filter[detail_glider_catg]"]'
-DATE_SELECTOR = 'select[name="filter[date]"]'
-ROW_SELECTOR = "#flights table.XClist tbody tr[id^='flight-']"
-SORT_SELECTOR_TEMPLATE = "#flights table.XClist thead a[href*='flights[sort]={sort_key}']"
 
 
 class BrowserCollectionError(RuntimeError):
@@ -125,31 +131,27 @@ class PlaywrightFlightListDriver:
 
         page = self._active_page
         self._wait_for_flights_container()
-        fragment_html = page.locator("#flights").evaluate("element => element.outerHTML")
+        fragment_html = page.locator(FLIGHTS_CONTAINER_SELECTOR).evaluate(
+            "element => element.outerHTML"
+        )
         raw_rows = page.locator(ROW_SELECTOR).evaluate_all(
-            """rows => rows.map(row => {
-                const cells = Array.from(row.querySelectorAll(':scope > td'));
-                const takeoffCell = cells[1];
-                const distance = row.querySelector('td.km strong')?.textContent?.trim() ?? '';
-                const launchLink = row.querySelector('a.lau');
+            """(rows, selectors) => rows.map(row => {
+                const distance = row.querySelector(selectors.distance)?.textContent?.trim() ?? '';
+                const launchLink = row.querySelector(selectors.launchLink);
                 const launchCell = launchLink?.closest('td');
-                const launchCountry = launchCell?.querySelector('.cic')?.textContent?.trim() ?? '';
-                const route = launchCell?.nextElementSibling?.querySelector('[title]');
-                const detailLink = row.querySelector('a.detail');
+                const launchCountry = launchCell
+                    ?.querySelector(selectors.launchCountry)?.textContent?.trim() ?? '';
                 return {
                     id: row.id.replace(/^flight-/, ''),
                     distance,
                     launchCountry,
-                    flightDate: takeoffCell?.querySelector('div.full')?.firstChild?.textContent?.trim() || null,
-                    takeoffTime: takeoffCell?.querySelector('em')?.textContent?.trim() || null,
-                    utcOffset: takeoffCell?.querySelector('.XCutcOffset')?.textContent?.trim() || null,
-                    launchName: launchLink?.getAttribute('title')?.trim() || null,
-                    launchSearchUrl: launchLink?.href || null,
-                    routeType: route?.getAttribute('title')?.trim() || null,
-                    duration: row.querySelector('td.dur strong')?.textContent?.trim() || null,
-                    detailUrl: detailLink?.href || null,
                 };
-            })"""
+            })""",
+            {
+                "distance": DISTANCE_SELECTOR,
+                "launchLink": LAUNCH_LINK_SELECTOR,
+                "launchCountry": LAUNCH_COUNTRY_SELECTOR,
+            },
         )
         rows = tuple(self._row_observation(row) for row in raw_rows)
         next_link = page.locator(".XCpager a[title='next page']")
@@ -169,25 +171,10 @@ class PlaywrightFlightListDriver:
     def _row_observation(raw_row: dict[str, object]) -> RowObservation:
         """Keep source strings raw while converting only the distance used for collection."""
 
-        def optional_text(key: str) -> str | None:
-            value = raw_row.get(key)
-            if value is None:
-                return None
-            text = str(value).strip()
-            return text or None
-
         return RowObservation(
             source_flight_id=str(raw_row["id"]),
             distance_km=float(str(raw_row["distance"]).replace(",", ".")),
             launch_country_code=str(raw_row["launchCountry"]),
-            flight_date_raw=optional_text("flightDate"),
-            takeoff_time_raw=optional_text("takeoffTime"),
-            utc_offset_raw=optional_text("utcOffset"),
-            launch_name_raw=optional_text("launchName"),
-            launch_search_url=optional_text("launchSearchUrl"),
-            route_type_raw=optional_text("routeType"),
-            duration_raw=optional_text("duration"),
-            source_flight_url=optional_text("detailUrl"),
         )
 
     def _season_option_value(self, season: int) -> str:
@@ -206,7 +193,9 @@ class PlaywrightFlightListDriver:
         page = self._active_page
         if page.locator(selector).input_value() == value:
             return
-        previous_fragment = page.locator("#flights").evaluate("element => element.outerHTML")
+        previous_fragment = page.locator(FLIGHTS_CONTAINER_SELECTOR).evaluate(
+            "element => element.outerHTML"
+        )
         self._pace_source_transition()
         page.locator(selector).select_option(value)
         self._wait_for_selected_value(selector, value, previous_fragment)
@@ -222,7 +211,9 @@ class PlaywrightFlightListDriver:
                 if sort_key == "distance" and sort_direction == "descending":
                     self._assert_distance_descending()
                 return
-            previous_fragment = page.locator("#flights").evaluate("element => element.outerHTML")
+            previous_fragment = page.locator(FLIGHTS_CONTAINER_SELECTOR).evaluate(
+                "element => element.outerHTML"
+            )
             self._pace_source_transition()
             sort_link.click()
             page.wait_for_function(
@@ -240,7 +231,8 @@ class PlaywrightFlightListDriver:
 
     def _assert_distance_descending(self) -> None:
         raw_distances = self._active_page.locator(ROW_SELECTOR).evaluate_all(
-            "rows => rows.map(row => row.querySelector('td.km strong')?.textContent?.trim() ?? '')"
+            "(rows, selector) => rows.map(row => row.querySelector(selector)?.textContent?.trim() ?? '')",
+            DISTANCE_SELECTOR,
         )
         distances = tuple(float(str(value).replace(",", ".")) for value in raw_distances)
         if any(left < right for left, right in pairwise(distances)):
@@ -249,7 +241,7 @@ class PlaywrightFlightListDriver:
             )
 
     def _wait_for_flights_container(self) -> None:
-        self._active_page.locator("#flights").wait_for(state="visible")
+        self._active_page.locator(FLIGHTS_CONTAINER_SELECTOR).wait_for(state="visible")
         self._active_page.wait_for_timeout(250)
 
     def _wait_for_selected_value(

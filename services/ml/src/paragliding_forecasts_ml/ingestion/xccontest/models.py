@@ -105,19 +105,11 @@ class CollectorConfig:
 
 @dataclass(frozen=True)
 class RowObservation:
-    """Raw visible-row evidence, before parsing, normalization, or site matching."""
+    """Minimal collector-control evidence; the exact HTML is the parser input."""
 
     source_flight_id: str
     distance_km: float
     launch_country_code: str
-    flight_date_raw: str | None = None
-    takeoff_time_raw: str | None = None
-    utc_offset_raw: str | None = None
-    launch_name_raw: str | None = None
-    launch_search_url: str | None = None
-    route_type_raw: str | None = None
-    duration_raw: str | None = None
-    source_flight_url: str | None = None
 
     def __post_init__(self) -> None:
         if not self.source_flight_id:

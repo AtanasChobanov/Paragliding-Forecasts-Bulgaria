@@ -47,57 +47,14 @@ def test_passes_wait_for_function_values_by_keyword_argument() -> None:
     ]
 
 
-def test_maps_downstream_flight_fields_without_normalizing_source_strings() -> None:
+def test_maps_only_collector_control_fields() -> None:
     row = PlaywrightFlightListDriver._row_observation(
-        {
-            "id": "5802259",
-            "distance": "400.86",
-            "launchCountry": "BG",
-            "flightDate": "02.08.25",
-            "takeoffTime": "10:55",
-            "utcOffset": "=UTC+03:00",
-            "launchName": "?",
-            "launchSearchUrl": (
-                "https://www.xcontest.org/2025/world/en/flights-search/"
-                "?filter[point]=28.074375%2043.74609"
-            ),
-            "routeType": "free flight",
-            "duration": "9 : 05",
-            "detailUrl": (
-                "https://www.xcontest.org/2025/world/en/flights/detail:adit0/2.08.2025/07:55"
-            ),
-        }
+        {"id": "5802259", "distance": "400.86", "launchCountry": "BG"}
     )
 
     assert row.source_flight_id == "5802259"
-    assert row.flight_date_raw == "02.08.25"
-    assert row.takeoff_time_raw == "10:55"
-    assert row.utc_offset_raw == "=UTC+03:00"
-    assert row.launch_name_raw == "?"
     assert row.launch_country_code == "BG"
-    assert row.launch_search_url is not None
-    assert "filter[point]=28.074375%2043.74609" in row.launch_search_url
-    assert row.route_type_raw == "free flight"
     assert row.distance_km == 400.86
-    assert row.duration_raw == "9 : 05"
-    assert row.source_flight_url is not None
-    assert row.source_flight_url.endswith("detail:adit0/2.08.2025/07:55")
-
-
-def test_keeps_optional_fields_missing_for_short_rows() -> None:
-    row = PlaywrightFlightListDriver._row_observation(
-        {
-            "id": "short-row",
-            "distance": "100,00",
-            "launchCountry": "BG",
-        }
-    )
-
-    assert row.distance_km == 100.0
-    assert row.flight_date_raw is None
-    assert row.launch_name_raw is None
-    assert row.duration_raw is None
-    assert row.source_flight_url is None
 
 
 def test_accepts_dates_from_both_calendar_years_of_an_xccontest_season() -> None:

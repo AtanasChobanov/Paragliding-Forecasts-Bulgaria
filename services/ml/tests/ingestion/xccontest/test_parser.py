@@ -110,10 +110,9 @@ def test_emits_one_conflicted_candidate_without_choosing_a_value(tmp_path) -> No
     assert {variant["scored_distance_km"] for variant in records[0]["variants"]} == {400.86, 401.0}
 
 
-def test_rejects_threshold_and_malformed_rows_and_accepts_manifest_v2(tmp_path) -> None:
+def test_rejects_threshold_and_malformed_legacy_rows(tmp_path) -> None:
     write_run(
         tmp_path,
-        version=2,
         fragments=[
             fragment(
                 flight_row("1"), flight_row("2", distance="99.99"), flight_row("3", duration="9:99")
@@ -127,7 +126,8 @@ def test_rejects_threshold_and_malformed_rows_and_accepts_manifest_v2(tmp_path) 
     assert len(jsonl(parsed.rejections_path)) == 2
     assert parsed.report["threshold_exclusions"] == 1
     assert parsed.report["records_rejected"] == 2
-    assert parsed.report["raw_manifest_schema_version"] == 2
+    assert parsed.report["raw_manifest_schema_version"] == 1
+    assert parsed.output_dir.name == "parser-v2"
 
 
 def test_fails_closed_for_artifact_hash_escape_and_existing_output(tmp_path) -> None:
