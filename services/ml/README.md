@@ -92,11 +92,10 @@ Every state transition is sequential and paced by at least three seconds; this
 collector intentionally does not open parallel tabs. It writes nonempty exact
 rendered `#flights` fragments under ignored `data/raw/xccontest/<run-key>/` and
 progress/failure state under ignored `data/interim/xccontest/<run-key>/`. The
-browser observation keeps the raw flight date, displayed takeoff time and UTC
-offset, launch name/country/search URL, route label, distance, duration, numeric
-flight ID, and canonical detail URL needed by the next parser slice. Optional
-values remain missing for short source rows; the collector does not normalize
-them or accept them as database records.
+exact saved HTML fragment is the durable parser input and retains the source
+fields without conversion. The ephemeral `RowObservation` model contains only
+flight ID, distance, and launch country because those values drive collector
+coverage, threshold, and country checks; it is not an ingestion-stage payload.
 
 Manifest schema v2 records the database-derived `all_sites` country scope, per-target country statuses, country-aware artifact paths, source URL, collector lifecycle timestamps,
 completion/coverage status, category/date/sort scope, artifact hashes, per-view
@@ -122,13 +121,22 @@ Parse an already collected raw run without browser or network access:
 uv run --project services/ml xccontest-parse --run-key <uuid>
 ```
 
-The parser accepts only immutable XCContest manifests and fragments below the
-matching `data/raw/xccontest/<uuid>/` run directory. It normalizes the numeric
-flight ID, takeoff UTC timestamp, launch token/name/country, route, distance,
-duration, and canonical detail URL. It applies the 100--2000 km staging range,
-removes identical same-run duplicate records, and keeps every contributing raw
-artifact reference. Unknown/ambiguous launch evidence, site mapping approval,
-and all SQLite persistence are intentionally outside this command.
+Parser v2 accepts legacy BG-only manifests and complete manifest-v2 runs. For
+v2 it verifies country/season scope, target completion, artifact and run
+counters, every SHA-256, and the actual saved row/qualifying counts before
+normalizing the numeric flight ID, UTC takeoff timestamp, launch evidence,
+route, distance, duration, and both supported XCContest detail URL forms. It
+applies the 100--2000 km staging range, removes identical same-run duplicate
+records, and keeps every contributing raw artifact reference. Unknown or
+ambiguous launch evidence, site mapping approval, and SQLite persistence remain
+outside this command.
+
+The collector and parser are separate commands today so a failed downstream
+stage can resume from immutable raw evidence without another source request. A
+future top-level ingestion command may orchestrate collector, parser,
+validation, and persistence in one invocation, but each stage must still pass a
+run key plus durable artifacts/staging outputs. It must not depend on ephemeral
+`RowObservation` instances surviving in one Python process.
 
 Other Python modules remain planned:
 
@@ -161,7 +169,7 @@ does not drop repeated flight IDs because the umbrella PG view deliberately
 overlaps exact-category and rescue-sort views; its repeated-observation count
 is operational coverage metadata. The offline `xccontest-parse --run-key <uuid>`
 command validates legacy BG-only and v2 manifests plus every artifact hash, then
-writes non-overwritable `parser-v1` outputs under
+writes non-overwritable `parser-v2` outputs under
 `data/interim/xccontest/<run-key>/`: deduplicated `normalized-flights.jsonl`,
 `parse-rejections.jsonl`, and `parse-report.json`. Equal same-run IDs become one
 record with all artifact references; conflicting IDs become one conflicted
@@ -184,6 +192,17 @@ incomplete. Current values are `xccontest-collector/2` and manifest schema v2.
 Ignored raw artifacts and their manifests are immutable: later parser work must support
 legacy BG-only manifests as well as v2 country-aware manifests rather than rewriting
 historical evidence.
+
+## Parser versioning policy
+
+The parser version is independent of the raw manifest schema version. Any
+change to accepted raw compatibility, selectors, parsing or normalization
+behaviour, output fields/semantics, deduplication/conflict handling, staging
+layout, or parser CLI contract must increment `PARSER_VERSION` and use a new
+non-overwriting `parser-vN` output directory. The same change must include
+focused legacy/current-manifest tests and update this README and the handoff.
+Current parser v2 accepts legacy/v1 and complete manifest-v2 inputs.
+
 ## Reproducibility and data safety
 
 - Pin resolved dependencies in `uv.lock`.

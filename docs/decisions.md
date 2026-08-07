@@ -37,6 +37,8 @@ consequences. Temporary progress and Git state belong in
 | DEC-022 | Collect XCContest list pages through the permitted rendered UI boundary | Superseded | 2026-08-04 |
 | DEC-023 | Partition saturated XCContest first-page views through visible filters | Accepted | 2026-08-06 |
 | DEC-024 | Derive XCContest country scope from all canonical sites | Accepted | 2026-08-06 |
+| DEC-025 | Use durable artifacts between versioned XCContest ingestion stages | Accepted | 2026-08-07 |
+
 ## Individual decisions
 
 ### DEC-001 — Use one repository with bounded subprojects
@@ -963,6 +965,53 @@ accepted records. T-013 remains in progress; T-014 and T-015 retain their existi
 **Related files:** [`../services/ml/README.md`](../services/ml/README.md),
 [`../services/ml/src/paragliding_forecasts_ml/storage/sqlite.py`](../services/ml/src/paragliding_forecasts_ml/storage/sqlite.py),
 [`handoff.md`](handoff.md), [`tasks.md`](tasks.md).
+
+### DEC-025 - Use durable artifacts between versioned XCContest ingestion stages
+
+**Status:** Accepted
+
+**Date:** 2026-08-07
+
+**Context:** The collector needs in-memory row values for collection coverage,
+threshold, and country checks, while parsing must be replayable after the
+browser process exits. A real manifest-v2 run also demonstrated that current
+and archived XCContest seasons can expose different canonical detail URL path
+forms. Passing collector-only Python objects directly into later ingestion
+stages would make replay, audit, and failure recovery depend on one process and
+would bypass the immutable evidence boundary.
+
+**Decision:** The exact saved HTML fragments plus their versioned manifest are
+the durable collector-to-parser interface. `RowObservation` remains a minimal
+ephemeral collector-control model and is not a normalized ingestion payload.
+The offline parser reads the immutable artifacts, verifies compatible manifest
+metadata/hashes/counters, and writes versioned language-neutral staging output.
+Separate stage commands are the current operational interface. A future single
+ingestion command may orchestrate them, but stages must communicate through run
+keys and durable artifacts or staging outputs rather than shared in-memory
+objects.
+
+Parser output versions are independent from collector and manifest versions.
+Any change to accepted raw compatibility, selectors, parsing/normalization,
+output semantics, deduplication/conflict behaviour, staging layout, or CLI
+contract increments `PARSER_VERSION`, writes to a new non-overwriting
+`parser-vN` directory, and updates focused compatibility tests and
+documentation. Parser v2 accepts legacy/v1 and complete manifest-v2 input.
+
+**Rationale:** Immutable stage boundaries preserve source evidence, allow
+offline replay without another source request, make partial-run recovery
+possible, and prevent transient browser models from becoming an undocumented
+pipeline contract. Independent versioning makes old parser results auditable
+while allowing current source variants to be handled explicitly.
+
+**Consequences:** Collector DOM selectors and parser selectors share one source
+module, but only the parser owns normalization. A one-command ingestion wrapper
+must not skip raw artifact creation. Existing `parser-v1` staging remains
+untouched; parser v2 writes a separate directory. Validation/site mapping and
+SQLite persistence remain later T-013 slices.
+
+**Related files:** [`../services/ml/README.md`](../services/ml/README.md),
+[`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/selectors.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/selectors.py),
+[`handoff.md`](handoff.md).
 
 ## Open decisions
 

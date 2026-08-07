@@ -189,7 +189,52 @@ lint, and all 41 Python tests pass; `uv run --env-file .env --project services/m
 xccontest-collect --help`, repository Prettier/structure checks, and `git diff --check`
 also pass. No live XCContest request was made.
 
-## T-013 parser/normalizer slice - current (2026-08-06)
+## T-013 parser/normalizer v2 - current (2026-08-07)
+
+This section supersedes the v1 snapshot below. Parser v1 nominally accepted
+manifest schema v2 but its canonical detail URL rule rejected every current
+2026 row because XCContest now emits `/world/en/flights/detail:...` without the
+archived season path prefix. The real complete run
+`f1032827-a98d-4c01-969e-e67b4885f90d` therefore exposed only the 2025 records
+in parser-v1 staging.
+
+Parser v2 accepts both archived `/<season>/world/en/flights/detail:...` and
+current `/world/en/flights/detail:...` canonical URLs. It remains backward
+compatible with the existing legacy BG-only manifest and strictly validates
+complete manifest-v2 scope, target statuses, per-artifact row/qualifying
+counters, run-wide observation/distinct/repeat counters, paths, and SHA-256
+hashes. Versioned outputs are non-overwriting under
+`data/interim/xccontest/<run-key>/parser-v2/`; existing parser-v1 output is not
+modified.
+
+The exact raw HTML plus manifest is the durable collector-to-parser interface.
+Collector `RowObservation` now retains only flight ID, distance, and launch
+country for collection control and counters. Parser and browser DOM selectors
+share `selectors.py`; parser normalization still reads the saved HTML offline.
+Separate commands intentionally support resume/replay without another source
+request. A later one-command ingestion wrapper may orchestrate the slices, but
+must pass run keys and durable artifacts/staging outputs rather than transient
+Python objects. DEC-025 records this boundary and the rule that parser
+compatibility, selector, normalization, output, staging, or CLI changes require
+a parser version increment plus a new `parser-vN` directory.
+
+Real offline verification:
+
+- manifest-v2 run `f1032827-a98d-4c01-969e-e67b4885f90d`: 1,200 observations
+  across seasons 2025 and 2026; 536 qualifying observations; 336 unique
+  candidates (224 for 2025, 112 for 2026); 200 duplicate observations removed;
+  zero conflicts; 664 below-threshold rejections; all v2 counters verified;
+- legacy run `fe8a32a0-03c7-4963-8931-1dc7c614c451`: 600 observations; 324
+  qualifying observations; 224 candidates; 100 repeats removed; zero conflicts;
+  276 below-threshold rejections.
+
+Validation passes: Ruff formatting/lint, all 47 Python tests,
+`xccontest-parse --help`, repository Prettier/structure checks, and
+`git diff --check`. No live source request was made during parser verification.
+T-013 remains **In Progress** for validation/site matching and persistence;
+T-015 still owns sanitized frozen source fixtures.
+
+## T-013 parser/normalizer slice - superseded v1 snapshot (2026-08-06)
 
 The offline parser/normalizer boundary is implemented; T-013 remains **In
 Progress** because validation/site matching and persistence are still separate
