@@ -209,8 +209,12 @@ modified.
 
 The exact raw HTML plus manifest is the durable collector-to-parser interface.
 Collector `RowObservation` now retains only flight ID, distance, and launch
-country for collection control and counters. Parser and browser DOM selectors
-share `selectors.py`; parser normalization still reads the saved HTML offline.
+country for collection control and counters. `CollectionReport` is now a compact
+CLI summary only: manifest relative path/hash, lifecycle, scope totals, and aggregate
+counters. Artifact/target detail remains solely in the immutable manifest. Version
+identifiers are centralized in `versions.py`; parser staging directory derives from its
+parser revision. Parser and browser DOM selectors share `selectors.py`; parser
+normalization still reads the saved HTML offline.
 Separate commands intentionally support resume/replay without another source
 request. A later one-command ingestion wrapper may orchestrate the slices, but
 must pass run keys and durable artifacts/staging outputs rather than transient

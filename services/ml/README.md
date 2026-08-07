@@ -97,6 +97,11 @@ fields without conversion. The ephemeral `RowObservation` model contains only
 flight ID, distance, and launch country because those values drive collector
 coverage, threshold, and country checks; it is not an ingestion-stage payload.
 
+The in-memory `CollectionReport` is likewise only a compact command/log summary:
+manifest relative path and hash, lifecycle, requested/completed scope summaries, and
+aggregate counters. Per-artifact detail and target statuses exist only in the immutable
+manifest; no raw root path, raw HTML, or row data is carried by the report.
+
 Manifest schema v2 records the database-derived `all_sites` country scope, per-target country statuses, country-aware artifact paths, source URL, collector lifecycle timestamps,
 completion/coverage status, category/date/sort scope, artifact hashes, per-view
 row counts, qualifying-distance counts, and run-wide observed/distinct/repeated
@@ -187,7 +192,9 @@ evidence, run metadata, or the CLI contract must increment `collector_version`. 
 edit that changes manifest fields, shape, semantics, or compatibility must increment
 `manifest_schema_version` as well. A collector commit or pull request without the
 applicable version bump, focused tests, and corresponding README/decision update is
-incomplete. Current values are `xccontest-collector/2` and manifest schema v2.
+incomplete. Current values are `xccontest-collector/2` and manifest schema v2. Current
+version identifiers live in `ingestion/xccontest/versions.py`; manifest compatibility
+policy remains in `manifest.py`.
 
 Ignored raw artifacts and their manifests are immutable: later parser work must support
 legacy BG-only manifests as well as v2 country-aware manifests rather than rewriting
@@ -200,8 +207,10 @@ change to accepted raw compatibility, selectors, parsing or normalization
 behaviour, output fields/semantics, deduplication/conflict handling, staging
 layout, or parser CLI contract must increment `PARSER_VERSION` and use a new
 non-overwriting `parser-vN` output directory. The same change must include
-focused legacy/current-manifest tests and update this README and the handoff.
-Current parser v2 accepts legacy/v1 and complete manifest-v2 inputs.
+focused legacy/current-manifest tests and update this README and the handoff. The
+staging directory is derived from the parser revision in `versions.py`, so the version
+identifier and `parser-vN` directory cannot drift. Current parser v2 accepts legacy/v1
+and complete manifest-v2 inputs.
 
 ## Reproducibility and data safety
 

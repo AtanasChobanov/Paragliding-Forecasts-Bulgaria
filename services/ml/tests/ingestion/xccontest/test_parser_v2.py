@@ -6,6 +6,11 @@ import json
 import pytest
 
 from paragliding_forecasts_ml.ingestion.xccontest.parser import ParseError, parse_run
+from paragliding_forecasts_ml.ingestion.xccontest.versions import (
+    PARSER_OUTPUT_DIRECTORY,
+    PARSER_REVISION,
+    PARSER_VERSION,
+)
 
 
 def row(flight_id: str, season: int, distance: float) -> str:
@@ -112,8 +117,9 @@ def test_parses_complete_multi_season_manifest_v2_and_both_detail_url_shapes(tmp
     assert records[1]["source_flight_url"] == (
         "https://www.xcontest.org/world/en/flights/detail:pilot/5.08.2026/08:17"
     )
-    assert parsed.output_dir.name == "parser-v2"
-    assert parsed.report["parser_version"] == "xccontest-parser/2"
+    assert parsed.output_dir.name == PARSER_OUTPUT_DIRECTORY
+    assert parsed.report["parser_version"] == PARSER_VERSION
+    assert PARSER_OUTPUT_DIRECTORY == f"parser-v{PARSER_REVISION}"
     assert parsed.report["raw_manifest_schema_version"] == 2
     assert parsed.report["raw_manifest_observation_counts_verified"] is True
     assert parsed.report["raw_country_codes"] == ["BG"]

@@ -13,6 +13,10 @@ from paragliding_forecasts_ml.ingestion.xccontest.models import (
     RowObservation,
     TargetCollectionStatus,
 )
+from paragliding_forecasts_ml.ingestion.xccontest.versions import (
+    COLLECTOR_VERSION,
+    RAW_MANIFEST_SCHEMA_VERSION,
+)
 
 
 def page(country_code: str = "BG") -> PageObservation:
@@ -55,8 +59,8 @@ def test_writes_country_aware_immutable_fragment_and_manifest_v2(tmp_path) -> No
     )
 
     manifest = json.loads(manifest_path.read_text())
-    assert manifest["manifest_schema_version"] == 2
-    assert manifest["collector_version"] == "xccontest-collector/2"
+    assert manifest["manifest_schema_version"] == RAW_MANIFEST_SCHEMA_VERSION
+    assert manifest["collector_version"] == COLLECTOR_VERSION
     assert manifest["source_url"] == "https://www.xcontest.org/world/en/flights/"
     assert manifest["status"] == "complete"
     assert manifest["scope"] == {

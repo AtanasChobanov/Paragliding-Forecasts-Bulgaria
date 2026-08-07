@@ -11,10 +11,11 @@ from typing import Any
 
 from .models import MIN_DISTANCE_KM, SOURCE_CODE, SOURCE_LIST_URL
 from .selectors import DISTANCE_SELECTOR
+from .versions import RAW_MANIFEST_SCHEMA_VERSION
 
 COUNTRY_CODE_PATTERN = re.compile(r"^[A-Z]{2}$")
 FLIGHT_ROW_ID_PATTERN = re.compile(r"^flight-([0-9]+)$")
-SUPPORTED_MANIFEST_SCHEMA_VERSIONS = (1, 2)
+SUPPORTED_MANIFEST_SCHEMA_VERSIONS = (1, RAW_MANIFEST_SCHEMA_VERSION)
 
 
 class ManifestValidationError(ValueError):

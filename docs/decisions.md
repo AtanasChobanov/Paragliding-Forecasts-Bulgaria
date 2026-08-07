@@ -1004,8 +1004,11 @@ pipeline contract. Independent versioning makes old parser results auditable
 while allowing current source variants to be handled explicitly.
 
 **Consequences:** Collector DOM selectors and parser selectors share one source
-module, but only the parser owns normalization. A one-command ingestion wrapper
-must not skip raw artifact creation. Existing `parser-v1` staging remains
+module, but only the parser owns normalization. `CollectionReport` is a compact
+command summary; per-artifact and per-target detail remains only in the manifest.
+Version identifiers live in source-specific `versions.py`, while manifest compatibility
+policy remains in `manifest.py`. A one-command ingestion wrapper must not skip raw
+artifact creation. Existing `parser-v1` staging remains
 untouched; parser v2 writes a separate directory. Validation/site mapping and
 SQLite persistence remain later T-013 slices.
 

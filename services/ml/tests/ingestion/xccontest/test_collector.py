@@ -133,12 +133,10 @@ def test_completes_from_primary_pg_view_when_it_reaches_the_threshold(tmp_path) 
     assert driver.prepared_seasons == [2025]
     assert driver.selected_countries == ["BG"]
     assert driver.selected_scopes == [("BG", primary)]
-    assert report.target_statuses[0].status == "complete_primary"
-    assert report.target_statuses[0].country_code == "BG"
-    assert report.target_statuses[0].unresolved_scopes == ()
-    assert len(report.artifacts) == 1
     assert report.status == "complete"
     assert report.completed_target_count == 1
+    assert report.unresolved_scope_count == 0
+    assert report.artifact_count == 1
     assert report.manifest_relative_path == "data/raw/xccontest/test-run/manifest.json"
     assert len(report.manifest_sha256) == 64
     assert report.started_at_utc <= report.completed_at_utc
@@ -169,10 +167,12 @@ def test_saturated_primary_partitions_the_exact_solo_pg_categories(tmp_path) -> 
         ("BG", primary),
         *(("BG", item) for item in category_scopes),
     ]
-    assert report.target_statuses[0].status == "complete_partitioned"
-    assert len(report.artifacts) == 5
-    assert not any("category-en-a" in entry.relative_path for entry in report.artifacts)
-    assert (artifacts.raw_dir / "manifest.json").is_file()
+    assert report.status == "complete"
+    assert report.unresolved_scope_count == 0
+    assert report.artifact_count == 5
+    manifest = json.loads((artifacts.raw_dir / "manifest.json").read_text())
+    assert manifest["target_statuses"][0]["status"] == "complete_partitioned"
+    assert not any("category-en-a" in entry["path"] for entry in manifest["artifacts"])
 
 
 def test_saturated_category_date_runs_every_rescue_sort_and_marks_coverage_unresolved(
@@ -222,10 +222,11 @@ def test_saturated_category_date_runs_every_rescue_sort_and_marks_coverage_unres
         ("BG", quiet_date),
         *(("BG", item) for item in other_category_scopes),
     ]
-    assert report.target_statuses[0].status == "saturated_unresolved"
-    assert report.target_statuses[0].unresolved_scopes == (overflowing_date,)
-    assert len(report.artifacts) == len(driver.selected_scopes)
+    assert report.status == "incomplete"
+    assert report.unresolved_scope_count == 1
+    assert report.artifact_count == len(driver.selected_scopes)
     manifest = json.loads((artifacts.raw_dir / "manifest.json").read_text())
+    assert manifest["target_statuses"][0]["status"] == "saturated_unresolved"
     assert manifest["target_statuses"][0]["unresolved_scopes"] == [
         {
             "category": "ccc",
@@ -270,12 +271,8 @@ def test_collects_each_country_sequentially_in_one_run(tmp_path) -> None:
     assert driver.selected_scopes == [("BG", primary), ("RS", primary)]
     assert report.country_codes == ("BG", "RS")
     assert report.completed_target_count == 2
-    assert [(item.season, item.country_code) for item in report.target_statuses] == [
-        (2025, "BG"),
-        (2025, "RS"),
-    ]
-    assert {entry.country_code for entry in report.artifacts} == {"BG", "RS"}
-    assert all("-country-" in entry.relative_path for entry in report.artifacts)
+    assert report.unresolved_scope_count == 0
+    assert report.artifact_count == 2
     manifest = json.loads((artifacts.raw_dir / "manifest.json").read_text())
     assert manifest["scope"]["country_codes"] == ["BG", "RS"]
     assert manifest["scope"]["country_scope_source"] == "all_sites"

@@ -124,14 +124,11 @@ def main(arguments: Sequence[str] | None = None) -> int:
         )
         return 1
 
-    unresolved_scopes = sum(len(status.unresolved_scopes) for status in report.target_statuses)
     print(
         json.dumps(
             {
                 "run_key": report.run_key,
                 "status": report.status,
-                "artifact_root": str(report.artifact_root),
-                "manifest_path": str(report.manifest_path),
                 "manifest_relative_path": report.manifest_relative_path,
                 "manifest_sha256": report.manifest_sha256,
                 "started_at_utc": report.started_at_utc.isoformat().replace("+00:00", "Z"),
@@ -139,8 +136,8 @@ def main(arguments: Sequence[str] | None = None) -> int:
                 "country_codes": list(report.country_codes),
                 "completed_seasons": list(report.completed_seasons),
                 "completed_target_count": report.completed_target_count,
-                "unresolved_scope_count": unresolved_scopes,
-                "artifact_count": len(report.artifacts),
+                "unresolved_scope_count": report.unresolved_scope_count,
+                "artifact_count": report.artifact_count,
                 "row_observations_seen": report.row_observations_seen,
                 "distinct_source_flights_seen": report.distinct_source_flights_seen,
                 "repeated_source_flight_observations": (report.repeated_source_flight_observations),

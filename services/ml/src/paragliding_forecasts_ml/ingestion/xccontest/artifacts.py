@@ -10,9 +10,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from .models import (
-    COLLECTOR_VERSION,
     MIN_DISTANCE_KM,
-    RAW_MANIFEST_SCHEMA_VERSION,
     SOURCE_CODE,
     SOURCE_LIST_URL,
     ArtifactEntry,
@@ -20,6 +18,7 @@ from .models import (
     PageObservation,
     TargetCollectionStatus,
 )
+from .versions import COLLECTOR_VERSION, RAW_MANIFEST_SCHEMA_VERSION
 
 
 def repository_root() -> Path:

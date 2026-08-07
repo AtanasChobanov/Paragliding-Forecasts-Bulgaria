@@ -4,12 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
 
 SOURCE_CODE = "xccontest"
 SOURCE_LIST_URL = "https://www.xcontest.org/world/en/flights/"
-RAW_MANIFEST_SCHEMA_VERSION = 2
-COLLECTOR_VERSION = "xccontest-collector/2"
 MIN_DISTANCE_KM = 100.0
 DEFAULT_DELAY_SECONDS = 3.0
 DEFAULT_MAX_VIEWS = 2_000
@@ -193,24 +190,19 @@ class TargetCollectionStatus:
 
 @dataclass(frozen=True)
 class CollectionReport:
-    """Collector-only result; parser and persistence own later pipeline states."""
+    """Compact command result; the immutable manifest owns collector detail."""
 
     run_key: str
-    artifact_root: Path
-    country_codes: tuple[str, ...]
-    completed_seasons: tuple[int, ...]
-    target_statuses: tuple[TargetCollectionStatus, ...]
-    artifacts: tuple[ArtifactEntry, ...]
-    manifest_path: Path
+    status: str
     manifest_relative_path: str
     manifest_sha256: str
-    status: str
+    country_codes: tuple[str, ...]
+    completed_seasons: tuple[int, ...]
     started_at_utc: datetime
     completed_at_utc: datetime
+    completed_target_count: int
+    unresolved_scope_count: int
+    artifact_count: int
     row_observations_seen: int
     distinct_source_flights_seen: int
     repeated_source_flight_observations: int
-
-    @property
-    def completed_target_count(self) -> int:
-        return len(self.target_statuses)

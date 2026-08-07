@@ -88,19 +88,20 @@ class FlightListCollector:
             )
             return CollectionReport(
                 run_key=self._artifacts.run_key,
-                artifact_root=self._artifacts.raw_dir,
-                country_codes=self._config.country_codes,
-                completed_seasons=tuple(completed_seasons),
-                target_statuses=tuple(target_statuses),
-                artifacts=self._artifacts.entries,
-                manifest_path=manifest_path,
+                status=run_status,
                 manifest_relative_path=manifest_path.relative_to(
                     self._artifacts.project_root
                 ).as_posix(),
                 manifest_sha256=manifest_sha256,
-                status=run_status,
+                country_codes=self._config.country_codes,
+                completed_seasons=tuple(completed_seasons),
                 started_at_utc=self._artifacts.started_at_utc,
                 completed_at_utc=completed_at_utc,
+                completed_target_count=len(target_statuses),
+                unresolved_scope_count=sum(
+                    len(status.unresolved_scopes) for status in target_statuses
+                ),
+                artifact_count=len(self._artifacts.entries),
                 row_observations_seen=self._artifacts.row_observations_seen,
                 distinct_source_flights_seen=self._artifacts.distinct_source_flights_seen,
                 repeated_source_flight_observations=(

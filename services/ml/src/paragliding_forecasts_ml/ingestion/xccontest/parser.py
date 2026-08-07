@@ -25,9 +25,8 @@ from .selectors import (
     ROW_SELECTOR,
     TAKEOFF_CELL_SELECTOR,
 )
+from .versions import PARSER_OUTPUT_DIRECTORY, PARSER_VERSION
 
-PARSER_VERSION = "xccontest-parser/2"
-PARSER_OUTPUT_DIRECTORY = "parser-v2"
 MAX_DISTANCE_KM = 2_000.0
 FLIGHT_ID_PATTERN = re.compile(r"^flight-([0-9]+)$")
 DATE_PATTERN = re.compile(r"^(\d{2})\.(\d{2})\.(\d{2})$")
