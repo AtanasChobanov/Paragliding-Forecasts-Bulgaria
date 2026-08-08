@@ -1,8 +1,6 @@
 {
   "id": "7e96d1fc-8366-48e9-bc78-9a6d7a9d86b7",
-  "prevIds": [
-    "70074a45-d0b4-46f1-81a5-870d8ba48a38"
-  ],
+  "prevIds": ["70074a45-d0b4-46f1-81a5-870d8ba48a38"],
   "version": "7",
   "dialect": "sqlite",
   "ddl": [
@@ -687,13 +685,9 @@
       "table": "source_site_mappings"
     },
     {
-      "columns": [
-        "source_id"
-      ],
+      "columns": ["source_id"],
       "tableTo": "flight_sources",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -702,15 +696,9 @@
       "table": "flight_records"
     },
     {
-      "columns": [
-        "source_site_mapping_id",
-        "source_id"
-      ],
+      "columns": ["source_site_mapping_id", "source_id"],
       "tableTo": "source_site_mappings",
-      "columnsTo": [
-        "id",
-        "source_id"
-      ],
+      "columnsTo": ["id", "source_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": true,
@@ -719,15 +707,9 @@
       "table": "flight_records"
     },
     {
-      "columns": [
-        "created_by_ingestion_run_id",
-        "source_id"
-      ],
+      "columns": ["created_by_ingestion_run_id", "source_id"],
       "tableTo": "ingestion_runs",
-      "columnsTo": [
-        "id",
-        "source_id"
-      ],
+      "columnsTo": ["id", "source_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": true,
@@ -736,15 +718,9 @@
       "table": "flight_records"
     },
     {
-      "columns": [
-        "last_validated_by_ingestion_run_id",
-        "source_id"
-      ],
+      "columns": ["last_validated_by_ingestion_run_id", "source_id"],
       "tableTo": "ingestion_runs",
-      "columnsTo": [
-        "id",
-        "source_id"
-      ],
+      "columnsTo": ["id", "source_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": true,
@@ -753,13 +729,9 @@
       "table": "flight_records"
     },
     {
-      "columns": [
-        "source_id"
-      ],
+      "columns": ["source_id"],
       "tableTo": "flight_sources",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -768,13 +740,9 @@
       "table": "ingestion_runs"
     },
     {
-      "columns": [
-        "source_id"
-      ],
+      "columns": ["source_id"],
       "tableTo": "flight_sources",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -783,13 +751,9 @@
       "table": "source_site_mappings"
     },
     {
-      "columns": [
-        "site_id"
-      ],
+      "columns": ["site_id"],
       "tableTo": "sites",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -798,45 +762,35 @@
       "table": "source_site_mappings"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "flight_records_pk",
       "table": "flight_records",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "flight_sources_pk",
       "table": "flight_sources",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "ingestion_runs_pk",
       "table": "ingestion_runs",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "sites_pk",
       "table": "sites",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "source_site_mappings_pk",
       "table": "source_site_mappings",
@@ -977,57 +931,42 @@
       "table": "source_site_mappings"
     },
     {
-      "columns": [
-        "source_id",
-        "source_flight_id"
-      ],
+      "columns": ["source_id", "source_flight_id"],
       "nameExplicit": true,
       "name": "flight_records_source_flight_unique",
       "entityType": "uniques",
       "table": "flight_records"
     },
     {
-      "columns": [
-        "code"
-      ],
+      "columns": ["code"],
       "nameExplicit": true,
       "name": "flight_sources_code_unique",
       "entityType": "uniques",
       "table": "flight_sources"
     },
     {
-      "columns": [
-        "run_key"
-      ],
+      "columns": ["run_key"],
       "nameExplicit": true,
       "name": "ingestion_runs_run_key_unique",
       "entityType": "uniques",
       "table": "ingestion_runs"
     },
     {
-      "columns": [
-        "id",
-        "source_id"
-      ],
+      "columns": ["id", "source_id"],
       "nameExplicit": true,
       "name": "ingestion_runs_id_source_id_parent_key_unique",
       "entityType": "uniques",
       "table": "ingestion_runs"
     },
     {
-      "columns": [
-        "slug"
-      ],
+      "columns": ["slug"],
       "nameExplicit": true,
       "name": "sites_slug_unique",
       "entityType": "uniques",
       "table": "sites"
     },
     {
-      "columns": [
-        "id",
-        "source_id"
-      ],
+      "columns": ["id", "source_id"],
       "nameExplicit": true,
       "name": "source_site_mappings_id_source_id_parent_key_unique",
       "entityType": "uniques",

@@ -39,6 +39,7 @@ consequences. Temporary progress and Git state belong in
 | DEC-024 | Derive XCContest country scope from all canonical sites | Accepted | 2026-08-06 |
 | DEC-025 | Use durable artifacts between versioned XCContest ingestion stages | Accepted | 2026-08-07 |
 | DEC-026 | Configure geographic catchments for every initial launch site | Accepted | 2026-08-08 |
+| DEC-027 | Review source-site mappings before flight acceptance | Accepted | 2026-08-08 |
 
 ## Individual decisions
 
@@ -1032,6 +1033,19 @@ SQLite persistence remain later T-013 slices.
 **Consequences:** A reviewed custom Drizzle data migration applies the six 5 km values to existing and fresh databases. Matching code must use inclusive Haversine distance checks, quarantine overlaps, and never call an external geocoder. API/UI contracts remain unchanged because catchments are ingestion configuration.
 
 **Related files:** [`../packages/database/src/schema.ts`](../packages/database/src/schema.ts), [`../packages/database/drizzle/20260808175017_set_launch_area_catchments/migration.sql`](../packages/database/drizzle/20260808175017_set_launch_area_catchments/migration.sql), [`handoff.md`](handoff.md).
+### DEC-027 - Review source-site mappings before flight acceptance
+
+**Status:** Accepted
+
+**Date:** 2026-08-08
+
+**Context:** XCContest parser staging preserves source launch name, optional point coordinates, and current opaque site-token URLs, but no source string or nearby coordinate may silently assign a canonical project site.
+
+**Decision:** The site-mapping command creates ignored, grouped JSONL proposals and never writes mappings automatically. A reviewed JSONL file explicitly creates `provisional` or `approved` rows in `source_site_mappings`; approval requires a verification reference and timestamp. The validator accepts only approved mappings. It derives coordinate suggestions from every same-country site with a configured catchment radius, quarantines overlap or unknown evidence, and writes versioned accepted/quarantine/report outputs keyed by a mapping snapshot hash.
+
+**Consequences:** Validation communicates only through parser-v2 JSONL, SQLite mapping rows, and versioned interim files. It neither contacts XCContest nor writes ingestion provenance or flight records; a later T-013 persistence slice owns those writes. Any change to source matching, proposal, review, or validation output semantics increments the corresponding mapping or validation version.
+
+**Related files:** [`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/site_mapping.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/site_mapping.py), [`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/validator.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/validator.py), [`../services/ml/README.md`](../services/ml/README.md).
 ## Open decisions
 
 | Question | Options / constraints | Resolve by |

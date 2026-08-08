@@ -136,6 +136,44 @@ records, and keeps every contributing raw artifact reference. Unknown or
 ambiguous launch evidence, site mapping approval, and SQLite persistence remain
 outside this command.
 
+## Reviewed site mapping and validation
+
+Create review proposals from a parser-v2 run without source access or SQLite writes:
+
+```powershell
+uv run --env-file .env --project services/ml xccontest-site-mappings propose --run-key <uuid>
+```
+
+The command writes non-overwriting `site-mapping-v2/mapping-proposals.jsonl` under the
+matching ignored interim run directory. A proposal may be based on the exact XCContest
+site token, a normalized source name, or a source point. Coordinates are compared with
+Haversine distance against every same-country `sites` row with a configured
+`catchment_radius_km`: the six launch areas use 5 km and Dobrich region uses 30 km.
+A point inside exactly one radius is only a review suggestion; overlaps and unknown
+locations remain quarantined. No external geocoding is used.
+
+A human reviews a local JSONL file by adding `decision`, `site_slug`, and, for an
+`approved` mapping, `verification_reference`. Apply that reviewed file in one SQLite
+transaction:
+
+```powershell
+uv run --env-file .env --project services/ml xccontest-site-mappings apply --review-file <mapping-decisions.jsonl>
+```
+
+`provisional` and `retired` mappings are never accepted. Incorrect mappings are retired
+and replaced; source evidence is not silently reassigned to another site.
+
+Validate an existing parser-v2 run against only approved mappings:
+
+```powershell
+uv run --env-file .env --project services/ml xccontest-validate --run-key <uuid>
+```
+
+The validator writes non-overwriting `validation-v1/<mapping-snapshot-sha256>/`
+outputs: `accepted-flights.jsonl`, `site-quarantine.jsonl`, and
+`validation-report.json`. It does not call XCContest or create `ingestion_runs` or
+`flight_records`; the later persistence slice owns that transaction. Re-run validation
+after mapping approvals to obtain a new mapping-snapshot output.
 The collector and parser are separate commands today so a failed downstream
 stage can resume from immutable raw evidence without another source request. A
 future top-level ingestion command may orchestrate collector, parser,
@@ -180,10 +218,11 @@ writes non-overwritable `parser-v2` outputs under
 record with all artifact references; conflicting IDs become one conflicted
 candidate without a selected value. It never writes or proposes
 `source_site_mappings`, retains pilot identity, calls XCContest, or writes
-SQLite. Validation, site assignment, and SQLite import remain later T-013
-slices. T-014 owns cross-run idempotency and persisted traceability. T-015 owns
-small, sanitized, permitted frozen fixtures; fixtures are not the live/raw
-dataset.
+SQLite. The T-013 validation/site-mapping slice now uses durable parser-v2 JSONL,
+reviewed `source_site_mappings`, and versioned accepted/quarantine outputs; persistence
+still remains a later T-013 slice. T-014 owns cross-run idempotency and persisted
+traceability. T-015 owns small, sanitized, permitted frozen fixtures; fixtures are not
+the live/raw dataset.
 
 ## Collector versioning policy
 

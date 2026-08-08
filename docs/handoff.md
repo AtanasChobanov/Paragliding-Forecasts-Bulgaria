@@ -4,12 +4,12 @@
 
 | Field                          | Value                                                                                                                                                      |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Last updated                   | 2026-08-06                                                                                                                                                 |
+| Last updated                   | 2026-08-08                                                                                                                                                 |
 | Current Git branch             | `feature/T-013-xccontest-collector`                                                                                                                         |
 | Branch relationship            | Extends the completed T-008 baseline at `e67bd5b` (`origin/main`) with T-009 through T-012 work                                                            |
 | Current tasks                  | T-001 through T-011 — `Done`; T-012 — `Review`; T-013 — `In Progress`                                                                                     |
 | Completed scope in this branch | T-009 coordinate/source research and the reviewed, migrated T-012 SQLite flight-data foundation, in addition to the completed dashboard/browser-smoke work |
-| Current working tree note      | Contains T-013 collector hardening plus the verified offline parser/normalizer boundary; local raw data, staging, and databases remain ignored                       |
+| Current working tree note      | Contains T-013 collector, parser, reviewed site-mapping, and approved-only validation boundaries; local raw data, staging, and databases remain ignored            |
 
 ## T-013 collector slice - current (2026-08-04)
 
@@ -237,6 +237,54 @@ Validation passes: Ruff formatting/lint, all 47 Python tests,
 `git diff --check`. No live source request was made during parser verification.
 T-013 remains **In Progress** for validation/site matching and persistence;
 T-015 still owns sanitized frozen source fixtures.
+
+## T-013 validation/site-mapping slice - current (2026-08-08)
+
+The offline validation/site-mapping boundary is implemented; T-013 remains
+**In Progress** because human mapping review and the persistence/orchestration
+slice are still outstanding. DEC-026 gives each `launch_area` a 5 km catchment
+and retains the 30 km Dobrich region catchment. The new reviewed custom Drizzle
+migration applies those six values to existing or fresh local databases without
+editing prior T-012 migrations.
+
+Use only existing parser-v2 staging and a migrated local database:
+
+```powershell
+uv run --env-file .env --project services/ml xccontest-site-mappings propose --run-key <uuid>
+uv run --env-file .env --project services/ml xccontest-site-mappings apply --review-file <mapping-decisions.jsonl>
+uv run --env-file .env --project services/ml xccontest-validate --run-key <uuid>
+```
+
+`propose` is read-only against SQLite and writes non-overwriting grouped
+`site-mapping-v2/mapping-proposals.jsonl`. It derives exact XCContest site-token,
+normalized-name, or source-point evidence; coordinate suggestions use inclusive
+Haversine distance against every same-country site with a non-null radius, not
+`site_type`. A unique catchment is only a proposal. `apply` is the only command
+that writes `source_site_mappings`, in one transaction after a human provides a
+site and, for approval, a verification reference. `provisional` and `retired`
+rows never accept flights.
+
+`xccontest-validate` reads parser-v2 JSONL and only approved mappings, then
+writes non-overwriting `validation-v1/<mapping-snapshot-sha256>/`
+`accepted-flights.jsonl`, `site-quarantine.jsonl`, and `validation-report.json`.
+It records parser/raw/mapping hashes and reconciles seen, rejected, deduplicated,
+accepted, and quarantined counters. It neither calls XCContest nor writes
+`ingestion_runs` or `flight_records`.
+
+Offline validation of the real complete run
+`f1032827-a98d-4c01-969e-e67b4885f90d` made no source request. With the current
+empty mapping table it produced 45 grouped v2 proposals and safely accepted zero
+records: 336 candidates were quarantined, alongside 664 parser rejections and
+200 duplicate observations, reconciling to 1,200 observations. A reviewer must
+now approve mappings before a subsequent mapping-snapshot validation can emit
+accepted candidates. T-014 still owns cross-run idempotency/traceability and
+T-015 owns sanitized frozen source fixtures.
+
+Verification passed: database migration metadata and 16 database tests; Ruff
+format/lint and all 54 ML tests; the mapping/validator CLI help; offline
+proposal and validation on the existing real run; and the root build, typecheck,
+lint, format, and repository checks. The Vite build retains its pre-existing
+chunk-size advisory.
 
 ## T-013 parser/normalizer slice - superseded v1 snapshot (2026-08-06)
 

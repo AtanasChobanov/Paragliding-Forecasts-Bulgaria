@@ -268,7 +268,10 @@ def load_mapping_catalog(
 
     url = configured_database_url(database_url)
     root = project_root or repository_root()
-    connection = open_read_only_database(url, root)
+    try:
+        connection = open_read_only_database(url, root)
+    except DatabaseConfigurationError as error:
+        raise SiteMappingError("Could not open the configured mapping database.") from error
     try:
         source = connection.execute(
             "SELECT id FROM flight_sources WHERE code = ?", (SOURCE_CODE,)
@@ -370,7 +373,7 @@ def mapping_snapshot_sha256(catalog: MappingCatalog) -> str:
 
 def _proposal_key(record: dict[str, Any]) -> tuple[str, object]:
     evidence = candidate_evidence(record)
-    for key_type in ("source_takeoff_id", "source_site_token", "normalized_name", "source_point"):
+    for key_type in ("source_takeoff_id", "source_site_token", "source_point", "normalized_name"):
         if key_type in evidence:
             return key_type, evidence[key_type]
     raise SiteMappingError("Candidate has no usable launch evidence for a mapping proposal.")
@@ -521,7 +524,10 @@ def apply_mapping_decisions(
 
     decisions = _load_decisions(review_path)
     root = project_root or repository_root()
-    connection = open_writable_database(configured_database_url(database_url), root)
+    try:
+        connection = open_writable_database(configured_database_url(database_url), root)
+    except DatabaseConfigurationError as error:
+        raise SiteMappingError("Could not open the configured mapping database.") from error
     inserted = promoted = unchanged = rejected = 0
     try:
         connection.execute("BEGIN IMMEDIATE")
@@ -621,7 +627,7 @@ def apply_mapping_decisions(
             )
             inserted += 1
         connection.commit()
-    except (sqlite3.Error, DatabaseConfigurationError) as error:
+    except sqlite3.Error as error:
         connection.rollback()
         raise SiteMappingError("Could not apply reviewed source-site mappings.") from error
     except Exception:

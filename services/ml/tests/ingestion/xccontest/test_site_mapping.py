@@ -174,3 +174,34 @@ def test_apply_rolls_back_conflicting_active_mapping(tmp_path: Path) -> None:
         )
 
     assert load_mapping_catalog(database_url(), project_root=tmp_path).mappings == ()
+
+
+def test_groups_generic_names_by_distinct_source_points(tmp_path: Path) -> None:
+    create_database(tmp_path)
+    first = record(flight_id="100")
+    first.update(
+        {
+            "launch_name_raw": "?",
+            "launch_latitude_deg": 42.68733,
+            "launch_longitude_deg": 24.749962,
+            "launch_search_url": "https://www.xcontest.org/world/en/flights-search/?filter[point]=24.749962%2042.68733",
+        }
+    )
+    second = record(flight_id="101")
+    second.update(
+        {
+            "launch_name_raw": "?",
+            "launch_latitude_deg": 42.7302,
+            "launch_longitude_deg": 24.0923,
+            "launch_search_url": "https://www.xcontest.org/world/en/flights-search/?filter[point]=24.0923%2042.7302",
+        }
+    )
+    write_parser_staging(tmp_path, [first, second])
+
+    result = write_mapping_proposals("test-run", database_url=database_url(), project_root=tmp_path)
+
+    proposals = [json.loads(line) for line in result["proposals_path"].read_text().splitlines()]
+    assert [proposal["key_type"] for proposal in proposals] == ["source_point", "source_point"]
+    assert {
+        (proposal["point_latitude_deg"], proposal["point_longitude_deg"]) for proposal in proposals
+    } == {(42.68733, 24.749962), (42.7302, 24.0923)}
