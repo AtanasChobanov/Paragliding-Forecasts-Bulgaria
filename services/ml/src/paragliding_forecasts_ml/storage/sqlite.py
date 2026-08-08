@@ -77,6 +77,27 @@ def open_read_only_database(
     return connection
 
 
+def open_writable_database(
+    database_url: str,
+    project_root: Path | None = None,
+) -> sqlite3.Connection:
+    """Open an existing migrated SQLite file for one explicit batch transaction."""
+
+    database_path = resolve_database_path(database_url, project_root)
+    if not database_path.is_file():
+        raise DatabaseConfigurationError(
+            f"DATABASE_URL database file does not exist: {database_path}"
+        )
+    try:
+        connection = sqlite3.connect(database_path)
+        connection.execute("PRAGMA foreign_keys = ON")
+    except sqlite3.Error as error:
+        raise DatabaseConfigurationError(
+            "DATABASE_URL database could not be opened for writing."
+        ) from error
+    return connection
+
+
 def load_site_country_codes(
     database_url: str,
     project_root: Path | None = None,
