@@ -38,6 +38,7 @@ consequences. Temporary progress and Git state belong in
 | DEC-023 | Partition saturated XCContest first-page views through visible filters | Accepted | 2026-08-06 |
 | DEC-024 | Derive XCContest country scope from all canonical sites | Accepted | 2026-08-06 |
 | DEC-025 | Use durable artifacts between versioned XCContest ingestion stages | Accepted | 2026-08-07 |
+| DEC-026 | Configure geographic catchments for every initial launch site | Accepted | 2026-08-08 |
 
 ## Individual decisions
 
@@ -1016,6 +1017,21 @@ SQLite persistence remain later T-013 slices.
 [`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/selectors.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/selectors.py),
 [`handoff.md`](handoff.md).
 
+### DEC-026 - Configure geographic catchments for every initial launch site
+
+**Status:** Accepted
+
+**Date:** 2026-08-08
+
+**Context:** Source list rows can expose launch coordinates that are near, but not bit-for-bit identical to, canonical launch coordinates. The initial T-009 locations need a deliberate tolerance for site-mapping proposals without reclassifying launch areas as broad regions.
+
+**Decision:** Keep Sofia - Vitosha (Kominite), Zlatitsa, Sopot, Nevsha, Shumen, and Pastrina as `launch_area` sites and set their `catchment_radius_km` values to 5. Keep Dobrich as a `region` with its existing 30 km radius. Geographic matching considers every same-country site with a non-null radius; it does not branch on `site_type`. A coordinate inside exactly one configured radius is a strong mapping proposal, but remains quarantined until a human approves a `source_site_mapping` row.
+
+**Rationale:** This supports ordinary coordinate drift around known launches while retaining a conservative reviewed-mapping gate. The existing schema already validates the radius independently of `site_type`, so no DDL change is needed.
+
+**Consequences:** A reviewed custom Drizzle data migration applies the six 5 km values to existing and fresh databases. Matching code must use inclusive Haversine distance checks, quarantine overlaps, and never call an external geocoder. API/UI contracts remain unchanged because catchments are ingestion configuration.
+
+**Related files:** [`../packages/database/src/schema.ts`](../packages/database/src/schema.ts), [`../packages/database/drizzle/20260808175017_set_launch_area_catchments/migration.sql`](../packages/database/drizzle/20260808175017_set_launch_area_catchments/migration.sql), [`handoff.md`](handoff.md).
 ## Open decisions
 
 | Question | Options / constraints | Resolve by |

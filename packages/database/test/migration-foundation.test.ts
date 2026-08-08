@@ -106,7 +106,7 @@ describe("flight foundation migrations", () => {
 
     expect(sqlite.prepare("PRAGMA foreign_keys").get()).toEqual({ foreign_keys: 1 });
     expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({
-      count: 2,
+      count: 3,
     });
 
     if (databaseUrl === undefined) {
@@ -116,7 +116,7 @@ describe("flight foundation migrations", () => {
     runMigrations(databaseUrl);
 
     expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({
-      count: 2,
+      count: 3,
     });
     expect(
       sqlite
@@ -128,7 +128,7 @@ describe("flight foundation migrations", () => {
         .all(),
     ).toEqual([
       {
-        catchment_radius_km: null,
+        catchment_radius_km: 5,
         country_code_iso2: "BG",
         id: 1,
         is_active: 1,
@@ -138,7 +138,7 @@ describe("flight foundation migrations", () => {
         time_zone: "Europe/Sofia",
       },
       {
-        catchment_radius_km: null,
+        catchment_radius_km: 5,
         country_code_iso2: "BG",
         id: 2,
         is_active: 1,
@@ -148,7 +148,7 @@ describe("flight foundation migrations", () => {
         time_zone: "Europe/Sofia",
       },
       {
-        catchment_radius_km: null,
+        catchment_radius_km: 5,
         country_code_iso2: "BG",
         id: 3,
         is_active: 1,
@@ -158,7 +158,7 @@ describe("flight foundation migrations", () => {
         time_zone: "Europe/Sofia",
       },
       {
-        catchment_radius_km: null,
+        catchment_radius_km: 5,
         country_code_iso2: "BG",
         id: 4,
         is_active: 1,
@@ -168,7 +168,7 @@ describe("flight foundation migrations", () => {
         time_zone: "Europe/Sofia",
       },
       {
-        catchment_radius_km: null,
+        catchment_radius_km: 5,
         country_code_iso2: "BG",
         id: 5,
         is_active: 1,
@@ -178,7 +178,7 @@ describe("flight foundation migrations", () => {
         time_zone: "Europe/Sofia",
       },
       {
-        catchment_radius_km: null,
+        catchment_radius_km: 5,
         country_code_iso2: "BG",
         id: 6,
         is_active: 1,
