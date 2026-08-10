@@ -4,7 +4,7 @@
 
 | Field                          | Value                                                                                                                                                      |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Last updated                   | 2026-08-08                                                                                                                                                 |
+| Last updated                   | 2026-08-10                                                                                                                                                 |
 | Current Git branch             | `feature/T-013-xccontest-collector`                                                                                                                         |
 | Branch relationship            | Extends the completed T-008 baseline at `e67bd5b` (`origin/main`) with T-009 through T-012 work                                                            |
 | Current tasks                  | T-001 through T-011 — `Done`; T-012 — `Review`; T-013 — `In Progress`                                                                                     |
@@ -285,6 +285,12 @@ format/lint and all 54 ML tests; the mapping/validator CLI help; offline
 proposal and validation on the existing real run; and the root build, typecheck,
 lint, format, and repository checks. The Vite build retains its pre-existing
 chunk-size advisory.
+
+The ML README now contains the complete human-review procedure for source-site
+mappings: proposal and review-file locations, JSONL rules, the valid decision values
+and required fields, an audit-reference template, ready-to-apply
+approved/provisional/rejected examples, transaction behavior, and the current
+retirement limitation.
 
 ## T-013 parser/normalizer slice - superseded v1 snapshot (2026-08-06)
 

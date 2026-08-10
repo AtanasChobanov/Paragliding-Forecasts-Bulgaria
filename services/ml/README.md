@@ -138,31 +138,128 @@ outside this command.
 
 ## Reviewed site mapping and validation
 
-Create review proposals from a parser-v2 run without source access or SQLite writes:
+This is a deliberately human-reviewed boundary. A proposal is evidence to inspect,
+not permission for the program to assign flights to a project site. No external
+geocoding is used and `propose` never changes SQLite.
+
+### 1. Create proposals
+
+Start with a completed parser-v2 run and a migrated local database. From the repository
+root, use the normal `.env` database configuration (or pass `--database-url`):
 
 ```powershell
+npm.cmd run db:migrate --workspace @paragliding-forecasts/database
 uv run --env-file .env --project services/ml xccontest-site-mappings propose --run-key <uuid>
 ```
 
-The command writes non-overwriting `site-mapping-v2/mapping-proposals.jsonl` under the
-matching ignored interim run directory. A proposal may be based on the exact XCContest
-site token, a normalized source name, or a source point. Coordinates are compared with
-Haversine distance against every same-country `sites` row with a configured
-`catchment_radius_km`: the six launch areas use 5 km and Dobrich region uses 30 km.
-A point inside exactly one radius is only a review suggestion; overlaps and unknown
-locations remain quarantined. No external geocoding is used.
+For a run key such as `f1032827-a98d-4c01-969e-e67b4885f90d`, the command writes its
+read-only output here:
 
-A human reviews a local JSONL file by adding `decision`, `site_slug`, and, for an
-`approved` mapping, `verification_reference`. Apply that reviewed file in one SQLite
-transaction:
-
-```powershell
-uv run --env-file .env --project services/ml xccontest-site-mappings apply --review-file <mapping-decisions.jsonl>
+```text
+data/interim/xccontest/f1032827-a98d-4c01-969e-e67b4885f90d/site-mapping-v2/
+  mapping-proposals.jsonl
+  proposal-report.json
 ```
 
-`provisional` and `retired` mappings are never accepted. Incorrect mappings are retired
-and replaced; source evidence is not silently reassigned to another site.
+The `data/interim/` directory is ignored by Git. `mapping-proposals.jsonl` is immutable
+evidence: do not edit it. It contains one JSON object per line (JSONL), grouped by the
+strongest available source evidence. Copy it to a sibling review file, then edit only the
+copy:
 
+```powershell
+$runKey = 'f1032827-a98d-4c01-969e-e67b4885f90d'
+$mappingDir = "data/interim/xccontest/$runKey/site-mapping-v2"
+Copy-Item "$mappingDir/mapping-proposals.jsonl" "$mappingDir/mapping-decisions.jsonl"
+```
+
+Use this recommended location and filename so the proposed evidence and the human
+review stay together. The apply command accepts a file elsewhere too, but the review
+file must remain local/ignored: it can contain real source evidence and reviewer notes.
+
+A proposal exposes the evidence to review:
+
+- `key_type` and its matching value identify exactly what will be persisted. Never
+  change either to “correct” a source value; reject it or create a separate reviewed
+  mapping instead.
+- `source_takeoff_id`, `source_site_token`, and `normalized_name` use a non-empty
+  string in `key_value`. Keep the proposed value exactly as written. A site token is an
+  opaque XCContest token, not a human-readable slug. A normalized name is already
+  Unicode-normalized, case-folded, and whitespace-collapsed; do not replace it with
+  the display name.
+- `source_point` uses `key_value: null` and the exact numeric
+  `point_latitude_deg`/`point_longitude_deg` from the proposal (rounded to at most six decimal places).
+  Do not round, swap, or otherwise alter the pair.
+- `source_display_names`, `sample_source_flight_ids`, `seasons`, and
+  `catchment_suggestions` are review context. They are not mapping keys. A unique
+  catchment suggestion is still only a suggestion; independently verify the location.
+- `recommendation` is `inside_unique_catchment`, `ambiguous_catchment`, or
+  `review_required`. None of these is an automatic approval.
+
+### 2. Complete each review decision
+
+Keep one JSON object per line; do not wrap lines in `[` / `]` and do not put commas
+between lines. It is safe, and useful for traceability, to retain every field copied from
+the proposal. `apply` ignores proposal-only context fields. Add the fields below to every
+line you retain.
+
+| Field | Required for | Exact format and meaning |
+| --- | --- | --- |
+| `decision` | Every retained line | One of `approved`, `provisional`, or `rejected`. This is the reviewer’s decision, not a proposal recommendation. |
+| `site_slug` | `approved`, `provisional` | Exact existing canonical `sites.slug` value, such as `sopot`. Use the `site_slug` in a verified catchment suggestion when applicable; otherwise obtain the canonical slug from the sites table. |
+| `verification_reference` | `approved` | Non-empty audit reference describing how the reviewer established the mapping. Use the consistent template `<evidence-kind>:<stable-reference>; reviewed-by:<initials-or-id>; reviewed-on:<YYYY-MM-DD>`. Examples: `xccontest-detail:https://www.xcontest.org/world/en/flights/detail:...; reviewed-by:AB; reviewed-on:2026-08-10` or `manual-coordinate-check:site-survey-2026-07; reviewed-by:AB; reviewed-on:2026-08-10`. This is an auditable string, not a URL-only field. |
+| `verified_at_utc` | Optional for `approved` | UTC timestamp exactly `YYYY-MM-DDTHH:MM:SSZ`, for example `2026-08-10T14:30:00Z`. If omitted for an approved decision, `apply` records its current UTC time; include it when the review time itself matters. |
+| `source_display_name` | Optional | One original human-readable launch label, for example `Sopot`. It aids later audit but is never used as a matching key. |
+| `notes` | Optional | Short plain-text reviewer rationale, uncertainty, or pointer to supporting evidence. Do not put secrets or pilot-identifying data here. |
+
+A `provisional` mapping is stored but will never allow a flight through validation. Use
+it when the hypothesis is useful to preserve but has not met the approval standard; omit
+`verification_reference` and `verified_at_utc`. A `rejected` line writes no mapping and
+needs no `site_slug`; retain `proposal_id` and add `notes` so the decision remains
+traceable in the local file.
+
+`retired` is a database status for historical mappings; it is **not** an accepted
+`decision` value for this command. Do not edit SQLite manually to retire or reassign an
+active mapping. The current apply command rejects a conflicting active key and rolls back
+the entire file; correction/retirement needs an explicit follow-up workflow.
+
+### 3. Valid examples
+
+The first example approves an opaque source token after manual verification. It is a
+complete, ready-to-apply JSONL line; additional copied proposal fields are allowed but
+not required:
+
+```json
+{"proposal_id":"keep-the-proposal-id-for-local-traceability","source":"xccontest","key_type":"source_site_token","key_value":"exact-token-from-proposal","source_display_name":"Sopot","decision":"approved","site_slug":"sopot","verification_reference":"xccontest-detail:https://www.xcontest.org/world/en/flights/detail:...; reviewed-by:AB; reviewed-on:2026-08-10","verified_at_utc":"2026-08-10T14:30:00Z","notes":"Launch page and source token were checked against the Sopot canonical site."}
+```
+
+A coordinate mapping must preserve its exact pair and has no `key_value`:
+
+```json
+{"proposal_id":"keep-the-proposal-id-for-local-traceability","source":"xccontest","key_type":"source_point","key_value":null,"point_latitude_deg":42.68733,"point_longitude_deg":24.749962,"source_display_name":"Sopot","decision":"provisional","site_slug":"sopot","notes":"Inside the configured 5 km catchment, but source-side evidence still needs review."}
+```
+
+A rejected proposal can be minimal:
+
+```json
+{"proposal_id":"keep-the-proposal-id-for-local-traceability","decision":"rejected","notes":"Generic launch name has no reliable evidence linking it to a canonical site."}
+```
+
+### 4. Apply the reviewed file
+
+Review the entire file before applying it. The command validates all lines and uses one
+SQLite transaction: any invalid line, unknown `site_slug`, missing approval reference, or
+conflicting active mapping aborts the whole file without a partial write.
+
+```powershell
+$runKey = 'f1032827-a98d-4c01-969e-e67b4885f90d'
+uv run --env-file .env --project services/ml xccontest-site-mappings apply `
+  --review-file "data/interim/xccontest/$runKey/site-mapping-v2/mapping-decisions.jsonl"
+```
+
+The output reports `inserted`, `promoted`, `unchanged`, and `rejected` counts. `approved`
+rows become reusable `source_site_mappings` records; a matching existing `provisional`
+row for the same site can be promoted to `approved`. Re-run validation after successful
+approvals so it reads the new mapping snapshot.
 Validate an existing parser-v2 run against only approved mappings:
 
 ```powershell
