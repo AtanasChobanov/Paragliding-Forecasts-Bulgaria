@@ -1092,7 +1092,10 @@ quarantines and at least one approved record. Otherwise it exits with the explic
 `awaiting_mapping_review` status before writing canonical flights. After a human applies reviewed
 mapping decisions, `xccontest-ingest resume --run-key <uuid>` performs only offline reusable stages,
 creates or verifies the validation output for the current mapping snapshot, and persists exactly
-once. An explicit `--persist-approved-only` permits a reviewer to retain mapping-actionable
+once. A rejection in the standard sibling review file resolves only the matching proposal evidence:
+it remains quarantined and is excluded from persistence, but does not block the approved subset. New,
+unresolved, ambiguous, provisional, or country-mismatched mapping evidence still blocks the run. An
+explicit `--persist-approved-only` permits a reviewer to retain mapping-actionable
 quarantines and persist the approved subset; this forfeits adding the remaining records to that
 persisted run until T-014.
 

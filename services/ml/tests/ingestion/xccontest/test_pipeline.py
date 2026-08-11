@@ -14,13 +14,33 @@ RUN_KEY = "11111111-1111-4111-8111-111111111111"
 SNAPSHOT = "a" * 64
 
 
-def _validation_report(root: Path, *, reason: str | None, accepted: int = 1) -> dict:
+def _validation_report(
+    root: Path,
+    *,
+    reason: str | None,
+    accepted: int = 1,
+    candidate: dict | None = None,
+) -> dict:
     relative = Path("data/interim/xccontest") / RUN_KEY / "validation-v2" / SNAPSHOT
     folder = root / relative
     folder.mkdir(parents=True)
     quarantine = folder / "site-quarantine.jsonl"
     if reason is not None:
-        quarantine.write_text(json.dumps({"reason": reason}) + "\n", encoding="utf-8")
+        quarantine.write_text(
+            json.dumps(
+                {
+                    "reason": reason,
+                    "candidate": candidate
+                    or {
+                        "launch_search_url": (
+                            "https://www.xcontest.org/world/en/flights-search/?filter[site]=test-token"
+                        )
+                    },
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
     else:
         quarantine.write_text("", encoding="utf-8")
     return {
@@ -69,6 +89,92 @@ def test_resume_pauses_for_actionable_mapping_quarantine_without_persistence(
     assert result["status"] == "awaiting_mapping_review"
     assert result["actionable_mapping_quarantine_count"] == 1
     assert calls == ["parse", "propose", "validate"]
+
+
+def test_resume_persists_when_rejected_decision_covers_mapping_quarantine(
+    monkeypatch, tmp_path
+) -> None:
+    candidate = {
+        "source_flight_id": "rejected-flight",
+        "launch_search_url": (
+            "https://www.xcontest.org/world/en/flights-search/?filter[site]=rejected-token"
+        ),
+    }
+    key_type, key_value = pipeline._proposal_key(candidate)
+    proposal = {
+        "proposal_id": pipeline._proposal_id(key_type, key_value),
+        "source": "xccontest",
+        "key_type": key_type,
+        "key_value": key_value,
+        "point_latitude_deg": None,
+        "point_longitude_deg": None,
+    }
+    mapping_directory = tmp_path / "data" / "interim" / "xccontest" / RUN_KEY / "site-mapping-v2"
+    mapping_directory.mkdir(parents=True)
+    (mapping_directory / "mapping-proposals.jsonl").write_text(
+        json.dumps(proposal) + "\n", encoding="utf-8"
+    )
+    (mapping_directory / "mapping-decisions.jsonl").write_text(
+        json.dumps({**proposal, "decision": "rejected"}) + "\n", encoding="utf-8"
+    )
+    report = _validation_report(tmp_path, reason="unknown_mapping", candidate=candidate)
+    calls = _stub_offline_stages(monkeypatch, tmp_path, report)
+    persisted: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        pipeline,
+        "persist_import",
+        lambda run_key, snapshot, *_args, **_kwargs: (
+            persisted.append((run_key, snapshot)) or {"status": "succeeded"}
+        ),
+    )
+
+    result = pipeline.resume_run(RUN_KEY, tmp_path / "policy.json")
+
+    assert result["status"] == "succeeded"
+    assert result["actionable_mapping_quarantine_count"] == 0
+    assert result["reviewed_rejected_mapping_quarantine_count"] == 1
+    assert calls == ["parse", "propose", "validate"]
+    assert persisted == [(RUN_KEY, SNAPSHOT)]
+
+
+def test_resume_does_not_trust_rejected_decision_for_different_proposal(
+    monkeypatch, tmp_path
+) -> None:
+    candidate = {
+        "source_flight_id": "unresolved-flight",
+        "launch_search_url": (
+            "https://www.xcontest.org/world/en/flights-search/?filter[site]=unresolved-token"
+        ),
+    }
+    mapping_directory = tmp_path / "data" / "interim" / "xccontest" / RUN_KEY / "site-mapping-v2"
+    mapping_directory.mkdir(parents=True)
+    proposal = {
+        "proposal_id": "a" * 64,
+        "source": "xccontest",
+        "key_type": "source_site_token",
+        "key_value": "other-token",
+        "point_latitude_deg": None,
+        "point_longitude_deg": None,
+    }
+    (mapping_directory / "mapping-proposals.jsonl").write_text(
+        json.dumps(proposal) + "\n", encoding="utf-8"
+    )
+    (mapping_directory / "mapping-decisions.jsonl").write_text(
+        json.dumps({**proposal, "decision": "rejected"}) + "\n", encoding="utf-8"
+    )
+    report = _validation_report(tmp_path, reason="unknown_mapping", candidate=candidate)
+    _stub_offline_stages(monkeypatch, tmp_path, report)
+    monkeypatch.setattr(
+        pipeline,
+        "persist_import",
+        lambda *_args, **_kwargs: pytest.fail("unreviewed mapping must still block persistence"),
+    )
+
+    result = pipeline.resume_run(RUN_KEY, tmp_path / "policy.json")
+
+    assert result["status"] == "awaiting_mapping_review"
+    assert result["actionable_mapping_quarantine_count"] == 1
+    assert result["reviewed_rejected_mapping_quarantine_count"] == 0
 
 
 def test_resume_persists_approved_records_after_review_or_explicit_override(

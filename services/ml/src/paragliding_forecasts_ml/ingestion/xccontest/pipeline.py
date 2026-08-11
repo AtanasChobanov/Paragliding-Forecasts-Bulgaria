@@ -18,10 +18,13 @@ from .parser import ParseError, parse_run
 from .persistence import PersistenceError, load_policy, persist_import
 from .site_mapping import (
     SiteMappingError,
+    _proposal_id,
+    _proposal_key,
     _safe_run_directory,
     load_mapping_catalog,
     load_parser_records,
     mapping_snapshot_sha256,
+    read_jsonl,
     repository_root,
     write_mapping_proposals,
 )
@@ -147,23 +150,86 @@ def _existing_or_validated(run_key: str, root: Path, database_url: str | None) -
         raise PipelineError(f"XCContest validation did not complete: {error}") from error
 
 
-def _actionable_quarantines(report: dict[str, Any], root: Path) -> int:
+def _rejected_review_proposal_ids(run_key: str, root: Path) -> frozenset[str]:
+    """Load rejections that are tied to this run's immutable proposal artifact."""
+
+    mapping_directory = _safe_run_directory(run_key, root) / MAPPING_OUTPUT_DIRECTORY
+    decisions_path = mapping_directory / "mapping-decisions.jsonl"
+    if not decisions_path.is_file():
+        return frozenset()
+    try:
+        proposals = read_jsonl(mapping_directory / "mapping-proposals.jsonl")
+        decisions = read_jsonl(decisions_path)
+    except SiteMappingError as error:
+        raise PipelineError(f"Mapping review artifacts are not reusable: {error}") from error
+    proposal_by_id: dict[str, dict[str, Any]] = {}
+    for proposal in proposals:
+        proposal_id = proposal.get("proposal_id")
+        if not isinstance(proposal_id, str) or not proposal_id:
+            raise PipelineError("Mapping proposal artifact contains an invalid proposal_id.")
+        if proposal_id in proposal_by_id:
+            raise PipelineError("Mapping proposal artifact contains duplicate proposal_ids.")
+        proposal_by_id[proposal_id] = proposal
+    rejected: set[str] = set()
+    seen: set[str] = set()
+    for decision in decisions:
+        proposal_id = decision.get("proposal_id")
+        if not isinstance(proposal_id, str) or proposal_id not in proposal_by_id:
+            raise PipelineError("Mapping decision does not belong to this run's proposal artifact.")
+        if proposal_id in seen:
+            raise PipelineError("Mapping decisions contain duplicate proposal_ids.")
+        seen.add(proposal_id)
+        proposal = proposal_by_id[proposal_id]
+        if any(
+            decision.get(field) != proposal.get(field)
+            for field in (
+                "source",
+                "key_type",
+                "key_value",
+                "point_latitude_deg",
+                "point_longitude_deg",
+            )
+        ):
+            raise PipelineError("Mapping decision evidence does not match its immutable proposal.")
+        action = decision.get("decision")
+        if action not in {"approved", "provisional", "rejected"}:
+            raise PipelineError("Mapping decision must be approved, provisional, or rejected.")
+        if action == "rejected":
+            rejected.add(proposal_id)
+    return frozenset(rejected)
+
+
+def _actionable_quarantines(report: dict[str, Any], run_key: str, root: Path) -> tuple[int, int]:
+    """Return unresolved and explicitly rejected mapping quarantine counts."""
+
     path_value = report.get("site_quarantine_path")
     if not isinstance(path_value, str):
         raise PipelineError("Validation report does not identify its quarantine output.")
     quarantine_path = root / path_value
     try:
-        records = [
-            json.loads(line) for line in quarantine_path.read_text(encoding="utf-8").splitlines()
-        ]
-    except FileNotFoundError as error:
-        raise PipelineError("Validation quarantine output does not exist.") from error
-    except json.JSONDecodeError as error:
-        raise PipelineError("Validation quarantine output is not valid JSONL.") from error
-    return sum(
-        isinstance(record, dict) and record.get("reason") in MAPPING_REVIEW_REASONS
-        for record in records
-    )
+        records = read_jsonl(quarantine_path)
+    except SiteMappingError as error:
+        raise PipelineError(f"Validation quarantine output is not reusable: {error}") from error
+    rejected_proposals = _rejected_review_proposal_ids(run_key, root)
+    unresolved = reviewed_rejected = 0
+    for record in records:
+        if record.get("reason") not in MAPPING_REVIEW_REASONS:
+            continue
+        candidate = record.get("candidate")
+        if not isinstance(candidate, dict):
+            raise PipelineError("Mapping-actionable quarantine record has no candidate evidence.")
+        try:
+            key_type, key_value = _proposal_key(candidate)
+        except SiteMappingError as error:
+            raise PipelineError(
+                "Mapping-actionable quarantine record has unusable proposal evidence."
+            ) from error
+        proposal_id = _proposal_id(key_type, key_value)
+        if proposal_id in rejected_proposals:
+            reviewed_rejected += 1
+        else:
+            unresolved += 1
+    return unresolved, reviewed_rejected
 
 
 def _paused_result(
@@ -174,6 +240,7 @@ def _paused_result(
     proposal_report: dict[str, Any],
     validation_report: dict[str, Any],
     actionable_quarantine_count: int,
+    reviewed_rejected_mapping_quarantine_count: int = 0,
 ) -> dict[str, Any]:
     return {
         "status": status,
@@ -182,6 +249,7 @@ def _paused_result(
         "mapping_proposals": proposal_report,
         "validation": validation_report,
         "actionable_mapping_quarantine_count": actionable_quarantine_count,
+        "reviewed_rejected_mapping_quarantine_count": reviewed_rejected_mapping_quarantine_count,
         "next_step": "Review/apply mapping decisions, then run xccontest-ingest resume --run-key <uuid>.",
     }
 
@@ -200,7 +268,7 @@ def resume_run(
     parser_report = _existing_or_parsed(run_key, root)
     proposal_report = _existing_or_proposed(run_key, root, resolved_url)
     validation_report = _existing_or_validated(run_key, root, resolved_url)
-    actionable = _actionable_quarantines(validation_report, root)
+    actionable, reviewed_rejected = _actionable_quarantines(validation_report, run_key, root)
     if actionable and not persist_approved_only:
         return _paused_result(
             status="awaiting_mapping_review",
@@ -209,6 +277,7 @@ def resume_run(
             proposal_report=proposal_report,
             validation_report=validation_report,
             actionable_quarantine_count=actionable,
+            reviewed_rejected_mapping_quarantine_count=reviewed_rejected,
         )
     if validation_report.get("records_accepted") == 0:
         return _paused_result(
@@ -218,6 +287,7 @@ def resume_run(
             proposal_report=proposal_report,
             validation_report=validation_report,
             actionable_quarantine_count=actionable,
+            reviewed_rejected_mapping_quarantine_count=reviewed_rejected,
         )
     snapshot = validation_report.get("mapping_snapshot_sha256")
     if not isinstance(snapshot, str):
@@ -238,6 +308,7 @@ def resume_run(
         "mapping_proposals": proposal_report,
         "validation": validation_report,
         "actionable_mapping_quarantine_count": actionable,
+        "reviewed_rejected_mapping_quarantine_count": reviewed_rejected,
         "persistence": persistence_report,
     }
 

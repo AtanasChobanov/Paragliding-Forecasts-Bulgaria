@@ -74,10 +74,11 @@ uv run --env-file .env --project services/ml xccontest-ingest fresh `
 `fresh` performs preflight, collection, parsing, mapping proposals, validation, and then
 persistence through the existing durable artifacts. It never bypasses the individual stage
 contracts. `propose` is automatic and read-only; `apply` is always a human-reviewed SQLite
-write. When validation finds actionable mapping quarantines, the command exits with status
-`awaiting_mapping_review` (process exit code 2) before it writes an ingestion run or flights.
-Copy/review/apply the generated `site-mapping-v2` decisions file, then continue without source
-access:
+write. When validation finds mapping quarantines with no matching reviewed rejection, the command
+exits with status `awaiting_mapping_review` (process exit code 2) before it writes an ingestion
+run or flights. Rejections in the sibling `mapping-decisions.jsonl` must retain the immutable
+proposal identifier and evidence; they keep those flights quarantined but allow the approved
+subset to persist. Copy/review/apply the generated `site-mapping-v2` decisions file, then continue without source access:
 
 ```powershell
 uv run --env-file .env --project services/ml xccontest-ingest resume `

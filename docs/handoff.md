@@ -1163,3 +1163,15 @@ Offline verification passed: `uv run --project services/ml ruff format --check`,
 SQLite evidence remains one successful import of 267 records from 2025/2026 and 23 approved
 mappings; the owner should manually test an ordinary permitted headed `fresh --season 2024` run
 with the default 30-second source delay. On a 500/challenge/access failure, stop without retrying.
+
+
+## T-013 reviewed-rejection resume gate - current (2026-08-11)
+
+`xccontest-ingest resume` now reads the standard sibling
+`site-mapping-v2/mapping-decisions.jsonl` when present. A `rejected` decision resolves only a
+quarantine candidate whose computed proposal ID and immutable mapping evidence exactly match the
+same run's `mapping-proposals.jsonl`; it remains quarantined and is excluded from persistence, but
+no longer blocks persistence of the accepted subset. Missing, mismatched, duplicate, or unreviewed
+decisions remain blocking. The result reports separate unresolved and reviewed-rejected mapping
+quarantine counts. Focused format, Ruff lint, and eight pipeline tests passed. No ingestion command,
+browser, live source request, or local-database write was run for this correction.
