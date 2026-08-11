@@ -19,7 +19,6 @@ from paragliding_forecasts_ml.storage.sqlite import (
 from .models import SOURCE_CODE
 from .site_mapping import _safe_run_directory, repository_root, utc_now
 from .versions import (
-    COLLECTOR_VERSION,
     PARSER_VERSION,
     PERSISTENCE_VERSION,
     VALIDATION_OUTPUT_DIRECTORY,
@@ -194,6 +193,8 @@ def prepare(run_key: str, snapshot: str, root: Path) -> Prepared:
         manifest.get("source") != SOURCE_CODE
         or manifest.get("run_key") != run_key
         or manifest.get("status") not in {"complete", "incomplete"}
+        or not isinstance(manifest.get("collector_version"), str)
+        or not manifest["collector_version"]
     ):
         raise PersistenceError("Raw manifest is incompatible.")
     if not isinstance(manifest.get("source_url"), str) or not manifest["source_url"].startswith(
@@ -303,9 +304,7 @@ def persist_import(
                     "Accepted flight mapping is no longer approved XCContest evidence."
                 )
         now = utc_now()
-        pipeline = (
-            f"{COLLECTOR_VERSION}|{PARSER_VERSION}|{VALIDATION_VERSION}|{PERSISTENCE_VERSION}"
-        )
+        pipeline = f"{prepared.manifest['collector_version']}|{PARSER_VERSION}|{VALIDATION_VERSION}|{PERSISTENCE_VERSION}"
         notes = json.dumps(
             {
                 "accepted_flights_path": prepared.accepted_path.relative_to(root).as_posix(),

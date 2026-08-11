@@ -5,19 +5,14 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-import time
 from collections.abc import Sequence
-
-from playwright.sync_api import Error as PlaywrightError
 
 from ...storage.sqlite import (
     DatabaseConfigurationError,
     configured_database_url,
     load_site_country_codes,
 )
-from .artifacts import RawArtifactStore, safe_failure_summary
-from .browser import BrowserCollectionError, PlaywrightFlightListDriver
-from .collector import CollectionError, FlightListCollector
+from .collection_runner import CollectionExecutionError, collect_run
 from .models import CollectorConfig
 
 
@@ -121,21 +116,10 @@ def main(arguments: Sequence[str] | None = None) -> int:
         )
         return 1
 
-    artifacts = RawArtifactStore()
     try:
-        with PlaywrightFlightListDriver(config, sleeper=time.sleep) as driver:
-            report = FlightListCollector(
-                config=config,
-                driver=driver,
-                artifacts=artifacts,
-            ).collect()
-    except (BrowserCollectionError, CollectionError, PlaywrightError) as error:
-        artifacts.write_failure_report(error=safe_failure_summary(error))
-        print(
-            "XCContest collection did not complete. Review the local failure report; "
-            "use --headed for a manual browser check.",
-            file=sys.stderr,
-        )
+        report = collect_run(config)
+    except CollectionExecutionError as error:
+        print(str(error), file=sys.stderr)
         return 1
 
     print(
