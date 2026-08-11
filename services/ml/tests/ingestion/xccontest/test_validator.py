@@ -104,6 +104,10 @@ def test_accepts_only_approved_mapping_and_quarantines_unknown(tmp_path: Path) -
     assert quarantined[0]["reason"] == "unknown_mapping"
     assert validated.report["records_accepted"] == 1
     assert validated.report["records_quarantined"] == 1
+    assert validated.report["accepted_flights_path"].endswith("accepted-flights.jsonl")
+    assert len(validated.report["accepted_flights_sha256"]) == 64
+    assert validated.report["site_quarantine_path"].endswith("site-quarantine.jsonl")
+    assert len(validated.report["site_quarantine_sha256"]) == 64
 
 
 def test_quarantines_conflicting_approved_evidence(tmp_path: Path) -> None:
