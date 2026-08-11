@@ -214,6 +214,7 @@ export const ingestionRuns = sqliteTable(
         'owner_export',
         'official_api',
         'authorized_http',
+        'browser_ui',
         'pilot_provided'
       )`,
     ),

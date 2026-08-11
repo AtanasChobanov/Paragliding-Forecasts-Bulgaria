@@ -106,7 +106,7 @@ describe("flight foundation migrations", () => {
 
     expect(sqlite.prepare("PRAGMA foreign_keys").get()).toEqual({ foreign_keys: 1 });
     expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({
-      count: 3,
+      count: 4,
     });
 
     if (databaseUrl === undefined) {
@@ -116,7 +116,7 @@ describe("flight foundation migrations", () => {
     runMigrations(databaseUrl);
 
     expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({
-      count: 3,
+      count: 4,
     });
     expect(
       sqlite
@@ -250,6 +250,21 @@ describe("flight foundation migrations", () => {
     ]);
   });
 
+  it("accepts browser UI as an explicit ingestion method", () => {
+    activeConnection().sqlite.exec(`
+      INSERT INTO ingestion_runs (
+        id, run_key, source_id, ingestion_method, status, source_url, permission_basis,
+        permission_reference, raw_manifest_path, raw_manifest_sha256, pipeline_version,
+        started_at_utc, completed_at_utc
+      ) VALUES (
+        3000, '33333333-3333-4333-8333-333333333333', 1, 'browser_ui', 'succeeded',
+        'https://www.xcontest.org/world/en/flights/', 'written_permission', 'test permission',
+        'data/raw/xccontest/test-run/manifest.json',
+        'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+        'test-pipeline', '2026-08-11T08:00:00Z', '2026-08-11T08:01:00Z'
+      );
+    `);
+  });
   it("enforces source consistency, flight identity, and validation levels", () => {
     insertReferenceRows();
     const sqlite = activeConnection().sqlite;
