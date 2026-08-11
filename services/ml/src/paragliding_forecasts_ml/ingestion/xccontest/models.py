@@ -8,7 +8,9 @@ from datetime import datetime
 SOURCE_CODE = "xccontest"
 SOURCE_LIST_URL = "https://www.xcontest.org/world/en/flights/"
 MIN_DISTANCE_KM = 100.0
-DEFAULT_DELAY_SECONDS = 3.0
+MIN_DELAY_SECONDS = 3.0
+RECOMMENDED_DELAY_SECONDS = 30.0
+DEFAULT_DELAY_SECONDS = RECOMMENDED_DELAY_SECONDS
 DEFAULT_MAX_VIEWS = 2_000
 
 
@@ -72,6 +74,7 @@ class CollectorConfig:
     timeout_seconds: int = 30
     max_views: int = DEFAULT_MAX_VIEWS
     delay_seconds: float = DEFAULT_DELAY_SECONDS
+    acknowledge_rate_limit_risk: bool = False
 
     def __post_init__(self) -> None:
         if not self.seasons:
@@ -96,8 +99,12 @@ class CollectorConfig:
             raise ValueError("timeout_seconds must be at least one.")
         if self.max_views < 1:
             raise ValueError("max_views must be at least one.")
-        if self.delay_seconds < DEFAULT_DELAY_SECONDS:
-            raise ValueError(f"delay_seconds must be at least {DEFAULT_DELAY_SECONDS:g}.")
+        if self.delay_seconds < MIN_DELAY_SECONDS:
+            raise ValueError(f"delay_seconds must be at least {MIN_DELAY_SECONDS:g}.")
+        if self.delay_seconds < RECOMMENDED_DELAY_SECONDS and not self.acknowledge_rate_limit_risk:
+            raise ValueError(
+                "delay_seconds below the recommended 30 seconds requires explicit rate-limit acknowledgement."
+            )
 
 
 @dataclass(frozen=True)

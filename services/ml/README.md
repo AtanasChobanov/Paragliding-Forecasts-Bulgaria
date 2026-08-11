@@ -70,8 +70,12 @@ uv run --env-file .env --project services/ml xccontest-collect --season 2025
 uv run --env-file .env --project services/ml xccontest-collect --season 2025 --season 2024
 ```
 
-It is headless by default. Use `--headed` (optionally with `--slow-mo-ms`) for
-local UI inspection. Before creating a browser or artifact directory, the command opens the
+It is headless by default. Use `--headed` for local UI inspection. `--slow-mo-ms` is
+only a Playwright debugging slowdown, not a rate-limit control. Source-changing browser
+operations wait 30 seconds by default. `--source-delay-seconds` may increase that delay;
+values from 3 up to but excluding 30 require the explicit
+`--acknowledge-rate-limit-risk` flag. No value below 3 is accepted. Before creating a
+browser or artifact directory, the command opens the
 Drizzle-migrated SQLite database in read-only mode and derives distinct ISO2 codes from
 all `sites` rows, including inactive sites. `DATABASE_URL` precedence is `--database-url`,
 then the process environment, then `file:./data/local/paragliding.db`; only relative
@@ -88,8 +92,10 @@ visible date control. If a category/date view is still saturated, the collector
 captures the visible pilot, points, and airtime orderings in both directions as
 best-effort supplementary evidence.
 
-Every state transition is sequential and paced by at least three seconds; this
-collector intentionally does not open parallel tabs. It writes nonempty exact
+Every navigation and rendered-control transition is sequential and source-paced; this
+collector intentionally does not open parallel tabs or retry a failed source operation. A
+failed navigation response, challenge, or missing rendered table stops the run for manual
+inspection. It writes nonempty exact
 rendered `#flights` fragments under ignored `data/raw/xccontest/<run-key>/` and
 progress/failure state under ignored `data/interim/xccontest/<run-key>/`. The
 exact saved HTML fragment is the durable parser input and retains the source
@@ -102,9 +108,10 @@ manifest relative path and hash, lifecycle, requested/completed scope summaries,
 aggregate counters. Per-artifact detail and target statuses exist only in the immutable
 manifest; no raw root path, raw HTML, or row data is carried by the report.
 
-Manifest schema v2 records the database-derived `all_sites` country scope, per-target country statuses, country-aware artifact paths, source URL, collector lifecycle timestamps,
-completion/coverage status, category/date/sort scope, artifact hashes, per-view
-row counts, qualifying-distance counts, and run-wide observed/distinct/repeated
+Manifest schema v3 records the database-derived `all_sites` country scope, per-target country statuses, country-aware artifact paths, source URL, collector lifecycle timestamps,
+completion/coverage status, the configured source-pacing delay and risk acknowledgement,
+category/date/sort scope, artifact hashes, per-view row counts, qualifying-distance counts,
+and run-wide observed/distinct/repeated
 flight-ID counts. The CLI also returns the repository-relative manifest path
 and SHA-256 needed by the later `ingestion_runs` write. The checkpoint and
 failure report carry the available observation counters. `--max-views` is a

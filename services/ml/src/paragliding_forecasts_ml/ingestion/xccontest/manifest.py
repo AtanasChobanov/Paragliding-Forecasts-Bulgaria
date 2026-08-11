@@ -15,7 +15,7 @@ from .versions import RAW_MANIFEST_SCHEMA_VERSION
 
 COUNTRY_CODE_PATTERN = re.compile(r"^[A-Z]{2}$")
 FLIGHT_ROW_ID_PATTERN = re.compile(r"^flight-([0-9]+)$")
-SUPPORTED_MANIFEST_SCHEMA_VERSIONS = (1, RAW_MANIFEST_SCHEMA_VERSION)
+SUPPORTED_MANIFEST_SCHEMA_VERSIONS = (1, 2, RAW_MANIFEST_SCHEMA_VERSION)
 
 
 class ManifestValidationError(ValueError):
@@ -54,7 +54,7 @@ class ManifestContract:
                 ) from error
             qualifying_rows += distance >= MIN_DISTANCE_KM
 
-        if self.schema_version == 2:
+        if self.schema_version >= 2:
             if len(rows) != artifact["row_observation_count"]:
                 raise ManifestValidationError(
                     f"Manifest v2 row count does not match artifact: {artifact['path']}"
@@ -89,7 +89,7 @@ class ManifestContract:
             "raw_manifest_status": self.status,
             "raw_country_codes": list(self.country_codes),
             "raw_seasons": list(self.seasons),
-            "raw_manifest_observation_counts_verified": self.schema_version == 2,
+            "raw_manifest_observation_counts_verified": self.schema_version >= 2,
         }
 
 
@@ -101,7 +101,27 @@ def _unique_values(value: Any, field_name: str, validator: Any) -> tuple[Any, ..
     return tuple(value)
 
 
-def _validate_v2_scope_and_targets(
+def _validate_v3_source_pacing(manifest: dict[str, Any]) -> None:
+    pacing = manifest.get("source_pacing")
+    if not isinstance(pacing, dict):
+        raise ManifestValidationError("Manifest v3 source_pacing must be an object.")
+    delay = pacing.get("delay_seconds")
+    acknowledged = pacing.get("below_recommended_delay_acknowledged")
+    if (
+        not isinstance(delay, (int, float))
+        or isinstance(delay, bool)
+        or delay < 3
+        or pacing.get("recommended_delay_seconds") != 30
+        or type(acknowledged) is not bool
+    ):
+        raise ManifestValidationError("Manifest v3 source pacing is invalid.")
+    if delay < 30 and not acknowledged:
+        raise ManifestValidationError(
+            "Manifest v3 below-recommended source pacing requires acknowledgement."
+        )
+
+
+def _validate_v2_or_v3_scope_and_targets(
     manifest: dict[str, Any],
 ) -> tuple[tuple[str, ...], tuple[int, ...]]:
     if manifest.get("source_url") != SOURCE_LIST_URL:
@@ -161,7 +181,7 @@ def _validate_v2_scope_and_targets(
     return countries, requested_seasons
 
 
-def _validate_v2_artifacts_and_counts(
+def _validate_v2_or_v3_artifacts_and_counts(
     manifest: dict[str, Any],
     artifacts: list[dict[str, Any]],
     country_codes: tuple[str, ...],
@@ -235,9 +255,13 @@ def load_manifest(
     if not isinstance(artifacts, list) or not artifacts:
         raise ManifestValidationError("Raw manifest must contain at least one artifact.")
 
-    if schema_version == 2:
-        countries, seasons = _validate_v2_scope_and_targets(manifest)
-        expected_counts = _validate_v2_artifacts_and_counts(manifest, artifacts, countries, seasons)
+    if schema_version >= 2:
+        countries, seasons = _validate_v2_or_v3_scope_and_targets(manifest)
+        expected_counts = _validate_v2_or_v3_artifacts_and_counts(
+            manifest, artifacts, countries, seasons
+        )
+        if schema_version == 3:
+            _validate_v3_source_pacing(manifest)
         collector_version = manifest["collector_version"]
         status = manifest["status"]
         legacy_country = None
@@ -284,7 +308,7 @@ def load_manifest(
             raise ManifestValidationError(
                 f"Raw artifact SHA-256 does not match manifest: {artifact['path']}"
             )
-        country = artifact.get("country_code") if schema_version == 2 else legacy_country
+        country = artifact.get("country_code") if schema_version >= 2 else legacy_country
         validated.append({**artifact, "manifest_country_code": country})
 
     contract = ManifestContract(

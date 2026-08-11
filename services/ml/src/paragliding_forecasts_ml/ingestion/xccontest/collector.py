@@ -76,6 +76,8 @@ class FlightListCollector:
                 country_codes=self._config.country_codes,
                 completed_seasons=tuple(completed_seasons),
                 target_statuses=tuple(target_statuses),
+                delay_seconds=self._config.delay_seconds,
+                acknowledge_rate_limit_risk=self._config.acknowledge_rate_limit_risk,
             )
             manifest_sha256 = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
             completed_at_utc = self._artifacts.completed_at_utc

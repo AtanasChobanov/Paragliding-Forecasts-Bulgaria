@@ -1046,6 +1046,34 @@ SQLite persistence remain later T-013 slices.
 **Consequences:** Validation communicates only through parser-v2 JSONL, SQLite mapping rows, and versioned interim files. It neither contacts XCContest nor writes ingestion provenance or flight records; a later T-013 persistence slice owns those writes. Any change to source matching, proposal, review, or validation output semantics increments the corresponding mapping or validation version.
 
 **Related files:** [`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/site_mapping.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/site_mapping.py), [`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/validator.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/validator.py), [`../services/ml/README.md`](../services/ml/README.md).
+### DEC-028 - Default XCContest collection to conservative source pacing
+
+**Status:** Accepted
+
+**Date:** 2026-08-11
+
+**Context:** XCContest does not publish an official numerical rate limit for the permitted
+rendered-browser workflow. Repeated local collector runs without a conservative delay resulted
+in an apparent IP-specific server failure. Playwright `slow_mo` delays browser actions, but it is
+not a source-rate-limit guarantee.
+
+**Decision:** Pace every browser navigation and source-changing rendered-control operation by
+30 seconds by default. The collector accepts a configured source delay no lower than three
+seconds; a value below 30 requires an explicit `--acknowledge-rate-limit-risk` flag and is
+recorded in manifest schema v3. `--slow-mo-ms` remains debugging-only. The collector uses one
+sequential browser session, opens no parallel tabs, does not retry failed source operations, and
+stops for manual inspection on an unsuccessful navigation, challenge, or missing table. It does
+not rotate IPs, use proxies, or bypass source controls.
+
+**Consequences:** Collector v3 and manifest schema v3 record the effective pacing policy while
+parser compatibility retains immutable legacy and v2 raw runs. Thirty seconds is a conservative
+operational default, not a published XCContest guarantee. Developers must stop rather than retry
+when the source presents an access failure.
+
+**Related files:** [`../services/ml/README.md`](../services/ml/README.md),
+[`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/browser.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/browser.py),
+[`handoff.md`](handoff.md).
+
 ## Open decisions
 
 | Question | Options / constraints | Resolve by |

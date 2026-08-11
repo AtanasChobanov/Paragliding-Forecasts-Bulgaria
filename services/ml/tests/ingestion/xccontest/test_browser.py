@@ -84,3 +84,66 @@ def test_select_country_uses_the_rendered_country_control(monkeypatch) -> None:
     driver.select_country("RS")
 
     assert selected == [(COUNTRY_SELECTOR, "RS")]
+
+
+class FakeResponse:
+    def __init__(self, status: int) -> None:
+        self.status = status
+
+
+class FakeSeasonLocator:
+    def __init__(self, selected: list[str]) -> None:
+        self._selected = selected
+
+    def select_option(self, value: str) -> None:
+        self._selected.append(value)
+
+
+class FakeSeasonPage:
+    def __init__(self, status: int) -> None:
+        self.status = status
+        self.selected: list[str] = []
+        self.goto_calls: list[str] = []
+
+    def goto(self, url: str, *, wait_until: str) -> FakeResponse:
+        assert wait_until == "domcontentloaded"
+        self.goto_calls.append(url)
+        return FakeResponse(self.status)
+
+    def locator(self, selector: str) -> FakeSeasonLocator:
+        return FakeSeasonLocator(self.selected)
+
+    def wait_for_load_state(self, state: str) -> None:
+        assert state == "domcontentloaded"
+
+
+def test_paces_navigation_and_season_selection_and_rejects_failed_navigation(monkeypatch) -> None:
+    delays: list[float] = []
+    driver = PlaywrightFlightListDriver(
+        CollectorConfig(seasons=(2025,), country_codes=("BG",)), sleeper=delays.append
+    )
+    page = FakeSeasonPage(500)
+    driver._page = page
+    monkeypatch.setattr(driver, "_wait_for_flights_container", lambda: None)
+
+    with pytest.raises(BrowserCollectionError, match="500"):
+        driver.prepare_season(2025)
+
+    assert delays == [30]
+    assert page.goto_calls == ["https://www.xcontest.org/world/en/flights/"]
+
+
+def test_paces_navigation_and_season_selection_before_source_changes(monkeypatch) -> None:
+    delays: list[float] = []
+    driver = PlaywrightFlightListDriver(
+        CollectorConfig(seasons=(2025,), country_codes=("BG",)), sleeper=delays.append
+    )
+    page = FakeSeasonPage(200)
+    driver._page = page
+    monkeypatch.setattr(driver, "_wait_for_flights_container", lambda: None)
+    monkeypatch.setattr(driver, "_season_option_value", lambda _season: "season-2025")
+
+    driver.prepare_season(2025)
+
+    assert delays == [30, 30]
+    assert page.selected == ["season-2025"]

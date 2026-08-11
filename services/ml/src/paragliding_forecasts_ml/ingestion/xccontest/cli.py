@@ -57,7 +57,19 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=0,
         metavar="MILLISECONDS",
-        help="Optional Playwright action slowdown for local debugging (default: 0).",
+        help="Optional Playwright action slowdown for local debugging; not source rate limiting (default: 0).",
+    )
+    parser.add_argument(
+        "--source-delay-seconds",
+        type=float,
+        default=30,
+        metavar="SECONDS",
+        help="Minimum delay before each source-changing browser operation (default: 30).",
+    )
+    parser.add_argument(
+        "--acknowledge-rate-limit-risk",
+        action="store_true",
+        help="Required only when --source-delay-seconds is below the recommended 30 seconds.",
     )
     parser.add_argument(
         "--timeout-seconds",
@@ -88,6 +100,8 @@ def _collector_config(
         slow_mo_ms=namespace.slow_mo_ms,
         timeout_seconds=namespace.timeout_seconds,
         max_views=namespace.max_views,
+        delay_seconds=namespace.source_delay_seconds,
+        acknowledge_rate_limit_risk=namespace.acknowledge_rate_limit_risk,
     )
 
 

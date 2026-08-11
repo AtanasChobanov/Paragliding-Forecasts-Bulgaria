@@ -76,10 +76,15 @@ class PlaywrightFlightListDriver:
         """Select one XCContest season through the rendered control."""
 
         page = self._active_page
-        page.goto(ROOT_URL, wait_until="domcontentloaded")
+        self._pace_source_transition()
+        response = page.goto(ROOT_URL, wait_until="domcontentloaded")
+        if response is None or not 200 <= response.status < 400:
+            status = "no response" if response is None else str(response.status)
+            raise BrowserCollectionError(f"XCContest flights page navigation failed with {status}.")
         self._wait_for_flights_container()
 
         season_option = self._season_option_value(season)
+        self._pace_source_transition()
         page.locator(SEASON_SELECTOR).select_option(season_option)
         page.wait_for_load_state("domcontentloaded")
         self._wait_for_flights_container()

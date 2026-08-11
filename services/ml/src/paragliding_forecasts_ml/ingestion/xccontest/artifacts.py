@@ -211,6 +211,8 @@ class RawArtifactStore:
         country_codes: tuple[str, ...],
         completed_seasons: tuple[int, ...],
         target_statuses: tuple[TargetCollectionStatus, ...],
+        delay_seconds: float,
+        acknowledge_rate_limit_risk: bool,
     ) -> Path:
         """Write the run manifest once after every requested season completes."""
 
@@ -233,6 +235,11 @@ class RawArtifactStore:
             "status": run_status,
             "started_at_utc": self.started_at_utc.isoformat().replace("+00:00", "Z"),
             "completed_at_utc": self.completed_at_utc.isoformat().replace("+00:00", "Z"),
+            "source_pacing": {
+                "delay_seconds": delay_seconds,
+                "recommended_delay_seconds": 30,
+                "below_recommended_delay_acknowledged": acknowledge_rate_limit_risk,
+            },
             "scope": {
                 "country_codes": list(country_codes),
                 "country_scope_source": "all_sites",

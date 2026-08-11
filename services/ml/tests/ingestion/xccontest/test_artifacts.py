@@ -43,10 +43,12 @@ def finalize(store: RawArtifactStore, country_codes: tuple[str, ...] = ("BG",)):
         country_codes=country_codes,
         completed_seasons=(2025,),
         target_statuses=tuple(target_status(country_code) for country_code in country_codes),
+        delay_seconds=30,
+        acknowledge_rate_limit_risk=False,
     )
 
 
-def test_writes_country_aware_immutable_fragment_and_manifest_v2(tmp_path) -> None:
+def test_writes_country_aware_immutable_fragment_and_manifest_v3(tmp_path) -> None:
     store = RawArtifactStore(project_root=tmp_path, run_key="test-run")
     entry = store.write_page(page())
     manifest_path = finalize(store)
@@ -63,6 +65,11 @@ def test_writes_country_aware_immutable_fragment_and_manifest_v2(tmp_path) -> No
     assert manifest["collector_version"] == COLLECTOR_VERSION
     assert manifest["source_url"] == "https://www.xcontest.org/world/en/flights/"
     assert manifest["status"] == "complete"
+    assert manifest["source_pacing"] == {
+        "delay_seconds": 30,
+        "recommended_delay_seconds": 30,
+        "below_recommended_delay_acknowledged": False,
+    }
     assert manifest["scope"] == {
         "country_codes": ["BG"],
         "country_scope_source": "all_sites",
