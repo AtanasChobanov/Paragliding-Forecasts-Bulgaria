@@ -266,7 +266,7 @@ Validate an existing parser-v2 run against only approved mappings:
 uv run --env-file .env --project services/ml xccontest-validate --run-key <uuid>
 ```
 
-The validator writes non-overwriting `validation-v1/<mapping-snapshot-sha256>/`
+The validator writes non-overwriting `validation-v2/<mapping-snapshot-sha256>/`
 outputs: `accepted-flights.jsonl`, `site-quarantine.jsonl`, and
 `validation-report.json`. It does not call XCContest or create `ingestion_runs` or
 `flight_records`; the later persistence slice owns that transaction. Re-run validation
@@ -356,3 +356,8 @@ and complete manifest-v2 inputs.
 - Preserve source URLs and quality notes when the source permits it.
 - Report 100/200/300 km validation separately and avoid false precision for
   sparse labels.
+
+
+### Persist validated XCContest flights
+
+Use xccontest-persist with one exact validation-v2 mapping snapshot and an ignored local JSON policy file. The file has exactly permission_basis, permission_reference, model_training_allowed, and operational_use_allowed. The command verifies every raw/parser/validation hash and current approved mapping snapshot, then creates one rowser_ui ingestion run and all accepted metadata-level flights in one transaction. Existing run keys or source-flight identities fail and roll back; T-014 owns retry/upsert behavior.

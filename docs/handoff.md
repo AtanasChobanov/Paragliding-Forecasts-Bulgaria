@@ -1125,3 +1125,10 @@ When permission and a permitted sample are available, use the existing
 Keep raw inputs and rejected/ambiguous candidates out of Git, preserve
 permission/provenance, and leave Drizzle as the sole DDL and migration owner.
 T-012 is verified and awaiting review; do not alter its applied migrations.
+
+
+## T-013 persistence slice - current (2026-08-11)
+
+T-013 is now Review. Validation v2 records SHA-256/path pairs for accepted and quarantine JSONL. The new xccontest-persist command verifies raw/parser/validation artifacts and the current approved mapping snapshot, then writes one succeeded ingestion run and its accepted flights in a single transaction. It records browser_ui; existing run keys or source flights fail and rollback, leaving T-014 to own retry/upsert policy.
+
+Verified first import: run f1032827-a98d-4c01-969e-e67b4885f90d, validation snapshot 94b4e0b6307d7ba6de6c0a0e180dad0d377f0ed7d4435b26092f6427b5a9d508, one succeeded run and 267 metadata-level flights. Counters: 1200 seen, 267 accepted, 664 rejected, 69 quarantined, 200 deduplicated. The policy, SQLite database, and artifacts remain ignored.
