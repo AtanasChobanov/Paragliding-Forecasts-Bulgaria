@@ -62,6 +62,37 @@ services/ml/
 
 ## Commands
 
+Run a new end-to-end XCContest ingestion pipeline:
+
+```powershell
+uv run --env-file .env --project services/ml xccontest-ingest fresh `
+  --season 2024 `
+  --headed `
+  --policy-file data/local/xccontest-import-policy.json
+```
+
+`fresh` performs preflight, collection, parsing, mapping proposals, validation, and then
+persistence through the existing durable artifacts. It never bypasses the individual stage
+contracts. `propose` is automatic and read-only; `apply` is always a human-reviewed SQLite
+write. When validation finds actionable mapping quarantines, the command exits with status
+`awaiting_mapping_review` (process exit code 2) before it writes an ingestion run or flights.
+Copy/review/apply the generated `site-mapping-v2` decisions file, then continue without source
+access:
+
+```powershell
+uv run --env-file .env --project services/ml xccontest-ingest resume `
+  --run-key <uuid> `
+  --policy-file data/local/xccontest-import-policy.json
+```
+
+`resume` reuses valid parser, proposal, and current mapping-snapshot validation artifacts; it
+parses a raw-only run when necessary, but never opens a browser. If a reviewer deliberately
+leaves mapping-actionable candidates quarantined, `--persist-approved-only` is an explicit
+opt-in to persist only the currently approved records. That choice cannot add the remaining
+records to the same persisted run before T-014 supplies cross-run idempotency/upsert policy.
+The separate `xccontest-collect`, `xccontest-parse`, `xccontest-site-mappings`,
+`xccontest-validate`, and `xccontest-persist` commands remain supported for focused collection,
+review, replay, and recovery.
 Run the collector for one or more explicitly selected XCContest seasons:
 
 ```powershell
@@ -133,8 +164,8 @@ Parse an already collected raw run without browser or network access:
 uv run --project services/ml xccontest-parse --run-key <uuid>
 ```
 
-Parser v2 accepts legacy BG-only manifests and complete manifest-v2 runs. For
-v2 it verifies country/season scope, target completion, artifact and run
+Parser v2 accepts legacy BG-only manifests plus complete manifest-v2 and manifest-v3 runs. For
+v2/v3 it verifies country/season scope, target completion, artifact and run
 counters, every SHA-256, and the actual saved row/qualifying counts before
 normalizing the numeric flight ID, UTC takeoff timestamp, launch evidence,
 route, distance, duration, and both supported XCContest detail URL forms. It
@@ -278,12 +309,11 @@ outputs: `accepted-flights.jsonl`, `site-quarantine.jsonl`, and
 `validation-report.json`. It does not call XCContest or create `ingestion_runs` or
 `flight_records`; the later persistence slice owns that transaction. Re-run validation
 after mapping approvals to obtain a new mapping-snapshot output.
-The collector and parser are separate commands today so a failed downstream
-stage can resume from immutable raw evidence without another source request. A
-future top-level ingestion command may orchestrate collector, parser,
-validation, and persistence in one invocation, but each stage must still pass a
-run key plus durable artifacts/staging outputs. It must not depend on ephemeral
-`RowObservation` instances surviving in one Python process.
+The top-level `xccontest-ingest` command orchestrates the same collector, parser, mapping,
+validator, and persistence boundaries without passing ephemeral `RowObservation` values. It
+writes the same non-overwriting stage outputs in the same locations. The conditional mapping
+review gate stops before persistence, preserving the run key and all artifacts for offline
+`resume`; it never applies mappings automatically.
 
 Other Python modules remain planned:
 

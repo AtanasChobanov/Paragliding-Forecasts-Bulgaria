@@ -1132,3 +1132,34 @@ T-012 is verified and awaiting review; do not alter its applied migrations.
 T-013 is now Review. Validation v2 records SHA-256/path pairs for accepted and quarantine JSONL. The new xccontest-persist command verifies raw/parser/validation artifacts and the current approved mapping snapshot, then writes one succeeded ingestion run and its accepted flights in a single transaction. It records browser_ui; existing run keys or source flights fail and rollback, leaving T-014 to own retry/upsert policy.
 
 Verified first import: run f1032827-a98d-4c01-969e-e67b4885f90d, validation snapshot 94b4e0b6307d7ba6de6c0a0e180dad0d377f0ed7d4435b26092f6427b5a9d508, one succeeded run and 267 metadata-level flights. Counters: 1200 seen, 267 accepted, 664 rejected, 69 quarantined, 200 deduplicated. The policy, SQLite database, and artifacts remain ignored.
+
+## T-013 orchestration and safe pacing - current (2026-08-11)
+
+T-013 is **In Progress**, not Review, until the project owner completes one manual live smoke
+run of the new command. The implemented `xccontest-ingest fresh` command performs preflight,
+collector, parser, read-only mapping proposal, validator, and persistence through the existing
+immutable raw/interim stage boundaries. `xccontest-ingest resume --run-key <uuid>` uses the same
+run's durable artifacts offline; it never launches a browser.
+
+The fresh/resume flow automatically creates `site-mapping-v2` proposals but never applies them.
+Validation with no mapping-actionable quarantine persists normally. If it finds unknown,
+provisional, ambiguous, or country-mismatched mapping evidence, it exits with
+`awaiting_mapping_review` before writing an ingestion run or flights. The owner reviews and applies
+the JSONL locally, then resumes the same run; the new mapping snapshot creates a new validation-v2
+folder without overwriting parser or previous validation output. `--persist-approved-only` is an
+explicit opt-in for retaining such quarantines; those omitted records cannot be added to the same
+persisted run before T-014.
+
+Collector v3 uses a 30-second default delay before every navigation and source-changing visible UI
+operation. `--slow-mo-ms` remains debugging-only. A 3--29.999 second source delay requires
+`--acknowledge-rate-limit-risk`; no delay below three seconds is accepted. The v3 raw manifest
+records this policy. The collector fails closed on unsuccessful initial navigation, challenges, or a
+missing rendered table, with no retries, proxy/IP rotation, parallel tabs, or source-control bypass.
+Parser compatibility retains legacy and manifest-v2 raw runs.
+
+Offline verification passed: `uv run --project services/ml ruff format --check`, Ruff lint, and all
+62 ML tests; `xccontest-ingest --help`, `xccontest-ingest fresh --help`, and
+`xccontest-ingest resume --help` also pass. No live XCContest request was made. Current local
+SQLite evidence remains one successful import of 267 records from 2025/2026 and 23 approved
+mappings; the owner should manually test an ordinary permitted headed `fresh --season 2024` run
+with the default 30-second source delay. On a 500/challenge/access failure, stop without retrying.

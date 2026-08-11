@@ -1074,6 +1074,38 @@ when the source presents an access failure.
 [`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/browser.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/browser.py),
 [`handoff.md`](handoff.md).
 
+### DEC-029 - Gate one-command XCContest persistence on mapping review
+
+**Status:** Accepted
+
+**Date:** 2026-08-11
+
+**Context:** The T-013 collector, parser, proposal, validator, and persistence slices already
+communicate through immutable raw/interim artifacts. A new top-level command should reduce
+operator steps without auto-approving site mappings or persisting a partial mapping decision that
+cannot safely be amended before T-014's cross-run idempotency policy.
+
+**Decision:** `xccontest-ingest fresh` performs preflight, collection, parsing, proposal, and
+validation sequentially. It automatically creates the read-only mapping proposal artifact, but
+never calls mapping `apply`. It persists immediately only when validation has no mapping-actionable
+quarantines and at least one approved record. Otherwise it exits with the explicit
+`awaiting_mapping_review` status before writing canonical flights. After a human applies reviewed
+mapping decisions, `xccontest-ingest resume --run-key <uuid>` performs only offline reusable stages,
+creates or verifies the validation output for the current mapping snapshot, and persists exactly
+once. An explicit `--persist-approved-only` permits a reviewer to retain mapping-actionable
+quarantines and persist the approved subset; this forfeits adding the remaining records to that
+persisted run until T-014.
+
+**Consequences:** Every stage preserves its current non-overwriting raw/interim directory and
+SHA-256 contract. A new mapping snapshot gets a separate `validation-v2/<snapshot>/` directory;
+parser artifacts are not recreated and the collector never runs during `resume`. Separate stage
+commands remain supported for focused work and recovery. T-014 still owns duplicate/upsert and
+retroactive traceability behavior.
+
+**Related files:** [`../services/ml/README.md`](../services/ml/README.md),
+[`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/pipeline.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/pipeline.py),
+[`handoff.md`](handoff.md).
+
 ## Open decisions
 
 | Question | Options / constraints | Resolve by |
