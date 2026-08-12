@@ -71,14 +71,11 @@ uv run --env-file .env --project services/ml xccontest-ingest fresh `
   --policy-file data/local/xccontest-import-policy.json
 ```
 
-`fresh` performs preflight, collection, parsing, mapping proposals, validation, and then
-persistence through the existing durable artifacts. It never bypasses the individual stage
-contracts. `propose` is automatic and read-only; `apply` is always a human-reviewed SQLite
-write. When validation finds mapping quarantines with no matching reviewed rejection, the command
-exits with status `awaiting_mapping_review` (process exit code 2) before it writes an ingestion
-run or flights. Rejections in the sibling `mapping-decisions.jsonl` must retain the immutable
-proposal identifier and evidence; they keep those flights quarantined but allow the approved
-subset to persist. Copy/review/apply the generated `site-mapping-v2` decisions file, then continue without source access:
+`fresh` preserves the explicit human mapping-review gate. `propose` is automatic and
+read-only; `apply` is always a human-reviewed SQLite write. If validation finds a mapping-actionable
+quarantine without a matching reviewed rejection, it exits with `awaiting_mapping_review` (exit
+code 2) before persistence. Copy/review/apply the generated `site-mapping-v2` decisions file, then
+continue entirely offline:
 
 ```powershell
 uv run --env-file .env --project services/ml xccontest-ingest resume `
@@ -87,13 +84,15 @@ uv run --env-file .env --project services/ml xccontest-ingest resume `
 ```
 
 `resume` reuses valid parser, proposal, and current mapping-snapshot validation artifacts; it
-parses a raw-only run when necessary, but never opens a browser. If a reviewer deliberately
-leaves mapping-actionable candidates quarantined, `--persist-approved-only` is an explicit
-opt-in to persist only the currently approved records. That choice cannot add the remaining
-records to the same persisted run before T-014 supplies cross-run idempotency/upsert policy.
-The separate `xccontest-collect`, `xccontest-parse`, `xccontest-site-mappings`,
-`xccontest-validate`, and `xccontest-persist` commands remain supported for focused collection,
-review, replay, and recovery.
+never opens a browser. Persistence then compares each accepted record with the canonical SQLite
+flight of the same source identity. Exact repeats revalidate, known values can be enriched, and
+conflicts stop with `awaiting_reconciliation_review` (exit code 2) before any database write.
+Follow the detailed [T-014 reconciliation and review workflow](../../docs/T-014-flight-reconciliation.md)
+to resolve those JSONL decisions. `--persist-approved-only` remains an explicit exceptional path
+for the accepted subset; a later reviewed `resume` reconciles the same run rather than losing the
+ability to add remaining records. The separate `xccontest-collect`, `xccontest-parse`,
+`xccontest-site-mappings`, `xccontest-validate`, and `xccontest-persist` commands remain supported
+for focused collection, review, replay, and recovery.
 Run the collector for one or more explicitly selected XCContest seasons:
 
 ```powershell
@@ -398,23 +397,21 @@ and complete manifest-v2 inputs.
 
 ### Persist validated XCContest flights
 
-`xccontest-persist` is the final T-013 stage. It does not contact XCContest and does not run collector, parser, or site validation. It consumes one immutable `validation-v2` snapshot and writes the accepted records to the migrated SQLite database.
+`xccontest-persist` is the final T-013 stage. It does not contact XCCont### Persist and reconcile validated XCContest flights
 
-#### Prerequisites
-
-1. Apply the committed database migrations:
+`xccontest-persist` is an offline final stage: it never contacts XCContest or invokes collection,
+parsing, or validation. Apply the committed database migrations, validate a run after required
+mapping decisions, and create the ignored policy file described below before invoking it:
 
 ```powershell
 npm.cmd run db:migrate --workspace @paragliding-forecasts/database
+uv run --env-file .env --project services/ml xccontest-persist `
+  --run-key <uuid-v4> `
+  --validation-snapshot <64-lowercase-hex-sha256> `
+  --policy-file data/local/xccontest-import-policy.json
 ```
 
-2. Run `xccontest-validate` after the required site mappings are approved. The validator writes a non-overwriting directory named `validation-v2/<mapping-snapshot-sha256>/` containing:
-
-- `accepted-flights.jsonl` - accepted canonical candidates;
-- `site-quarantine.jsonl` - unknown, provisional, or ambiguous candidates;
-- `validation-report.json` - counters, stage versions, artifact paths, and SHA-256 hashes.
-
-3. Create the ignored local policy file `data/local/xccontest-import-policy.json`. It must contain exactly these four fields:
+The policy JSON must contain exactly these booleans and non-empty permission provenance:
 
 ```json
 {
@@ -425,41 +422,21 @@ npm.cmd run db:migrate --workspace @paragliding-forecasts/database
 }
 ```
 
-The permission basis must be one of `written_permission`, `source_terms`, `owner_export`, `official_api_terms`, or `pilot_provided`. The two usage values must be JSON booleans; they are never inferred from the basis.
+`permission_basis` is one of `written_permission`, `source_terms`, `owner_export`,
+`official_api_terms`, or `pilot_provided`. The command verifies the raw manifest, parser and
+validation reports/files, their SHA-256 values, approved mapping snapshot, current mapping rows,
+record fields, and source identity before opening its transaction.
 
-#### Command
+A successful reconciliation writes a canonical `flight_records` row only when no row already
+exists for `(source_id, source_flight_id)`. Existing rows are revalidated, enriched, or preserved
+under the deterministic T-014 policy. A material contradiction (source URL, site mapping, takeoff
+time, distance, two concrete durations/track URLs, or two known route types) creates a local,
+immutable proposal artifact and returns `awaiting_reconciliation_review`. It changes neither
+flights nor runs until a complete reviewed decisions JSONL file is supplied and `resume` or this
+command is rerun.
 
-```powershell
-uv run --env-file .env --project services/ml xccontest-persist `
-  --run-key <uuid-v4> `
-  --validation-snapshot <64-lowercase-hex-sha256> `
-  --policy-file data/local/xccontest-import-policy.json
-```
-
-Available flags:
-
-- `--run-key` (required) - UUID v4 identifying the collector/parser/validation run.
-- `--validation-snapshot` (required) - exact mapping snapshot hash used as the `validation-v2` directory name. The command never chooses a latest snapshot implicitly.
-- `--policy-file` (required) - path to the local permission/usage JSON policy.
-- `--database-url` (optional) - SQLite URL override. Precedence is this flag, then `DATABASE_URL`, then `file:./data/local/paragliding.db`. Only existing files below `data/` are accepted.
-
-#### What the command verifies and writes
-
-Before opening the write transaction it verifies the validation report, accepted/quarantine files, parser files, and raw manifest against every recorded SHA-256. It also checks source/run/version identity, counters, accepted flight fields, unique source flight IDs, and the manifest source URL.
-
-Inside one `BEGIN IMMEDIATE` transaction it rechecks the current approved `source_site_mappings` snapshot, rejects mapping drift, rejects an existing `run_key`, and verifies every accepted mapping is still approved and belongs to XCContest. A failure rolls back the complete transaction and leaves no partial run or flight rows.
-
-On success it writes one `ingestion_runs` row with `ingestion_method = browser_ui`, permission metadata, pipeline versions, raw manifest provenance, and counters. It writes one metadata-level `flight_records` row per accepted JSONL record. `track_url` is `NULL` because the collector does not retain track downloads. `distance_band` is derived later at read time.
-
-The command prints a JSON run report. A successful run is not idempotent yet: running the same command again fails on the existing `run_key` and rolls back without changing counts. Cross-run duplicate/upsert and richer traceability policy belong to T-014.
-
-Example for the verified first import:
-
-```powershell
-uv run --env-file .env --project services/ml xccontest-persist `
-  --run-key f1032827-a98d-4c01-969e-e67b4885f90d `
-  --validation-snapshot 94b4e0b6307d7ba6de6c0a0e180dad0d377f0ed7d4435b26092f6427b5a9d508 `
-  --policy-file data/local/xccontest-import-policy.json
-```
-
-That import produced one succeeded run and 267 flight records. Its counters are 1200 seen, 267 accepted, 664 rejected, 69 quarantined, and 200 deduplicated.
+The full comparison policy, decision-file contract, quality-note JSON schema, data fields, and
+troubleshooting are documented in [T-014 reconciliation and review workflow](../../docs/T-014-flight-reconciliation.md).
+The concise outcomes in the JSON report are `applied` (with per-outcome counts) or `no_op` for an
+exact already-applied replay. The direct persist command returns exit code 0 for `succeeded`, 2
+for an outstanding reconciliation review, and 1 for failed validation or invalid decision evidence.
