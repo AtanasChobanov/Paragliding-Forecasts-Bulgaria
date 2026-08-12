@@ -298,11 +298,15 @@ def resume_run(
             snapshot,
             policy_path,
             database_url=resolved_url,
+            mapping_review_complete=not actionable,
         )
     except PersistenceError as error:
         raise PipelineError(f"XCContest persistence did not complete: {error}") from error
-    return {
-        "status": "succeeded",
+    status = persistence_report.get("status")
+    if status not in {"succeeded", "awaiting_reconciliation_review"}:
+        raise PipelineError("XCContest persistence returned an unsupported status.")
+    result = {
+        "status": status,
         "run_key": run_key,
         "parser": parser_report,
         "mapping_proposals": proposal_report,
@@ -311,6 +315,11 @@ def resume_run(
         "reviewed_rejected_mapping_quarantine_count": reviewed_rejected,
         "persistence": persistence_report,
     }
+    if status == "awaiting_reconciliation_review":
+        result["next_step"] = (
+            "Review reconciliation decisions, then run xccontest-ingest resume --run-key <uuid>."
+        )
+    return result
 
 
 def fresh_run(

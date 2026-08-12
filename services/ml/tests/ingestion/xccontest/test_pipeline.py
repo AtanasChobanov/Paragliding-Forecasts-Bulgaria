@@ -202,6 +202,27 @@ def test_resume_persists_approved_records_after_review_or_explicit_override(
     assert persisted == [(RUN_KEY, SNAPSHOT)]
 
 
+def test_resume_surfaces_reconciliation_review_without_restarting_stages(
+    monkeypatch, tmp_path
+) -> None:
+    report = _validation_report(tmp_path, reason=None)
+    calls = _stub_offline_stages(monkeypatch, tmp_path, report)
+    monkeypatch.setattr(
+        pipeline,
+        "persist_import",
+        lambda *_args, **_kwargs: {
+            "status": "awaiting_reconciliation_review",
+            "reconciliation": {"proposal_count": 1},
+        },
+    )
+
+    result = pipeline.resume_run(RUN_KEY, tmp_path / "policy.json")
+
+    assert result["status"] == "awaiting_reconciliation_review"
+    assert "Review reconciliation decisions" in result["next_step"]
+    assert calls == ["parse", "propose", "validate"]
+
+
 def test_resume_stops_when_no_records_are_accepted(monkeypatch, tmp_path) -> None:
     report = _validation_report(tmp_path, reason=None, accepted=0)
     _stub_offline_stages(monkeypatch, tmp_path, report)

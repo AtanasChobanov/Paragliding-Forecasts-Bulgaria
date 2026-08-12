@@ -17,6 +17,18 @@ from paragliding_forecasts_ml.storage.sqlite import (
 )
 
 from .models import SOURCE_CODE
+from .reconciliation import (
+    ReconciliationAction,
+    ReconciliationError,
+    build_quality_notes,
+    canonical_flight,
+    compare_flight,
+    decisions_sha256,
+    load_review_decisions,
+    plan_sha256,
+    proposal_for,
+    write_or_load_proposals,
+)
 from .site_mapping import _safe_run_directory, repository_root, utc_now
 from .versions import (
     PARSER_VERSION,
@@ -265,6 +277,134 @@ def mapping_hash(connection: sqlite3.Connection, source_id: int) -> str:
     ).hexdigest()
 
 
+def _incoming_record(row: dict[str, Any]) -> dict[str, Any]:
+    """Add persistence-owned validation values to a validated staging row."""
+
+    return {**row, "track_url": row.get("track_url"), "validation_level": "metadata"}
+
+
+def _existing_flight(
+    connection: sqlite3.Connection, source_id: int, source_flight_id: str
+) -> dict[str, Any] | None:
+    row = connection.execute(
+        """SELECT fr.id, fr.source_flight_url, fr.source_site_mapping_id, fr.takeoff_at_utc,
+                  fr.duration_seconds, fr.scored_distance_km, fr.route_type, fr.track_url,
+                  fr.validation_level, ssm.key_type AS mapping_key_type
+             FROM flight_records AS fr
+             INNER JOIN source_site_mappings AS ssm ON ssm.id = fr.source_site_mapping_id
+            WHERE fr.source_id = ? AND fr.source_flight_id = ?""",
+        (source_id, source_flight_id),
+    ).fetchone()
+    if row is None:
+        return None
+    return {
+        "id": int(row[0]),
+        "source_flight_url": str(row[1]),
+        "source_site_mapping_id": int(row[2]),
+        "takeoff_at_utc": str(row[3]),
+        "duration_seconds": row[4],
+        "scored_distance_km": row[5],
+        "route_type": str(row[6]),
+        "track_url": row[7],
+        "validation_level": str(row[8]),
+        "mapping_key_type": str(row[9]),
+    }
+
+
+def _load_run_notes(value: object) -> dict[str, Any]:
+    """Upgrade existing unversioned JSON provenance lazily, without losing it."""
+
+    if not isinstance(value, str) or not value:
+        return {"schema_version": 2, "persistence_events": []}
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        return {"schema_version": 2, "legacy_notes": value, "persistence_events": []}
+    if (
+        isinstance(parsed, dict)
+        and parsed.get("schema_version") == 2
+        and isinstance(parsed.get("persistence_events"), list)
+    ):
+        return parsed
+    return {"schema_version": 2, "legacy_provenance": parsed, "persistence_events": []}
+
+
+def _event_sha256(
+    *,
+    run_key: str,
+    validation_snapshot: str,
+    prepared: Prepared,
+    mapping_review_complete: bool,
+) -> str:
+    """Identify one applied validation snapshot, independently of its prior DB state."""
+
+    value = {
+        "schema_version": 1,
+        "run_key": run_key,
+        "validation_snapshot_sha256": validation_snapshot,
+        "validation_report_sha256": prepared.report_sha,
+        "accepted_flights_sha256": prepared.accepted_sha,
+        "mapping_review_complete": mapping_review_complete,
+    }
+    return hashlib.sha256(
+        json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+def _run_event(
+    *,
+    event_sha256: str,
+    validation_snapshot: str,
+    prepared: Prepared,
+    root: Path,
+    plan: str,
+    mapping_review_complete: bool,
+    decisions_digest: str | None,
+    counts: dict[str, int],
+    now: str,
+) -> dict[str, Any]:
+    return {
+        "event_sha256": event_sha256,
+        "event_type": "reconciliation_applied",
+        "applied_at_utc": now,
+        "validation_snapshot_sha256": validation_snapshot,
+        "validation_report_path": prepared.report_path.relative_to(root).as_posix(),
+        "validation_report_sha256": prepared.report_sha,
+        "accepted_flights_path": prepared.accepted_path.relative_to(root).as_posix(),
+        "accepted_flights_sha256": prepared.accepted_sha,
+        "reconciliation_plan_sha256": plan,
+        "reconciliation_decisions_sha256": decisions_digest,
+        "mapping_review_complete": mapping_review_complete,
+        "counts": counts,
+    }
+
+
+def _existing_run(
+    connection: sqlite3.Connection, run_key: str
+) -> tuple[int, int, str, str, str, str, str, int, int, str] | None:
+    row = connection.execute(
+        """SELECT id, source_id, source_url, permission_basis, permission_reference,
+                  raw_manifest_path, raw_manifest_sha256, model_training_allowed,
+                  operational_use_allowed, notes
+             FROM ingestion_runs WHERE run_key = ?""",
+        (run_key,),
+    ).fetchone()
+    if row is None:
+        return None
+    return (
+        int(row[0]),
+        int(row[1]),
+        str(row[2]),
+        str(row[3]),
+        str(row[4]),
+        str(row[5]),
+        str(row[6]),
+        int(row[7]),
+        int(row[8]),
+        str(row[9]) if row[9] is not None else "",
+    )
+
+
 def persist_import(
     run_key: str,
     validation_snapshot: str,
@@ -272,7 +412,10 @@ def persist_import(
     *,
     database_url: str | None = None,
     project_root: Path | None = None,
+    mapping_review_complete: bool = True,
 ) -> dict[str, Any]:
+    """Persist or reconcile one integrity-verified XCContest validation snapshot offline."""
+
     root = (project_root or repository_root()).resolve()
     prepared = prepare(run_key, validation_snapshot, root)
     basis, ref, training, operational = load_policy(policy_path)
@@ -290,10 +433,6 @@ def persist_import(
         source_id = int(source[0])
         if mapping_hash(connection, source_id) != validation_snapshot:
             raise PersistenceError("Approved mapping snapshot changed; re-run validation.")
-        if connection.execute(
-            "SELECT 1 FROM ingestion_runs WHERE run_key = ?", (run_key,)
-        ).fetchone():
-            raise PersistenceError("Run already exists; T-014 owns retry policy.")
         for row in prepared.records:
             mapping = connection.execute(
                 "SELECT source_id, site_id, status FROM source_site_mappings WHERE id = ?",
@@ -303,82 +442,330 @@ def persist_import(
                 raise PersistenceError(
                     "Accepted flight mapping is no longer approved XCContest evidence."
                 )
-        now = utc_now()
-        pipeline = f"{prepared.manifest['collector_version']}|{PARSER_VERSION}|{VALIDATION_VERSION}|{PERSISTENCE_VERSION}"
-        notes = json.dumps(
-            {
-                "accepted_flights_path": prepared.accepted_path.relative_to(root).as_posix(),
-                "accepted_flights_sha256": prepared.accepted_sha,
-                "mapping_snapshot_sha256": validation_snapshot,
-                "validation_report_path": prepared.report_path.relative_to(root).as_posix(),
-                "validation_report_sha256": prepared.report_sha,
-            },
-            sort_keys=True,
-            separators=(",", ":"),
+
+        pipeline = (
+            f"{prepared.manifest['collector_version']}|{PARSER_VERSION}|{VALIDATION_VERSION}|"
+            f"{PERSISTENCE_VERSION}"
         )
-        cur = connection.execute(
-            "INSERT INTO ingestion_runs (run_key,source_id,ingestion_method,status,source_url,permission_basis,permission_reference,model_training_allowed,operational_use_allowed,raw_manifest_path,raw_manifest_sha256,pipeline_version,started_at_utc,completed_at_utc,records_seen,records_accepted,records_rejected,records_quarantined,records_deduplicated,notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                run_key,
-                source_id,
-                "browser_ui",
-                "succeeded",
-                prepared.manifest["source_url"],
-                basis,
-                ref,
-                int(training),
-                int(operational),
-                prepared.report["raw_manifest_path"],
-                prepared.report["raw_manifest_sha256"],
-                pipeline,
-                prepared.manifest["started_at_utc"],
-                now,
-                *[
-                    prepared.report[key]
-                    for key in (
-                        "records_seen",
-                        "records_accepted",
-                        "records_rejected",
-                        "records_quarantined",
-                        "records_deduplicated",
-                    )
-                ],
-                notes,
-            ),
+        existing_run = _existing_run(connection, run_key)
+        event_sha = _event_sha256(
+            run_key=run_key,
+            validation_snapshot=validation_snapshot,
+            prepared=prepared,
+            mapping_review_complete=mapping_review_complete,
         )
-        run_id = int(cur.lastrowid)
-        rows = [
+        if existing_run is not None:
             (
-                source_id,
-                row["source_flight_id"],
-                row["source_flight_url"],
-                row["source_site_mapping_id"],
-                row["takeoff_at_utc"],
-                row["duration_seconds"],
-                row["scored_distance_km"],
-                row["route_type"],
-                "metadata",
-                f"metadata-only; validator={VALIDATION_VERSION}; mapping_snapshot_sha256={validation_snapshot}; mapping_key_type={row['mapping_key_type']}",
-                row["validated_at_utc"],
                 run_id,
-                run_id,
-                now,
-                now,
+                existing_source_id,
+                existing_source_url,
+                existing_basis,
+                existing_reference,
+                existing_manifest_path,
+                existing_manifest_sha,
+                existing_training,
+                existing_operational,
+                existing_notes,
+            ) = existing_run
+            if (
+                existing_source_id != source_id
+                or existing_source_url != prepared.manifest["source_url"]
+                or existing_basis != basis
+                or existing_reference != ref
+                or existing_manifest_path != prepared.report["raw_manifest_path"]
+                or existing_manifest_sha != prepared.report["raw_manifest_sha256"]
+                or existing_training != int(training)
+                or existing_operational != int(operational)
+            ):
+                raise PersistenceError(
+                    "Existing run_key has incompatible source, manifest, or permission provenance."
+                )
+            existing_run_notes = _load_run_notes(existing_notes)
+            events = existing_run_notes["persistence_events"]
+            if any(
+                isinstance(event, dict) and event.get("event_sha256") == event_sha
+                for event in events
+            ):
+                connection.rollback()
+                return {
+                    "ingestion_run_id": run_id,
+                    "run_key": run_key,
+                    "status": "succeeded",
+                    "records_seen": prepared.report["records_seen"],
+                    "records_accepted": prepared.report["records_accepted"],
+                    "records_rejected": prepared.report["records_rejected"],
+                    "records_quarantined": prepared.report["records_quarantined"],
+                    "records_deduplicated": prepared.report["records_deduplicated"],
+                    "validation_snapshot_sha256": validation_snapshot,
+                    "accepted_flights_sha256": prepared.accepted_sha,
+                    "pipeline_version": pipeline,
+                    "reconciliation": {
+                        "status": "no_op",
+                        "event_sha256": event_sha,
+                        "mapping_review_complete": mapping_review_complete,
+                    },
+                }
+        else:
+            run_id = None
+            existing_run_notes = {"schema_version": 2, "persistence_events": []}
+
+        incoming_by_id = {
+            row["source_flight_id"]: _incoming_record(row) for row in prepared.records
+        }
+        existing_by_id = {
+            source_flight_id: _existing_flight(connection, source_id, source_flight_id)
+            for source_flight_id in incoming_by_id
+        }
+        actions = tuple(
+            compare_flight(
+                source_flight_id,
+                existing_by_id[source_flight_id],
+                incoming_by_id[source_flight_id],
             )
-            for row in prepared.records
-        ]
-        connection.executemany(
-            "INSERT INTO flight_records (source_id,source_flight_id,source_flight_url,source_site_mapping_id,takeoff_at_utc,duration_seconds,scored_distance_km,route_type,validation_level,validation_notes,validated_at_utc,created_by_ingestion_run_id,last_validated_by_ingestion_run_id,created_at_utc,updated_at_utc) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            rows,
+            for source_flight_id in sorted(incoming_by_id, key=int)
         )
+        reconciliation_plan = plan_sha256(
+            run_key, validation_snapshot, prepared.accepted_sha, actions
+        )
+        conflicts = tuple(action for action in actions if action.requires_review)
+        decisions: dict[str, dict[str, Any]] = {}
+        decisions_digest: str | None = None
+        if conflicts:
+            artifacts = write_or_load_proposals(
+                root,
+                run_key=run_key,
+                validation_snapshot_sha256=validation_snapshot,
+                accepted_flights_sha256=prepared.accepted_sha,
+                actions=actions,
+            )
+            decisions = load_review_decisions(artifacts)
+            if decisions is None:
+                connection.rollback()
+                return {
+                    "run_key": run_key,
+                    "status": "awaiting_reconciliation_review",
+                    "records_seen": prepared.report["records_seen"],
+                    "records_accepted": prepared.report["records_accepted"],
+                    "validation_snapshot_sha256": validation_snapshot,
+                    "accepted_flights_sha256": prepared.accepted_sha,
+                    "reconciliation": {
+                        "plan_sha256": artifacts.plan_sha256,
+                        "proposal_count": len(artifacts.proposals),
+                        "proposals_path": artifacts.proposals_path.relative_to(root).as_posix(),
+                        "proposals_sha256": artifacts.proposals_sha256,
+                        "report_path": artifacts.report_path.relative_to(root).as_posix(),
+                        "decisions_path": artifacts.decisions_path.relative_to(root).as_posix(),
+                        "next_step": (
+                            "Copy reconciliation-proposals.jsonl to reconciliation-decisions.jsonl, "
+                            "add one reviewed decision per proposal, then run xccontest-ingest resume."
+                        ),
+                    },
+                }
+            decisions_digest = decisions_sha256(artifacts)
+
+        resolved: list[
+            tuple[
+                dict[str, Any],
+                ReconciliationAction,
+                dict[str, Any],
+                str,
+                str | None,
+                str,
+                int | None,
+            ]
+        ] = []
+        for action in actions:
+            incoming = incoming_by_id[action.source_flight_id]
+            existing = existing_by_id[action.source_flight_id]
+            final_values = action.incoming
+            outcome = action.outcome
+            decision_reference: str | None = None
+            if action.requires_review:
+                proposal = proposal_for(
+                    action,
+                    run_key=run_key,
+                    validation_snapshot_sha256=validation_snapshot,
+                    accepted_flights_sha256=prepared.accepted_sha,
+                )
+                decision = decisions[proposal["proposal_id"]]
+                decision_reference = decision["verification_reference"]
+                if decision["decision"] == "keep_existing":
+                    if action.existing is None or existing is None:
+                        raise PersistenceError("Conflict review cannot retain a missing flight.")
+                    final_values = action.existing
+                    outcome = "reviewed_keep_existing"
+                else:
+                    outcome = "reviewed_accept_incoming"
+            elif action.existing is not None:
+                final_values = {**action.existing, **action.updates}
+            mapping_key_type = (
+                existing["mapping_key_type"]
+                if existing is not None
+                and int(final_values["source_site_mapping_id"])
+                == int(existing["source_site_mapping_id"])
+                else incoming["mapping_key_type"]
+            )
+            resolved.append(
+                (
+                    incoming,
+                    action,
+                    final_values,
+                    outcome,
+                    decision_reference,
+                    mapping_key_type,
+                    int(existing["id"]) if existing is not None else None,
+                )
+            )
+
+        counts = {
+            "inserted": 0,
+            "revalidated_unchanged": 0,
+            "enriched": 0,
+            "preserved_existing": 0,
+            "reviewed_keep_existing": 0,
+            "reviewed_accept_incoming": 0,
+        }
+        for _incoming, _action, _final, outcome, _reference, _mapping_type, _id in resolved:
+            counts[outcome] += 1
+        now = utc_now()
+        event = _run_event(
+            event_sha256=event_sha,
+            validation_snapshot=validation_snapshot,
+            prepared=prepared,
+            root=root,
+            plan=reconciliation_plan,
+            mapping_review_complete=mapping_review_complete,
+            decisions_digest=decisions_digest,
+            counts=counts,
+            now=now,
+        )
+        existing_run_notes["persistence_events"].append(event)
+        notes = json.dumps(existing_run_notes, sort_keys=True, separators=(",", ":"))
+        if run_id is None:
+            cursor = connection.execute(
+                "INSERT INTO ingestion_runs (run_key,source_id,ingestion_method,status,source_url,permission_basis,permission_reference,model_training_allowed,operational_use_allowed,raw_manifest_path,raw_manifest_sha256,pipeline_version,started_at_utc,completed_at_utc,records_seen,records_accepted,records_rejected,records_quarantined,records_deduplicated,notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    run_key,
+                    source_id,
+                    "browser_ui",
+                    "succeeded",
+                    prepared.manifest["source_url"],
+                    basis,
+                    ref,
+                    int(training),
+                    int(operational),
+                    prepared.report["raw_manifest_path"],
+                    prepared.report["raw_manifest_sha256"],
+                    pipeline,
+                    prepared.manifest["started_at_utc"],
+                    now,
+                    *[
+                        prepared.report[key]
+                        for key in (
+                            "records_seen",
+                            "records_accepted",
+                            "records_rejected",
+                            "records_quarantined",
+                            "records_deduplicated",
+                        )
+                    ],
+                    notes,
+                ),
+            )
+            run_id = int(cursor.lastrowid)
+        else:
+            connection.execute(
+                "UPDATE ingestion_runs SET status = 'succeeded', completed_at_utc = ?, pipeline_version = ?, records_seen = ?, records_accepted = ?, records_rejected = ?, records_quarantined = ?, records_deduplicated = ?, notes = ? WHERE id = ?",
+                (
+                    now,
+                    pipeline,
+                    *[
+                        prepared.report[key]
+                        for key in (
+                            "records_seen",
+                            "records_accepted",
+                            "records_rejected",
+                            "records_quarantined",
+                            "records_deduplicated",
+                        )
+                    ],
+                    notes,
+                    run_id,
+                ),
+            )
+
+        for (
+            incoming,
+            action,
+            final_values,
+            outcome,
+            decision_reference,
+            mapping_key_type,
+            existing_flight_id,
+        ) in resolved:
+            quality_notes = build_quality_notes(
+                canonical=final_values,
+                mapping_key_type=mapping_key_type,
+                validation_snapshot_sha256=validation_snapshot,
+                accepted_flights_sha256=prepared.accepted_sha,
+                artifact_references=incoming["artifact_references"],
+                parser_version=PARSER_VERSION,
+                validator_version=VALIDATION_VERSION,
+                persistence_version=PERSISTENCE_VERSION,
+                outcome=outcome,
+                event_sha256=event_sha,
+                decision_reference=decision_reference,
+            )
+            values = canonical_flight(final_values)
+            if existing_flight_id is None:
+                connection.execute(
+                    "INSERT INTO flight_records (source_id,source_flight_id,source_flight_url,source_site_mapping_id,takeoff_at_utc,duration_seconds,scored_distance_km,route_type,track_url,validation_level,validation_notes,validated_at_utc,created_by_ingestion_run_id,last_validated_by_ingestion_run_id,created_at_utc,updated_at_utc) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        source_id,
+                        action.source_flight_id,
+                        values["source_flight_url"],
+                        values["source_site_mapping_id"],
+                        values["takeoff_at_utc"],
+                        values["duration_seconds"],
+                        float(values["scored_distance_km"]),
+                        values["route_type"],
+                        values["track_url"],
+                        values["validation_level"],
+                        quality_notes,
+                        incoming["validated_at_utc"],
+                        run_id,
+                        run_id,
+                        now,
+                        now,
+                    ),
+                )
+            else:
+                connection.execute(
+                    "UPDATE flight_records SET source_flight_url = ?, source_site_mapping_id = ?, takeoff_at_utc = ?, duration_seconds = ?, scored_distance_km = ?, route_type = ?, track_url = ?, validation_level = ?, validation_notes = ?, validated_at_utc = ?, last_validated_by_ingestion_run_id = ?, updated_at_utc = ? WHERE id = ?",
+                    (
+                        values["source_flight_url"],
+                        values["source_site_mapping_id"],
+                        values["takeoff_at_utc"],
+                        values["duration_seconds"],
+                        float(values["scored_distance_km"]),
+                        values["route_type"],
+                        values["track_url"],
+                        values["validation_level"],
+                        quality_notes,
+                        incoming["validated_at_utc"],
+                        run_id,
+                        now,
+                        existing_flight_id,
+                    ),
+                )
         connection.commit()
-    except (PersistenceError, sqlite3.Error) as error:
+    except (PersistenceError, ReconciliationError, sqlite3.Error) as error:
         connection.rollback()
         if isinstance(error, PersistenceError):
             raise
-        raise PersistenceError(
-            "SQLite transaction did not complete; no flights were persisted."
-        ) from error
+        if isinstance(error, ReconciliationError):
+            raise PersistenceError(str(error)) from error
+        raise PersistenceError("SQLite reconciliation transaction did not complete.") from error
     finally:
         connection.close()
     return {
@@ -393,4 +780,11 @@ def persist_import(
         "validation_snapshot_sha256": validation_snapshot,
         "accepted_flights_sha256": prepared.accepted_sha,
         "pipeline_version": pipeline,
+        "reconciliation": {
+            "status": "applied",
+            "event_sha256": event_sha,
+            "plan_sha256": reconciliation_plan,
+            "mapping_review_complete": mapping_review_complete,
+            "counts": counts,
+        },
     }
