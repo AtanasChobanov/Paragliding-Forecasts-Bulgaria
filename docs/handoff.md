@@ -62,7 +62,8 @@ Important current behavior:
   after a T-014 reconciliation; pre-existing legacy text is not backfilled.
 - A conflict writes ignored immutable review evidence under
   `data/interim/xccontest/<run-key>/reconciliation-v1/` and rolls back before
-  any flight/run write. Follow `docs/T-014-flight-reconciliation.md` exactly.
+  any flight/run write. Follow the `Flight reconciliation and review workflow` section of
+  `services/ml/README.md` exactly.
 - T-012 migrations are reviewed/applied local schema history. Do not rewrite or
   alter applied migrations; generate a new reviewed migration when schema change
   is required.
@@ -107,8 +108,8 @@ values enrich, and lower-quality incoming values cannot erase known values. A
 material difference returns `awaiting_reconciliation_review` (exit code 2) and
 writes no database row. Copy/review the returned `reconciliation-proposals.jsonl`
 into `reconciliation-decisions.jsonl`, then run the same offline `resume`
-command. The detailed contract, including every required JSONL field, is in
-`docs/T-014-flight-reconciliation.md`.
+command. The detailed contract, including every required JSONL field, is in the
+`Flight reconciliation and review workflow` section of `services/ml/README.md`.
 
 ### Source safety
 
@@ -197,8 +198,9 @@ SQLite tests migrate a temporary local file.
 
 **Manual review:** use only already collected `data/interim/xccontest/<run-key>/`
 artifacts. Do not run `fresh` or a collector command. If an existing run produces
-a reconciliation pause, follow `docs/T-014-flight-reconciliation.md`; inspect the
-generated proposal, create the matching decisions file, and run offline `resume`.
+a reconciliation pause, follow the `Flight reconciliation and review workflow` section of
+`services/ml/README.md`; inspect the generated proposal, create the
+matching decisions file, and run offline `resume`.
 An exact repeated snapshot is expected to be a successful no-op. Do not edit raw,
 validation, proposal, or existing database evidence by hand.
 

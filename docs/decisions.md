@@ -1175,10 +1175,10 @@ preservation, no-op replay, cross-run duplicates, conflict atomicity, stale
 decisions, reviewed resolution, and pipeline pause propagation. T-015 remains
 responsible for committed sanitized parser fixtures.
 
-**Related files:** [`T-014-flight-reconciliation.md`](T-014-flight-reconciliation.md),
+**Related files:** [`../services/ml/README.md`](../services/ml/README.md),
 [`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/reconciliation.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/reconciliation.py),
 [`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/persistence.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/persistence.py),
-[`../services/ml/README.md`](../services/ml/README.md), [`handoff.md`](handoff.md).
+[`handoff.md`](handoff.md).
 
 ## Open decisions
 
