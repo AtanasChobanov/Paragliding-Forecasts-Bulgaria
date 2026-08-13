@@ -174,6 +174,24 @@ records, and keeps every contributing raw artifact reference. Unknown or
 ambiguous launch evidence, site mapping approval, and SQLite persistence remain
 outside this command.
 
+### Frozen parser fixture regression test
+
+data/samples/xccontest/parser-v2/synthetic-mini-run-v1 is a small,
+project-authored manifest-v3/HTML mini-run with reviewed parser-v2 golden
+outputs. It contains no live XCContest data or pilot information. The
+fixture-based integration/regression test copies it into a temporary raw layout,
+executes the real offline parser, and compares every emitted JSONL/report
+artifact without a browser, network request, or SQLite database:
+
+```powershell
+uv run --project services/ml pytest `
+  services/ml/tests/ingestion/xccontest/test_parser_fixtures.py -vv
+```
+
+See data/samples/xccontest/parser-v2/synthetic-mini-run-v1/README.md for the
+fixture's synthetic origin, sanitation/redistribution constraints, and exact
+coverage matrix. Keep fixtures small and separate from ignored live/raw runs.
+
 ## Reviewed site mapping and validation
 
 This is a deliberately human-reviewed boundary. A proposal is evidence to inspect,
