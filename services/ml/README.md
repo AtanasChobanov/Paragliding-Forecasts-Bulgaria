@@ -536,11 +536,18 @@ For a successful reconciliation:
   versioned `notes` JSON.
 - A cross-run duplicate creates a new `ingestion_runs` row, but never a second
   `flight_records` row for the same source identity.
-- `created_by_ingestion_run_id` is never changed.  Every successful observation
-  updates `last_validated_by_ingestion_run_id`, `validated_at_utc`,
-  `validation_notes`, and `updated_at_utc` on the canonical flight.
+- `created_by_ingestion_run_id` is never changed. An applied reconciliation
+  refreshes `last_validated_by_ingestion_run_id`, `validation_notes`, and
+  `updated_at_utc` on the canonical flight. For a same-run resume the validator
+  run ID naturally remains the same; a cross-run duplicate changes it to the
+  later run.
+- `validated_at_utc` is the timestamp placed in the immutable accepted-flight
+  validation artifact, not the persistence timestamp. An applied artifact created
+  by a later validation supplies its value; a replay of the same evidence does
+  not reinterpret it as "now". `updated_at_utc` is the reconciliation-write
+  timestamp.
 - Repeating the exact already-applied validation evidence for the same run is a
-  successful no-op.  It reports `reconciliation.status: "no_op"` and writes no
+  successful no-op. It reports `reconciliation.status: "no_op"` and writes no
   additional database event or flight update.
 
 This is intentionally a compare-and-reconcile policy rather than SQLite
@@ -699,14 +706,34 @@ mapping-review completeness, outcome counts, and timestamp.
 
 #### Verification approach
 
-The implementation has deterministic unit tests for exact comparison, allowed enrichment,
-preservation, conflict classification, decision-evidence validation, and
-quality-note semantics. Its integration tests run the committed migrations into
-a temporary local SQLite file and create only synthetic raw/parser/validation
-artifacts. They cover partial-run resume, same-run no-op replay, cross-run
-duplicate revalidation, conflict atomicity, both reviewed decisions, and
-pipeline/direct-CLI review pauses. No Docker instance is required: the project
-uses SQLite, and no test sends a request to XCContest.
+The deterministic unit tests cover exact comparison, allowed enrichment, preservation,
+conflict classification, decision-evidence validation, and quality-note semantics.
+The persistence integration suite runs the committed Drizzle migrations against
+an isolated temporary SQLite file, then uses real foreign keys, unique
+constraints, transactions, `persist_import`, reconciliation code, and synthetic
+raw/parser/validation artifacts with SHA-256 evidence. It covers inserts,
+same-run no-op, cross-run duplicates and validation provenance, enrichment,
+missing-value preservation, conflicts with no partial writes, complete
+`keep_existing` and `accept_incoming` decisions, stale decisions, forced
+mid-transaction rollback, source URL retention, quality-note semantics, and
+creator/last-validator provenance.
+
+Two pipeline component tests exercise the real mapping-review transaction and
+`resume_run` boundary on that same isolated database: (1)
+`persist-approved-only` inserts 174 accepted records, eight reviewed mappings
+are applied to yield a new 182-record snapshot, resume revalidates 174 and
+inserts 8, and its identical replay is a no-op; (2) two remaining mappings are
+rejected through the real review transaction, then resume revalidates the
+unchanged accepted snapshot without changing any business fields. Run them with:
+
+```powershell
+uv run --project services/ml pytest services/ml/tests/ingestion/xccontest/test_reconciliation.py -q
+```
+
+No Docker instance is required: SQLite is the production test boundary, and no
+test sends a request to XCContest. The existing 449-row local database is not a
+test fixture and is deliberately not mutated by automated tests; verify it with
+the offline smoke procedure below.
 
 #### Manual offline verification with the current local data
 

@@ -12,12 +12,12 @@ not a project history. Use the following documents for the authoritative detail:
 5. `docs/decisions.md` for accepted durable decisions.
 6. Git history for prior implementation detail and validation evidence.
 
-## Current state (2026-08-12)
+## Current state (2026-08-13)
 
 | Field | Value |
 | --- | --- |
 | Branch | `feature/T-014-flight-reconciliation`, based on T-013 branch commit `162bf9e`; rebase after T-013 merges. |
-| Working tree at handoff update | Clean after committing the focused T-014 code/docs/test changes; do not discard unrelated user work. |
+| Working tree at handoff update | Clean after committing the focused T-014 code, documentation, and expanded test coverage; do not discard unrelated user work. |
 | Task status in `docs/tasks.md` | T-012 `Review`; T-013 `In Progress`; T-014 `Review`; T-015 `To Do`. |
 | Next implementation focus | Human/manual review of T-014 against the already collected local interim data, then T-015 frozen parser fixtures. |
 | Local storage | SQLite selected by `DATABASE_URL`; local databases, raw source data, and interim artifacts are ignored. |
@@ -179,22 +179,25 @@ uv run --project services/ml ruff check
 uv run --project services/ml pytest
 ```
 
-At the latest verification, all 72 ML tests passed. T-014's added tests use
-synthetic durable artifacts plus temporary migrated SQLite only; they make no
-source request. The project owner asked not to run a fresh/collector command for
-T-014 verification. The remaining manual check is therefore an offline
-`xccontest-ingest resume` or `xccontest-persist` against the existing local
-interim data, at the project owner's discretion. Do not mistake fixtures/fakes
-for permission to make new live source requests.
+At the latest verification, all 76 ML tests passed, including 11 focused T-014
+reconciliation tests. The persistence/component tests use synthetic durable
+artifacts, real mapping-review transactions, and temporary SQLite migrated by
+the committed Drizzle migrations; they make no source request and never open the
+existing 449-row local database. The project owner asked not to run a
+fresh/collector command for T-014 verification. Manual verification is therefore
+an offline `xccontest-ingest resume` or `xccontest-persist` against existing
+local interim data only. Do not mistake fixtures/fakes for permission to make
+new live source requests.
 
 ## T-014 review handoff
 
 **Delivered:** compare-and-reconcile persistence, same-run no-op replay,
 cross-run duplicate revalidation, partial-run resume support, atomic conflict
 pause/resolution, source URL preservation, schema-v1 quality notes, append-only
-run events, and detailed operator documentation. No database migration or Docker
-instance was needed because existing text provenance fields are sufficient and
-SQLite tests migrate a temporary local file.
+run events, detailed operator documentation, and integration/component coverage
+through real temporary SQLite migrations and mapping-review transactions. No
+database migration or Docker instance was needed because existing text provenance
+fields are sufficient and SQLite tests migrate a temporary local file.
 
 **Manual review:** use only already collected `data/interim/xccontest/<run-key>/`
 artifacts. Do not run `fresh` or a collector command. If an existing run produces
