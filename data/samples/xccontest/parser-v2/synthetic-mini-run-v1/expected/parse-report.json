@@ -1,0 +1,26 @@
+{
+  "artifact_count": 3,
+  "conflict_candidates": 1,
+  "duplicate_observations_removed": 2,
+  "normalized_candidates": 7,
+  "normalized_observations": 9,
+  "parser_version": "xccontest-parser/2",
+  "raw_collector_version": "xccontest-collector/3",
+  "raw_country_codes": [
+    "BG"
+  ],
+  "raw_manifest_observation_counts_verified": true,
+  "raw_manifest_path": "data/raw/xccontest/t015-synthetic-mini-run-v1/manifest.json",
+  "raw_manifest_schema_version": 3,
+  "raw_manifest_status": "complete",
+  "raw_seasons": [
+    2024,
+    2026
+  ],
+  "records_rejected": 3,
+  "row_observations_seen": 12,
+  "run_key": "t015-synthetic-mini-run-v1",
+  "source": "xccontest",
+  "threshold_exclusions": 1,
+  "unique_source_flight_ids": 7
+}

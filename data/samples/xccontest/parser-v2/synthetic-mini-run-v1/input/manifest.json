@@ -1,0 +1,86 @@
+{
+  "manifest_schema_version": 3,
+  "collector_version": "xccontest-collector/3",
+  "source": "xccontest",
+  "source_url": "https://www.xcontest.org/world/en/flights/",
+  "run_key": "t015-synthetic-mini-run-v1",
+  "status": "complete",
+  "started_at_utc": "2026-08-13T09:00:00Z",
+  "completed_at_utc": "2026-08-13T09:01:00Z",
+  "scope": {
+    "country_codes": ["BG"],
+    "country_scope_source": "all_sites",
+    "requested_seasons": [2024, 2026],
+    "primary_glider_category": "FAI3",
+    "minimum_scored_distance_km": 100,
+    "completed_seasons": [2024, 2026]
+  },
+  "target_statuses": [
+    {"season": 2024, "country_code": "BG", "status": "complete_primary", "unresolved_scopes": []},
+    {"season": 2026, "country_code": "BG", "status": "complete_primary", "unresolved_scopes": []}
+  ],
+  "source_pacing": {
+    "delay_seconds": 30,
+    "recommended_delay_seconds": 30,
+    "below_recommended_delay_acknowledged": false
+  },
+  "observation_counts": {
+    "views_written": 3,
+    "row_observations_seen": 12,
+    "distinct_source_flights_seen": 10,
+    "repeated_source_flight_observations": 2
+  },
+  "artifacts": [
+    {
+      "path": "data/raw/xccontest/t015-synthetic-mini-run-v1/season-2024-primary.html",
+      "sha256": "eacef28c4c3f88b040bd70ac802eb6fd513c39822aaf73b71a5a75c16faabe33",
+      "season": 2024,
+      "country_code": "BG",
+      "category": "pg",
+      "date_filter": null,
+      "sort_key": "distance",
+      "sort_direction": "descending",
+      "retrieved_at_utc": "2026-08-13T09:00:00Z",
+      "first_flight_id": "150001",
+      "last_flight_id": "150008",
+      "first_distance_km": 100.0,
+      "last_distance_km": 151.0,
+      "row_observation_count": 8,
+      "qualifying_row_observation_count": 7
+    },
+    {
+      "path": "data/raw/xccontest/t015-synthetic-mini-run-v1/season-2024-overlap.html",
+      "sha256": "dfe5aace1c6d5f4a6c26832b6b704550884193fad4269fbd976f34b40d992d64",
+      "season": 2024,
+      "country_code": "BG",
+      "category": "pg",
+      "date_filter": null,
+      "sort_key": "points",
+      "sort_direction": "descending",
+      "retrieved_at_utc": "2026-08-13T09:00:30Z",
+      "first_flight_id": "150001",
+      "last_flight_id": "150002",
+      "first_distance_km": 100.0,
+      "last_distance_km": 199.98,
+      "row_observation_count": 2,
+      "qualifying_row_observation_count": 2
+    },
+    {
+      "path": "data/raw/xccontest/t015-synthetic-mini-run-v1/season-2026-current.html",
+      "sha256": "8e26fb6d6635bf364950a13f216d6ec6e4f61afb07b3b6739943e5c0ff80b625",
+      "season": 2026,
+      "country_code": "BG",
+      "category": "pg",
+      "date_filter": null,
+      "sort_key": "duration",
+      "sort_direction": "ascending",
+      "retrieved_at_utc": "2026-08-13T09:01:00Z",
+      "first_flight_id": "150009",
+      "last_flight_id": "150010",
+      "first_distance_km": 150.5,
+      "last_distance_km": 180.0,
+      "row_observation_count": 2,
+      "qualifying_row_observation_count": 2
+    }
+  ]
+}
