@@ -4,7 +4,29 @@ version = "0.1.0"
 description = "Data ingestion, feature engineering, and ML workflows for Paragliding Forecasts Bulgaria."
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
-dependencies = []
+dependencies = [
+    "playwright>=1.62.0",
+    "selectolax>=0.4.11",
+]
 
-[tool.uv]
-package = false
+[project.scripts]
+xccontest-collect = "paragliding_forecasts_ml.ingestion.xccontest.cli:main"
+xccontest-parse = "paragliding_forecasts_ml.ingestion.xccontest.parser_cli:main"
+xccontest-site-mappings = "paragliding_forecasts_ml.ingestion.xccontest.site_mapping_cli:main"
+xccontest-validate = "paragliding_forecasts_ml.ingestion.xccontest.validator_cli:main"
+xccontest-persist = "paragliding_forecasts_ml.ingestion.xccontest.persistence_cli:main"
+xccontest-ingest = "paragliding_forecasts_ml.ingestion.xccontest.pipeline_cli:main"
+
+[build-system]
+requires = ["uv_build>=0.12.1,<0.13"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.16.1",
+]

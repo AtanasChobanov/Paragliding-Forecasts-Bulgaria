@@ -34,6 +34,12 @@ consequences. Temporary progress and Git state belong in
 | DEC-019 | Use Playwright Chromium for local browser smoke coverage | Accepted | 2026-07-25 |
 | DEC-020 | Use a phased Drizzle-owned SQLite foundation for flight data | Accepted | 2026-07-30 |
 | DEC-021 | Finalize the normalized T-012 flight foundation schema | Accepted | 2026-08-02 |
+| DEC-022 | Collect XCContest list pages through the permitted rendered UI boundary | Superseded | 2026-08-04 |
+| DEC-023 | Partition saturated XCContest first-page views through visible filters | Accepted | 2026-08-06 |
+| DEC-024 | Derive XCContest country scope from all canonical sites | Accepted | 2026-08-06 |
+| DEC-025 | Use durable artifacts between versioned XCContest ingestion stages | Accepted | 2026-08-07 |
+| DEC-026 | Configure geographic catchments for every initial launch site | Accepted | 2026-08-08 |
+| DEC-027 | Review source-site mappings before flight acceptance | Accepted | 2026-08-08 |
 
 ## Individual decisions
 
@@ -799,6 +805,310 @@ column.
 [`architecture.md`](architecture.md), [`handoff.md`](handoff.md),
 [`../data/README.md`](../data/README.md), [`../CONTRIBUTING.md`](../CONTRIBUTING.md).
 
+
+### DEC-022 - Collect XCContest list pages through the permitted rendered UI boundary
+
+**Status:** Accepted
+
+**Date:** 2026-08-04
+
+**Context:** T-010 established that XCContest flight-list data is dynamically
+rendered and that undocumented backend calls, session values and challenge
+bypass must not be used. For the present T-013 work, the project owner has
+confirmed an ordinary, low-volume browser workflow for the public flights page.
+The first implementation needs raw evidence without prematurely owning the
+parser, validation, matching, duplicate or persistence responsibilities.
+
+**Decision:** The T-013 collector uses Playwright Chromium only through the
+rendered XCContest controls and table. For every requested season it selects
+the `BG` country and `FAI3` (`PG *`) category, establishes non-increasing
+scored distance order through the rendered length control, then uses the
+rendered Next pager rather than calculating page URLs. It paces source state
+transitions by at least three seconds, captures the exact rendered `#flights`
+fragment once per page, and stops after the first captured page containing a
+distance below 100 km. A full raw page is retained even when its final rows
+are below the threshold; a later parser must exclude those rows from the
+accepted dataset.
+
+The command defaults to headless execution and offers `--headed` and
+`--slow-mo-ms` for manual local inspection. It accepts one or more explicit
+`--season` values and a fail-closed `--max-pages` safety cap. It does not accept
+or persist a permission-reference argument. The later database-import slice
+owns the `ingestion_runs` placeholder required by the accepted schema.
+
+The collector writes ignored immutable raw fragments and a manifest under
+`data/raw/xccontest/<run-key>/`, with ignored local progress or failure state
+under `data/interim/xccontest/<run-key>/`. It must not call undocumented
+backend endpoints, retain cookies/tokens, bypass login/consent/Cloudflare or
+CAPTCHA, download IGC/track files, retain pilot identity, parse/normalize
+flights, assign sites, decide canonical duplicates, or write SQLite records.
+
+**Rationale:** Browser control interaction follows the scope explicitly
+authorised for this project, while preserving exact source evidence for a
+separate parser run. A source-provided pager avoids a brittle dependence on the
+current hash/offset convention. The threshold and page cap reduce collection
+volume without silently dropping potentially qualifying pages.
+
+**Consequences:** Collector tests use a fake UI driver and synthetic fragments,
+not a frozen source fixture. T-014 remains responsible for canonical duplicate
+and persisted source-traceability behavior; T-015 remains responsible for
+sanitized frozen parser fixtures. On 2026-08-04, the available headless browser
+did not render a visible flight table, so live success is unverified. A
+developer must perform a permitted `--headed` run in a normal browser
+environment; an interstitial or challenge must be handled only by the ordinary
+user flow, never bypassed.
+
+**Related files:** [`../services/ml/README.md`](../services/ml/README.md),
+
+[`handoff.md`](handoff.md), [`tasks.md`](tasks.md),
+[`T-010-xccontest-research-report.md`](T-010-xccontest-research-report.md).
+
+### DEC-023 - Partition saturated XCContest first-page views through visible filters
+
+**Status:** Accepted
+
+**Date:** 2026-08-06
+
+**Supersedes:** the pagination portion of DEC-022.
+
+**Context:** In the permitted ordinary browser workflow, XCContest rendered the
+first BG/PG list successfully but did not refresh its table after the
+source-provided pager action. Opening its offset fragment directly or attempting
+to work around an interstitial/challenge is outside the approved boundary.
+However, the rendered category, date, and sortable-table controls continue to
+operate normally. A first page contains at most 100 rows, so a distance-sorted
+page whose final row is still at least 100 km may omit qualifying flights.
+
+**Decision:** For each selected season, collect one `BG` + `PG *` view in
+descending distance order. If it is saturated, collect the exact disjoint solo
+PG classes `CCC`, `EN D`, `EN C`, `EN B`, and `EN A`, again in descending
+distance order. Only a saturated exact class is further divided by every date
+offered in the rendered date control. For every still-saturated
+class-and-date view, collect pilot, points, and airtime in both source-provided
+orders as a best-effort supplement. Do not use the pager, calculate offset
+URLs, call undocumented endpoints, or open concurrent tabs.
+
+All source state transitions remain paced by at least three seconds. The
+collector stores a separate raw fragment per nonempty category/date/sort view,
+and the manifest records its scope. It records a `saturated_unresolved` season
+status when a class-and-date view remains saturated even after supplementary
+sorts; a successful command must surface that status as incomplete coverage.
+It must not claim that alternate sort orders establish exhaustive collection.
+
+**Rationale:** Exact classes create a smaller, non-overlapping partition than
+the nested starred classes. Date partitioning is used only when necessary, which
+keeps normal low-volume runs small. Alternate sorting may expose additional
+records without relying on a prohibited navigation mechanism, but it is not a
+completeness proof.
+
+**Consequences:** `--max-pages` is replaced by a fail-closed `--max-views` cap
+for all rendered views in a run. The raw collector still does not normalize,
+retain pilot identity as an accepted field, deduplicate canonical records,
+assign sites, or write SQLite. It may retain raw visible-row evidence and count
+repeated source IDs so downstream parsing can prove coverage; it must not drop
+overlapping raw observations. The T-013 parser/normalizer owns same-run collapse
+by XCContest source flight ID before site assignment, while T-014 hardens
+cross-run idempotency, conflict detection, and persisted traceability. T-015
+scope remains unchanged. A developer must manually verify a permitted headed
+run in a normal desktop browser before treating any live sample as validated.
+
+**Related files:** [`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/collector.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/collector.py),
+[`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/browser.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/browser.py),
+[`../services/ml/README.md`](../services/ml/README.md),
+[`handoff.md`](handoff.md).
+
+### DEC-024 - Derive XCContest country scope from all canonical sites
+
+**Status:** Accepted
+
+**Date:** 2026-08-06
+
+**Supersedes:** the hard-coded `BG` country selection in DEC-022 and DEC-023.
+
+**Context:** The collector originally fixed its visible XCContest country filter to
+Bulgaria. The canonical `sites` table already carries ISO2 country codes and is the
+authoritative project scope. Future sites in other countries must expand source collection
+without a collector code edit, while inactive sites remain relevant historical evidence.
+
+**Decision:** Before a collector run creates a browser or raw-artifact directory, Python
+uses only standard-library `sqlite3` to open the Drizzle-migrated SQLite file read-only.
+It accepts only a relative `file:` URL below repository `data/`, opens it with `mode=ro`,
+enables foreign keys, and neither creates a database nor runs DDL or migrations. URL
+precedence is CLI `--database-url`, then `DATABASE_URL`, then
+`file:./data/local/paragliding.db`. It reads every distinct country using
+`SELECT DISTINCT country_code_iso2 FROM sites ORDER BY country_code_iso2`; `is_active`
+does not filter this scope. An empty, invalid, unreadable, or unmigrated result fails
+closed before browser interaction or artifact creation.
+
+The collector processes each requested `season × country` target sequentially in one
+browser session. Country is explicitly selected through the rendered source UI and is
+verified against the selected filter and each row launch country. The global `--max-views`
+cap remains fail-closed across the complete multi-country run. Manifest schema v2 records
+the `all_sites` country scope, per-target statuses, and country-aware artifacts/checkpoints;
+the collector version is `xccontest-collector/2`. Existing ignored raw evidence stays
+immutable, and later parser work must accept legacy BG-only manifests as well as v2.
+
+**Version policy:** Every change to collector behaviour, browser/source interaction, raw
+evidence, run metadata, or CLI contract must increment `collector_version`. Every change
+to manifest fields, shape, semantics, or compatibility must increment
+`manifest_schema_version`. A collector change without the applicable version bump, focused
+tests, and README/decision update is incomplete.
+
+**Rationale:** Reusing the canonical database scope makes country expansion data-driven
+without introducing another migration authority or Python dependency. Read-only discovery
+prevents an attempted collection from silently creating an empty database or collecting an
+accidental fallback scope. Explicit country provenance makes a multi-country raw run
+auditable before parsing and persistence exist.
+
+**Consequences:** Adding a site in a new country intentionally expands subsequent source
+workload. The collector still does not parse, normalize, match sites, deduplicate, or write
+accepted records. T-013 remains in progress; T-014 and T-015 retain their existing scopes.
+
+**Related files:** [`../services/ml/README.md`](../services/ml/README.md),
+[`../services/ml/src/paragliding_forecasts_ml/storage/sqlite.py`](../services/ml/src/paragliding_forecasts_ml/storage/sqlite.py),
+[`handoff.md`](handoff.md), [`tasks.md`](tasks.md).
+
+### DEC-025 - Use durable artifacts between versioned XCContest ingestion stages
+
+**Status:** Accepted
+
+**Date:** 2026-08-07
+
+**Context:** The collector needs in-memory row values for collection coverage,
+threshold, and country checks, while parsing must be replayable after the
+browser process exits. A real manifest-v2 run also demonstrated that current
+and archived XCContest seasons can expose different canonical detail URL path
+forms. Passing collector-only Python objects directly into later ingestion
+stages would make replay, audit, and failure recovery depend on one process and
+would bypass the immutable evidence boundary.
+
+**Decision:** The exact saved HTML fragments plus their versioned manifest are
+the durable collector-to-parser interface. `RowObservation` remains a minimal
+ephemeral collector-control model and is not a normalized ingestion payload.
+The offline parser reads the immutable artifacts, verifies compatible manifest
+metadata/hashes/counters, and writes versioned language-neutral staging output.
+Separate stage commands are the current operational interface. A future single
+ingestion command may orchestrate them, but stages must communicate through run
+keys and durable artifacts or staging outputs rather than shared in-memory
+objects.
+
+Parser output versions are independent from collector and manifest versions.
+Any change to accepted raw compatibility, selectors, parsing/normalization,
+output semantics, deduplication/conflict behaviour, staging layout, or CLI
+contract increments `PARSER_VERSION`, writes to a new non-overwriting
+`parser-vN` directory, and updates focused compatibility tests and
+documentation. Parser v2 accepts legacy/v1 and complete manifest-v2 input.
+
+**Rationale:** Immutable stage boundaries preserve source evidence, allow
+offline replay without another source request, make partial-run recovery
+possible, and prevent transient browser models from becoming an undocumented
+pipeline contract. Independent versioning makes old parser results auditable
+while allowing current source variants to be handled explicitly.
+
+**Consequences:** Collector DOM selectors and parser selectors share one source
+module, but only the parser owns normalization. `CollectionReport` is a compact
+command summary; per-artifact and per-target detail remains only in the manifest.
+Version identifiers live in source-specific `versions.py`, while manifest compatibility
+policy remains in `manifest.py`. A one-command ingestion wrapper must not skip raw
+artifact creation. Existing `parser-v1` staging remains
+untouched; parser v2 writes a separate directory. Validation/site mapping and
+SQLite persistence remain later T-013 slices.
+
+**Related files:** [`../services/ml/README.md`](../services/ml/README.md),
+[`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/selectors.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/selectors.py),
+[`handoff.md`](handoff.md).
+
+### DEC-026 - Configure geographic catchments for every initial launch site
+
+**Status:** Accepted
+
+**Date:** 2026-08-08
+
+**Context:** Source list rows can expose launch coordinates that are near, but not bit-for-bit identical to, canonical launch coordinates. The initial T-009 locations need a deliberate tolerance for site-mapping proposals without reclassifying launch areas as broad regions.
+
+**Decision:** Keep Sofia - Vitosha (Kominite), Zlatitsa, Sopot, Nevsha, Shumen, and Pastrina as `launch_area` sites and set their `catchment_radius_km` values to 5. Keep Dobrich as a `region` with its existing 30 km radius. Geographic matching considers every same-country site with a non-null radius; it does not branch on `site_type`. A coordinate inside exactly one configured radius is a strong mapping proposal, but remains quarantined until a human approves a `source_site_mapping` row.
+
+**Rationale:** This supports ordinary coordinate drift around known launches while retaining a conservative reviewed-mapping gate. The existing schema already validates the radius independently of `site_type`, so no DDL change is needed.
+
+**Consequences:** A reviewed custom Drizzle data migration applies the six 5 km values to existing and fresh databases. Matching code must use inclusive Haversine distance checks, quarantine overlaps, and never call an external geocoder. API/UI contracts remain unchanged because catchments are ingestion configuration.
+
+**Related files:** [`../packages/database/src/schema.ts`](../packages/database/src/schema.ts), [`../packages/database/drizzle/20260808175017_set_launch_area_catchments/migration.sql`](../packages/database/drizzle/20260808175017_set_launch_area_catchments/migration.sql), [`handoff.md`](handoff.md).
+### DEC-027 - Review source-site mappings before flight acceptance
+
+**Status:** Accepted
+
+**Date:** 2026-08-08
+
+**Context:** XCContest parser staging preserves source launch name, optional point coordinates, and current opaque site-token URLs, but no source string or nearby coordinate may silently assign a canonical project site.
+
+**Decision:** The site-mapping command creates ignored, grouped JSONL proposals and never writes mappings automatically. A reviewed JSONL file explicitly creates `provisional` or `approved` rows in `source_site_mappings`; approval requires a verification reference and timestamp. The validator accepts only approved mappings. It derives coordinate suggestions from every same-country site with a configured catchment radius, quarantines overlap or unknown evidence, and writes versioned accepted/quarantine/report outputs keyed by a mapping snapshot hash.
+
+**Consequences:** Validation communicates only through parser-v2 JSONL, SQLite mapping rows, and versioned interim files. It neither contacts XCContest nor writes ingestion provenance or flight records; a later T-013 persistence slice owns those writes. Any change to source matching, proposal, review, or validation output semantics increments the corresponding mapping or validation version.
+
+**Related files:** [`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/site_mapping.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/site_mapping.py), [`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/validator.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/validator.py), [`../services/ml/README.md`](../services/ml/README.md).
+### DEC-028 - Default XCContest collection to conservative source pacing
+
+**Status:** Accepted
+
+**Date:** 2026-08-11
+
+**Context:** XCContest does not publish an official numerical rate limit for the permitted
+rendered-browser workflow. Repeated local collector runs without a conservative delay resulted
+in an apparent IP-specific server failure. Playwright `slow_mo` delays browser actions, but it is
+not a source-rate-limit guarantee.
+
+**Decision:** Pace every browser navigation and source-changing rendered-control operation by
+30 seconds by default. The collector accepts a configured source delay no lower than three
+seconds; a value below 30 requires an explicit `--acknowledge-rate-limit-risk` flag and is
+recorded in manifest schema v3. `--slow-mo-ms` remains debugging-only. The collector uses one
+sequential browser session, opens no parallel tabs, does not retry failed source operations, and
+stops for manual inspection on an unsuccessful navigation, challenge, or missing table. It does
+not rotate IPs, use proxies, or bypass source controls.
+
+**Consequences:** Collector v3 and manifest schema v3 record the effective pacing policy while
+parser compatibility retains immutable legacy and v2 raw runs. Thirty seconds is a conservative
+operational default, not a published XCContest guarantee. Developers must stop rather than retry
+when the source presents an access failure.
+
+**Related files:** [`../services/ml/README.md`](../services/ml/README.md),
+[`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/browser.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/browser.py),
+[`handoff.md`](handoff.md).
+
+### DEC-029 - Gate one-command XCContest persistence on mapping review
+
+**Status:** Accepted
+
+**Date:** 2026-08-11
+
+**Context:** The T-013 collector, parser, proposal, validator, and persistence slices already
+communicate through immutable raw/interim artifacts. A new top-level command should reduce
+operator steps without auto-approving site mappings or persisting a partial mapping decision that
+cannot safely be amended before T-014's cross-run idempotency policy.
+
+**Decision:** `xccontest-ingest fresh` performs preflight, collection, parsing, proposal, and
+validation sequentially. It automatically creates the read-only mapping proposal artifact, but
+never calls mapping `apply`. It persists immediately only when validation has no mapping-actionable
+quarantines and at least one approved record. Otherwise it exits with the explicit
+`awaiting_mapping_review` status before writing canonical flights. After a human applies reviewed
+mapping decisions, `xccontest-ingest resume --run-key <uuid>` performs only offline reusable stages,
+creates or verifies the validation output for the current mapping snapshot, and persists exactly
+once. A rejection in the standard sibling review file resolves only the matching proposal evidence:
+it remains quarantined and is excluded from persistence, but does not block the approved subset. New,
+unresolved, ambiguous, provisional, or country-mismatched mapping evidence still blocks the run. An
+explicit `--persist-approved-only` permits a reviewer to retain mapping-actionable
+quarantines and persist the approved subset; this forfeits adding the remaining records to that
+persisted run until T-014.
+
+**Consequences:** Every stage preserves its current non-overwriting raw/interim directory and
+SHA-256 contract. A new mapping snapshot gets a separate `validation-v2/<snapshot>/` directory;
+parser artifacts are not recreated and the collector never runs during `resume`. Separate stage
+commands remain supported for focused work and recovery. T-014 still owns duplicate/upsert and
+retroactive traceability behavior.
+
+**Related files:** [`../services/ml/README.md`](../services/ml/README.md),
+[`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/pipeline.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/pipeline.py),
+[`handoff.md`](handoff.md).
+
 ## Open decisions
 
 | Question | Options / constraints | Resolve by |
@@ -806,7 +1116,7 @@ column.
 | What exact T-012 field types, nullability, indexes, constraints, and migration layout should be used? | Must implement DEC-020's bounded Takt 2 tables, preserve source/provenance/validation data, retain numeric site IDs, and keep accepted flights distinct from quarantined candidates. | T-012 design and implementation. |
 | Which task owns the persisted prediction schema and SQLite forecast adapter? | The backlog has flight and weather schema tasks but no explicit owner for storing T-022-T-024 outputs and replacing the T-002 mock adapter. Public units/status/provenance must be mapped deliberately. | Backlog planning before real predictions are connected to the API. |
 | What are the final coordinates, aliases, and catchment radii for each site? | Current map points are provisional; Pastrina and the Dobrich regional model need particular confirmation. | T-009. |
-| What access methods, permissions, attribution, caching, and rate limits apply to flight sources? | XCContest and SkyNomad must be researched without assuming scraping permission. | T-010 and T-011. |
+| What retention, attribution, licensing, and rate limits apply beyond the current XCContest browser workflow? | T-013 has a project-owner-confirmed ordinary low-volume UI workflow; do not extend it to bulk/commercial use or SkyNomad without explicit terms. | Before broader collection or product use. |
 | Which historical forecast/archive or reanalysis sources will be used? | Exact archived forecasts are preferred; reanalysis is the documented fallback. | T-016, with units refined in T-017. |
 | Which first alert channel should be implemented? | Dashboard watchlist, email, Telegram, or another agreed channel; alerts require at least one-day lead time and deduplication. | T-027/T-028. |
 | What deployment/distribution model is required beyond local development? | The MVP is local-first; cloud/distributed infrastructure needs a demonstrated requirement. | No task assigned; decide when deployment becomes an accepted scope item. |

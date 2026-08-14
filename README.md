@@ -14,8 +14,9 @@ result as an inspectable daily dashboard.
 
 - Delivery phase: **Takt 2**
 - Current ticket: **T-012 - Implement flight record schema** (`Review`)
-- Next ticket: **T-013 - Ingest first validated flight sample** (`To Do`;
-  requires a permitted XCContest input/export method)
+- In progress: **T-013 - Ingest first validated flight sample**. The Playwright
+  collector boundary is implemented; parsing, validation, site matching, and
+  database import remain pending T-013 work.
 - Implemented: runnable React/Vite and Node.js/Express workspaces, shared runtime
   contracts, structured logging and errors, a map-ready seven-site catalog,
   deterministic date-aware mock forecasts, dashboard summary/day-preview read
@@ -24,8 +25,9 @@ result as an inspectable daily dashboard.
   accessible request states, and a routed detailed site/date forecast view with
   mock forecast inputs/drivers, and Playwright Chromium smoke coverage for the
   dashboard-to-detail happy path; and a Drizzle-owned SQLite flight-data
-  foundation with reviewed, reproducible migrations
-- Not implemented: data ingestion, API persistence integration, real forecasts, models, and alerts
+  foundation with reviewed, reproducible migrations; and an ignored-raw-artifact
+  XCContest collector for the explicitly allowed browser UI workflow
+- Not implemented: flight parsing/import, API persistence integration, real forecasts, models, and alerts
 
 Displayed mock responses are deliberately identified as `mock`; they are
 development fixtures, not forecasts or flying advice.
