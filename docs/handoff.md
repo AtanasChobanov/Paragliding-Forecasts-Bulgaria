@@ -16,10 +16,10 @@ not a project history. Use the following documents for the authoritative detail:
 
 | Field | Value |
 | --- | --- |
-| Branch | `feature/T-014-flight-reconciliation`, based on T-013 branch commit `162bf9e`; rebase after T-013 merges. |
-| Working tree at handoff update | Clean after committing the focused T-014 code, documentation, and expanded test coverage; do not discard unrelated user work. |
-| Task status in `docs/tasks.md` | T-012 `Review`; T-013 `In Progress`; T-014 `Review`; T-015 `To Do`. |
-| Next implementation focus | Human/manual review of T-014 against the already collected local interim data, then T-015 frozen parser fixtures. |
+| Branch | `feature/T-015-parser-fixtures`, based on T-014 commit `21a7665`; rebase after T-014 merges. |
+| Working tree at handoff update | T-015 changes are committed; an existing user-owned T-013 status edit in `docs/tasks.md` remains unstaged and must not be discarded. |
+| Task status in `docs/tasks.md` | T-012 `Review`; T-013 `Review`; T-014 `Review`; T-015 `Review`. |
+| Next implementation focus | Review/merge T-012 through T-015, then begin T-016 historical forecast archive research. |
 | Local storage | SQLite selected by `DATABASE_URL`; local databases, raw source data, and interim artifacts are ignored. |
 
 T-013 now has two successful local XCContest ingestion runs. The complete
@@ -171,7 +171,7 @@ The raw manifest is complete, schema version 3, and covers season 2024/BG.
 
 ## Verification baseline
 
-The latest T-014 code checks passed locally:
+The latest T-015 code checks passed locally:
 
 ```powershell
 uv run --project services/ml ruff format --check
@@ -179,8 +179,9 @@ uv run --project services/ml ruff check
 uv run --project services/ml pytest
 ```
 
-At the latest verification, all 76 ML tests passed, including 11 focused T-014
-reconciliation tests. The persistence/component tests use synthetic durable
+At the latest verification, all 77 ML tests passed, including 11 focused T-014
+reconciliation tests and the committed T-015 parser-fixture integration/regression
+test. The persistence/component tests use synthetic durable
 artifacts, real mapping-review transactions, and temporary SQLite migrated by
 the committed Drizzle migrations; they make no source request and never open the
 existing 449-row local database. The project owner asked not to run a
@@ -207,17 +208,28 @@ matching decisions file, and run offline `resume`.
 An exact repeated snapshot is expected to be a successful no-op. Do not edit raw,
 validation, proposal, or existing database evidence by hand.
 
-## Following task: T-015
+## T-015 parser fixture handoff
 
-**Goal:** add small, sanitized, deterministic frozen fixtures for flight-source
-parsing, so parser changes do not depend on live pages.
+**Delivered:** a small committed synthetic XCContest manifest-v3 mini-run under
+`data/samples/xccontest/parser-v2/synthetic-mini-run-v1/`, reviewed parser-v2
+golden JSONL/report outputs, and a fixture-driven offline parser
+integration/regression test. The test copies the fixture into a temporary raw
+layout, validates hashes/counters through the real parser, and compares every
+output artifact. It opens no browser, makes no network request, and does not
+access SQLite.
 
-Fixtures must be committed only when they are small, licensed/permitted,
-sanitary, deterministic, and documented. Do not copy local raw collections or
-private pilot information into Git. Cover representative valid rows, short or
-malformed rows, threshold boundaries, duplicate observations, and launch mapping
-evidence. Keep browser/collector testing separate from parser fixtures unless a
-permitted sanitized page fragment is explicitly justified.
+The fixture is entirely project-authored: it contains no copied live/raw page,
+real pilot information, account data, or track. Its README records synthetic
+origin, sanitation/redistribution limits, test command, and case matrix.
+Coverage includes manifest-v3 compatibility; current/archived URL shapes;
+100/200/300 km boundaries; decimal parsing; route variants; season/timezone
+boundaries; launch evidence; exact and conflicting duplicate observations;
+under-threshold/malformed rows; and pilot-text exclusion from parser output.
+Browser navigation, source responses, pagination, retries, and rate policy
+remain collector/browser concerns, covered separately.
+
+**Validation:** `uv run --project services/ml ruff format --check`, `ruff
+check`, and the full `pytest` suite passed on 2026-08-13: 77 tests passed.
 
 ## Routine commands
 
