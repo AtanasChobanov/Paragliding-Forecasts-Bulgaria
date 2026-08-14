@@ -31,7 +31,7 @@ def main(arguments: Sequence[str] | None = None) -> int:
         print(f"XCContest persistence did not complete: {error}", file=sys.stderr)
         return 1
     print(json.dumps(report, indent=2, sort_keys=True))
-    return 0
+    return 0 if report["status"] == "succeeded" else 2
 
 
 if __name__ == "__main__":

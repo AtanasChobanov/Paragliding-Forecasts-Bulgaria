@@ -12,14 +12,14 @@ not a project history. Use the following documents for the authoritative detail:
 5. `docs/decisions.md` for accepted durable decisions.
 6. Git history for prior implementation detail and validation evidence.
 
-## Current state (2026-08-11)
+## Current state (2026-08-13)
 
 | Field | Value |
 | --- | --- |
-| Branch | `feature/T-013-xccontest-collector` |
-| Working tree at handoff update | Clean before this documentation edit; do not discard unrelated user work. |
-| Task status in `docs/tasks.md` | T-012 `Review`; T-013 `In Progress`; T-014 and T-015 `To Do`. |
-| Next implementation focus | T-014 duplicate/source-traceability checks, then T-015 frozen parser fixtures. |
+| Branch | `feature/T-014-flight-reconciliation`, based on T-013 branch commit `162bf9e`; rebase after T-013 merges. |
+| Working tree at handoff update | Clean after committing the focused T-014 code, documentation, and expanded test coverage; do not discard unrelated user work. |
+| Task status in `docs/tasks.md` | T-012 `Review`; T-013 `In Progress`; T-014 `Review`; T-015 `To Do`. |
+| Next implementation focus | Human/manual review of T-014 against the already collected local interim data, then T-015 frozen parser fixtures. |
 | Local storage | SQLite selected by `DATABASE_URL`; local databases, raw source data, and interim artifacts are ignored. |
 
 T-013 now has two successful local XCContest ingestion runs. The complete
@@ -53,14 +53,17 @@ provenance, confidence, and the states `mock`, `manual`, `baseline`, `real`, and
 
 Important current behavior:
 
-- Canonical flight identity is source-specific. T-013 persistence intentionally
-  fails atomically if an `ingestion_runs.run_key` or a source flight already
-  exists; it has no retry/upsert/reconciliation policy.
-- A persisted flight retains source URL, selected distance, raw launch evidence,
-  canonical site relationship, validation provenance, and its ingestion run.
-- T-014 owns the duplicate policy, cross-run idempotency, conflict handling, and
-  source-traceability/quality checks. Do not silently add an upsert policy before
-  that task defines its rules and tests.
+- Canonical flight identity is source-specific: `(source_id, source_flight_id)`.
+  T-014 classifies each repeat as no-op revalidation, enrichment, preservation,
+  conflict, or a reviewed resolution; it never silently replaces a row.
+- A persisted flight retains the chosen source URL, canonical values, selected
+  source-site mapping, validation provenance, creator run, and latest validator
+  run. `validation_notes` is schema-v1 machine-verifiable quality/provenance JSON
+  after a T-014 reconciliation; pre-existing legacy text is not backfilled.
+- A conflict writes ignored immutable review evidence under
+  `data/interim/xccontest/<run-key>/reconciliation-v1/` and rolls back before
+  any flight/run write. Follow the `Flight reconciliation and review workflow` section of
+  `services/ml/README.md` exactly.
 - T-012 migrations are reviewed/applied local schema history. Do not rewrite or
   alter applied migrations; generate a new reviewed migration when schema change
   is required.
@@ -94,10 +97,19 @@ uv run --env-file .env --project services/ml xccontest-ingest resume
 `fresh` performs preflight, collection, parsing, read-only proposal generation,
 validation, and persistence when safe. `resume` is offline: it reuses raw and
 interim artifacts and never launches a browser. Raw output remains under
-`data/raw/xccontest/<run-key>/`; parser, mapping, and validation output remains
-under `data/interim/xccontest/<run-key>/`. New mapping snapshots create distinct
-`validation-v2/<snapshot>/` output directories; existing artifacts are not
-overwritten.
+`data/raw/xccontest/<run-key>/`; parser, mapping, validation, and reconciliation
+review output remains under `data/interim/xccontest/<run-key>/`. New mapping
+snapshots create distinct `validation-v2/<snapshot>/` output directories; existing
+artifacts are not overwritten.
+
+After the mapping gate allows accepted records, persistence now compares them
+with canonical SQLite rows. Exact repeats revalidate, safe missing-to-known
+values enrich, and lower-quality incoming values cannot erase known values. A
+material difference returns `awaiting_reconciliation_review` (exit code 2) and
+writes no database row. Copy/review the returned `reconciliation-proposals.jsonl`
+into `reconciliation-decisions.jsonl`, then run the same offline `resume`
+command. The detailed contract, including every required JSONL field, is in the
+`Flight reconciliation and review workflow` section of `services/ml/README.md`.
 
 ### Source safety
 
@@ -159,7 +171,7 @@ The raw manifest is complete, schema version 3, and covers season 2024/BG.
 
 ## Verification baseline
 
-The latest T-013 code checks passed locally:
+The latest T-014 code checks passed locally:
 
 ```powershell
 uv run --project services/ml ruff format --check
@@ -167,28 +179,33 @@ uv run --project services/ml ruff check
 uv run --project services/ml pytest
 ```
 
-At the latest verification, all 64 ML tests passed. The separate manual 2024
-workflow above proved the live/source-facing path and the reviewed-rejection
-resume behavior. Do not mistake offline test fixtures/fakes for permission to
-make new live source requests.
+At the latest verification, all 76 ML tests passed, including 11 focused T-014
+reconciliation tests. The persistence/component tests use synthetic durable
+artifacts, real mapping-review transactions, and temporary SQLite migrated by
+the committed Drizzle migrations; they make no source request and never open the
+existing 449-row local database. The project owner asked not to run a
+fresh/collector command for T-014 verification. Manual verification is therefore
+an offline `xccontest-ingest resume` or `xccontest-persist` against existing
+local interim data only. Do not mistake fixtures/fakes for permission to make
+new live source requests.
 
-## Next task: T-014
+## T-014 review handoff
 
-**Goal:** detect duplicate flights and preserve source URLs and quality notes for
-every record.
+**Delivered:** compare-and-reconcile persistence, same-run no-op replay,
+cross-run duplicate revalidation, partial-run resume support, atomic conflict
+pause/resolution, source URL preservation, schema-v1 quality notes, append-only
+run events, detailed operator documentation, and integration/component coverage
+through real temporary SQLite migrations and mapping-review transactions. No
+database migration or Docker instance was needed because existing text provenance
+fields are sufficient and SQLite tests migrate a temporary local file.
 
-Start by reading T-014 in `docs/tasks.md`, the current schema/migrations,
-`services/ml/.../persistence.py`, and existing parser/validator tests. Define,
-test, and document before implementation:
-
-1. idempotent replay of the same run;
-2. duplicate source-flight identity across different runs;
-3. conflicting observations for one source identity;
-4. retained source URL and quality/provenance notes; and
-5. the migration and audit behavior required for any changed storage shape.
-
-Keep run-level raw/interim SHA-256 provenance intact. T-014 must not erase or
-silently overwrite either of the verified imports above.
+**Manual review:** use only already collected `data/interim/xccontest/<run-key>/`
+artifacts. Do not run `fresh` or a collector command. If an existing run produces
+a reconciliation pause, follow the `Flight reconciliation and review workflow` section of
+`services/ml/README.md`; inspect the generated proposal, create the
+matching decisions file, and run offline `resume`.
+An exact repeated snapshot is expected to be a successful no-op. Do not edit raw,
+validation, proposal, or existing database evidence by hand.
 
 ## Following task: T-015
 

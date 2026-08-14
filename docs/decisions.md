@@ -1109,6 +1109,77 @@ retroactive traceability behavior.
 [`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/pipeline.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/pipeline.py),
 [`handoff.md`](handoff.md).
 
+
+### DEC-030 - Reconcile repeated XCContest source flights without silent overwrite
+
+**Status:** Accepted
+
+**Date:** 2026-08-12
+
+**Supersedes:** the T-014 limitation in DEC-029 that `--persist-approved-only`
+forfeits adding later approved records to that persisted run. DEC-029's
+mapping-review gate remains accepted.
+
+**Context:** The database already enforces `(source_id, source_flight_id)` as a
+canonical source identity, while a run can be resumed after a partial approved
+subset or a later run can legitimately observe the same flight. Rejecting all
+repeats loses offline recovery; a generic upsert or replace could silently
+change a source URL, site mapping, takeoff time, distance, duration, route, or
+track evidence. T-014 also needs durable per-record quality/provenance notes
+without expanding the validated T-012 schema speculatively.
+
+**Decision:** Persistence compares every accepted normalized flight with the
+canonical SQLite row for the same source identity before it writes. Exact
+same-run evidence is a successful no-op. Cross-run exact duplicates revalidate
+the existing canonical row and retain its original creator run. Missing duration,
+track, or route information may be enriched only in the defined direction; a
+lower-quality or missing incoming value cannot erase an existing known value.
+A metadata-to-track validation upgrade is automatic, but not the reverse.
+
+A changed source URL, approved site-mapping ID, takeoff timestamp, normalized
+scored distance, two concrete distinct durations, two known distinct route
+values, or two concrete distinct track URLs is a conflict. A conflict writes
+non-overwriting, ignored `reconciliation-v1/<plan-sha256>` proposal/report
+evidence under the run's interim directory and returns
+`awaiting_reconciliation_review` without any database write. A complete sibling
+JSONL decisions file must copy immutable proposal identity/fingerprints and give
+each proposal either `keep_existing` or `accept_incoming`, plus an auditable
+reference, reviewer, UTC review timestamp, and rationale. Invalid, stale, or
+partial decisions fail closed. One valid reviewed transaction resolves all
+conflicts and non-conflicts together.
+
+The normal `fresh`/mapping-review/`resume` gate does not change. The explicit
+`--persist-approved-only` path can now create a partial run; after mapping
+review, offline resume reconciles prior accepted records and adds newly accepted
+records under the same run rather than failing for duplicates.
+
+`flight_records.source_flight_url` remains the chosen source link.
+`flight_records.validation_notes` stores schema-v1 machine-verifiable JSON for
+versions, mapping/accepted evidence hashes, artifact-reference count/hash,
+derived quality flags, and reconciliation outcome/event/optional review
+reference. `ingestion_runs.notes` stores append-only versioned persistence
+events. Existing legacy notes are not destructively backfilled. No migration is
+required because these existing text provenance fields are sufficient; Drizzle
+remains the sole schema owner.
+
+**Rationale:** This preserves the highest-value canonical record, allows safe
+partial-run recovery and cross-run revalidation, makes a material contradiction
+visible to a human, and retains enough hashes and references to audit the
+choice without copying raw artifacts or pilot identity into SQLite.
+
+**Consequences:** The persistence revision is `xccontest-persistence/3`.
+Operators use the documented reconciliation proposal/decision workflow and
+`xccontest-ingest resume` for resolution; neither path contacts XCContest.
+Focused unit and migrated-temporary-SQLite integration tests cover enrichment,
+preservation, no-op replay, cross-run duplicates, conflict atomicity, stale
+decisions, reviewed resolution, and pipeline pause propagation. T-015 remains
+responsible for committed sanitized parser fixtures.
+
+**Related files:** [`../services/ml/README.md`](../services/ml/README.md),
+[`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/reconciliation.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/reconciliation.py),
+[`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/persistence.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/persistence.py),
+[`handoff.md`](handoff.md).
+
 ## Open decisions
 
 | Question | Options / constraints | Resolve by |

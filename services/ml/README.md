@@ -71,14 +71,11 @@ uv run --env-file .env --project services/ml xccontest-ingest fresh `
   --policy-file data/local/xccontest-import-policy.json
 ```
 
-`fresh` performs preflight, collection, parsing, mapping proposals, validation, and then
-persistence through the existing durable artifacts. It never bypasses the individual stage
-contracts. `propose` is automatic and read-only; `apply` is always a human-reviewed SQLite
-write. When validation finds mapping quarantines with no matching reviewed rejection, the command
-exits with status `awaiting_mapping_review` (process exit code 2) before it writes an ingestion
-run or flights. Rejections in the sibling `mapping-decisions.jsonl` must retain the immutable
-proposal identifier and evidence; they keep those flights quarantined but allow the approved
-subset to persist. Copy/review/apply the generated `site-mapping-v2` decisions file, then continue without source access:
+`fresh` preserves the explicit human mapping-review gate. `propose` is automatic and
+read-only; `apply` is always a human-reviewed SQLite write. If validation finds a mapping-actionable
+quarantine without a matching reviewed rejection, it exits with `awaiting_mapping_review` (exit
+code 2) before persistence. Copy/review/apply the generated `site-mapping-v2` decisions file, then
+continue entirely offline:
 
 ```powershell
 uv run --env-file .env --project services/ml xccontest-ingest resume `
@@ -87,13 +84,15 @@ uv run --env-file .env --project services/ml xccontest-ingest resume `
 ```
 
 `resume` reuses valid parser, proposal, and current mapping-snapshot validation artifacts; it
-parses a raw-only run when necessary, but never opens a browser. If a reviewer deliberately
-leaves mapping-actionable candidates quarantined, `--persist-approved-only` is an explicit
-opt-in to persist only the currently approved records. That choice cannot add the remaining
-records to the same persisted run before T-014 supplies cross-run idempotency/upsert policy.
-The separate `xccontest-collect`, `xccontest-parse`, `xccontest-site-mappings`,
-`xccontest-validate`, and `xccontest-persist` commands remain supported for focused collection,
-review, replay, and recovery.
+never opens a browser. Persistence then compares each accepted record with the canonical SQLite
+flight of the same source identity. Exact repeats revalidate, known values can be enriched, and
+conflicts stop with `awaiting_reconciliation_review` (exit code 2) before any database write.
+Follow the [Flight reconciliation and review workflow](#flight-reconciliation-and-review-workflow)
+below to resolve those JSONL decisions. `--persist-approved-only` remains an explicit exceptional path
+for the accepted subset; a later reviewed `resume` reconciles the same run rather than losing the
+ability to add remaining records. The separate `xccontest-collect`, `xccontest-parse`,
+`xccontest-site-mappings`, `xccontest-validate`, and `xccontest-persist` commands remain supported
+for focused collection, review, replay, and recovery.
 Run the collector for one or more explicitly selected XCContest seasons:
 
 ```powershell
@@ -334,30 +333,29 @@ pipeline version, confidence, and data status. Prefer language-neutral storage
 or serialization. Avoid coupling the Node API to Python internals or pickled
 objects.
 
-For Takt 2, Python reads permitted XCContest inputs into immutable raw artifacts,
-parses them into source records, normalizes and validates them, resolves a
-canonical project site, and writes accepted flight records to the SQLite schema
-owned by `packages/database`. Python is a non-migrating client of that schema:
+Python reads permitted XCContest inputs into immutable raw artifacts, parses them
+into source records, normalizes and validates them, resolves a canonical project
+site, and writes accepted flight records to the SQLite schema owned by
+`packages/database`. Python is a non-migrating client of that schema:
 Drizzle/Drizzle Kit own all DDL and migrations. Ambiguous or rejected records
 remain as ignored interim/quarantine outputs rather than entering the canonical
 flight table.
 
-T-013's collector slice owns source UI control and raw artifact retention. It
-does not drop repeated flight IDs because the umbrella PG view deliberately
-overlaps exact-category and rescue-sort views; its repeated-observation count
-is operational coverage metadata. The offline `xccontest-parse --run-key <uuid>`
-command validates legacy BG-only and v2 manifests plus every artifact hash, then
-writes non-overwritable `parser-v2` outputs under
-`data/interim/xccontest/<run-key>/`: deduplicated `normalized-flights.jsonl`,
-`parse-rejections.jsonl`, and `parse-report.json`. Equal same-run IDs become one
-record with all artifact references; conflicting IDs become one conflicted
-candidate without a selected value. It never writes or proposes
-`source_site_mappings`, retains pilot identity, calls XCContest, or writes
-SQLite. The T-013 validation/site-mapping slice now uses durable parser-v2 JSONL,
-reviewed `source_site_mappings`, and versioned accepted/quarantine outputs; persistence
-still remains a later T-013 slice. T-014 owns cross-run idempotency and persisted
-traceability. T-015 owns small, sanitized, permitted frozen fixtures; fixtures are not
-the live/raw dataset.
+The collector owns source UI control and raw artifact retention. It does not drop
+repeated flight IDs because the umbrella PG view deliberately overlaps exact-category
+and rescue-sort views; its repeated-observation count is operational coverage
+metadata. The offline `xccontest-parse --run-key <uuid>` command validates legacy
+BG-only and current manifests plus every artifact hash, then writes non-overwritable
+`parser-v2` outputs under `data/interim/xccontest/<run-key>/`: deduplicated
+`normalized-flights.jsonl`, `parse-rejections.jsonl`, and `parse-report.json`.
+Equal same-run IDs become one record with all artifact references; conflicting IDs
+become one conflicted candidate without a selected value. It never writes or
+proposes `source_site_mappings`, retains pilot identity, calls XCContest, or writes
+SQLite. Mapping/validation uses durable parser JSONL, reviewed
+`source_site_mappings`, and versioned accepted/quarantine outputs. Persistence
+reconciles repeated source identities, preserves traceability, and writes canonical
+flights only after the reviewed validation boundary. Frozen parser fixtures, when
+added, must remain small, sanitized, permitted, and separate from live/raw data.
 
 ## Collector versioning policy
 
@@ -396,25 +394,21 @@ and complete manifest-v2 inputs.
   sparse labels.
 
 
-### Persist validated XCContest flights
+### Persist and reconcile validated XCContest flights
 
-`xccontest-persist` is the final T-013 stage. It does not contact XCContest and does not run collector, parser, or site validation. It consumes one immutable `validation-v2` snapshot and writes the accepted records to the migrated SQLite database.
-
-#### Prerequisites
-
-1. Apply the committed database migrations:
+`xccontest-persist` is an offline final stage: it never contacts XCContest or invokes collection,
+parsing, or validation. Apply the committed database migrations, validate a run after required
+mapping decisions, and create the ignored policy file described below before invoking it:
 
 ```powershell
 npm.cmd run db:migrate --workspace @paragliding-forecasts/database
+uv run --env-file .env --project services/ml xccontest-persist `
+  --run-key <uuid-v4> `
+  --validation-snapshot <64-lowercase-hex-sha256> `
+  --policy-file data/local/xccontest-import-policy.json
 ```
 
-2. Run `xccontest-validate` after the required site mappings are approved. The validator writes a non-overwriting directory named `validation-v2/<mapping-snapshot-sha256>/` containing:
-
-- `accepted-flights.jsonl` - accepted canonical candidates;
-- `site-quarantine.jsonl` - unknown, provisional, or ambiguous candidates;
-- `validation-report.json` - counters, stage versions, artifact paths, and SHA-256 hashes.
-
-3. Create the ignored local policy file `data/local/xccontest-import-policy.json`. It must contain exactly these four fields:
+The policy JSON must contain exactly these booleans and non-empty permission provenance:
 
 ```json
 {
@@ -425,41 +419,405 @@ npm.cmd run db:migrate --workspace @paragliding-forecasts/database
 }
 ```
 
-The permission basis must be one of `written_permission`, `source_terms`, `owner_export`, `official_api_terms`, or `pilot_provided`. The two usage values must be JSON booleans; they are never inferred from the basis.
+`permission_basis` is one of `written_permission`, `source_terms`, `owner_export`,
+`official_api_terms`, or `pilot_provided`. The command verifies the raw manifest, parser and
+validation reports/files, their SHA-256 values, approved mapping snapshot, current mapping rows,
+record fields, and source identity before opening its transaction.
 
-#### Command
+A successful reconciliation writes a canonical `flight_records` row only when no row already
+exists for `(source_id, source_flight_id)`. Existing rows are revalidated, enriched, or preserved
+under the deterministic reconciliation policy. A material contradiction (source URL, site mapping, takeoff
+time, distance, two concrete durations/track URLs, or two known route types) creates a local,
+immutable proposal artifact and returns `awaiting_reconciliation_review`. It changes neither
+flights nor runs until a complete reviewed decisions JSONL file is supplied and `resume` or this
+command is rerun.
+
+The concise outcomes in the JSON report are `applied` (with per-outcome counts) or `no_op` for an
+exact already-applied replay. The direct persist command returns exit code 0 for `succeeded`, 2
+for an outstanding reconciliation review, and 1 for failed validation or invalid decision evidence.
+
+### Flight reconciliation and review workflow
+
+#### Purpose and boundary
+
+Persistence makes an already validated XCContest flight snapshot
+repeatable and auditable.  It is an **offline** boundary: it reads the existing
+`parser-v2` and `validation-v2` artifacts, verifies their hashes, and reconciles
+accepted records with migrated SQLite.  It does not collect, open a browser, or
+contact XCContest.
+
+The source identity of a canonical flight is the database constraint
+`(source_id, source_flight_id)`.  A second observation of that identity is not
+silently inserted or overwritten.  It is classified before any database write.
+
+The system deliberately keeps the mapping-review gate introduced by DEC-029:
+
+1. `xccontest-ingest fresh` creates mapping proposals and stops with
+   `awaiting_mapping_review` if mapping-actionable quarantines are still
+   unresolved.
+2. A human applies mapping decisions, then runs `xccontest-ingest resume`.
+   `resume` is offline and revalidates against the current approved mapping
+   snapshot.
+3. Only then does persistence reconcile the accepted flights.  A reconciliation
+   conflict creates another explicit review pause rather than a partial write.
+
+`--persist-approved-only` remains an explicit, exceptional path.  It may persist
+currently accepted records while unresolved mapping quarantines remain.  When
+mapping review later permits the remaining records, `resume` reuses the same
+`ingestion_runs` row and reconciles the earlier subset instead of failing on
+duplicates.  It is not the normal `fresh` workflow and never bypasses the
+mapping-review requirement for a quarantined record.
+
+#### What is compared
+
+Every accepted validation record is normalized to these canonical values before
+comparison.  Distances use an exact normalized decimal representation, so JSON
+`150`, `150.0`, and `150.00` are equal; there is intentionally no arbitrary
+numeric tolerance.
+
+| Field | Reconciliation rule |
+| --- | --- |
+| `source_flight_url` | Different non-empty URL is a human-review conflict. |
+| `source_site_mapping_id` | Different approved mapping is a human-review conflict. |
+| `takeoff_at_utc` | Different timestamp is a human-review conflict. |
+| `scored_distance_km` | Different normalized decimal is a human-review conflict. |
+| `duration_seconds` | `null` to a concrete value enriches; concrete to `null` preserves the existing value; two different concrete values conflict. |
+| `route_type` | `unknown` to known enriches; known to `unknown` preserves the existing value; two different known values conflict. |
+| `track_url` | `null` to a URL enriches; URL to `null` preserves the existing value; two distinct URLs conflict. |
+| `validation_level` | `metadata` to `track` enriches automatically; the reverse preserves the existing level. |
+
+The resulting outcome is one of the following:
+
+| Outcome | Effect on `flight_records` |
+| --- | --- |
+| `inserted` | Create a new canonical flight. |
+| `revalidated_unchanged` | Keep canonical values and refresh validation/provenance metadata. |
+| `enriched` | Fill only the allowed missing or lower-quality values. |
+| `preserved_existing` | Keep a better existing value when the incoming value is missing, unknown, or lower validation level. |
+| `reviewed_keep_existing` | A human chose the entire existing canonical value set for a conflict. |
+| `reviewed_accept_incoming` | A human chose the entire incoming canonical value set for a conflict. |
+
+There is no implicit field-by-field merge for a conflict.  `accept_incoming`
+means the incoming canonical record wins; `keep_existing` means the existing
+canonical record wins.  The proposal exposes both complete values so a reviewer
+can make that choice deliberately.
+
+#### Normal reconciliation flow
+
+```text
+validated accepted JSONL + current SQLite
+                |
+                v
+       classify each source identity
+         |       |          |
+         |       |          +-- conflict --> write immutable proposal --> pause
+         |       |
+         |       +-- existing --> revalidate / enrich / preserve
+         |
+         +-- absent --> insert
+                |
+                v
+       one BEGIN IMMEDIATE transaction
+                |
+                v
+  update run event + canonical flights + quality notes
+```
+
+The transaction first verifies all raw/parser/validation SHA-256 evidence, the
+current mapping snapshot, and that every selected mapping is still approved for
+XCContest.  If any comparison needs reconciliation review, it rolls back before
+creating or changing an `ingestion_runs` or `flight_records` row.  Therefore a
+batch containing one conflict and several new flights cannot partially persist.
+
+For a successful reconciliation:
+
+- The first persistence of a run creates its `ingestion_runs` row.  A later
+  partial-run resume updates that same row and appends a new event in its
+  versioned `notes` JSON.
+- A cross-run duplicate creates a new `ingestion_runs` row, but never a second
+  `flight_records` row for the same source identity.
+- `created_by_ingestion_run_id` is never changed. An applied reconciliation
+  refreshes `last_validated_by_ingestion_run_id`, `validation_notes`, and
+  `updated_at_utc` on the canonical flight. For a same-run resume the validator
+  run ID naturally remains the same; a cross-run duplicate changes it to the
+  later run.
+- `validated_at_utc` is the timestamp placed in the immutable accepted-flight
+  validation artifact, not the persistence timestamp. An applied artifact created
+  by a later validation supplies its value; a replay of the same evidence does
+  not reinterpret it as "now". `updated_at_utc` is the reconciliation-write
+  timestamp.
+- Repeating the exact already-applied validation evidence for the same run is a
+  successful no-op. It reports `reconciliation.status: "no_op"` and writes no
+  additional database event or flight update.
+
+This is intentionally a compare-and-reconcile policy rather than SQLite
+`INSERT OR REPLACE`: replacement would lose provenance and could silently choose
+the wrong distance, launch mapping, or takeoff time.
+
+#### Resolving a reconciliation conflict
+
+When persistence returns `status: "awaiting_reconciliation_review"`, its JSON
+report contains `reconciliation.proposals_path`, `report_path`, and
+`decisions_path`.  The files are local and ignored by Git:
+
+```text
+data/interim/xccontest/<run-key>/
+  reconciliation-v1/
+    <plan-sha256>/
+      reconciliation-proposals.jsonl  # generated immutable evidence
+      reconciliation-report.json       # generated hash/count summary
+      reconciliation-decisions.jsonl   # reviewer-created decision file
+```
+
+The `<plan-sha256>` includes the run key, validation snapshot, accepted JSONL
+hash, and the comparison results.  Do not guess the directory name; copy the
+paths returned by the pause report.  If validation evidence or the database
+state changes, a new plan is generated and an old decisions file is deliberately
+not reused.
+
+##### Reviewer procedure
+
+1. Read `reconciliation-report.json` and inspect each line in
+   `reconciliation-proposals.jsonl`.  It contains `existing`, `incoming`, and
+   `conflicting_fields`; it contains no pilot identity fields.
+2. Copy the proposal file next to itself.  Never edit the proposal file.
+
+   ```powershell
+   $reconciliationDir = 'data/interim/xccontest/<run-key>/reconciliation-v1/<plan-sha256>'
+   Copy-Item "$reconciliationDir/reconciliation-proposals.jsonl" `
+     "$reconciliationDir/reconciliation-decisions.jsonl"
+   ```
+
+3. Keep every copied immutable field exactly as generated.  Add the decision
+   fields below to every JSONL line.  A decision file must contain exactly one
+   decision for every proposal; it cannot resolve only a subset.
+4. Run the usual offline resume command.  It uses the already existing raw and
+   interim artifacts and does not launch the collector.
+
+   ```powershell
+   uv run --env-file .env --project services/ml xccontest-ingest resume `
+     --run-key <uuid> `
+     --policy-file data/local/xccontest-import-policy.json
+   ```
+
+`xccontest-persist` can be used for a focused stage replay instead.  Supply the
+same `--run-key`, exact validation snapshot, and policy file.  Both commands
+return exit code `2` while review is pending; malformed evidence returns an
+error and exit code `1`.
+
+##### Required decision fields
+
+The following values are copied from the proposal and are immutable evidence:
+
+- `proposal_id`
+- `reconciliation_schema_version`
+- `run_key`
+- `source`
+- `source_flight_id`
+- `validation_snapshot_sha256`
+- `accepted_flights_sha256`
+- `existing_fingerprint`
+- `incoming_fingerprint`
+
+The reviewer adds these fields:
+
+| Field | Required value |
+| --- | --- |
+| `decision` | Exactly `keep_existing` or `accept_incoming`. |
+| `verification_reference` | Non-empty auditable evidence reference. Prefer a stable source artifact/detail URL plus review context, for example `raw-artifact:data/raw/xccontest/<run>/views/?; detail-url:https://www.xcontest.org/?`. |
+| `reviewed_by` | Non-empty reviewer identifier or initials. |
+| `reviewed_at_utc` | UTC timestamp exactly `YYYY-MM-DDTHH:MM:SSZ`. |
+| `notes` | Non-empty concise rationale for the selected canonical record. Do not add credentials or pilot-identifying data. |
+
+Example decision line (the placeholders must be replaced by the unchanged values
+copied from the generated proposal):
+
+```json
+{"proposal_id":"<copied>","reconciliation_schema_version":1,"run_key":"<copied>","source":"xccontest","source_flight_id":"12345","validation_snapshot_sha256":"<copied-sha>","accepted_flights_sha256":"<copied-sha>","existing_fingerprint":"<copied-sha>","incoming_fingerprint":"<copied-sha>","decision":"keep_existing","verification_reference":"raw-artifact:data/raw/xccontest/<run-key>/?; reviewed-source-detail:https://www.xcontest.org/world/en/flights/detail:12345","reviewed_by":"AB","reviewed_at_utc":"2026-08-12T12:00:00Z","notes":"The retained source artifact confirms the previously stored scored distance."}
+```
+
+The validator rejects a missing, duplicate, stale, incomplete, or edited
+immutable record.  It also rejects a decision that does not cover every
+proposal.  Nothing is written until the entire decisions file is valid.
+
+#### Quality and traceability notes
+
+`flight_records.source_flight_url` remains the canonical link for the chosen
+record.  Persistence writes a compact, machine-verifiable JSON object to
+`flight_records.validation_notes` whenever it inserts, revalidates, enriches,
+preserves, or resolves a record.  Its current `schema_version` is `1`:
+
+```json
+{
+  "schema_version": 1,
+  "evidence_level": "metadata",
+  "parser_version": "xccontest-parser/2",
+  "validator_version": "xccontest-validator/2",
+  "persistence_version": "xccontest-persistence/3",
+  "mapping_key_type": "source_site_token",
+  "mapping_snapshot_sha256": "<sha256>",
+  "accepted_flights_sha256": "<sha256>",
+  "artifact_reference_count": 2,
+  "artifact_references_sha256": "<sha256>",
+  "quality_flags": ["track_not_verified"],
+  "reconciliation": {
+    "outcome": "revalidated_unchanged",
+    "event_sha256": "<sha256>",
+    "decision_reference": null
+  }
+}
+```
+
+`quality_flags` are derived from the chosen canonical value, not from an
+operator free-text judgement:
+
+- `track_not_verified` for metadata-level evidence;
+- `route_type_unknown` when the route type is `unknown`;
+- `duration_missing` when duration is null;
+- `incoming_missing_value_preserved` when a lower-quality incoming value was
+  deliberately not allowed to erase a known value; and
+- `manual_reconciliation` for either reviewed conflict outcome.
+
+The reconciliation object carries the outcome, deterministic persistence event
+hash, and (for manual decisions) the reviewer-supplied verification reference.
+The full per-artifact references stay in the verified parser/validation
+artifacts; the database retains their count and deterministic hash to avoid
+duplicating raw evidence or personal data.
+
+Legacy plain-text `validation_notes` remain readable. The system does not perform
+a destructive database backfill.  A legacy row receives schema-v1 notes only
+when a later valid reconciliation actually updates or revalidates it.
+
+Run-level history is append-only within the versioned JSON held in
+`ingestion_runs.notes`.  Each applied event records its validation report and
+accepted JSONL paths/hashes, reconciliation plan hash, optional decisions hash,
+mapping-review completeness, outcome counts, and timestamp.
+
+#### Operational outcomes and troubleshooting
+
+| Result | Meaning | Next action |
+| --- | --- | --- |
+| `awaiting_mapping_review` | Unknown/ambiguous/provisional mapping evidence remains. | Review site mappings; do not create reconciliation decisions yet. |
+| `awaiting_reconciliation_review` | A mapped accepted flight conflicts with an existing canonical record. No database writes occurred. | Create the complete reconciliation decisions JSONL, then use `resume`. |
+| `succeeded` + `reconciliation.status: applied` | All records were inserted, revalidated, enriched, preserved, or manually resolved in one transaction. | Retain the output JSON and ignored local artifacts for audit. |
+| `succeeded` + `reconciliation.status: no_op` | The same run/evidence was already applied. | No action; there was no duplicate write. |
+| Error about mapping snapshot or mapping approval | Approved mappings changed after validation. | Re-run validation, then resume using its new snapshot. |
+| Error about decision evidence | The decisions file is malformed, stale, or was edited beyond permitted fields. | Regenerate/read the current proposal plan and produce a complete matching decisions file. |
+
+#### Verification approach
+
+The deterministic unit tests cover exact comparison, allowed enrichment, preservation,
+conflict classification, decision-evidence validation, and quality-note semantics.
+The persistence integration suite runs the committed Drizzle migrations against
+an isolated temporary SQLite file, then uses real foreign keys, unique
+constraints, transactions, `persist_import`, reconciliation code, and synthetic
+raw/parser/validation artifacts with SHA-256 evidence. It covers inserts,
+same-run no-op, cross-run duplicates and validation provenance, enrichment,
+missing-value preservation, conflicts with no partial writes, complete
+`keep_existing` and `accept_incoming` decisions, stale decisions, forced
+mid-transaction rollback, source URL retention, quality-note semantics, and
+creator/last-validator provenance.
+
+Two pipeline component tests exercise the real mapping-review transaction and
+`resume_run` boundary on that same isolated database: (1)
+`persist-approved-only` inserts 174 accepted records, eight reviewed mappings
+are applied to yield a new 182-record snapshot, resume revalidates 174 and
+inserts 8, and its identical replay is a no-op; (2) two remaining mappings are
+rejected through the real review transaction, then resume revalidates the
+unchanged accepted snapshot without changing any business fields. Run them with:
 
 ```powershell
-uv run --env-file .env --project services/ml xccontest-persist `
-  --run-key <uuid-v4> `
-  --validation-snapshot <64-lowercase-hex-sha256> `
+uv run --project services/ml pytest services/ml/tests/ingestion/xccontest/test_reconciliation.py -q
+```
+
+No Docker instance is required: SQLite is the production test boundary, and no
+test sends a request to XCContest. The existing 449-row local database is not a
+test fixture and is deliberately not mutated by automated tests; verify it with
+the offline smoke procedure below.
+
+#### Manual offline verification with the current local data
+
+Do **not** delete `flight_records`, edit a raw/validation/proposal artifact, or
+run `fresh` to test reconciliation. The existing canonical rows are the required
+comparison baseline. The commands below use only the local 2024 raw/interim
+artifacts and the already migrated database; none opens a browser or contacts
+XCContest. They do make the intended local database updates, so create a backup
+first.
+
+```powershell
+Copy-Item data/local/paragliding.db data/local/paragliding.before-t14-manual.db
+```
+
+The current known 2024 run is `8d809838-3ff8-42ce-9977-3997cd2536bc`. Its
+current approved mapping snapshot is
+`fbe9bc251bc07b287d16e2c2127c70daf0b781754ca871931bd6530680ea2204`; it has
+182 accepted canonical records already created by ingestion run 2. Run its first
+reconciliation replay as follows:
+
+```powershell
+uv run --env-file .env --project services/ml xccontest-ingest resume `
+  --run-key 8d809838-3ff8-42ce-9977-3997cd2536bc `
   --policy-file data/local/xccontest-import-policy.json
 ```
 
-Available flags:
+Expected result: process exit code 0 and JSON `status: "succeeded"`. Under
+`persistence.reconciliation`, expect `status: "applied"`,
+`counts.revalidated_unchanged: 182`, and zero `inserted`, `enriched`,
+`preserved_existing`, and reviewed outcomes. The existing 182 rows retain their
+creator run and receive schema-v1 `validation_notes`, current validator-run
+provenance, and one append-only persistence event. The mapping review portion
+should report no actionable quarantines and 26 reviewed-rejected quarantine
+records.
 
-- `--run-key` (required) - UUID v4 identifying the collector/parser/validation run.
-- `--validation-snapshot` (required) - exact mapping snapshot hash used as the `validation-v2` directory name. The command never chooses a latest snapshot implicitly.
-- `--policy-file` (required) - path to the local permission/usage JSON policy.
-- `--database-url` (optional) - SQLite URL override. Precedence is this flag, then `DATABASE_URL`, then `file:./data/local/paragliding.db`. Only existing files below `data/` are accepted.
-
-#### What the command verifies and writes
-
-Before opening the write transaction it verifies the validation report, accepted/quarantine files, parser files, and raw manifest against every recorded SHA-256. It also checks source/run/version identity, counters, accepted flight fields, unique source flight IDs, and the manifest source URL.
-
-Inside one `BEGIN IMMEDIATE` transaction it rechecks the current approved `source_site_mappings` snapshot, rejects mapping drift, rejects an existing `run_key`, and verifies every accepted mapping is still approved and belongs to XCContest. A failure rolls back the complete transaction and leaves no partial run or flight rows.
-
-On success it writes one `ingestion_runs` row with `ingestion_method = browser_ui`, permission metadata, pipeline versions, raw manifest provenance, and counters. It writes one metadata-level `flight_records` row per accepted JSONL record. `track_url` is `NULL` because the collector does not retain track downloads. `distance_band` is derived later at read time.
-
-The command prints a JSON run report. A successful run is not idempotent yet: running the same command again fails on the existing `run_key` and rolls back without changing counts. Cross-run duplicate/upsert and richer traceability policy belong to T-014.
-
-Example for the verified first import:
+Inspect the expected local state without modifying it:
 
 ```powershell
-uv run --env-file .env --project services/ml xccontest-persist `
-  --run-key f1032827-a98d-4c01-969e-e67b4885f90d `
-  --validation-snapshot 94b4e0b6307d7ba6de6c0a0e180dad0d377f0ed7d4435b26092f6427b5a9d508 `
-  --policy-file data/local/xccontest-import-policy.json
+@'
+import json
+import sqlite3
+from pathlib import Path
+
+connection = sqlite3.connect(Path('data/local/paragliding.db'))
+for label, sql in (
+    ('flight_records', 'SELECT count(*) FROM flight_records'),
+    ('quality_notes_v1', "SELECT count(*) FROM flight_records WHERE validation_notes LIKE '{\"schema_version\":1,%'"),
+    ('ingestion_runs', 'SELECT count(*) FROM ingestion_runs'),
+):
+    print(label, connection.execute(sql).fetchone()[0])
+print(connection.execute(
+    "SELECT notes FROM ingestion_runs WHERE run_key = ?",
+    ('8d809838-3ff8-42ce-9977-3997cd2536bc',),
+).fetchone()[0])
+connection.close()
+'@ | uv run --project services/ml python -
 ```
 
-That import produced one succeeded run and 267 flight records. Its counters are 1200 seen, 267 accepted, 664 rejected, 69 quarantined, and 200 deduplicated.
+Expected counts after that first replay: `flight_records 449`,
+`quality_notes_v1 182`, and `ingestion_runs 2`. The printed run notes contain
+`schema_version: 2` and one `reconciliation_applied` event.
+
+Run exactly the same `resume` command a second time. Expected result: exit code
+0, top-level `status: "succeeded"`, and
+`persistence.reconciliation.status: "no_op"`. It must not change the flight,
+run, or event counts.
+
+The 2025/2026 run `f1032827-a98d-4c01-969e-e67b4885f90d` is an optional
+follow-up, not the deterministic smoke check. Its existing validation artifacts
+use an older mapping snapshot, so `resume` will create/verify a new local
+`validation-v2/<current-snapshot>/` directory before reconciliation. It can
+revalidate its 267 existing records and may add records now eligible through
+newer approved mappings. Review the JSON output and backup first; do not assume
+its counts equal the old 267-record snapshot.
+
+A real-data conflict should not be manufactured by modifying historical evidence
+or deleting/updating a canonical row. The isolated integration test below is the
+safe reproducible manual proof of conflict atomicity, generated proposals, and
+both reviewer decisions:
+
+```powershell
+uv run --project services/ml pytest `
+  services/ml/tests/ingestion/xccontest/test_reconciliation.py -q
+```
+
+Expected result: seven tests pass. They migrate a temporary SQLite file and use
+synthetic fixture artifacts only; cleanup removes them afterwards.
