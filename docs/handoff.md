@@ -12,14 +12,14 @@ not a project history. Use the following documents for the authoritative detail:
 5. `docs/decisions.md` for accepted durable decisions.
 6. Git history for prior implementation detail and validation evidence.
 
-## Current state (2026-08-13)
+## Current state (2026-08-16)
 
 | Field | Value |
 | --- | --- |
 | Branch | `feature/T-015-parser-fixtures`, based on T-014 commit `21a7665`; rebase after T-014 merges. |
-| Working tree at handoff update | T-015 changes are committed; an existing user-owned T-013 status edit in `docs/tasks.md` remains unstaged and must not be discarded. |
-| Task status in `docs/tasks.md` | T-012 `Review`; T-013 `Review`; T-014 `Review`; T-015 `Review`. |
-| Next implementation focus | Review/merge T-012 through T-015, then begin T-016 historical forecast archive research. |
+| Working tree at handoff update | The T-016 research report is already staged. This handoff/tasks/decisions update is intentionally unstaged; preserve both sets of documentation changes. |
+| Task status in `docs/tasks.md` | T-012 `Review`; T-013 `Review`; T-014 `Review`; T-015 `Review`; T-016 `Review`. |
+| Next implementation focus | Review/merge T-012 through T-016, then run the bounded T-017 weather-field/source data spike before accepting an operational weather provider. |
 | Local storage | SQLite selected by `DATABASE_URL`; local databases, raw source data, and interim artifacts are ignored. |
 
 T-013 now has two successful local XCContest ingestion runs. The complete
@@ -43,6 +43,44 @@ license, safety, or future source-access guarantee.
 The dashboard/API baseline from T-001 through T-008 is implemented and tested.
 Its detailed visual and historical test checkpoints are intentionally not
 repeated here; consult Git and the owning README/tests when changing that area.
+
+## T-016 weather-data research handoff
+
+The detailed source comparison is in
+[`T-016-forecast-data-research-report.md`](T-016-forecast-data-research-report.md).
+T-016 is ready for review: exact historical forecasts exist, but no one free
+high-resolution archive covers the complete likely Bulgarian flight-history
+period.
+
+- Treat `forecast`, `reanalysis`, and `observation` as distinct source kinds.
+  An as-issued forecast is the information available before a flight day;
+  reanalysis is a retrospective physically consistent reconstruction; station
+  and radiosonde values are point observations. Do not train or backtest as if
+  they were interchangeable, and retain source/model/run/valid/lead provenance.
+- The provisional exact/live primary is explicit Open-Meteo ECMWF IFS HRES
+  Single Runs from 2024-03-14. NOAA GFS offers older exact forecasts from 2006
+  at materially coarser resolution. ERA5 is the provisional long-history
+  reanalysis baseline; CERRA is a bounded 5.5 km terrain-resolution comparison.
+  Direct DWD ICON-EU is the commercial-safe raw-GRIB comparator/future fallback.
+  These are research recommendations, not accepted provider or feature choices.
+- For current forecasts, select only a fully available named model run and
+  preserve `runAt`, `availableAt`, `retrievedAt`, `validAt`, and `leadHours`.
+  A `00 UTC` global run normally becomes available 4–6 hours later; schedule
+  ingestion from provider availability metadata rather than a fixed local time.
+  If a new run is unavailable, retain the last successful forecast and expose
+  its age. ERA5, which has about five days of latency, is not an operational
+  fallback.
+- Open-Meteo's free hosted service is non-commercial. A paid beta/subscription
+  product must use its appropriate commercial plan or a direct licensed source;
+  preserve required attribution and source licence metadata. The direct DWD
+  path avoids a hosted Open-Meteo commercial dependency but requires GRIB
+  decoding, subsetting, and operational archiving.
+- T-017 must request a small, representative Bulgaria sample across 24/48/72/
+  120-hour leads and confirm per-model field availability, units, nulls,
+  grid-orography fit, CAPE/CIN/PBL derivability, payload cost, run identity,
+  attribution, and source switching behaviour before T-018 designs the schema.
+  T-019 should parse raw NOAA IGRA Sofia profiles; image scraping/OCR remains
+  deferred.
 
 ## Database and flight-data boundary
 
