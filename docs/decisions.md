@@ -44,7 +44,7 @@ consequences. Temporary progress and Git state belong in
 | DEC-029 | Gate one-command XCContest persistence on mapping review | Accepted | 2026-08-11 |
 | DEC-030 | Reconcile repeated XCContest source flights without silent overwrite | Accepted | 2026-08-12 |
 | DEC-031 | Lock weather-source roles and canonical feature semantics | Accepted | 2026-08-16 |
-| DEC-032 | Roll out weather ingestion and source-compatible ML in stages | Proposed | 2026-08-17 |
+| DEC-032 | Implement GFS and ERA5 weather ingestion in T-018 | Accepted | 2026-08-17 |
 
 ## Individual decisions
 
@@ -1228,63 +1228,67 @@ provider licences, attribution, retention, and direct-source/archive operations.
 [`T-017-weather-field-catalogue.json`](T-017-weather-field-catalogue.json),
 [`handoff.md`](handoff.md).
 
-### DEC-032 - Roll out weather ingestion and source-compatible ML in stages
+### DEC-032 - Implement GFS and ERA5 weather ingestion in T-018
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Date:** 2026-08-17
 
 **Context:** T-017 locks canonical weather semantics and source roles, but it
-does not implement storage or source collectors. GFS, ICON-EU, IFS HRES, ERA5,
-CERRA, and IGRA have different grid resolutions, terrain representations,
-field definitions, missingness, run archives, and forecast error distributions.
-An ML artifact trained only on GFS snapshots cannot safely accept an ICON-EU
-snapshot merely because its canonical field names and units match. The backlog
-currently has T-018 for the schema and T-019 for soundings, but no explicit
-weather-collector ticket before T-020 joins weather to flight days.
+does not implement storage or source collectors. The project now needs one
+complete, reproducible ingestion path before T-020: exact forecasts whose
+historical and operational distributions match, plus a separately preserved
+reanalysis baseline. A model trained on GFS snapshots cannot safely accept an
+ICON-EU or IFS HRES snapshot merely because canonical names and units match.
 
-**Proposed decision:** T-018 implements only the source-neutral weather schema,
-migrations, constraints, and tests; it must not hide a multi-source collector
-implementation. Add scoped weather-ingestion tickets before T-020. The first
-end-to-end exact-forecast cohort should use GFS for both historical training
-and operational inference, because the source/model distribution then matches.
-Collect ICON-EU in parallel (shadow mode) for comparison and future
-source-specific training/calibration. Treat IFS HRES as an optional
-surface/PBL component and defer CERRA to an offline experiment. Implement the
-GFS operational fallback before relying on ICON-EU operationally; a documented
-but unimplemented fallback is not a fallback.
+**Decision:** T-018 implements the source-neutral weather schema and the full
+GFS and ERA5 ingestion pipeline through SQLite. GFS is the only exact-forecast
+source in this phase, both for historical archive collection and for the
+current/future forecasts shown by the product. The collector selects an
+explicit, complete GFS run, retains run/availability/retrieval/valid/lead and
+grid provenance, and persists the source without substitution by another
+forecast model. When a new GFS run is unavailable, retain the most recent
+successful GFS result and expose its age rather than silently changing source.
 
-ERA5 is ingested independently and is never a live or silent row-level
-replacement for an unavailable exact forecast. Use it to create: (1) a separate
-reanalysis outcome/feature benchmark; (2) forecast-to-ERA5 verification and
-source/lead/site bias-correction pairs; and (3) versioned site/season
-climatology and anomaly features. Do not initially mix forecast and reanalysis
-rows in one cohort as if they had identical information availability. IGRA is a
-separate observed-profile branch for derivation and forecast validation; it is
-not an automatic operational input unless published before the prediction
-cutoff.
+ERA5 is collected independently through the registered CDS access path. It
+remains reanalysis, never a live or row-level substitute for a missing GFS
+forecast. T-018 stores it with its own reference/step/statistic provenance for
+later forecast-to-ERA5 verification, bias-correction pairs, climatology and
+separate reanalysis cohorts. Those joins, datasets and all ML work remain out
+of T-018. Product documentation and presentation that use ERA5 must include
+the applicable Copernicus/ECMWF attribution required by the dataset licence.
 
-Direct DWD ICON-EU Open Data is a current-run GRIB distribution rather than a
-convenient free exact historical-run query service. If direct DWD becomes the
-operational path, archive each selected complete run at collection time as an
-immutable, sufficiently raw Bulgaria/site-neighbourhood subset with manifest,
-checksum, source URL, run/valid/lead times, model metadata, and licence data.
-Do not confuse DWD's historical ICON-DREAM-EU reanalysis with an archive of
-operational ICON-EU forecasts.
+T-018 does not implement Open-Meteo, ICON-EU, IFS HRES, direct DWD ICON-EU or
+CERRA collectors. They remain future options, each requiring a new accepted
+source decision, source-specific adapter and compatible model evaluation:
 
-**Consequences:** A future prediction artifact must declare compatible source
-families/model versions, feature-contract version, calibration version, and
-fallback policy. A source fallback selects a compatible weather snapshot and
-ML artifact together; it must never relabel GFS output as ICON-EU or feed
-ICON-EU fields to a GFS-only artifact without a validated multi-source or
-source-to-common-space calibration. For fixed-radius neighbourhood features,
-use physical distances rather than a fixed number of model grid cells, and
-retain grid coordinates/elevation/interpolation provenance.
+- Open-Meteo ICON-EU or direct DWD ICON-EU could provide a finer regional
+  profile source. Direct DWD would require immutable collection-time archival
+  of every selected complete run because it is not an arbitrary-date archive.
+- Open-Meteo IFS HRES could provide a high-resolution surface/PBL component,
+  but it must not be treated as a complete profile source without a verified
+  profile-capable endpoint and a compatible model path.
+- CERRA could be used later as an offline terrain-resolution reanalysis
+  comparator, with its large full-domain payload and queued retrieval cost
+  handled outside operational collection.
+
+IGRA remains the T-019 observational sounding branch and is not part of this
+weather-forecast ingestion scope.
+
+**Consequences:** T-018's weather contract and persistence must retain source,
+model/version, run/reference/availability/retrieval/valid/lead/step times,
+grid coordinates/elevation, interpolation, native provenance, field quality
+and feature-contract version. Forecast and reanalysis rows stay distinct. A
+future forecast-source addition must select a compatible weather snapshot and
+prediction artifact together; it must never relabel or silently blend another
+model's values into a GFS cohort. Neighbourhood calculations use physical
+distance and retain their footprint version.
 
 **Related files:** [`T-017-weather-feature-spike-report.md`](T-017-weather-feature-spike-report.md),
 [`T-017-weather-field-catalogue.json`](T-017-weather-field-catalogue.json),
 [`T-016-forecast-data-research-report.md`](T-016-forecast-data-research-report.md),
-[`handoff.md`](handoff.md).
+[handoff.md](handoff.md).
+
 ## Open decisions
 
 | Question | Options / constraints | Resolve by |

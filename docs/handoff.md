@@ -17,9 +17,9 @@ not a project history. Use the following documents for the authoritative detail:
 | Field | Value |
 | --- | --- |
 | Branch | `feature/T-016-T-017-forecast-research`. |
-| Working tree at handoff update | T-017 report/catalogue and this operational update are uncommitted; verified ERA5/CERRA GRIB and decoded outputs are ignored under `data/raw/weather-spike/`. |
+| Working tree at handoff update | DEC-032 and this operational update are uncommitted; verified weather-spike GRIB and decoded outputs are ignored under `data/raw/weather-spike/`. |
 | Task status in `docs/tasks.md` | T-012 through T-017 `Review`. |
-| Next implementation focus | T-018 designs and implements only the source-neutral weather schema; plan explicit weather-ingestion tickets before T-020. |
+| Next implementation focus | T-018/S01 designs and implements the source-neutral weather schema. The following in-scope slices build the complete GFS and ERA5 ingestion pipeline through SQLite before T-020. |
 | Local storage | SQLite selected by `DATABASE_URL`; local databases, raw source data, and interim artifacts are ignored. |
 
 T-013 now has two successful local XCContest ingestion runs. The complete
@@ -129,36 +129,52 @@ metadata, and `cerra-decoded-summary.json` remain ignored under
 
 ## Post-spike weather implementation context
 
-T-018 owns the source-neutral SQLite weather schema, migrations, constraints,
-and tests. It does **not** own implementation of all collectors. The backlog
-has no explicit weather-collector ticket between T-018/T-019 and T-020, so add
-scoped ingestion work before attempting the T-020 weather/flight join. Do not
-create inert placeholder collectors.
+T-018 owns the source-neutral SQLite weather schema and the complete GFS and
+ERA5 ingestion pipeline through persistence. It includes immutable raw
+artifacts/manifests, source decoders, canonical normalization, deterministic
+site/grid sampling, validation/quarantine, versioned feature building and
+idempotent SQLite writes. Do not create inert placeholder collectors.
 
-The proposed first end-to-end exact-forecast cohort is GFS for both training
-and operational inference. This avoids feeding ICON-EU values into an ML
-artifact trained only on GFS: matching canonical units do not remove source,
-resolution, terrain, physics, or bias differences. Collect ICON-EU in shadow
-mode for comparison and eventual source-specific model/calibration. A future
-source switch must select a compatible weather snapshot and prediction artifact
-together, retaining source/model, grid point/elevation, interpolation, feature
-contract, calibration, and fallback provenance. The GFS fallback must be
-implemented and tested before ICON-EU is relied on operationally.
+GFS is the only exact-forecast source in this implementation phase. It is used
+both for historical exact forecasts and for the current/future forecasts that
+the product will later show, preserving one source/model distribution across
+training and operational inference. Select only a complete named GFS run;
+retain the last successful GFS result and its age when a new run is unavailable.
+Do not silently replace it with another model.
 
-ERA5 has three separate offline roles: an independent reanalysis outcome/
-feature benchmark, forecast-to-ERA5 verification and bias-correction pairs,
-and versioned site/season climatology/anomaly features. It is not a live
-fallback and must never silently fill a missing exact-forecast row. Keep
-forecast and reanalysis cohorts distinct initially. IGRA is a separate
-observed-profile validation branch and may only be an operational input if its
-actual publication time is before the prediction cutoff.
+ERA5 is the separate long-history reanalysis baseline, collected through the
+registered CDS path. It is not a live fallback and must never fill a missing
+GFS row. Its later roles are independent reanalysis evaluation, forecast-to-
+ERA5 verification/bias pairs and climatology/anomaly features; those joins and
+all ML work remain outside T-018. Any product use of ERA5 must carry the
+applicable Copernicus/ECMWF attribution.
 
-Direct DWD ICON-EU Open Data serves current GRIB runs; it is not a convenient
-free arbitrary-date exact-run archive. A direct-DWD operational collector must
-archive each selected complete run immediately as immutable raw/subset evidence
-with manifest, checksum, source URL, run/valid/lead times, model metadata, and
-licence data. ICON-DREAM-EU is a 6.5 km reanalysis from 2010 with a publication
-lag, not an archive of those operational ICON-EU forecasts.
+Open-Meteo ICON-EU, direct DWD ICON-EU, Open-Meteo IFS HRES and CERRA are not
+implemented in T-018. They remain future source options only: ICON-EU for a
+regional profile path, IFS HRES for a conditional high-resolution surface/PBL
+component, and CERRA for an offline terrain-resolution reanalysis comparison.
+Each requires a new accepted source decision, an adapter, provenance/archival
+handling and a compatible model evaluation. IGRA soundings remain T-019.
+
+### T-018 implementation slice plan
+
+- `S00` (complete) — lock this scope in decisions and handoff; do not edit
+  `tasks.md` except for lifecycle status changes.
+- `S01` — design and implement the Drizzle weather schema/migration, including
+  source/run/artifact/site-grid/sample/profile/feature identity and constraints.
+- `S02` — implement shared atmospheric contracts, durable artifacts, manifests,
+  versions and stage state machine.
+- `S03` — implement the GFS request planner and immutable collector.
+- `S04` — implement GFS GRIB decoding and T-017 canonical normalization.
+- `S05` — implement deterministic canonical site/grid sampling and AGL policy.
+- `S06` — implement source-aware validation, missingness and quarantine.
+- `S07` — implement the versioned meteorological feature builder.
+- `S08` — implement non-migrating SQLite persistence and the end-to-end GFS
+  `fresh`/offline `resume` walking skeleton.
+- `S09` — implement the ERA5 CDS collector/decoder/normalizer through the same
+  validation and persistence boundaries.
+- `S10` — harden the GFS+ERA5 orchestration, offline replays, bounded live
+  verification, documentation and final T-018 validation.
 
 ## Database and flight-data boundary
 
