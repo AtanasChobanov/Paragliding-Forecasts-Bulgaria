@@ -12,14 +12,14 @@ not a project history. Use the following documents for the authoritative detail:
 5. `docs/decisions.md` for accepted durable decisions.
 6. Git history for prior implementation detail and validation evidence.
 
-## Current state (2026-08-13)
+## Current state (2026-08-17)
 
 | Field | Value |
 | --- | --- |
-| Branch | `feature/T-015-parser-fixtures`, based on T-014 commit `21a7665`; rebase after T-014 merges. |
-| Working tree at handoff update | T-015 changes are committed; an existing user-owned T-013 status edit in `docs/tasks.md` remains unstaged and must not be discarded. |
-| Task status in `docs/tasks.md` | T-012 `Review`; T-013 `Review`; T-014 `Review`; T-015 `Review`. |
-| Next implementation focus | Review/merge T-012 through T-015, then begin T-016 historical forecast archive research. |
+| Branch | `feature/T-016-T-017-forecast-research`. |
+| Working tree at handoff update | T-017 report/catalogue and this operational update are uncommitted; verified ERA5/CERRA GRIB and decoded outputs are ignored under `data/raw/weather-spike/`. |
+| Task status in `docs/tasks.md` | T-012 through T-017 `Review`. |
+| Next implementation focus | T-018 designs and implements only the source-neutral weather schema; plan explicit weather-ingestion tickets before T-020. |
 | Local storage | SQLite selected by `DATABASE_URL`; local databases, raw source data, and interim artifacts are ignored. |
 
 T-013 now has two successful local XCContest ingestion runs. The complete
@@ -43,6 +43,122 @@ license, safety, or future source-access guarantee.
 The dashboard/API baseline from T-001 through T-008 is implemented and tested.
 Its detailed visual and historical test checkpoints are intentionally not
 repeated here; consult Git and the owning README/tests when changing that area.
+
+## T-016 weather-data research handoff
+
+The detailed source comparison is in
+[`T-016-forecast-data-research-report.md`](T-016-forecast-data-research-report.md).
+T-016 is ready for review: exact historical forecasts exist, but no one free
+high-resolution archive covers the complete likely Bulgarian flight-history
+period.
+
+- Treat `forecast`, `reanalysis`, and `observation` as distinct source kinds.
+  An as-issued forecast is the information available before a flight day;
+  reanalysis is a retrospective physically consistent reconstruction; station
+  and radiosonde values are point observations. Do not train or backtest as if
+  they were interchangeable, and retain source/model/run/valid/lead provenance.
+- DEC-031 supersedes the earlier provisional source preference: GFS is the
+  coarse exact long-history forecast comparator; ICON-EU is the preferred recent
+  regional profile candidate; IFS HRES is only a conditional high-resolution
+  surface/PBL component; ERA5 is the long-history reanalysis baseline; CERRA is
+  an offline terrain comparison; and IGRA is observational validation. Do not
+  silently substitute these source kinds or models.
+- For current forecasts, select only a fully available named model run and
+  preserve `runAt`, `availableAt`, `retrievedAt`, `validAt`, and `leadHours`.
+  A `00 UTC` global run normally becomes available 4–6 hours later; schedule
+  ingestion from provider availability metadata rather than a fixed local time.
+  If a new run is unavailable, retain the last successful forecast and expose
+  its age. ERA5, which has about five days of latency, is not an operational
+  fallback.
+- Open-Meteo's free hosted service is non-commercial. A paid beta/subscription
+  product must use its appropriate commercial plan or a direct licensed source;
+  preserve required attribution and source licence metadata. The direct DWD
+  path avoids a hosted Open-Meteo commercial dependency but requires GRIB
+  decoding, subsetting, and operational archiving.
+- T-017 completed that bounded Bulgaria sample and locked the source/feature
+  contract for T-018. T-019 should parse raw NOAA IGRA Sofia profiles; image
+  scraping/OCR remains deferred.
+
+## T-017 weather-field spike handoff
+
+The detailed results and proposed canonical vocabulary are in
+[`T-017-weather-feature-spike-report.md`](T-017-weather-feature-spike-report.md)
+and the machine-readable
+[`T-017-weather-field-catalogue.json`](T-017-weather-field-catalogue.json).
+
+The no-credential phase is complete for five canonical sites, representative
+strong/marginal/precipitation cases, and 24/48/72/120-hour leads:
+
+- Open-Meteo IFS HRES provides useful high-resolution surface, CAPE/CIN, and
+  PBL fields, but all requested pressure-level profiles were null. One explicit
+  archived run also returned an HTTP-200 plain-text unavailable-run error. It
+  cannot remain the sole detailed source.
+- Open-Meteo ICON-EU returned complete 925/850/700 hPa temperature, humidity,
+  wind, and geopotential profiles in the sample, but no PBL height or pressure-
+  level vertical velocity. It is the preferred regional profile candidate.
+- NOAA GFS public AWS GRIB2 returned the required surface, profile, CAPE/CIN,
+  PBL, and vertical-velocity inventory without registration; it is accepted as
+  the coarse exact long-history comparator.
+- NOAA IGRA Sofia raw/derived archives contained 06 and 12 UTC profiles for all
+  three 2025 case dates and are accepted as observational validation evidence.
+- ERA5 authenticated CDS retrievals completed for all three case dates. The
+  surface and pressure-level inventories are accepted as the long-history
+  reanalysis baseline; direct CIN and cloud base are nullable, and bitmap/
+  missing-value metadata must turn sentinels into explicit nulls.
+- CERRA retrieval and decoding are verified: 13 analysis messages across two
+  successful jobs used the 1069 x 1069 full-domain grid with zero missing values.
+  It is accepted as an offline terrain comparator, not as primary direct PBL,
+  cloud-base, CAPE, or CIN evidence.
+
+CDS account setup and all required terms are complete. Four bounded ERA5
+requests downloaded 519,048 bytes and were decoded successfully: all 630
+pressure-level messages had no missing grid values, while direct ERA5 CIN was
+missing for 93.359% and cloud base for 21.839% of the sampled surface grid.
+Preserve run/base time, valid time, step/statistic, native units, and missing
+metadata; never persist the GRIB missing sentinel as a physical value.
+
+Both CERRA jobs completed successfully and were downloaded. The 12-field
+analysis payload is 27,438,924 bytes and the one-field diagnostic is 2,286,577
+bytes. Each spent about two hours queued, while provider processing took about
+10 seconds and local download under six seconds. The decoded native surface
+inventory is `2t` K, `2r` %, `10si` m/s, `10wdir` degrees true, `msl`/`sp` Pa,
+`tcc`/`lcc`/`mcc`/`hcc` %, `orog` m, and `tciwv` kg/m2. CERRA surface wind
+components are derived from native speed/direction. Raw GRIB, request/result
+metadata, and `cerra-decoded-summary.json` remain ignored under
+`data/raw/weather-spike/cds/`. T-017 is ready for review.
+
+## Post-spike weather implementation context
+
+T-018 owns the source-neutral SQLite weather schema, migrations, constraints,
+and tests. It does **not** own implementation of all collectors. The backlog
+has no explicit weather-collector ticket between T-018/T-019 and T-020, so add
+scoped ingestion work before attempting the T-020 weather/flight join. Do not
+create inert placeholder collectors.
+
+The proposed first end-to-end exact-forecast cohort is GFS for both training
+and operational inference. This avoids feeding ICON-EU values into an ML
+artifact trained only on GFS: matching canonical units do not remove source,
+resolution, terrain, physics, or bias differences. Collect ICON-EU in shadow
+mode for comparison and eventual source-specific model/calibration. A future
+source switch must select a compatible weather snapshot and prediction artifact
+together, retaining source/model, grid point/elevation, interpolation, feature
+contract, calibration, and fallback provenance. The GFS fallback must be
+implemented and tested before ICON-EU is relied on operationally.
+
+ERA5 has three separate offline roles: an independent reanalysis outcome/
+feature benchmark, forecast-to-ERA5 verification and bias-correction pairs,
+and versioned site/season climatology/anomaly features. It is not a live
+fallback and must never silently fill a missing exact-forecast row. Keep
+forecast and reanalysis cohorts distinct initially. IGRA is a separate
+observed-profile validation branch and may only be an operational input if its
+actual publication time is before the prediction cutoff.
+
+Direct DWD ICON-EU Open Data serves current GRIB runs; it is not a convenient
+free arbitrary-date exact-run archive. A direct-DWD operational collector must
+archive each selected complete run immediately as immutable raw/subset evidence
+with manifest, checksum, source URL, run/valid/lead times, model metadata, and
+licence data. ICON-DREAM-EU is a 6.5 km reanalysis from 2010 with a publication
+lag, not an archive of those operational ICON-EU forecasts.
 
 ## Database and flight-data boundary
 

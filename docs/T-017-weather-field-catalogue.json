@@ -1,0 +1,415 @@
+{
+  "catalogueVersion": "t017-spike-v1",
+  "generatedAt": "2026-08-16",
+  "status": "verified_source_lock",
+  "notForSafetyCriticalUse": true,
+  "sourceKinds": ["forecast", "reanalysis", "observation"],
+  "requiredProvenance": [
+    "source_kind",
+    "source_id",
+    "model_id",
+    "native_field_name",
+    "native_unit",
+    "run_at",
+    "available_at",
+    "retrieved_at",
+    "valid_at",
+    "lead_hours",
+    "step_or_interval",
+    "grid_latitude",
+    "grid_longitude",
+    "grid_elevation_m",
+    "derivation_method",
+    "derivation_version",
+    "quality_state"
+  ],
+  "qualityStates": ["real", "derived", "missing", "sentinel_missing", "unavailable_run", "invalid_payload"],
+  "canonicalFields": [
+    {
+      "name": "air_temperature_k",
+      "unit": "K",
+      "kind": "direct_or_normalized",
+      "notes": "Preserve native K or Celsius; convert Celsius by adding 273.15."
+    },
+    {
+      "name": "dew_point_temperature_k",
+      "unit": "K",
+      "kind": "direct_or_derived",
+      "notes": "May be direct or derived from temperature, pressure, and humidity; record method."
+    },
+    {
+      "name": "relative_humidity_percent",
+      "unit": "%",
+      "kind": "direct_or_normalized",
+      "range": [0, 100]
+    },
+    {
+      "name": "air_pressure_pa",
+      "unit": "Pa",
+      "kind": "direct_or_normalized",
+      "notes": "Keep surface/station and mean-sea-level pressure as separate level types."
+    },
+    {
+      "name": "wind_u_m_s",
+      "unit": "m/s",
+      "kind": "direct_or_derived",
+      "formulaWhenSpeedDirectionNative": "-wind_speed_m_s * sin(wind_direction_degrees_from_north * pi / 180)",
+      "notes": "Retain level type, pressure or height, geopotential height, and derivation provenance."
+    },
+    {
+      "name": "wind_v_m_s",
+      "unit": "m/s",
+      "kind": "direct_or_derived",
+      "formulaWhenSpeedDirectionNative": "-wind_speed_m_s * cos(wind_direction_degrees_from_north * pi / 180)",
+      "notes": "Retain level type, pressure or height, geopotential height, and derivation provenance."
+    },
+    {
+      "name": "wind_speed_m_s",
+      "unit": "m/s",
+      "kind": "direct_or_derived",
+      "formulaWhenComponentsNative": "sqrt(u^2 + v^2)"
+    },
+    {
+      "name": "wind_direction_degrees_from_north",
+      "unit": "degree",
+      "kind": "direct_or_derived",
+      "range": [0, 360],
+      "notes": "Meteorological direction the wind comes from; CERRA surface analysis supplies it directly."
+    },
+    {
+      "name": "geopotential_height_msl_m",
+      "unit": "m",
+      "kind": "direct_or_normalized"
+    },
+    {
+      "name": "level_height_agl_m",
+      "unit": "m",
+      "kind": "derived",
+      "formula": "geopotential_height_msl_m - reference_elevation_m",
+      "notes": "Reference elevation and its provenance are mandatory; exclude below-terrain levels."
+    },
+    {
+      "name": "vertical_velocity_pa_s",
+      "unit": "Pa/s",
+      "kind": "direct",
+      "notes": "Pressure vertical velocity is not thermal updraft speed."
+    },
+    {
+      "name": "convective_available_potential_energy_j_per_kg",
+      "unit": "J/kg",
+      "kind": "direct",
+      "notes": "Retain parcel/layer definition when known."
+    },
+    {
+      "name": "convective_inhibition_magnitude_j_per_kg",
+      "unit": "J/kg",
+      "kind": "normalized",
+      "range": [0, null],
+      "formula": "abs(native_cin) when native convention is signed non-positive",
+      "notes": "Preserve native value and sign convention."
+    },
+    {
+      "name": "provider_boundary_layer_height_agl_m",
+      "unit": "m",
+      "kind": "direct",
+      "notes": "Provider/model definition is mandatory and is not interchangeable with a derived PBL."
+    },
+    {
+      "name": "derived_boundary_layer_height_agl_m",
+      "unit": "m",
+      "kind": "derived",
+      "candidateMethods": ["bulk_richardson_v1", "potential_temperature_threshold_v1"]
+    },
+    {
+      "name": "provider_cloud_base_agl_m",
+      "unit": "m",
+      "kind": "direct",
+      "notes": "Do not alias to an LCL without provider evidence."
+    },
+    {
+      "name": "mixed_layer_lcl_agl_m",
+      "unit": "m",
+      "kind": "derived",
+      "candidateMethod": "project_mixed_layer_lcl_v1",
+      "notes": "Mix the lowest approximately 100 hPa; keep MSL counterpart and method inputs."
+    },
+    {
+      "name": "convective_velocity_scale_m_s",
+      "unit": "m/s",
+      "kind": "derived_optional",
+      "formula": "((g / theta_v) * surface_buoyancy_flux * boundary_layer_height)^(1/3)",
+      "notes": "Only calculate when flux sign/interval and PBL inputs are valid; do not substitute vertical velocity or sqrt(TKE)."
+    },
+    {
+      "name": "specific_humidity_kg_per_kg",
+      "unit": "kg/kg",
+      "kind": "direct",
+      "notes": "Retain the source pressure level and vertical coordinate."
+    },
+    {
+      "name": "total_column_water_vapour_kg_m2",
+      "unit": "kg/m2",
+      "kind": "direct_or_normalized",
+      "notes": "ERA5 tcwv and CERRA tciwv map here; preserve the native field name."
+    },
+    {
+      "name": "surface_sensible_heat_flux_upward_w_m2",
+      "unit": "W/m2",
+      "kind": "direct_or_deaccumulated",
+      "notes": "Canonical sign is upward-positive. Negate ERA5/CERRA native downward-positive values after validating the statistic and interval."
+    },
+    {
+      "name": "surface_latent_heat_flux_upward_w_m2",
+      "unit": "W/m2",
+      "kind": "direct_or_deaccumulated",
+      "notes": "Canonical sign is upward-positive. Negate ERA5/CERRA native downward-positive values after validating the statistic and interval."
+    },
+    {
+      "name": "surface_buoyancy_flux_kinematic_k_m_s",
+      "unit": "K m/s",
+      "kind": "derived_optional",
+      "formula": "sensible_heat_flux_upward / (air_density * cp) + 0.61 * theta_v * latent_heat_flux_upward / (air_density * latent_heat_of_vaporization)",
+      "notes": "Version constants and density/theta-v inputs; required before deriving convective velocity scale."
+    },
+    {
+      "name": "turbulent_kinetic_energy_j_per_kg",
+      "unit": "J/kg",
+      "kind": "direct_optional",
+      "notes": "CERRA forecast pressure-level field only; preserve as turbulence evidence and never alias to thermal strength."
+    },
+    {
+      "name": "cloud_cover_percent",
+      "unit": "%",
+      "kind": "direct_or_normalized",
+      "range": [0, 100],
+      "dimensions": ["total", "low", "mid", "high"]
+    },
+    {
+      "name": "precipitation_amount_mm",
+      "unit": "mm",
+      "kind": "direct_or_deaccumulated",
+      "notes": "The preceding interval and source reset/step metadata are mandatory."
+    },
+    {
+      "name": "shortwave_radiation_w_m2",
+      "unit": "W/m2",
+      "kind": "direct_or_deaccumulated",
+      "notes": "Distinguish instantaneous flux from interval energy/average."
+    },
+    {
+      "name": "temperature_lapse_rate_k_per_km",
+      "unit": "K/km",
+      "kind": "derived",
+      "notes": "Version the AGL layer boundaries and below-terrain filtering."
+    },
+    {
+      "name": "wind_shear_m_s_per_km",
+      "unit": "m/s/km",
+      "kind": "derived",
+      "formula": "sqrt((u2-u1)^2 + (v2-v1)^2) / ((z2-z1)/1000)"
+    },
+    {
+      "name": "neighbourhood_pressure_gradient_pa_per_km",
+      "unit": "Pa/km",
+      "kind": "derived_grid_required",
+      "notes": "Cannot be derived from a single point."
+    },
+    {
+      "name": "neighbourhood_low_level_divergence_s_inverse",
+      "unit": "1/s",
+      "kind": "derived_grid_required",
+      "formula": "du/dx + dv/dy",
+      "notes": "Negative values indicate convergence; retain neighbourhood and interpolation version."
+    }
+  ],
+  "sourceMappings": [
+    {
+      "sourceId": "open_meteo_ecmwf_ifs_hres_single_runs",
+      "sourceKind": "forecast",
+      "access": "no_key_noncommercial_hosted_api",
+      "archiveStart": "2024-03-14",
+      "spikeStatus": "verified_conditional_surface_component",
+      "directAvailable": [
+        "air_temperature_k",
+        "dew_point_temperature_k",
+        "relative_humidity_percent",
+        "air_pressure_pa",
+        "cloud_cover_percent",
+        "precipitation_amount_mm",
+        "shortwave_radiation_w_m2",
+        "convective_available_potential_energy_j_per_kg",
+        "convective_inhibition_magnitude_j_per_kg",
+        "provider_boundary_layer_height_agl_m"
+      ],
+      "allNullInSpike": [
+        "pressure_level_temperature",
+        "pressure_level_relative_humidity",
+        "pressure_level_wind",
+        "pressure_level_geopotential_height",
+        "pressure_level_vertical_velocity",
+        "freezing_level_height",
+        "lifted_index"
+      ],
+      "observations": {
+        "requests": 12,
+        "validJsonResponses": 11,
+        "unavailableRuns": 1,
+        "siteValidSamples": 55,
+        "pblNullSamples": 10,
+        "capeNullSamples": 5,
+        "cinNullSamples": 24
+      }
+    },
+    {
+      "sourceId": "open_meteo_dwd_icon_eu_single_runs",
+      "sourceKind": "forecast",
+      "access": "no_key_noncommercial_hosted_api",
+      "archiveStart": "2026-04-02",
+      "spikeStatus": "verified_preferred_regional_profile_candidate",
+      "directAvailable": [
+        "surface_weather_fields",
+        "pressure_level_temperature",
+        "pressure_level_relative_humidity",
+        "pressure_level_wind",
+        "pressure_level_geopotential_height",
+        "convective_available_potential_energy_j_per_kg",
+        "convective_inhibition_magnitude_j_per_kg"
+      ],
+      "allNullInSpike": ["provider_boundary_layer_height_agl_m", "pressure_level_vertical_velocity"],
+      "observations": {
+        "requests": 4,
+        "validJsonResponses": 4,
+        "siteValidSamples": 20
+      }
+    },
+    {
+      "sourceId": "noaa_gfs_0p25_aws_grib2",
+      "sourceKind": "forecast",
+      "access": "public_no_account",
+      "spikeStatus": "verified_accepted_long_history_comparator",
+      "directAvailable": [
+        "surface_weather_fields",
+        "pressure_level_temperature",
+        "pressure_level_relative_humidity",
+        "pressure_level_wind",
+        "pressure_level_geopotential_height",
+        "pressure_level_vertical_velocity",
+        "convective_available_potential_energy_j_per_kg",
+        "native_signed_cin",
+        "provider_boundary_layer_height_agl_m"
+      ],
+      "limitations": ["approximately_0p25_degree_grid", "grib_table_version_must_be_pinned", "accumulation_steps_must_be_deaccumulated"]
+    },
+    {
+      "sourceId": "noaa_igra_bum00015614",
+      "sourceKind": "observation",
+      "access": "public_no_account",
+      "spikeStatus": "verified_accepted_upper_air_validation",
+      "observedNominalHoursUtc": [6, 12],
+      "limitations": ["single_station_profile", "observation_not_forecast", "actual_time_availability_varies"]
+    },
+    {
+      "sourceId": "copernicus_era5",
+      "sourceKind": "reanalysis",
+      "access": "cds_account_token_and_dataset_terms",
+      "spikeStatus": "verified_accepted_long_history_baseline",
+      "requiredDatasets": ["hourly_single_levels", "hourly_pressure_levels"],
+      "directAvailable": ["2m_temperature", "2m_dewpoint_temperature", "surface_pressure", "mean_sea_level_pressure", "10m_u_wind", "10m_v_wind", "boundary_layer_height", "cloud_base_height", "cape", "cin", "total_low_mid_high_cloud_cover", "total_column_water_vapour", "total_precipitation", "surface_solar_radiation_downwards", "mean_surface_downward_shortwave_radiation_flux", "mean_sensible_heat_flux", "mean_latent_heat_flux", "geopotential", "friction_velocity", "pressure_level_temperature", "pressure_level_specific_humidity", "pressure_level_relative_humidity", "pressure_level_u_wind", "pressure_level_v_wind", "pressure_level_vertical_velocity"],
+      "normalizations": ["kelvin_retained", "pressure_pa_retained", "cloud_fraction_times_100", "precipitation_m_times_1000", "geopotential_divided_by_standard_gravity", "native_downward_flux_negated_for_upward_positive_canonical"],
+      "observations": {
+        "requests": 4,
+        "downloadedBytes": 519048,
+        "downloadSecondsRange": [36.93, 77.763],
+        "pressureMessages": 630,
+        "pressureMissingValues": 0,
+        "surfaceGridValuesPerField": 2349,
+        "cinMissingGridValues": 2193,
+        "cinMissingPercent": 93.359,
+        "cloudBaseMissingGridValues": 513,
+        "cloudBaseMissingPercent": 21.839,
+        "valid12UtcSiteSamples": 15,
+        "cinMissingSiteSamples": 14,
+        "cloudBaseMissingSiteSamples": 3,
+        "capeMissingSiteSamples": 0,
+        "boundaryLayerHeightMissingSiteSamples": 0
+      },
+      "limitations": ["cin_and_cloud_base_are_nullable", "grib_bitmap_and_missing_value_metadata_must_be_honoured", "forecast_step_metadata_occurs_on_some_reanalysis_fields"]
+    },
+    {
+      "sourceId": "copernicus_cerra",
+      "sourceKind": "reanalysis",
+      "access": "cds_account_token_and_dataset_terms",
+      "spikeStatus": "verified_accepted_offline_terrain_comparator",
+      "testedDatasets": ["subdaily_single_levels"],
+      "catalogueReviewedDatasets": ["subdaily_single_levels", "subdaily_pressure_levels"],
+      "actualSurfaceAvailable": [
+        {"nativeName": "2t", "nativeUnit": "K", "canonicalName": "air_temperature_k"},
+        {"nativeName": "2r", "nativeUnit": "%", "canonicalName": "relative_humidity_percent"},
+        {"nativeName": "10si", "nativeUnit": "m s**-1", "canonicalName": "wind_speed_m_s"},
+        {"nativeName": "10wdir", "nativeUnit": "Degree true", "canonicalName": "wind_direction_degrees_from_north"},
+        {"nativeName": "msl", "nativeUnit": "Pa", "canonicalName": "air_pressure_pa", "levelType": "mean_sea_level"},
+        {"nativeName": "sp", "nativeUnit": "Pa", "canonicalName": "air_pressure_pa", "levelType": "surface"},
+        {"nativeName": "tcc", "nativeUnit": "%", "canonicalName": "cloud_cover_percent", "dimension": "total"},
+        {"nativeName": "lcc", "nativeUnit": "%", "canonicalName": "cloud_cover_percent", "dimension": "low"},
+        {"nativeName": "mcc", "nativeUnit": "%", "canonicalName": "cloud_cover_percent", "dimension": "mid"},
+        {"nativeName": "hcc", "nativeUnit": "%", "canonicalName": "cloud_cover_percent", "dimension": "high"},
+        {"nativeName": "orog", "nativeUnit": "m", "canonicalName": "grid_elevation_m"},
+        {"nativeName": "tciwv", "nativeUnit": "kg m**-2", "canonicalName": "total_column_water_vapour_kg_m2"}
+      ],
+      "catalogueDeclaredButPayloadUnverified": ["pressure_level_temperature", "pressure_level_relative_humidity", "pressure_level_u_wind", "pressure_level_v_wind", "pressure_level_geopotential", "forecast_pressure_level_cloud_cover", "forecast_pressure_level_turbulent_kinetic_energy", "forecast_surface_precipitation", "forecast_surface_radiation", "forecast_surface_sensible_and_latent_heat_flux"],
+      "catalogueDeclaredAbsent": ["boundary_layer_height", "cloud_base_height", "cape", "cin"],
+      "normalizations": ["cloud_cover_is_already_percent_0_to_100", "wind_u_equals_negative_speed_times_sine_direction", "wind_v_equals_negative_speed_times_cosine_direction", "orography_is_direct_metres"],
+      "grid": {
+        "type": "lambert_conformal_europe",
+        "dimensions": [1069, 1069],
+        "pointsPerMessage": 1142761,
+        "areaSubsetInMainForm": false
+      },
+      "observations": {
+        "requests": 2,
+        "decodedMessages": 13,
+        "decodedMissingValues": 0,
+        "payloadBytes": [27438924, 2286577],
+        "totalPayloadBytes": 29725501,
+        "queueWaitSeconds": [7668.82, 7371.924],
+        "providerProcessingSeconds": [9.32, 10.351],
+        "localDownloadSeconds": [5.347, 2.921],
+        "analysisStepRange": "0",
+        "siteOrographyM": {
+          "vitosha_kominite": 1513.86,
+          "sopot": 1320.23,
+          "pastrina": 237.86,
+          "nevsha": 177.36,
+          "dobrich_region": 244.86
+        }
+      },
+      "completedJobs": [
+        {
+          "requestId": "cd6ecce3-43f2-42dc-b6f7-9bb54ae01577",
+          "scope": "12_field_surface_analysis",
+          "status": "successful",
+          "createdUtc": "2026-08-16T13:08:29.538344Z",
+          "startedUtc": "2026-08-16T15:16:18.358202Z",
+          "finishedUtc": "2026-08-16T15:16:27.678040Z"
+        },
+        {
+          "requestId": "022c32df-a870-4049-abd2-b5dcf6b4a385",
+          "scope": "single_variable_2m_temperature_diagnostic",
+          "status": "successful",
+          "createdUtc": "2026-08-16T13:25:12.156799Z",
+          "startedUtc": "2026-08-16T15:28:04.079758Z",
+          "finishedUtc": "2026-08-16T15:28:14.430730Z"
+        }
+      ],
+      "limitations": ["verified_payload_is_single_level_analysis_only", "main_dataset_form_has_no_area_subset", "full_domain_payload_and_queue_cost_preclude_per_site_live_use", "direct_pbl_cloud_base_cape_and_cin_are_absent", "tke_is_not_thermal_strength"]
+    }
+  ],
+  "sourceRoleDecision": {
+    "exactLongHistoryForecastComparator": "noaa_gfs_0p25_aws_grib2",
+    "preferredRegionalProfileCandidate": "open_meteo_dwd_icon_eu_single_runs",
+    "conditionalHighResolutionSurfaceComponent": "open_meteo_ecmwf_ifs_hres_single_runs",
+    "upperAirObservation": "noaa_igra_bum00015614",
+    "reanalysisBaseline": "copernicus_era5",
+    "terrainReanalysisComparator": "copernicus_cerra"
+  }
+}
