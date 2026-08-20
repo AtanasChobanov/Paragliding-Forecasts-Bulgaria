@@ -94,29 +94,45 @@ SQLite remains the MVP direction because it is local, inspectable, and easy to
 back up. Repository interfaces in the API prevent storage details from leaking
 into HTTP handlers.
 
-T-012 owns the first persistence foundation. It uses a new TypeScript workspace
-under `packages/database` for the Drizzle schema, generated/reviewed SQL
-migrations, and Node-side database connection primitives. Drizzle/Drizzle Kit
-are the sole owners of schema DDL and migration history. The API imports the
-schema through repository adapters; it does not expose SQLite details to HTTP
-handlers.
+T-012 established the first Drizzle-owned persistence foundation under
+`packages/database`; T-018/S01 extends that same boundary for weather data.
+Drizzle/Drizzle Kit remain the sole owners of schema DDL and migration history.
+The API imports schema types through repository adapters and Python uses only a
+non-migrating, language-neutral SQLite boundary.
 
-T-012 is deliberately limited to the Takt 2 flight-data foundation, not the
-whole eventual product schema. It creates only the tables required to persist
-validated flight evidence and its relationship to the existing site catalog:
+Flight and weather ingestion executions are deliberately separate. The former
+`ingestion_runs` table is renamed to `flight_ingestion_runs`; weather collectors
+write `weather_ingestion_runs`, whose request purpose, source method, permission
+evidence, manifest hash, pipeline versions, lifecycle, and counters have
+weather-specific meaning. Existing flight rows and foreign keys survive the
+rename; legacy internal constraint/index names are retained to avoid an
+unnecessary SQLite table rebuild.
 
-- canonical `sites` records, retaining the current numeric IDs and public
-  slugs;
-- source-specific site aliases/takeoff mappings for later XCContest matching;
-- `ingestion_runs` provenance for an import execution;
-- canonical `flight_records` with source identity, raw takeoff evidence,
-  canonical site relationship, selected distance, track link, validation, and
-  provenance fields.
+The source-neutral weather schema is a hybrid relational design:
 
-Exact columns, types, indexes, checks, nullable rules, and migration names are
-an explicit T-012 design deliverable. Weather features, soundings, processed
-feature sets, model runs, predictions, and alerts are deferred to their owning
-tasks; T-012 must not pre-create speculative tables for them.
+- `weather_sources` and `weather_product_runs` identify the provider dataset and
+  exact native GFS cycle or ERA5 coverage product. No semantic `model_version`
+  is fabricated when those sources do not publish one; source dataset,
+  `source_product_key`, timestamps, manifest, and pipeline versions provide the
+  reproducible identity.
+- `weather_site_sampling_configs`, grids, reusable grid points, versioned
+  footprints, and footprint nodes preserve where and how a canonical site was
+  sampled. One approved weather coordinate exists per site in T-018; Dobrich
+  uses the accepted-flight Kardam centroid, while its `sites` coordinate remains
+  the region/map centre.
+- `weather_samples` holds one canonical point/valid-time record and its direct
+  scalar surface fields. Pressure levels, repeated CAPE/CIN variants, and
+  interval/statistic measurements stay in normalized child tables.
+- `weather_feature_snapshots` holds versioned derived ML-ready features.
+  `weather_field_provenance` records source/native meaning and one explicit
+  quality state for each stored field, including `real`, `derived`, `missing`,
+  `sentinel_missing`, and `invalid_payload`.
+
+Raw and interim weather artifacts remain filesystem evidence. The database
+stores the ingestion manifest path and SHA-256 rather than duplicating every
+artifact in a `weather_artifacts` table. Sounding storage and collection remain
+T-019, while flight/weather joins, training cohorts, and ML execution remain
+T-020 or later.
 
 The physical SQLite schema is a language-neutral boundary. Python batch code
 may read/write the migrated file through a non-migrating persistence adapter,

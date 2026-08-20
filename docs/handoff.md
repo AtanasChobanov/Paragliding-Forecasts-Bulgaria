@@ -12,14 +12,14 @@ not a project history. Use the following documents for the authoritative detail:
 5. `docs/decisions.md` for accepted durable decisions.
 6. Git history for prior implementation detail and validation evidence.
 
-## Current state (2026-08-17)
+## Current state (2026-08-20)
 
 | Field | Value |
 | --- | --- |
-| Branch | `feature/T-016-T-017-forecast-research`. |
-| Working tree at handoff update | DEC-032 and this operational update are uncommitted; verified weather-spike GRIB and decoded outputs are ignored under `data/raw/weather-spike/`. |
-| Task status in `docs/tasks.md` | T-012 through T-017 `Review`. |
-| Next implementation focus | T-018/S01 designs and implements the source-neutral weather schema. The following in-scope slices build the complete GFS and ERA5 ingestion pipeline through SQLite before T-020. |
+| Branch | `feature/T-018-weather-ingestion`. |
+| Working tree at handoff update | T-018/S01 Drizzle schema, generated migration, compatibility updates, tests, draw.io, and documentation are uncommitted. The migration has not been applied to the configured local database. |
+| Task status in `docs/tasks.md` | Unchanged in this session; `tasks.md` was deliberately not edited. |
+| Next implementation focus | Owner reviews the generated T-018/S01 migration. After explicit approval it may be applied/committed; then T-018/S02 begins shared contracts, manifests, versions, and stage state. |
 | Local storage | SQLite selected by `DATABASE_URL`; local databases, raw source data, and interim artifacts are ignored. |
 
 T-013 now has two successful local XCContest ingestion runs. The complete
@@ -160,8 +160,9 @@ handling and a compatible model evaluation. IGRA soundings remain T-019.
 
 - `S00` (complete) — lock this scope in decisions and handoff; do not edit
   `tasks.md` except for lifecycle status changes.
-- `S01` — design and implement the Drizzle weather schema/migration, including
-  source/run/artifact/site-grid/sample/profile/feature identity and constraints.
+- `S01` (implementation complete; owner review pending) — Drizzle weather schema,
+  manifest-backed run provenance, site/grid/sample/profile/feature identity,
+  generated migration, constraints, indexes, and temporary migration tests.
 - `S02` — implement shared atmospheric contracts, durable artifacts, manifests,
   versions and stage state machine.
 - `S03` — implement the GFS request planner and immutable collector.
@@ -176,10 +177,65 @@ handling and a compatible model evaluation. IGRA soundings remain T-019.
 - `S10` — harden the GFS+ERA5 orchestration, offline replays, bounded live
   verification, documentation and final T-018 validation.
 
+### T-018/S01 schema and migration review state
+
+The final weather section of `docs/T-012-flight-schema.drawio` is the S01
+physical source of truth. It has fourteen tables: source/run/product identity;
+approved site/grid sampling; canonical samples, pressure levels, repeatable
+convection and interval measurements; derived feature snapshots; and per-field
+provenance. Direct surface scalars stay on `weather_samples`; there is no
+`weather_artifacts`, `weather_surface_samples`, `weather_profiles`, or generic
+multi-point site table.
+
+Key accepted semantics:
+
+- `weather_ingestion_runs.ingestion_method` and `request_purpose` remain
+  separate. Permission flags are run-level, not duplicated on
+  `weather_sources`; component versions share the existing pipe-delimited
+  `pipeline_version` convention.
+- GFS and ERA5 do not receive a fabricated `model_version`. Dataset identity,
+  `source_product_key`, reference/availability/valid times, manifest hash, and
+  pipeline versions are the reproducibility contract.
+- One approved weather coordinate exists per site. Dobrich uses the Kardam
+  accepted-flight centroid `43.746321, 28.074025`; the site row remains the map
+  centre. Multi-point regional aggregation is deferred.
+- Samples do not repeat `site_id` or `grid_id`; those are reached through the
+  footprint graph. Footprint nodes likewise do not repeat `grid_id` or an
+  ordinal.
+- Interval rows retain `source_step_start_hours` and
+  `source_step_end_hours`. `quality_state` exists only per field in
+  `weather_field_provenance`. Zero is a real value; missing/sentinel values use
+  NULL plus their explicit provenance state.
+- Convection rows may keep CAPE and CIN both NULL when their required per-field
+  provenance rows say missing. Partial unique indexes make nullable
+  parcel/layer identities deterministic.
+- SQLite checks enforce row-local UUID, SHA-256, time, lifecycle, unit range,
+  interval, ownership, and identity rules. Cross-row rules such as interpolation
+  weights summing to one, same-grid footprint membership, correct
+  point/neighbourhood role, and required interval/CAPE/CIN provenance remain
+  mandatory validator/persistence-transaction checks.
+
+`packages/database/drizzle/20260820160216_create_weather_foundation/` is one
+coherent generated migration for the full FK graph. Its SQL was minimally
+amended so all fourteen new tables are SQLite `STRICT`. It also renames the
+populated flight `ingestion_runs` table to `flight_ingestion_runs` without a
+rebuild. Legacy internal flight constraint/index names intentionally remain;
+an initial generated draft tried to rebuild the parent table merely to rename
+those objects and failed correctly against populated FK data, so that draft was
+discarded and safely regenerated.
+
+The migration contains no source/site/grid seed data. Approved site sampling
+configs are pre-provisioned configuration; a missing config must fail preflight and
+request review rather than being auto-created halfway through ingestion. No
+`db:migrate` command has been run against the configured database, and nothing
+from S01 is committed.
+Temporary migration tests cover a fresh file, constraints, and an upgrade from
+the four prior migrations with an existing linked flight row.
+
 ## Database and flight-data boundary
 
 The migrated SQLite flight foundation contains `flight_sources`, `sites`,
-`source_site_mappings`, `ingestion_runs`, and `flight_records`. Preserve units,
+`source_site_mappings`, `flight_ingestion_runs`, and `flight_records`. Preserve units,
 provenance, confidence, and the states `mock`, `manual`, `baseline`, `real`, and
 `missing` across boundaries.
 
@@ -293,7 +349,7 @@ or interim JSONL.
 
 | Ingestion run | Scope and result | Durable notes |
 | --- | --- | --- |
-| `f1032827-a98d-4c01-969e-e67b4885f90d` | First successful import: 267 accepted flights from the prior 2025/2026 collection; 1,200 seen, 664 rejected, 69 quarantined, 200 same-run duplicates removed. | Established the persistence slice and the first `ingestion_runs` row. |
+| `f1032827-a98d-4c01-969e-e67b4885f90d` | First successful import: 267 accepted flights from the prior 2025/2026 collection; 1,200 seen, 664 rejected, 69 quarantined, 200 same-run duplicates removed. | Established the persistence slice and the first `flight_ingestion_runs` row. |
 | `8d809838-3ff8-42ce-9977-3997cd2536bc` | Manual 2024 `fresh`, review/apply, then successful `resume` on 2026-08-11. 600 seen; 208 normalized candidates; 182 persisted accepted flights; 295 rejected; 26 quarantined; 97 same-run duplicates removed. | `ingestion_run_id=2`; validation snapshot `fbe9bc251bc07b287d16e2c2127c70daf0b781754ca871931bd6530680ea2204`; 26 quarantines were explicitly reviewed/rejected and `actionable_mapping_quarantine_count=0`. |
 
 For the 2024 run, eight reviewed mappings were approved and inserted, while ten
@@ -301,6 +357,26 @@ proposals were rejected. The successful result used pipeline version
 `xccontest-collector/3|xccontest-parser/2|xccontest-validation/2|xccontest-persistence/2`.
 The raw manifest is complete, schema version 3, and covers season 2024/BG.
 
+### T-018/S01 verification (uncommitted)
+
+The final generated migration and compatibility rename were verified on
+2026-08-20 without touching the configured local database:
+
+- `npm.cmd run test`: database 25, contracts 15, API 82, and web 121 tests
+  passed;
+- `npm.cmd run build`, `npm.cmd run typecheck`, `npm.cmd run lint`,
+  `npm.cmd run repo:check`, and database `db:check` passed;
+- focused Prettier checks for every T-018 TypeScript/JSON file passed;
+- `uv run --project services/ml pytest`: 77 tests passed after updating the
+  existing XCContest persistence adapter to `flight_ingestion_runs`;
+- `uv run --project services/ml ruff format --check` and `ruff check` passed;
+- `git diff --check` passed and `docs/tasks.md` is unchanged.
+
+The repository-wide `npm.cmd run format:check` still reports only the already
+committed pre-T-018 snapshot
+`packages/database/drizzle/20260811080029_add_browser_ui_ingestion_method/snapshot.json`.
+The new snapshot passes focused formatting. The old applied snapshot was not
+rewritten as unrelated cleanup.
 ## Verification baseline
 
 The latest T-015 code checks passed locally:

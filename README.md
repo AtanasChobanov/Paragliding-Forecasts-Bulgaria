@@ -24,7 +24,7 @@ result as an inspectable daily dashboard.
   interactive Leaflet site selector, a fixed five-day selector, scoped
   accessible request states, and a routed detailed site/date forecast view with
   mock forecast inputs/drivers, and Playwright Chromium smoke coverage for the
-  dashboard-to-detail happy path; and a Drizzle-owned SQLite flight-data
+  dashboard-to-detail happy path; and a Drizzle-owned SQLite flight-and-weather data
   foundation with reviewed, reproducible migrations; and an ignored-raw-artifact
   XCContest collector for the explicitly allowed browser UI workflow
 - Not implemented: flight parsing/import, API persistence integration, real forecasts, models, and alerts

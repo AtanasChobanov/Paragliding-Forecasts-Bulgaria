@@ -45,6 +45,7 @@ consequences. Temporary progress and Git state belong in
 | DEC-030 | Reconcile repeated XCContest source flights without silent overwrite | Accepted | 2026-08-12 |
 | DEC-031 | Lock weather-source roles and canonical feature semantics | Accepted | 2026-08-16 |
 | DEC-032 | Implement GFS and ERA5 weather ingestion in T-018 | Accepted | 2026-08-17 |
+| DEC-033 | Finalize the normalized T-018 weather persistence schema | Accepted | 2026-08-20 |
 
 ## Individual decisions
 
@@ -1275,9 +1276,9 @@ source decision, source-specific adapter and compatible model evaluation:
 IGRA remains the T-019 observational sounding branch and is not part of this
 weather-forecast ingestion scope.
 
-**Consequences:** T-018's weather contract and persistence must retain source,
-model/version, run/reference/availability/retrieval/valid/lead/step times,
-grid coordinates/elevation, interpolation, native provenance, field quality
+**Consequences:** T-018's weather contract and persistence must retain source and
+provider-dataset identity, source product key, run/reference/availability,
+retrieval/valid/lead/step times, grid coordinates/elevation, interpolation, native provenance, field quality
 and feature-contract version. Forecast and reanalysis rows stay distinct. A
 future forecast-source addition must select a compatible weather snapshot and
 prediction artifact together; it must never relabel or silently blend another
@@ -1289,16 +1290,110 @@ distance and retain their footprint version.
 [`T-016-forecast-data-research-report.md`](T-016-forecast-data-research-report.md),
 [handoff.md](handoff.md).
 
+### DEC-033 - Finalize the normalized T-018 weather persistence schema
+
+**Status:** Accepted
+
+**Date:** 2026-08-20
+
+**Context:** T-018/S01 needs an exact relational contract before GFS and ERA5
+collectors can persist data. Earlier drafts mixed direct scalar values,
+repeatable atmospheric variants, interval values, field quality, grid sampling,
+and ingestion provenance. They also risked redundant site/grid foreign keys,
+a speculative artifact catalog, and a fabricated model-version value that GFS
+and ERA5 files do not reliably publish.
+
+**Decision:** The reviewed `T-012-flight-schema.drawio` weather section is the
+physical schema source of truth. Drizzle owns fourteen weather tables:
+
+- `weather_sources`, `weather_ingestion_runs`, and `weather_product_runs` for
+  provider dataset, pipeline execution, and native product/cycle identity;
+- `weather_site_sampling_configs`, `weather_grids`, `weather_grid_points`,
+  `weather_sampling_footprints`, and `weather_sampling_footprint_nodes` for one
+  approved site coordinate and reproducible point/neighbourhood sampling;
+- `weather_samples`, `weather_profile_levels`,
+  `weather_convection_measurements`, and `weather_interval_measurements` for
+  direct scalar, vertical-profile, repeatable CAPE/CIN, and explicit
+  interval/statistic values; and
+- `weather_feature_snapshots` plus `weather_field_provenance` for versioned
+  derived ML inputs and per-field native/quality meaning.
+
+Flight and weather ingestion provenance remains separate. The existing
+`ingestion_runs` table is renamed to `flight_ingestion_runs`; weather runs use
+`weather_ingestion_runs`. A weather run retains `ingestion_method` separately
+from `request_purpose`, run-level training/operational permission decisions,
+the raw manifest pointer/hash, one pipe-delimited `pipeline_version`, lifecycle,
+and counters. The rename preserves the old flight table's internal constraint
+and index names so SQLite can perform a data-preserving table rename instead of
+a risky rebuild.
+
+No `model_version` column is stored for GFS or ERA5. Reproducibility comes from
+`weather_sources`, `source_product_key`, reference/availability/valid times,
+raw manifest/hash, and versioned pipeline components; an absent provider
+semantic version is never replaced by an invented value.
+
+The storage shape is deliberately hybrid rather than EAV-only or one giant
+wide row. Direct single-valued surface fields live on `weather_samples`;
+pressure levels, parcel/layer convection variants, and time-window metrics use
+normalized child rows; derived ML-ready fields use a versioned wide feature
+snapshot. `weather_field_provenance` is the only owner of `quality_state`, one
+field at a time. Interval rows retain `source_step_start_hours` and
+`source_step_end_hours`, but do not duplicate a row-level quality state.
+Temperature is canonical Kelvin, humidity/cloud cover are percent, wind is
+metres per second, direction is degrees from north, and explicit AGL/MSL names
+are retained wherever present in the accepted diagram.
+
+The schema avoids transitively redundant foreign keys. A sample reaches its
+site/grid through `point_footprint_id`, and a footprint node reaches its grid
+through `grid_point_id`. Field-provenance ownership is polymorphic but exactly
+one of its five owner foreign keys must be set; partial unique indexes enforce
+one `(owner, field_code, field_variant)` row despite SQLite NULL semantics.
+Nullable convection layer/method-version identities use partial unique indexes
+for the same reason.
+
+One weather coordinate is approved per canonical site for T-018. Dobrich uses
+the Kardam accepted-flight centroid `43.746321, 28.074025`; the canonical
+`sites` coordinate stays the region/map centre. Multi-point regional
+aggregation is not implemented.
+
+There is no separate `weather_artifacts`, `weather_surface_samples`,
+`weather_profiles`, or generic one-to-many sampling-point table. Raw/interim
+files remain immutable filesystem evidence referenced by the run manifest.
+Soundings remain T-019.
+
+Cross-row rules that SQLite CHECK constraints cannot express remain mandatory
+pipeline validation: point interpolation weights sum to one; footprint/grid
+nodes belong to the same grid; point versus neighbourhood footprint roles are
+used correctly; grid first-seen runs match the grid source; and every interval
+metric and CAPE/CIN slot receives its matching field-provenance row in the same
+persistence transaction.
+
+The schema is delivered as one coherent generated/reviewed migration because
+all fourteen tables form one foreign-key graph. The migration contains no
+GFS/ERA5, site-coordinate, grid, or footprint seed rows; those require separate
+reviewed collector/configuration inputs. Migration tests may apply it only to
+temporary SQLite files before owner review; generation does not authorize
+application to the configured local database.
+
+**Consequences:** Collectors and persistence adapters have an exact target and
+must not create parallel JSON/EAV storage. Query indexes follow run lookup,
+product/source time, site/footprint valid time, profile pressure, interval
+window, field quality, and ingestion-provenance paths. Adding a new source or
+metric requires an explicit compatibility/schema decision rather than an
+unreviewed column or field code.
+
+**Related files:** [`T-012-flight-schema.drawio`](T-012-flight-schema.drawio),
+[`architecture.md`](architecture.md), [`handoff.md`](handoff.md),
+[`../packages/database/src/schema.ts`](../packages/database/src/schema.ts).
+
 ## Open decisions
 
 | Question | Options / constraints | Resolve by |
 | --- | --- | --- |
-| What exact T-012 field types, nullability, indexes, constraints, and migration layout should be used? | Must implement DEC-020's bounded Takt 2 tables, preserve source/provenance/validation data, retain numeric site IDs, and keep accepted flights distinct from quarantined candidates. | T-012 design and implementation. |
 | Which task owns the persisted prediction schema and SQLite forecast adapter? | The backlog has flight and weather schema tasks but no explicit owner for storing T-022-T-024 outputs and replacing the T-002 mock adapter. Public units/status/provenance must be mapped deliberately. | Backlog planning before real predictions are connected to the API. |
 | What are the final coordinates, aliases, and catchment radii for each site? | Current map points are provisional; Pastrina and the Dobrich regional model need particular confirmation. | T-009. |
 | What retention, attribution, licensing, and rate limits apply beyond the current XCContest browser workflow? | T-013 has a project-owner-confirmed ordinary low-volume UI workflow; do not extend it to bulk/commercial use or SkyNomad without explicit terms. | Before broader collection or product use. |
-| What production licences, attribution, retention, and direct-source/archive operations are required for the locked weather roles? | DEC-031 locks the technical source roles, but hosted Open-Meteo commercial use and direct ECMWF/DWD operational archiving still require owner confirmation and implementation. Models must not be silently substituted. | Before a commercial release. |
-| Which source-compatible weather-to-prediction rollout should become the MVP? | DEC-032 proposes GFS-only matched training/inference first, ICON-EU shadow collection, ERA5 verification/climatology, and later source-specific calibration or models. Confirm the rollout and create explicit weather-collector tickets before T-020. | Before weather collectors and T-020. |
+| What final production attribution, retention, and archive-operation wording is required for the selected weather sources? | T-018 uses direct NOAA GFS and CDS ERA5. Preserve source/permission evidence for both and the applicable Copernicus/ECMWF attribution for ERA5; confirm final product wording and retention operations before commercial release. | Before a commercial release. |
 | Which first alert channel should be implemented? | Dashboard watchlist, email, Telegram, or another agreed channel; alerts require at least one-day lead time and deduplication. | T-027/T-028. |
 | What deployment/distribution model is required beyond local development? | The MVP is local-first; cloud/distributed infrastructure needs a demonstrated requirement. | No task assigned; decide when deployment becomes an accepted scope item. |
 | What license should the repository use? | No open-source license is currently selected. | Repository owner decision; no task assigned. |

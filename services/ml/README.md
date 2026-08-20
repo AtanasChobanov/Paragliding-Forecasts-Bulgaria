@@ -144,7 +144,7 @@ completion/coverage status, the configured source-pacing delay and risk acknowle
 category/date/sort scope, artifact hashes, per-view row counts, qualifying-distance counts,
 and run-wide observed/distinct/repeated
 flight-ID counts. The CLI also returns the repository-relative manifest path
-and SHA-256 needed by the later `ingestion_runs` write. The checkpoint and
+and SHA-256 needed by the later `flight_ingestion_runs` write. The checkpoint and
 failure report carry the available observation counters. `--max-views` is a
 fail-closed cap across the full run, rather than a pagination cap.
 
@@ -324,7 +324,7 @@ uv run --env-file .env --project services/ml xccontest-validate --run-key <uuid>
 
 The validator writes non-overwriting `validation-v2/<mapping-snapshot-sha256>/`
 outputs: `accepted-flights.jsonl`, `site-quarantine.jsonl`, and
-`validation-report.json`. It does not call XCContest or create `ingestion_runs` or
+`validation-report.json`. It does not call XCContest or create `flight_ingestion_runs` or
 `flight_records`; the later persistence slice owns that transaction. Re-run validation
 after mapping approvals to obtain a new mapping-snapshot output.
 The top-level `xccontest-ingest` command orchestrates the same collector, parser, mapping,
@@ -482,7 +482,7 @@ The system deliberately keeps the mapping-review gate introduced by DEC-029:
 `--persist-approved-only` remains an explicit, exceptional path.  It may persist
 currently accepted records while unresolved mapping quarantines remain.  When
 mapping review later permits the remaining records, `resume` reuses the same
-`ingestion_runs` row and reconciles the earlier subset instead of failing on
+`flight_ingestion_runs` row and reconciles the earlier subset instead of failing on
 duplicates.  It is not the normal `fresh` workflow and never bypasses the
 mapping-review requirement for a quarantined record.
 
@@ -544,15 +544,15 @@ validated accepted JSONL + current SQLite
 The transaction first verifies all raw/parser/validation SHA-256 evidence, the
 current mapping snapshot, and that every selected mapping is still approved for
 XCContest.  If any comparison needs reconciliation review, it rolls back before
-creating or changing an `ingestion_runs` or `flight_records` row.  Therefore a
+creating or changing an `flight_ingestion_runs` or `flight_records` row.  Therefore a
 batch containing one conflict and several new flights cannot partially persist.
 
 For a successful reconciliation:
 
-- The first persistence of a run creates its `ingestion_runs` row.  A later
+- The first persistence of a run creates its `flight_ingestion_runs` row.  A later
   partial-run resume updates that same row and appends a new event in its
   versioned `notes` JSON.
-- A cross-run duplicate creates a new `ingestion_runs` row, but never a second
+- A cross-run duplicate creates a new `flight_ingestion_runs` row, but never a second
   `flight_records` row for the same source identity.
 - `created_by_ingestion_run_id` is never changed. An applied reconciliation
   refreshes `last_validated_by_ingestion_run_id`, `validation_notes`, and
@@ -707,7 +707,7 @@ a destructive database backfill.  A legacy row receives schema-v1 notes only
 when a later valid reconciliation actually updates or revalidates it.
 
 Run-level history is append-only within the versioned JSON held in
-`ingestion_runs.notes`.  Each applied event records its validation report and
+`flight_ingestion_runs.notes`.  Each applied event records its validation report and
 accepted JSONL paths/hashes, reconciliation plan hash, optional decisions hash,
 mapping-review completeness, outcome counts, and timestamp.
 
@@ -799,11 +799,11 @@ connection = sqlite3.connect(Path('data/local/paragliding.db'))
 for label, sql in (
     ('flight_records', 'SELECT count(*) FROM flight_records'),
     ('quality_notes_v1', "SELECT count(*) FROM flight_records WHERE validation_notes LIKE '{\"schema_version\":1,%'"),
-    ('ingestion_runs', 'SELECT count(*) FROM ingestion_runs'),
+    ('flight_ingestion_runs', 'SELECT count(*) FROM flight_ingestion_runs'),
 ):
     print(label, connection.execute(sql).fetchone()[0])
 print(connection.execute(
-    "SELECT notes FROM ingestion_runs WHERE run_key = ?",
+    "SELECT notes FROM flight_ingestion_runs WHERE run_key = ?",
     ('8d809838-3ff8-42ce-9977-3997cd2536bc',),
 ).fetchone()[0])
 connection.close()
@@ -811,7 +811,7 @@ connection.close()
 ```
 
 Expected counts after that first replay: `flight_records 449`,
-`quality_notes_v1 182`, and `ingestion_runs 2`. The printed run notes contain
+`quality_notes_v1 182`, and `flight_ingestion_runs 2`. The printed run notes contain
 `schema_version: 2` and one `reconciliation_applied` event.
 
 Run exactly the same `resume` command a second time. Expected result: exit code
