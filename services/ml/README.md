@@ -1,3 +1,5 @@
+# Data and ML service
+
 
 ## GFS raw planner and collector (T-018/S03)
 
@@ -41,7 +43,85 @@ uv run --project services/ml gfs-collect --purpose operational_forecast --explic
 Review the resulting manifest and byte cap before repeating it. The example has
 one valid time only; an operational D0--D2 request must explicitly list every
 chosen UTC valid hour after converting the local window, including DST.
-# Data and ML service
+
+### Command options
+
+```powershell
+uv run --project services/ml gfs-collect [options]
+```
+
+| Option | Required | Behaviour |
+| --- | --- | --- |
+| `--purpose operational_forecast` or `historical_forecast` | Yes | Immutable provenance for intended use. It does not change native GFS message selection. |
+| `--valid-at <UTC>` | Yes, repeatable | Forecast valid timestamp in `YYYY-MM-DDTHH:MM:SSZ`. Each must be from the selected run and at most 384 hours after it. |
+| `--explicit-run-at <UTC>` | One selection mode | Use this exact 00/06/12/18Z GFS cycle. Recommended for historical/training. |
+| `--newest-complete-before <UTC>` | One selection mode | Select the newest complete cycle available at or before this UTC cutoff. |
+| `--maximum-total-mib <integer>` | No; default `128` | Fail closed if selected byte ranges exceed the cap. One valid hour is currently about 31 MB. |
+| `--project-root <path>` | No; current directory | Root receiving `data/raw/weather/<run-key>/` and `data/interim/weather/<run-key>/`. |
+| `--allow-live-network` | Yes | Required acknowledgement before any NOAA request. |
+
+`--explicit-run-at` and `--newest-complete-before` are mutually exclusive. The
+planner checks at most eight six-hourly candidates when newest-run selection is
+used; this is intentionally not a CLI override.
+
+### Operational examples
+
+Use an explicit reviewed cycle when you know which run to use:
+
+```powershell
+uv run --project services/ml gfs-collect `
+  --purpose operational_forecast `
+  --explicit-run-at 2026-08-21T00:00:00Z `
+  --valid-at 2026-08-21T07:00:00Z `
+  --allow-live-network
+```
+
+Use `--newest-complete-before` when the collector should choose the freshest
+complete cycle. The cutoff is an availability boundary, not the valid forecast
+time. This example asks for the newest cycle available by 10:30Z, then requests
+its 11:00Z forecast:
+
+```powershell
+uv run --project services/ml gfs-collect `
+  --purpose operational_forecast `
+  --newest-complete-before 2026-08-21T10:30:00Z `
+  --valid-at 2026-08-21T11:00:00Z `
+  --allow-live-network
+```
+
+For the intended 10:00--20:00 `Europe/Sofia` thermal-XC window, convert each
+local hour to UTC for that date (DST matters), repeat `--valid-at`, and split
+into small same-cycle batches below `--maximum-total-mib`. Do not mix GFS cycles
+inside one run.
+
+### Historical example
+
+S03 already supports historical raw collection. Supply the exact historical run
+that existed before the flight day, rather than bulk-fetching calendar years:
+
+```powershell
+uv run --project services/ml gfs-collect `
+  --purpose historical_forecast `
+  --explicit-run-at 2025-06-14T00:00:00Z `
+  --valid-at 2025-06-15T10:00:00Z `
+  --allow-live-network
+```
+
+This is `f034`: the forecast issued at 00Z on 14 June and valid at 10Z on 15
+June. Repeat `--valid-at` only for a small same-cycle batch. T-020 will select
+the historical flight/control cohorts; S04--S08 must parse, sample, normalize,
+validate and persist the raw outputs before they form a training dataset.
+
+### Output and safety
+
+The `.idx` artifact is the official text index (message number, byte offset,
+native parameter, level and forecast descriptor). It contains no grid values.
+Each `gfs-f<lead>-r<ordinal>.grib2` is a real selected GRIB2 byte-range payload,
+not a pointer; it contains global 0.25-degree messages that S04 will decode.
+
+JSON artifacts are pretty-printed, deterministically sorted and SHA-256
+verified. Do not edit them after collection because their hash covers the exact
+stored bytes. Use a read-only formatter for older compact JSON files.
 
 ## Status
 

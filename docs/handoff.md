@@ -1,26 +1,38 @@
 
-## T-018/S03 GFS planner and collector handoff (uncommitted)
+## T-018/S03 GFS planner and collector handoff
 
-Delivered a raw-only NOAA GFS 0.25-degree planner/collector. It resolves either
-an explicit cycle or the newest complete cycle before a cutoff using the official
-AWS object metadata and `.idx`, selects only approved variable/level/lead
-messages, and persists immutable request/index/range/collection/manifest
-artifacts with URL, range, checksum, run/valid/lead and licence evidence.
+T-018/S03 is implemented. The raw-only NOAA GFS 0.25-degree planner/collector
+resolves an explicit cycle or the newest complete cycle before a cutoff using
+official object metadata and `.idx` inventory, then persists immutable
+request/index/range/collection/manifest evidence. It intentionally retains
+global selected GRIB messages: byte ranges narrow variables, levels and leads,
+but cannot spatially crop a message. S04 will decode GRIB; S05 will sample
+approved Weather Site Points.
 
-The collector distinguishes absent files, incomplete runs, changed inventory,
-range-protocol errors and network failures. Retry is intentionally conservative:
-only 408/429/502/503/504 retry; 400-class blocked/invalid responses and HTTP 500
-stop immediately. Offline fake transport tests cover parser/ranges, retry policy,
-fail-fast responses and bounded immutable collection. No live NOAA request was
-made in this session.
+The selector contract is based on GFS native descriptor semantics: instantaneous
+fields use point forecasts, fluxes use their shortest available averaging
+interval, and accumulated precipitation uses the shortest available
+accumulation interval (including tied native messages where applicable). It
+therefore handles `f000` correctly by omitting interval-only fields. A bounded
+live `f007` operational collection was manually verified on 2026-08-21; raw
+artifacts remain ignored under `data/raw/weather/`.
 
-`gfs-collect` requires `--allow-live-network`; default test command is
-`uv run --project services/ml pytest services/ml/tests/ingestion/gfs -q`. A
-manual bounded live example and operational/training selection policy are in
-`services/ml/README.md`. The current implementation stores global 0.25-degree
-messages because GFS byte ranges cannot spatially crop a message; S05 must apply
-approved Weather Site Point sampling after GRIB parsing. T-020 owns the
-cohort-driven historical flight/control date selection and joins.
+Retry is deliberately conservative: 400/401/403/404/405/410/413/416/422 and
+500 fail immediately; only 408, 429, 502, 503 and 504 retry with bounded waits
+and `Retry-After` support. The implementation reports absent files, incomplete
+runs, source-contract mismatch and network failure separately.
+
+`services/ml/README.md` now documents every `gfs-collect` option, explicit and
+newest-complete operational examples, historical collection, byte-cap batching,
+outputs and immutability. Default tests do not use the network.
+
+Final verification: `uv run --project services/ml pytest -q` (102 passed),
+`uv run --project services/ml ruff check`, `uv run --project services/ml ruff
+format --check`, and `git diff --check` all passed before the documentation-only
+handoff update.
+
+Next slice: T-018/S04 must parse only the hash-verified GRIB artifacts; do not
+re-fetch or reinterpret raw selector provenance there.
 # Project Handoff
 
 ## Purpose and source of truth
