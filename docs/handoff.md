@@ -1,38 +1,46 @@
+## T-018/S04 GFS GRIB parser and normalization handoff
 
-## T-018/S03 GFS planner and collector handoff
+T-018/S04 is implemented. The offline-only `gfs-parse` command accepts only a
+complete, hash-verified S03 raw GFS run. It uses the pinned Python `eccodes`
+2.47.0 binding and numeric NOAA `kwbc` GRIB2 profile (master table 2, local
+table 1) to verify every selected message's identity, level, reference/valid
+time, forecast step, statistic and grid metadata before storing immutable native
+arrays and missing masks. `HPBL` is matched numerically because its ecCodes
+short name is not stable enough to be a parser identity.
 
-T-018/S03 is implemented. The raw-only NOAA GFS 0.25-degree planner/collector
-resolves an explicit cycle or the newest complete cycle before a cutoff using
-official object metadata and `.idx` inventory, then persists immutable
-request/index/range/collection/manifest evidence. It intentionally retains
-global selected GRIB messages: byte ranges narrow variables, levels and leads,
-but cannot spatially crop a message. S04 will decode GRIB; S05 will sample
-approved Weather Site Points.
+The normalizer emits separate canonical surface/convection/interval and
+pressure-level grains for S05. It retains native U/V fields; derives speed and
+meteorological direction; converts signed GFS CIN to a positive magnitude while
+retaining the native convention; and maps GFS geopotential-height values to
+canonical height. Bitmap/sentinel cells are retained through masks and marked
+`sentinel_missing`; valid values are `real`; derived arrays are `derived`; and
+malformed boundary input is rejected as `invalid_payload`. The only accepted
+quality-state vocabulary is `real`, `derived`, `missing`, `sentinel_missing`,
+and `invalid_payload`.
 
-The selector contract is based on GFS native descriptor semantics: instantaneous
-fields use point forecasts, fluxes use their shortest available averaging
-interval, and accumulated precipitation uses the shortest available
-accumulation interval (including tied native messages where applicable). It
-therefore handles `f000` correctly by omitting interval-only fields. A bounded
-live `f007` operational collection was manually verified on 2026-08-21; raw
-artifacts remain ignored under `data/raw/weather/`.
+The parser preserves S03's shortest explicitly identified APCP interval. It
+does not infer a precipitation rate or de-accumulate across runs; a future
+multi-interval implementation may de-accumulate only when it proves adjacent
+interval continuity and reset behavior. `GUST` and orography remain parsed as
+native evidence but are explicit unsupported canonical mappings because neither
+has a T-017/S01 destination. No additional GUST metric was added: the Project
+Brief requests wind speed/direction and shear, while T-017 and the persisted
+weather schema contain no gust field.
 
-Retry is deliberately conservative: 400/401/403/404/405/410/413/416/422 and
-500 fail immediately; only 408, 429, 502, 503 and 504 retry with bounded waits
-and `Retry-After` support. The implementation reports absent files, incomplete
-runs, source-contract mismatch and network failure separately.
+A committed offline golden contract fixture locks the f007 numeric identities,
+selected-selector count, canonical-grain counts, GUST mapping outcome and
+quality policy. The fixture is intentionally small and contains no raw NOAA
+grid download; the parser's real f007 run was additionally exercised locally
+against ignored raw evidence on 2026-08-21.
 
-`services/ml/README.md` now documents every `gfs-collect` option, explicit and
-newest-complete operational examples, historical collection, byte-cap batching,
-outputs and immutability. Default tests do not use the network.
-
-Final verification: `uv run --project services/ml pytest -q` (102 passed),
+Final verification: `uv run --project services/ml pytest -q` (106 passed),
 `uv run --project services/ml ruff check`, `uv run --project services/ml ruff
-format --check`, and `git diff --check` all passed before the documentation-only
-handoff update.
+format --check`, `uv run --project services/ml gfs-parse --help`, and `git diff
+--check` all passed. No network request is made by default tests or `gfs-parse`.
 
-Next slice: T-018/S04 must parse only the hash-verified GRIB artifacts; do not
-re-fetch or reinterpret raw selector provenance there.
+Next slice: T-018/S05 must consume only hash-verified S04 canonical grid
+artifacts; it must not re-fetch raw GFS, reinterpret parser provenance, or add
+an unapproved GUST persistence field.
 # Project Handoff
 
 ## Purpose and source of truth

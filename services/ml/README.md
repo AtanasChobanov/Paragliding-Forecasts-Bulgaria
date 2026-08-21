@@ -117,12 +117,44 @@ validate and persist the raw outputs before they form a training dataset.
 The `.idx` artifact is the official text index (message number, byte offset,
 native parameter, level and forecast descriptor). It contains no grid values.
 Each `gfs-f<lead>-r<ordinal>.grib2` is a real selected GRIB2 byte-range payload,
-not a pointer; it contains global 0.25-degree messages that S04 will decode.
+not a pointer; it contains global 0.25-degree messages that S04 will parse.
 
 JSON artifacts are pretty-printed, deterministically sorted and SHA-256
 verified. Do not edit them after collection because their hash covers the exact
 stored bytes. Use a read-only formatter for older compact JSON files.
 
+### GFS GRIB parser and normalizer (T-018/S04)
+
+`gfs-parse` is an offline-only parser/normalizer stage. It accepts an existing,
+complete, hash-verified S03 run and never contacts NOAA or recalculates selector
+provenance:
+
+```powershell
+uv run --project services/ml gfs-parse --run-key <uuid>
+```
+
+The parser pins ecCodes `2.47.0` and the observed NOAA `kwbc` GRIB2 table profile
+(master table `2`, local table `1`). It checks message number/order, numeric
+parameter identity, level, run/valid time, step range, statistic and grid
+metadata before values can cross the raw boundary. `HPBL` is identified through
+its numeric GRIB identity, not its ecCodes `shortName`.
+
+Parser output retains immutable native value arrays and missing masks. The
+normalizer writes separate canonical surface/convection/interval grains and
+pressure-level grains for S05. It retains native `u`/`v`, derives wind speed and
+meteorological direction, converts signed GFS CIN to positive magnitude while
+retaining the native convention, and records interval boundaries without
+inventing a rate. Precipitation is only de-accumulated when a proven reset and
+adjacent interval are available; the S03 shortest explicit accumulation interval
+is otherwise retained directly.
+
+Field quality uses only the persistence-compatible states: `real`, `derived`,
+`missing`, `sentinel_missing`, and `invalid_payload`. Bitmap/sentinel cells are
+`sentinel_missing`; a physically zero value remains `real`. A malformed message
+or incompatible identity fails as `invalid_payload`. `GUST` remains parsed as
+native evidence but has no T-017 canonical field or S01 persistence destination,
+so it is listed as an unsupported mapping outcome rather than persisted as a
+quality-state measurement.
 ## Status
 
 The permitted XCContest browser collector and its offline parser/normalizer are

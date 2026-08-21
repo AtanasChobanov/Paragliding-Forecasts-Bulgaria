@@ -1426,6 +1426,39 @@ boundary. The T-017 report and all decisions link to the packaged resource.
 [`contracts.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/atmosphere/contracts.py),
 [`artifacts.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/artifacts.py),
 [`handoff.md`](handoff.md).
+### DEC-035 - Pin GFS GRIB parser identity and preserve only canonical weather quality states
+
+**Status:** Accepted
+
+**Date:** 2026-08-21
+
+**Context:** T-018/S04 must make NOAA GFS GRIB parsing reproducible without
+trusting mutable ecCodes short names, while preserving the quality vocabulary
+already accepted by the weather persistence contract. GFS `HPBL` demonstrates
+the risk: in the observed operational table it has a numeric local parameter
+identity but an unusable generic short name.
+
+**Decision:** Use Python `eccodes` 2.47.0 and a versioned numeric profile for
+NOAA `kwbc` GRIB2 master table 2/local table 1. Verify centre, table versions,
+discipline/category/number, level, reference/valid time, step and statistics
+before grids pass the raw boundary. Preserve native missing bitmap/sentinel
+masks and use only `real`, `derived`, `missing`, `sentinel_missing`, and
+`invalid_payload` quality states. Normalize signed GFS CIN to the canonical
+positive magnitude while retaining the native sign convention; retain native
+U/V and derive wind speed/direction; retain a stated accumulation interval
+without inferred de-accumulation unless adjacent intervals and a reset are
+proven. GUST and orography have no T-017/S01 destination, so retain them only
+as native evidence with an explicit unsupported canonical mapping outcome.
+
+**Consequences:** S05 consumes hash-verified canonical grid artifacts, not raw
+GRIB. A new GUST persistence field requires a separate catalogue/schema decision.
+The pinned profile must be deliberately reviewed if NOAA changes its GRIB table
+or source identity.
+
+**Related files:** [`profile.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/profile.py),
+[`parser.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/parser.py),
+[`normalizer.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/normalizer.py),
+[`handoff.md`](handoff.md).
 ## Open decisions
 
 | Question | Options / constraints | Resolve by |
