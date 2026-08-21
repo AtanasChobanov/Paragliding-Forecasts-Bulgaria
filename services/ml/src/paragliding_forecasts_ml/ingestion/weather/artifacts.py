@@ -83,6 +83,25 @@ class WeatherArtifactStore:
             media_type=media_type,
         )
 
+    def write_raw_model(
+        self,
+        artifact_key: str,
+        filename: str,
+        model: BaseModel,
+        *,
+        record_count: int | None = None,
+    ) -> ArtifactReference:
+        """Write one source-specific immutable JSON record beneath raw payloads."""
+
+        if not filename or Path(filename).name != filename:
+            raise ArtifactError("Raw payload filename must be one safe filename.")
+        return self._write_model(
+            self.raw_dir / "payloads" / filename,
+            artifact_key,
+            model,
+            record_count=record_count,
+        )
+
     def write_raw_manifest(self, manifest: RawManifest) -> ArtifactReference:
         """Finalize the raw evidence manifest once, without overwriting a partial attempt."""
 

@@ -1,3 +1,46 @@
+
+## GFS raw planner and collector (T-018/S03)
+
+`gfs-collect` is the real, deliberately opt-in raw-only command. It checks the
+official `.idx` inventory and GRIB object metadata before collecting an explicit
+GFS cycle, or the newest complete cycle at/before a supplied cutoff. It writes a
+hash-verified request plan, native index, selected GRIB byte ranges, collection
+record and raw manifest below `data/raw/weather/<run-key>/`. It does not parse
+GRIB, sample a site, write SQLite, join flights, or train a model.
+
+A GFS message is global at 0.25 degrees: `.idx` byte ranges reduce variables,
+levels and leads, but cannot reduce the geographic grid. The S03 collector
+therefore does **not** use `weather_site_sampling_configs` to choose bytes; S05
+will sample the already-provenanced global fields at those approved coordinates.
+
+Operational use should request the 10:00--20:00 `Europe/Sofia` thermal-XC window
+for today through D+2 from one selected complete GFS cycle. Historical/training
+use must be cohort-driven: request exact historical cycles only for the flight
+site-days and deterministic controls chosen by T-020, rather than bulk-fetching
+calendar years. The default 128 MiB cap applies to one command execution.
+
+The source policy is conservative: 400/401/403/404/405/410/413/416/422 and 500
+fail once; only 408, 429, 502, 503 and 504 retry. There are at most three total
+attempts; 408 waits 60 seconds once, 502/503/504 wait 30 then 120 seconds, and
+429 honours `Retry-After` with a 120-second minimum and a 900-second safe cap.
+A changed `.idx`, absent object, incomplete run and transport failure have
+separate recorded outcomes.
+
+Default tests make no network request:
+
+```powershell
+uv run --project services/ml pytest services/ml/tests/ingestion/gfs -q
+```
+
+Manual bounded live collection (do not run as part of the default test suite):
+
+```powershell
+uv run --project services/ml gfs-collect --purpose operational_forecast --explicit-run-at 2026-08-21T00:00:00Z --valid-at 2026-08-21T07:00:00Z --allow-live-network
+```
+
+Review the resulting manifest and byte cap before repeating it. The example has
+one valid time only; an operational D0--D2 request must explicitly list every
+chosen UTC valid hour after converting the local window, including DST.
 # Data and ML service
 
 ## Status

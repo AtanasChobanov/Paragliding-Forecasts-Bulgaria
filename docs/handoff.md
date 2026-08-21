@@ -1,3 +1,26 @@
+
+## T-018/S03 GFS planner and collector handoff (uncommitted)
+
+Delivered a raw-only NOAA GFS 0.25-degree planner/collector. It resolves either
+an explicit cycle or the newest complete cycle before a cutoff using the official
+AWS object metadata and `.idx`, selects only approved variable/level/lead
+messages, and persists immutable request/index/range/collection/manifest
+artifacts with URL, range, checksum, run/valid/lead and licence evidence.
+
+The collector distinguishes absent files, incomplete runs, changed inventory,
+range-protocol errors and network failures. Retry is intentionally conservative:
+only 408/429/502/503/504 retry; 400-class blocked/invalid responses and HTTP 500
+stop immediately. Offline fake transport tests cover parser/ranges, retry policy,
+fail-fast responses and bounded immutable collection. No live NOAA request was
+made in this session.
+
+`gfs-collect` requires `--allow-live-network`; default test command is
+`uv run --project services/ml pytest services/ml/tests/ingestion/gfs -q`. A
+manual bounded live example and operational/training selection policy are in
+`services/ml/README.md`. The current implementation stores global 0.25-degree
+messages because GFS byte ranges cannot spatially crop a message; S05 must apply
+approved Weather Site Point sampling after GRIB parsing. T-020 owns the
+cohort-driven historical flight/control date selection and joins.
 # Project Handoff
 
 ## Purpose and source of truth
