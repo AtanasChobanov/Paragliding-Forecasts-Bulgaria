@@ -12,18 +12,37 @@ from pydantic import BaseModel
 from ..atmosphere.contracts import ensure_json_compatible
 
 
-def canonical_json_bytes(value: BaseModel | dict[str, Any]) -> bytes:
-    """Serialize a contract deterministically for fingerprints and immutable files."""
-
+def _json_payload(value: BaseModel | dict[str, Any]) -> Any:
     payload: Any = value.model_dump(mode="json") if isinstance(value, BaseModel) else value
     ensure_json_compatible(payload)
+    return payload
+
+
+def canonical_json_bytes(value: BaseModel | dict[str, Any]) -> bytes:
+    """Serialize a contract compactly and deterministically for fingerprints."""
+
     return (
         json.dumps(
-            payload,
+            _json_payload(value),
             ensure_ascii=False,
             allow_nan=False,
             sort_keys=True,
             separators=(",", ":"),
+        )
+        + "\n"
+    ).encode("utf-8")
+
+
+def pretty_json_bytes(value: BaseModel | dict[str, Any]) -> bytes:
+    """Serialize a durable JSON artifact in deterministic, human-readable form."""
+
+    return (
+        json.dumps(
+            _json_payload(value),
+            ensure_ascii=False,
+            allow_nan=False,
+            sort_keys=True,
+            indent=2,
         )
         + "\n"
     ).encode("utf-8")

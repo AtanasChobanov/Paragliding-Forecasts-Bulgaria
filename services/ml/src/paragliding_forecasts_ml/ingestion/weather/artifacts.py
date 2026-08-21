@@ -8,7 +8,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from ..atmosphere.contracts import ArtifactReference, RawManifest, RequestPlan, StageManifest
-from .serialization import canonical_json_bytes, sha256_bytes, sha256_file
+from .serialization import canonical_json_bytes, pretty_json_bytes, sha256_bytes, sha256_file
 from .versions import output_directory_name
 
 
@@ -260,7 +260,7 @@ class WeatherArtifactStore:
         return self._write_bytes(
             path,
             artifact_key,
-            canonical_json_bytes(model),
+            pretty_json_bytes(model),
             media_type="application/json",
             record_count=record_count,
         )

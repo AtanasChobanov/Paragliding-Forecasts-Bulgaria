@@ -60,6 +60,17 @@ def complete_raw(store: WeatherArtifactStore):
     return store.write_raw_manifest(manifest)
 
 
+def test_model_artifacts_are_human_readable_and_hash_verified(tmp_path) -> None:
+    store = WeatherArtifactStore.create_fresh(RUN_KEY, project_root=tmp_path)
+    reference = store.write_request_plan(make_plan())
+    text = (tmp_path / reference.relative_path).read_text(encoding="utf-8")
+
+    assert text.startswith("{\n")
+    assert '\n  "adapter_request": {' in text
+    assert text.endswith("\n")
+    assert store.verify_reference(reference).is_file()
+
+
 def test_raw_artifacts_are_immutable_and_hash_verified(tmp_path) -> None:
     store = WeatherArtifactStore.create_fresh(RUN_KEY, project_root=tmp_path)
     raw_manifest = complete_raw(store)
