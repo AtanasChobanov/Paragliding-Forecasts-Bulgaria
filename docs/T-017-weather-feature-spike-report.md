@@ -138,10 +138,10 @@ and archive runs itself.
 
 The official public AWS archive was accessed without an account. A 2025-08-01
 00 UTC lead-24 file index contained 743 messages. Forty selected GRIB2 byte
-ranges were downloaded and decoded with ecCodes: about 31.4 MB instead of the
+ranges were downloaded and parsed with ecCodes: about 31.4 MB instead of the
 roughly 545 MB full file.
 
-Actual decoded metadata confirmed surface temperature/dew point/humidity,
+Actual parsed metadata confirmed surface temperature/dew point/humidity,
 10 m vector wind and gust, pressure, precipitation, cloud cover, surface and
 layer CAPE/CIN, boundary-layer height, plus 925/850/700 hPa geopotential,
 temperature, humidity, vector wind, and vertical velocity. Native units include
@@ -161,9 +161,9 @@ leads:
 GFS native CIN is signed negative, while the Open-Meteo output observed in this
 spike represents CIN as a positive magnitude. The canonical field therefore
 uses an explicit positive-magnitude name and retains native value/sign metadata.
-The locally decoded HPBL short name appeared as `unknown` under the temporary
+The locally parsed HPBL short name appeared as `unknown` under the temporary
 ecCodes definition set even though the NOAA index identifies it as HPBL; a
-production decoder must pin and test the GRIB table/version.
+production parser must pin and test the GRIB table/version.
 
 **Decision from the spike:** GFS is accepted as the exact, long-history,
 no-credential forecast archive comparator. Its coarse grid does not replace a
@@ -192,7 +192,7 @@ pressure-level fields, and 1000/975/950/925/900/875/850/800/750/700 hPa. Total
 payload size was 519,048 bytes; individual requests completed in approximately
 37-78 seconds.
 
-The decoded native inventory is:
+The parsed native inventory is:
 
 | Group | Native fields and units |
 | --- | --- |
@@ -202,7 +202,7 @@ The decoded native inventory is:
 | Interval fields | `tp` m; `ssrd` J/m2; mean shortwave/sensible/latent fluxes W/m2 |
 | Pressure levels | `t` K; `q` kg/kg; `r` percent; `u`/`v` m/s; `w` Pa/s; `z` m2/s2 |
 
-All 630 requested pressure-level messages decoded without a missing grid value.
+All 630 requested pressure-level messages parsed without a missing grid value.
 The surface fields exposed a critical distinction between physical zero and
 missing evidence:
 
@@ -214,7 +214,7 @@ missing evidence:
 - `cape` and `blh` were present at all 15 site/time samples. A zero CAPE value is
   valid data and must not be treated as missing.
 
-The decoder must use GRIB missing metadata/bitmap handling and normalize missing
+The parser must use GRIB missing metadata/bitmap handling and normalize missing
 sentinels to `null`; `9999 m` or `9999 J/kg` must never cross the ingestion
 boundary as a measurement.
 
@@ -237,16 +237,16 @@ remain nullable and must not be imputed silently.
 
 ### CERRA through CDS
 
-Authentication, terms acceptance, retrieval, and GRIB decoding are now verified.
+Authentication, terms acceptance, retrieval, and GRIB parsing are now verified.
 The full-domain analysis request returned 12 messages for 2025-05-25 12:00 UTC;
 the diagnostic request returned one `2t` message for 2025-08-02 12:00 UTC.
 Every message used the 1069 x 1069 Lambert conformal grid (1,142,761 points),
-analysis step `0`, and the requested valid time. No decoded message contained a
+analysis step `0`, and the requested valid time. No parsed message contained a
 missing grid value.
 
 The actual native surface inventory is:
 
-| Native field | Decoded name | Native unit | Canonical treatment |
+| Native field | parsed name | Native unit | Canonical treatment |
 | --- | --- | --- | --- |
 | `2t` | 2 metre temperature | K | `air_temperature_k`, direct |
 | `2r` | 2 metre relative humidity | `%` | `relative_humidity_percent`, direct |
@@ -290,7 +290,7 @@ overcast/precipitation case: total cloud cover was 100% at four sites and
 non-flying label.
 
 The catalogue declares additional pressure-level and forecast products, but
-this bounded retrieval decoded only single-level analysis data. Direct CERRA
+this bounded retrieval parsed only single-level analysis data. Direct CERRA
 PBL height, cloud-base height, CAPE, and CIN are not exposed by the reviewed
 single/pressure dataset forms. They must remain missing or be derived from
 other validated inputs; CERRA TKE must not be renamed to thermal strength.
@@ -362,13 +362,13 @@ All raw artifacts are ignored by Git and remain on disk D: inside the project:
   including the retained unavailable-run response;
 - `data/raw/weather-spike/open-meteo-icon-eu/` - four exact ICON-EU responses;
 - `data/raw/weather-spike/igra-sofia/` - IGRA raw and derived station archives.
-- `data/raw/weather-spike/cds/` - CDS request/result metadata plus decoded ERA5 and CERRA GRIB summaries.
+- `data/raw/weather-spike/cds/` - CDS request/result metadata plus parsed ERA5 and CERRA GRIB summaries.
 
-The GFS values were decoded with a temporary uv/ecCodes environment; no Python
+The GFS values were parsed with a temporary uv/ecCodes environment; no Python
 dependency or secret was added to the repository. The permanent, reviewable
 output of this research phase is this report and its JSON catalogue. T-018/T-019
 should turn accepted mappings into tested ingestion code rather than depend on
-an ad-hoc research decoder.
+an ad-hoc research parser.
 
 ## Primary documentation consulted
 

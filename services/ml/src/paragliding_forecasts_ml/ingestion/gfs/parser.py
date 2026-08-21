@@ -336,7 +336,7 @@ def _parse_message(
     missing_count = int(metadata["numberOfMissing"])
     if missing_count != int(missing_mask.sum()):
         raise GfsParserError(
-            f"{selector_key} bitmap/sentinel metadata does not match decoded values."
+            f"{selector_key} bitmap/sentinel metadata does not match parsed values."
         )
     values[missing_mask] = np.nan
     value_reference = _write_array(

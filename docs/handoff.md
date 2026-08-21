@@ -117,7 +117,7 @@ period.
   product must use its appropriate commercial plan or a direct licensed source;
   preserve required attribution and source licence metadata. The direct DWD
   path avoids a hosted Open-Meteo commercial dependency but requires GRIB
-  decoding, subsetting, and operational archiving.
+  parsing, subsetting, and operational archiving.
 - T-017 completed that bounded Bulgaria sample and locked the source/feature
   contract for T-018. T-019 should parse raw NOAA IGRA Sofia profiles; image
   scraping/OCR remains deferred.
@@ -148,13 +148,13 @@ strong/marginal/precipitation cases, and 24/48/72/120-hour leads:
   surface and pressure-level inventories are accepted as the long-history
   reanalysis baseline; direct CIN and cloud base are nullable, and bitmap/
   missing-value metadata must turn sentinels into explicit nulls.
-- CERRA retrieval and decoding are verified: 13 analysis messages across two
+- CERRA retrieval and parsing are verified: 13 analysis messages across two
   successful jobs used the 1069 x 1069 full-domain grid with zero missing values.
   It is accepted as an offline terrain comparator, not as primary direct PBL,
   cloud-base, CAPE, or CIN evidence.
 
 CDS account setup and all required terms are complete. Four bounded ERA5
-requests downloaded 519,048 bytes and were decoded successfully: all 630
+requests downloaded 519,048 bytes and were parsed successfully: all 630
 pressure-level messages had no missing grid values, while direct ERA5 CIN was
 missing for 93.359% and cloud base for 21.839% of the sampled surface grid.
 Preserve run/base time, valid time, step/statistic, native units, and missing
@@ -163,18 +163,18 @@ metadata; never persist the GRIB missing sentinel as a physical value.
 Both CERRA jobs completed successfully and were downloaded. The 12-field
 analysis payload is 27,438,924 bytes and the one-field diagnostic is 2,286,577
 bytes. Each spent about two hours queued, while provider processing took about
-10 seconds and local download under six seconds. The decoded native surface
+10 seconds and local download under six seconds. The parsed native surface
 inventory is `2t` K, `2r` %, `10si` m/s, `10wdir` degrees true, `msl`/`sp` Pa,
 `tcc`/`lcc`/`mcc`/`hcc` %, `orog` m, and `tciwv` kg/m2. CERRA surface wind
 components are derived from native speed/direction. Raw GRIB, request/result
-metadata, and `cerra-decoded-summary.json` remain ignored under
+metadata, and `cerra-parsed-summary.json` remain ignored under
 `data/raw/weather-spike/cds/`. T-017 is ready for review.
 
 ## Post-spike weather implementation context
 
 T-018 owns the source-neutral SQLite weather schema and the complete GFS and
 ERA5 ingestion pipeline through persistence. It includes immutable raw
-artifacts/manifests, source decoders, canonical normalization, deterministic
+artifacts/manifests, source parsers, canonical normalization, deterministic
 site/grid sampling, validation/quarantine, versioned feature building and
 idempotent SQLite writes. Do not create inert placeholder collectors.
 

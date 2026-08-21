@@ -1197,7 +1197,7 @@ responsible for committed sanitized parser fixtures.
 sources, but generic provider documentation could not prove exact per-model
 field availability, native units, null behavior, step semantics, terrain fit, or
 payload cost. T-017 tested representative Bulgarian sites, weather cases, and
-forecast leads, then decoded bounded GFS, ERA5, CERRA, and IGRA evidence and
+forecast leads, then parsed bounded GFS, ERA5, CERRA, and IGRA evidence and
 exact hosted IFS HRES/ICON-EU responses.
 
 **Decision:** Use GFS as the coarse exact long-history forecast comparator,
