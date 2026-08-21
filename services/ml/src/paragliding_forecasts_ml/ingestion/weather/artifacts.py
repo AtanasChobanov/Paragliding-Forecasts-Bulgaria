@@ -178,6 +178,29 @@ class WeatherArtifactStore:
             record_count=record_count,
         )
 
+    def write_stage_bytes(
+        self,
+        stage_directory: Path,
+        filename: str,
+        artifact_key: str,
+        content: bytes,
+        *,
+        media_type: str,
+        record_count: int | None = None,
+    ) -> ArtifactReference:
+        """Write one immutable non-JSON stage payload such as a NumPy array."""
+
+        self._assert_stage_directory(stage_directory)
+        if not filename or Path(filename).name != filename:
+            raise ArtifactError("Stage filename must be one safe filename.")
+        return self._write_bytes(
+            stage_directory / filename,
+            artifact_key,
+            content,
+            media_type=media_type,
+            record_count=record_count,
+        )
+
     def write_stage_manifest(
         self, stage_directory: Path, manifest: StageManifest
     ) -> ArtifactReference:

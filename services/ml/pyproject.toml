@@ -5,6 +5,8 @@ description = "Data ingestion, feature engineering, and ML workflows for Paragli
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
 dependencies = [
+    "eccodes==2.47.0",
+    "numpy>=2.0,<3",
     "playwright>=1.62.0",
     "pydantic>=2.12.0,<3",
     "selectolax>=0.4.11",
@@ -17,6 +19,7 @@ xccontest-site-mappings = "paragliding_forecasts_ml.ingestion.xccontest.site_map
 xccontest-validate = "paragliding_forecasts_ml.ingestion.xccontest.validator_cli:main"
 xccontest-persist = "paragliding_forecasts_ml.ingestion.xccontest.persistence_cli:main"
 gfs-collect = "paragliding_forecasts_ml.ingestion.gfs.cli:main"
+gfs-parse = "paragliding_forecasts_ml.ingestion.gfs.parser_cli:main"
 xccontest-ingest = "paragliding_forecasts_ml.ingestion.xccontest.pipeline_cli:main"
 
 [build-system]
