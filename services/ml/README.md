@@ -8,6 +8,32 @@ local staging records only; it does not match sites, update mappings, write
 SQLite, or make source requests. Feature engineering, training, and prediction
 entry points start in later Takts.
 
+## Atmospheric durable protocol (T-018/S02)
+
+The packaged T-017 catalogue at
+`src/paragliding_forecasts_ml/ingestion/atmosphere/resources/weather-field-catalogue.json`
+is the only canonical atmospheric vocabulary. Runtime contracts validate field
+codes and canonical units directly against it; do not add a parallel Python
+field enum.
+
+A weather run owns immutable raw evidence under
+`data/raw/weather/<run-key>/`: `request-plan.json`, native payloads, and
+`manifest.json`. Derived outputs are immutable version/fingerprint directories
+under `data/interim/weather/<run-key>/`, with an append-only hash-linked state
+ledger under `state/events/`. Artifacts are written once, referenced by
+repository-relative path/SHA-256/byte count, and verified before a downstream
+stage can use them.
+
+The contract stages are collector, parser, normalizer, spatial aligner,
+validator, feature builder, and persistence. Their versions are independent;
+`weather_ingestion_runs.pipeline_version` will receive their fixed-order
+pipe-delimited tuple only in S08. `fresh` creates one new run UUID and `resume`
+is offline. `failed` may retry from the last hash-verified stage; `partial` and
+`persisted` are terminal; `quarantined` may only be emitted or resolved by a new
+validation output.
+
+S02 deliberately registers no weather CLI command. S03 onward will expose a
+stage command only when it implements the corresponding real behavior.
 ## Why Python exists in a TypeScript-first repository
 
 Product behavior, HTTP transport, and the dashboard stay in TypeScript. Python

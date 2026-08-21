@@ -17,9 +17,9 @@ not a project history. Use the following documents for the authoritative detail:
 | Field | Value |
 | --- | --- |
 | Branch | `feature/T-018-weather-ingestion`. |
-| Working tree at handoff update | T-018/S01 Drizzle schema, generated migration, compatibility updates, tests, draw.io, and documentation are uncommitted. The migration has not been applied to the configured local database. |
+| Working tree at handoff update | T-018/S02 adds Python runtime contracts, immutable artifacts, state protocol, tests, and documentation. T-018/S01 is committed on this branch; its migration has not been applied to the configured local database. |
 | Task status in `docs/tasks.md` | Unchanged in this session; `tasks.md` was deliberately not edited. |
-| Next implementation focus | Owner reviews the generated T-018/S01 migration. After explicit approval it may be applied/committed; then T-018/S02 begins shared contracts, manifests, versions, and stage state. |
+| Next implementation focus | Implement S03 GFS request planning and immutable collection against the S02 contracts; do not add a placeholder CLI. |
 | Local storage | SQLite selected by `DATABASE_URL`; local databases, raw source data, and interim artifacts are ignored. |
 
 T-013 now has two successful local XCContest ingestion runs. The complete
@@ -84,7 +84,7 @@ period.
 The detailed results and proposed canonical vocabulary are in
 [`T-017-weather-feature-spike-report.md`](T-017-weather-feature-spike-report.md)
 and the machine-readable
-[`T-017-weather-field-catalogue.json`](T-017-weather-field-catalogue.json).
+[`weather-field-catalogue.json`](../services/ml/src/paragliding_forecasts_ml/ingestion/atmosphere/resources/weather-field-catalogue.json).
 
 The no-credential phase is complete for five canonical sites, representative
 strong/marginal/precipitation cases, and 24/48/72/120-hour leads:
@@ -163,20 +163,42 @@ handling and a compatible model evaluation. IGRA soundings remain T-019.
 - `S01` (implementation complete; owner review pending) — Drizzle weather schema,
   manifest-backed run provenance, site/grid/sample/profile/feature identity,
   generated migration, constraints, indexes, and temporary migration tests.
-- `S02` — implement shared atmospheric contracts, durable artifacts, manifests,
-  versions and stage state machine.
+- `S02` (complete; 89 Python tests, Ruff, wheel-resource, and repository checks passed) — shared atmospheric contracts, durable artifacts, manifests, versions and stage state machine.
 - `S03` — implement the GFS request planner and immutable collector.
-- `S04` — implement GFS GRIB decoding and T-017 canonical normalization.
+- `S04` — implement GFS GRIB parsing and T-017 canonical normalization.
 - `S05` — implement deterministic canonical site/grid sampling and AGL policy.
 - `S06` — implement source-aware validation, missingness and quarantine.
 - `S07` — implement the versioned meteorological feature builder.
 - `S08` — implement non-migrating SQLite persistence and the end-to-end GFS
   `fresh`/offline `resume` walking skeleton.
-- `S09` — implement the ERA5 CDS collector/decoder/normalizer through the same
+- `S09` — implement the ERA5 CDS collector/parser/normalizer through the same
   validation and persistence boundaries.
 - `S10` — harden the GFS+ERA5 orchestration, offline replays, bounded live
   verification, documentation and final T-018 validation.
 
+### T-018/S02 durable atmospheric protocol
+
+S02 moves the sole machine-readable T-017 catalogue to the packaged resource
+`services/ml/src/paragliding_forecasts_ml/ingestion/atmosphere/resources/weather-field-catalogue.json`.
+There is no copied Python field enum: strict Pydantic contracts validate field
+codes, canonical units, source IDs, and quality states against that resource at
+runtime.
+
+`data/raw/weather/<run-key>/` owns one immutable `request-plan.json`, native
+payloads, and `manifest.json`. `data/interim/weather/<run-key>/` owns versioned
+fingerprint directories for parser, normalizer, spatial alignment, validation,
+feature building, and persistence evidence, plus an append-only hash-linked
+state-event ledger. A `fresh` run initializes a new UUID directory; `resume` is
+an offline mode that may only append a legal next event after verifying the
+prior hashes. `partial` and `persisted` are terminal, failed parser/normalizer
+stages may retry from the last complete stage, and only validation may emit or
+resolve `quarantined`.
+
+S02 declares source adapter, parser, normalizer, spatial aligner, validator,
+feature builder, and persistence protocols plus independently versioned
+component slots. It intentionally adds no weather CLI command, source request,
+GRIB/NetCDF parser, or SQLite write. The synthetic proof covers the complete
+request-to-persistence hash chain without network or database access.
 ### T-018/S01 schema and migration review state
 
 The final weather section of `docs/T-012-flight-schema.drawio` is the S01

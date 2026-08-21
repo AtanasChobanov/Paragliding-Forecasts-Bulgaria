@@ -46,6 +46,7 @@ consequences. Temporary progress and Git state belong in
 | DEC-031 | Lock weather-source roles and canonical feature semantics | Accepted | 2026-08-16 |
 | DEC-032 | Implement GFS and ERA5 weather ingestion in T-018 | Accepted | 2026-08-17 |
 | DEC-033 | Finalize the normalized T-018 weather persistence schema | Accepted | 2026-08-20 |
+| DEC-034 | Use one packaged atmospheric catalogue and durable stage protocol | Accepted | 2026-08-21 |
 
 ## Individual decisions
 
@@ -1226,7 +1227,7 @@ remain unavailable. A commercial release still requires owner confirmation of
 provider licences, attribution, retention, and direct-source/archive operations.
 
 **Related files:** [`T-017-weather-feature-spike-report.md`](T-017-weather-feature-spike-report.md),
-[`T-017-weather-field-catalogue.json`](T-017-weather-field-catalogue.json),
+[`weather-field-catalogue.json`](../services/ml/src/paragliding_forecasts_ml/ingestion/atmosphere/resources/weather-field-catalogue.json),
 [`handoff.md`](handoff.md).
 
 ### DEC-032 - Implement GFS and ERA5 weather ingestion in T-018
@@ -1286,7 +1287,7 @@ model's values into a GFS cohort. Neighbourhood calculations use physical
 distance and retain their footprint version.
 
 **Related files:** [`T-017-weather-feature-spike-report.md`](T-017-weather-feature-spike-report.md),
-[`T-017-weather-field-catalogue.json`](T-017-weather-field-catalogue.json),
+[`weather-field-catalogue.json`](../services/ml/src/paragliding_forecasts_ml/ingestion/atmosphere/resources/weather-field-catalogue.json),
 [`T-016-forecast-data-research-report.md`](T-016-forecast-data-research-report.md),
 [handoff.md](handoff.md).
 
@@ -1386,6 +1387,45 @@ unreviewed column or field code.
 [`architecture.md`](architecture.md), [`handoff.md`](handoff.md),
 [`../packages/database/src/schema.ts`](../packages/database/src/schema.ts).
 
+### DEC-034 - Use one packaged atmospheric catalogue and durable stage protocol
+
+**Status:** Accepted
+
+**Date:** 2026-08-21
+
+**Context:** T-018/S02 needs runtime validation of the T-017 canonical weather
+vocabulary and reproducible boundaries before a GFS or ERA5 adapter can be
+implemented. A copied Python enum, mutable intermediate files, or one combined
+pipeline version would permit silent vocabulary drift and make offline replay
+ambiguous.
+
+**Decision:** Move the single machine-readable T-017 catalogue into the ML
+package resources. Load it at runtime with strict validation; do not retain a
+second manual field vocabulary. Use strict versioned contracts for request
+plans, raw manifests, native parser batches, canonical samples/profile levels,
+validation reports, feature snapshots, stage manifests, and persistence
+receipts. Source adapters own planning/collection and source-native parsing;
+source-neutral normalization, spatial alignment, validation, feature building,
+and persistence have separate component versions.
+
+Raw evidence lives under `data/raw/weather/<run-key>/`; all derived evidence and
+an append-only hash-linked state ledger live under
+`data/interim/weather/<run-key>/`. Every durable file is exclusive-create and
+SHA-256 verified. `fresh` and offline `resume` are execution modes, while
+`failed`, `partial`, `quarantined`, and `persisted` are protocol dispositions.
+The existing SQLite lifecycle remains `running`/`succeeded`/`failed`; S08 maps
+filesystem outcomes into it without a schema change.
+
+**Consequences:** S02 does not expose a placeholder weather command, make a
+network request, parse a real GRIB payload, or write SQLite. Each later slice
+must add only its real stage implementation and use the S02 artifact/hash/state
+boundary. The T-017 report and all decisions link to the packaged resource.
+
+**Related files:**
+[`weather-field-catalogue.json`](../services/ml/src/paragliding_forecasts_ml/ingestion/atmosphere/resources/weather-field-catalogue.json),
+[`contracts.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/atmosphere/contracts.py),
+[`artifacts.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/artifacts.py),
+[`handoff.md`](handoff.md).
 ## Open decisions
 
 | Question | Options / constraints | Resolve by |
