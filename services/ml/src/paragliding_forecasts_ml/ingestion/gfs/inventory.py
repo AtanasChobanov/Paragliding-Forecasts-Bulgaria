@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Literal
 
 
 class InventoryError(ValueError):
     """An official GFS inventory cannot safely define byte ranges."""
+
+
+class SelectorContractError(InventoryError):
+    """The configured selector contract does not resolve against a valid inventory."""
 
 
 @dataclass(frozen=True)
@@ -25,12 +31,14 @@ class GfsIndexEntry:
 
 @dataclass(frozen=True)
 class GfsSelector:
-    """One exact parameter/level match required by the S03 raw collector."""
+    """One parameter/level/temporal semantic required by the raw collector."""
 
     key: str
     parameter: str
     level: str
-    required_count: int = 1
+    temporal_kind: Literal["point", "average", "accumulation"] = "point"
+    minimum_lead_hours: int = 0
+    allow_tied_matches: bool = False
 
 
 @dataclass(frozen=True)
@@ -41,6 +49,7 @@ class GfsByteRange:
     end: int
     selector_keys: tuple[str, ...]
     message_numbers: tuple[int, ...]
+    forecast_descriptors: tuple[str, ...]
 
     @property
     def byte_count(self) -> int:
@@ -58,14 +67,27 @@ DEFAULT_SELECTORS: tuple[GfsSelector, ...] = (
     GfsSelector("pres_surface", "PRES", "surface"),
     GfsSelector("prmsl", "PRMSL", "mean sea level"),
     GfsSelector("orog", "HGT", "surface"),
-    GfsSelector("hpbl", "HGT", "planetary boundary layer"),
+    GfsSelector("hpbl", "HPBL", "surface"),
     GfsSelector("tcdc", "TCDC", "entire atmosphere"),
     GfsSelector("lcdc", "LCDC", "low cloud layer"),
     GfsSelector("mcdc", "MCDC", "middle cloud layer"),
     GfsSelector("hcdc", "HCDC", "high cloud layer"),
-    GfsSelector("apcp", "APCP", "surface"),
-    GfsSelector("dswrf", "DSWRF", "surface"),
-    GfsSelector("pwat", "PWAT", "entire atmosphere"),
+    GfsSelector(
+        "apcp",
+        "APCP",
+        "surface",
+        temporal_kind="accumulation",
+        minimum_lead_hours=1,
+        allow_tied_matches=True,
+    ),
+    GfsSelector(
+        "dswrf",
+        "DSWRF",
+        "surface",
+        temporal_kind="average",
+        minimum_lead_hours=1,
+    ),
+    GfsSelector("pwat", "PWAT", "entire atmosphere (considered as a single layer)"),
     GfsSelector("cape_surface", "CAPE", "surface"),
     GfsSelector("cin_surface", "CIN", "surface"),
     GfsSelector("cape_layer", "CAPE", "180-0 mb above ground"),
@@ -121,27 +143,93 @@ def parse_index(content: bytes) -> tuple[GfsIndexEntry, ...]:
     return tuple(entries)
 
 
+_INTERVAL_RE = re.compile(
+    r"^(?P<start>\d+)-(?P<end>\d+) (?P<unit>hour|day) (?P<kind>ave|acc) fcst$"
+)
+
+
+def _point_descriptor(lead_hours: int) -> str:
+    return "anl" if lead_hours == 0 else f"{lead_hours} hour fcst"
+
+
+def _interval_hours(descriptor: str, *, kind: str, lead_hours: int) -> tuple[int, int] | None:
+    match = _INTERVAL_RE.fullmatch(descriptor)
+    if match is None or match.group("kind") != kind:
+        return None
+    multiplier = 24 if match.group("unit") == "day" else 1
+    start = int(match.group("start")) * multiplier
+    end = int(match.group("end")) * multiplier
+    if end != lead_hours or start >= end:
+        return None
+    return start, end
+
+
+def _selector_hits(
+    entries: tuple[GfsIndexEntry, ...], selector: GfsSelector, *, lead_hours: int
+) -> list[tuple[int, GfsIndexEntry]]:
+    candidates = [
+        (index, entry)
+        for index, entry in enumerate(entries)
+        if entry.parameter == selector.parameter and entry.level == selector.level
+    ]
+    if selector.temporal_kind == "point":
+        descriptor = _point_descriptor(lead_hours)
+        return [
+            (index, entry) for index, entry in candidates if entry.forecast_descriptor == descriptor
+        ]
+
+    interval_kind = "ave" if selector.temporal_kind == "average" else "acc"
+    intervals = [
+        (index, entry, interval)
+        for index, entry in candidates
+        if (
+            interval := _interval_hours(
+                entry.forecast_descriptor,
+                kind=interval_kind,
+                lead_hours=lead_hours,
+            )
+        )
+        is not None
+    ]
+    if not intervals:
+        return []
+    shortest = min(end - start for _index, _entry, (start, end) in intervals)
+    return [(index, entry) for index, entry, (start, end) in intervals if end - start == shortest]
+
+
 def select_ranges(
     entries: tuple[GfsIndexEntry, ...],
     *,
     content_length: int,
+    lead_hours: int,
     selectors: tuple[GfsSelector, ...] = DEFAULT_SELECTORS,
     maximum_range_bytes: int,
 ) -> tuple[GfsByteRange, ...]:
-    """Return exact whole-message ranges, failing closed on missing selectors."""
+    """Return exact whole-message ranges selected by native temporal semantics."""
 
-    if content_length < 1 or maximum_range_bytes < 1:
-        raise InventoryError("GFS object and range byte limits must be positive.")
+    if content_length < 1 or maximum_range_bytes < 1 or lead_hours < 0:
+        raise InventoryError("GFS object, lead and range byte limits must be valid.")
     matched: list[tuple[GfsIndexEntry, str, int, int]] = []
     for selector in selectors:
-        hits = [
-            (index, entry)
-            for index, entry in enumerate(entries)
-            if entry.parameter == selector.parameter and entry.level == selector.level
-        ]
-        if len(hits) != selector.required_count:
-            raise InventoryError(
-                f"Selector {selector.key} expected {selector.required_count} message(s), found {len(hits)}."
+        if lead_hours < selector.minimum_lead_hours:
+            continue
+        hits = _selector_hits(entries, selector, lead_hours=lead_hours)
+        if not hits:
+            available = sorted(
+                {
+                    f"{entry.level} [{entry.forecast_descriptor}]"
+                    for entry in entries
+                    if entry.parameter == selector.parameter
+                }
+            )
+            raise SelectorContractError(
+                f"Selector {selector.key} found no matching message at f{lead_hours:03d}; "
+                f"available {selector.parameter} forms: {available or ['none']}."
+            )
+        if len(hits) > 1 and not selector.allow_tied_matches:
+            descriptors = [entry.forecast_descriptor for _index, entry in hits]
+            raise SelectorContractError(
+                f"Selector {selector.key} is ambiguous at f{lead_hours:03d}: {descriptors}."
             )
         for index, entry in hits:
             end = entries[index + 1].offset - 1 if index + 1 < len(entries) else content_length - 1
@@ -167,8 +255,17 @@ def select_ranges(
                     end,
                     previous.selector_keys + (selector_key,),
                     previous.message_numbers + (entry.message_number,),
+                    previous.forecast_descriptors + (entry.forecast_descriptor,),
                 )
             )
         else:
-            ranges.append(GfsByteRange(start, end, (selector_key,), (entry.message_number,)))
+            ranges.append(
+                GfsByteRange(
+                    start,
+                    end,
+                    (selector_key,),
+                    (entry.message_number,),
+                    (entry.forecast_descriptor,),
+                )
+            )
     return tuple(ranges)

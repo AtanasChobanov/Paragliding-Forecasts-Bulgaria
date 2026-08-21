@@ -10,7 +10,7 @@ from ..atmosphere.contracts import ArtifactReference, AtmosphericContract, valid
 
 GFS_SOURCE_ID = "noaa_gfs_0p25_aws_grib2"
 GFS_BUCKET_URL = "https://noaa-gfs-bdp-pds.s3.amazonaws.com"
-GFS_COLLECTOR_VERSION = "gfs-collector/1"
+GFS_COLLECTOR_VERSION = "gfs-collector/2"
 
 
 class GfsRequest(AtmosphericContract):
@@ -65,6 +65,8 @@ class GfsPlannedRange(AtmosphericContract):
     selector_keys: tuple[str, ...] = Field(min_length=1)
     message_numbers: tuple[int, ...] = Field(min_length=1)
 
+    forecast_descriptors: tuple[str, ...] = Field(min_length=1)
+
     @field_validator("valid_at_utc", "object_last_modified_utc")
     @classmethod
     def timestamps_must_be_utc(cls, value: str) -> str:
@@ -79,7 +81,7 @@ class GfsResolvedPlan(AtmosphericContract):
     resolved_run_at_utc: str
     available_at_utc: str
     source_product_key: str
-    selector_set_version: Literal[1] = 1
+    selector_set_version: Literal[2] = 2
     spatial_footprint: Literal["global_regular_latlon_0p25"] = "global_regular_latlon_0p25"
     ranges: tuple[GfsPlannedRange, ...] = Field(min_length=1)
     licence_reference: str = "https://registry.opendata.aws/noaa-gfs-bdp-pds/"
@@ -106,6 +108,7 @@ class GfsArtifactEvidence(AtmosphericContract):
     selector_keys: tuple[str, ...] = ()
     etag: str | None = None
     last_modified_utc: str | None = None
+    forecast_descriptors: tuple[str, ...] = ()
 
     @field_validator("valid_at_utc", "last_modified_utc")
     @classmethod

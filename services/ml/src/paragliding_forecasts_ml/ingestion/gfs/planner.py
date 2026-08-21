@@ -8,7 +8,13 @@ from email.utils import parsedate_to_datetime
 
 from ..atmosphere.catalogue import load_catalogue
 from ..atmosphere.contracts import RequestPlan
-from .inventory import DEFAULT_SELECTORS, InventoryError, parse_index, select_ranges
+from .inventory import (
+    DEFAULT_SELECTORS,
+    InventoryError,
+    SelectorContractError,
+    parse_index,
+    select_ranges,
+)
 from .models import GFS_BUCKET_URL, GFS_SOURCE_ID, GfsPlannedRange, GfsRequest, GfsResolvedPlan
 from .transport import GfsTransportError, HttpTransport
 
@@ -138,8 +144,14 @@ class GfsPlanner:
                     entries,
                     content_length=length,
                     selectors=self.selectors,
+                    lead_hours=lead,
                     maximum_range_bytes=request.maximum_range_bytes,
                 )
+            except SelectorContractError as error:
+                raise GfsPlanningError(
+                    "source_contract_mismatch",
+                    f"GFS f{lead:03d} selector contract does not match the inventory: {error}",
+                ) from error
             except (ValueError, InventoryError) as error:
                 raise GfsPlanningError(
                     "incomplete_run", f"GFS f{lead:03d} inventory is incomplete: {error}"
@@ -161,6 +173,7 @@ class GfsPlanner:
                         byte_end=byte_range.end,
                         selector_keys=byte_range.selector_keys,
                         message_numbers=byte_range.message_numbers,
+                        forecast_descriptors=byte_range.forecast_descriptors,
                     )
                 )
         if (

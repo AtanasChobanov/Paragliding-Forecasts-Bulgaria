@@ -45,6 +45,7 @@ def test_collector_persists_bounded_range_evidence(tmp_path) -> None:
                 byte_end=3,
                 selector_keys=("tmp_2m",),
                 message_numbers=(1,),
+                forecast_descriptors=("anl",),
             ),
         ),
     )

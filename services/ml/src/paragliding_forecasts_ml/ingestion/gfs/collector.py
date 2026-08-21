@@ -121,6 +121,7 @@ class GfsCollector:
                         valid_at_utc=item.valid_at_utc,
                         message_numbers=item.message_numbers,
                         selector_keys=item.selector_keys,
+                        forecast_descriptors=item.forecast_descriptors,
                         etag=item.object_etag,
                         last_modified_utc=item.object_last_modified_utc,
                     )
