@@ -58,7 +58,7 @@ DEFAULT_SELECTORS: tuple[GfsSelector, ...] = (
     GfsSelector("pres_surface", "PRES", "surface"),
     GfsSelector("prmsl", "PRMSL", "mean sea level"),
     GfsSelector("orog", "HGT", "surface"),
-    GfsSelector("hpbl", "HPBL", "planetary boundary layer"),
+    GfsSelector("hpbl", "HGT", "planetary boundary layer"),
     GfsSelector("tcdc", "TCDC", "entire atmosphere"),
     GfsSelector("lcdc", "LCDC", "low cloud layer"),
     GfsSelector("mcdc", "MCDC", "middle cloud layer"),
