@@ -6,7 +6,7 @@ derivation boundaries are locked for T-018 implementation review.**
 Date: 2026-08-16
 
 The machine-readable companion to this report is
-[`T-017-weather-field-catalogue.json`](T-017-weather-field-catalogue.json).
+[`weather-field-catalogue.json`](../services/ml/src/paragliding_forecasts_ml/ingestion/atmosphere/resources/weather-field-catalogue.json).
 The catalogue is the proposed ingestion vocabulary for T-018. It is not yet a
 database schema and must not be treated as an accepted source-provider decision
 until the CDS checks below are complete.
