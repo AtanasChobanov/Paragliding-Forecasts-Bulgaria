@@ -10,6 +10,7 @@ dependencies = [
     "playwright>=1.62.0",
     "pydantic>=2.12.0,<3",
     "selectolax>=0.4.11",
+    "tifffile>=2025.6.11,<2027",
 ]
 
 [project.scripts]
@@ -20,6 +21,7 @@ xccontest-validate = "paragliding_forecasts_ml.ingestion.xccontest.validator_cli
 xccontest-persist = "paragliding_forecasts_ml.ingestion.xccontest.persistence_cli:main"
 gfs-collect = "paragliding_forecasts_ml.ingestion.gfs.cli:main"
 gfs-parse = "paragliding_forecasts_ml.ingestion.gfs.parser_cli:main"
+copernicus-elevations = "paragliding_forecasts_ml.ingestion.copernicus.elevation_cli:main"
 xccontest-ingest = "paragliding_forecasts_ml.ingestion.xccontest.pipeline_cli:main"
 
 [build-system]
