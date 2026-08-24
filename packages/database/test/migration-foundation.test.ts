@@ -101,8 +101,8 @@ afterEach(() => {
   }
 });
 
-const insertWeatherGraph = (): void => {
-  activeConnection().sqlite.exec(`
+const insertWeatherGraph = (targetConnection = activeConnection()): void => {
+  targetConnection.sqlite.exec(`
     INSERT INTO weather_sources (
       id, code, provider_name, dataset_name, source_kind, base_url, is_active
     ) VALUES (
@@ -251,7 +251,7 @@ describe("database foundation migrations", () => {
 
     expect(sqlite.prepare("PRAGMA foreign_keys").get()).toEqual({ foreign_keys: 1 });
     expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({
-      count: 6,
+      count: 7,
     });
 
     if (databaseUrl === undefined) {
@@ -261,7 +261,7 @@ describe("database foundation migrations", () => {
     runMigrations(databaseUrl);
 
     expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({
-      count: 6,
+      count: 7,
     });
     expect(
       sqlite
@@ -721,6 +721,18 @@ describe("database foundation migrations", () => {
       ) VALUES (10, 10, 12.5, 1.1);
     `);
     expectSqlFailure(`
+      UPDATE weather_samples
+      SET provider_boundary_layer_height_agl_m = -1,
+          provider_boundary_layer_method = 'provider'
+      WHERE id = 10;
+    `);
+    expectSqlFailure(`
+      UPDATE weather_samples
+      SET provider_boundary_layer_height_agl_m = 100,
+          provider_boundary_layer_method = NULL
+      WHERE id = 10;
+    `);
+    expectSqlFailure(`
       INSERT INTO weather_convection_measurements (
         weather_sample_id, parcel_method, calculation_method
       ) VALUES (10, 'provider_unspecified', 'provider');
@@ -765,6 +777,7 @@ describe("database foundation migrations", () => {
 
 const migrationsDirectory = fileURLToPath(new URL("../drizzle/", import.meta.url));
 const weatherMigrationDirectory = "20260820160216_create_weather_foundation";
+const pblAglMigrationDirectory = "20260824183235_add_provider_pbl_agl";
 
 let upgradeConnection: DatabaseConnection | undefined;
 let upgradeTestDirectory: string | undefined;
@@ -852,6 +865,49 @@ describe("weather foundation upgrade", () => {
       created_by_ingestion_run_id: 500,
       last_validated_by_ingestion_run_id: 500,
     });
+    expect(upgradeConnection.sqlite.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+  });
+
+  it("adds provider PBL AGL storage without losing an existing weather graph", () => {
+    mkdirSync(dataLocalDirectory, { recursive: true });
+    upgradeTestDirectory = mkdtempSync(join(dataLocalDirectory, "t018-pbl-upgrade-test-"));
+    const oldMigrationsDirectory = join(upgradeTestDirectory, "old-migrations");
+    mkdirSync(oldMigrationsDirectory);
+
+    for (const entry of readdirSync(migrationsDirectory, { withFileTypes: true })) {
+      if (entry.isDirectory() && entry.name < pblAglMigrationDirectory) {
+        cpSync(join(migrationsDirectory, entry.name), join(oldMigrationsDirectory, entry.name), {
+          recursive: true,
+        });
+      }
+    }
+
+    const databaseUrl = `file:./data/local/${basename(upgradeTestDirectory)}/upgrade.db`;
+    upgradeConnection = openDatabase(databaseUrl);
+    migrate(upgradeConnection.db, { migrationsFolder: oldMigrationsDirectory });
+    insertWeatherGraph(upgradeConnection);
+    upgradeConnection.close();
+    upgradeConnection = undefined;
+
+    runMigrations(databaseUrl);
+    upgradeConnection = openDatabase(databaseUrl);
+
+    expect(
+      upgradeConnection.sqlite
+        .prepare(
+          `SELECT air_temperature_2m_k, provider_boundary_layer_height_agl_m
+           FROM weather_samples WHERE id = 10`,
+        )
+        .get(),
+    ).toEqual({
+      air_temperature_2m_k: 293.15,
+      provider_boundary_layer_height_agl_m: null,
+    });
+    expect(
+      upgradeConnection.sqlite
+        .prepare("SELECT count(*) AS count FROM weather_field_provenance")
+        .get(),
+    ).toEqual({ count: 6 });
     expect(upgradeConnection.sqlite.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
   });
 });

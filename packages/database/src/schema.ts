@@ -883,6 +883,7 @@ export const weatherSamples = sqliteTable(
     windV10mMS: real("wind_v_10m_m_s"),
     windSpeed10mMS: real("wind_speed_10m_m_s"),
     windDirection10mDegreesFromNorth: real("wind_direction_10m_degrees_from_north"),
+    providerBoundaryLayerHeightAglM: real("provider_boundary_layer_height_agl_m"),
     providerBoundaryLayerHeightMslM: real("provider_boundary_layer_height_msl_m"),
     providerBoundaryLayerMethod: text("provider_boundary_layer_method"),
     providerCloudBaseAglM: real("provider_cloud_base_agl_m"),
@@ -961,10 +962,16 @@ export const weatherSamples = sqliteTable(
         )`,
     ),
     check(
+      "weather_samples_boundary_layer_agl_non_negative_check",
+      sql`${table.providerBoundaryLayerHeightAglM} IS NULL
+        OR ${table.providerBoundaryLayerHeightAglM} >= 0`,
+    ),
+    check(
       "weather_samples_boundary_layer_method_shape_check",
       sql`(${table.providerBoundaryLayerMethod} IS NULL
           OR length(trim(${table.providerBoundaryLayerMethod})) > 0)
-        AND (${table.providerBoundaryLayerHeightMslM} IS NULL
+        AND ((${table.providerBoundaryLayerHeightAglM} IS NULL
+            AND ${table.providerBoundaryLayerHeightMslM} IS NULL)
           OR ${table.providerBoundaryLayerMethod} IS NOT NULL)`,
     ),
     check(

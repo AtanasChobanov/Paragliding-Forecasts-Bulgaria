@@ -136,7 +136,14 @@ describe("weather persistence schema", () => {
       "interpolation_weight",
     ]);
     expect(sampleColumns).not.toEqual(expect.arrayContaining(["site_id", "grid_id"]));
-    expect(sampleColumns).toEqual(expect.arrayContaining(["product_run_id", "point_footprint_id"]));
+    expect(sampleColumns).toEqual(
+      expect.arrayContaining([
+        "product_run_id",
+        "point_footprint_id",
+        "provider_boundary_layer_height_agl_m",
+        "provider_boundary_layer_height_msl_m",
+      ]),
+    );
   });
 
   it("stores interval quality only through per-field provenance", () => {
