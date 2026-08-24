@@ -11,42 +11,44 @@ consequences. Temporary progress and Git state belong in
 
 ## Decision index
 
-| Decision ID | Title | Status | Date |
-| --- | --- | --- | --- |
-| DEC-001 | Use one repository with bounded subprojects | Accepted | 2026-07-15 |
-| DEC-002 | Use npm workspaces for TypeScript and uv for Python | Accepted | 2026-07-15 |
-| DEC-003 | Use TypeScript by default and limit Python to data/ML work | Accepted | 2026-07-15 |
-| DEC-004 | Use React/Vite for web and Node.js/Express for the public API | Accepted | 2026-07-15 |
-| DEC-005 | Share browser/API contracts in TypeScript and keep Python language-neutral | Accepted | 2026-07-15 |
-| DEC-006 | Use a local-first MVP and SQLite storage direction | Accepted | 2026-07-15 |
-| DEC-007 | Preserve explicit forecast status, provenance, units, and safety semantics | Accepted | 2026-07-15 |
-| DEC-008 | Keep generated/local data out of Git with a controlled fixture exception | Accepted | 2026-07-15 |
-| DEC-009 | Use short-lived ticket branches and pull-request review | Accepted | 2026-07-15 |
-| DEC-010 | Organize the API by feature with manual dependency injection | Accepted | 2026-07-17 |
-| DEC-011 | Use Zod as the runtime browser/API contract validator | Accepted | 2026-07-17 |
-| DEC-012 | Use TSX and Vitest for the initial API development loop | Accepted | 2026-07-17 |
-| DEC-013 | Use Pino logging and Problem Details HTTP errors | Accepted | 2026-07-17 |
-| DEC-014 | Separate internal numeric site IDs from public slugs | Accepted | 2026-07-20 |
-| DEC-015 | Add dashboard-specific forecast read models | Accepted | 2026-07-21 |
-| DEC-016 | Expose provisional map coordinates and confirm Pastrina spelling | Accepted | 2026-07-21 |
-| DEC-017 | Use a focused React dashboard stack with Leaflet | Accepted | 2026-07-22 |
-| DEC-018 | Add a provisional detailed forecast-input read model | Accepted | 2026-07-24 |
-| DEC-019 | Use Playwright Chromium for local browser smoke coverage | Accepted | 2026-07-25 |
-| DEC-020 | Use a phased Drizzle-owned SQLite foundation for flight data | Accepted | 2026-07-30 |
-| DEC-021 | Finalize the normalized T-012 flight foundation schema | Accepted | 2026-08-02 |
-| DEC-022 | Collect XCContest list pages through the permitted rendered UI boundary | Superseded | 2026-08-04 |
-| DEC-023 | Partition saturated XCContest first-page views through visible filters | Accepted | 2026-08-06 |
-| DEC-024 | Derive XCContest country scope from all canonical sites | Accepted | 2026-08-06 |
-| DEC-025 | Use durable artifacts between versioned XCContest ingestion stages | Accepted | 2026-08-07 |
-| DEC-026 | Configure geographic catchments for every initial launch site | Accepted | 2026-08-08 |
-| DEC-027 | Review source-site mappings before flight acceptance | Accepted | 2026-08-08 |
-| DEC-028 | Default XCContest collection to conservative source pacing | Accepted | 2026-08-11 |
-| DEC-029 | Gate one-command XCContest persistence on mapping review | Accepted | 2026-08-11 |
-| DEC-030 | Reconcile repeated XCContest source flights without silent overwrite | Accepted | 2026-08-12 |
-| DEC-031 | Lock weather-source roles and canonical feature semantics | Accepted | 2026-08-16 |
-| DEC-032 | Implement GFS and ERA5 weather ingestion in T-018 | Accepted | 2026-08-17 |
-| DEC-033 | Finalize the normalized T-018 weather persistence schema | Accepted | 2026-08-20 |
-| DEC-034 | Use one packaged atmospheric catalogue and durable stage protocol | Accepted | 2026-08-21 |
+| Decision ID | Title                                                                           | Status     | Date       |
+| ----------- | ------------------------------------------------------------------------------- | ---------- | ---------- |
+| DEC-001     | Use one repository with bounded subprojects                                     | Accepted   | 2026-07-15 |
+| DEC-002     | Use npm workspaces for TypeScript and uv for Python                             | Accepted   | 2026-07-15 |
+| DEC-003     | Use TypeScript by default and limit Python to data/ML work                      | Accepted   | 2026-07-15 |
+| DEC-004     | Use React/Vite for web and Node.js/Express for the public API                   | Accepted   | 2026-07-15 |
+| DEC-005     | Share browser/API contracts in TypeScript and keep Python language-neutral      | Accepted   | 2026-07-15 |
+| DEC-006     | Use a local-first MVP and SQLite storage direction                              | Accepted   | 2026-07-15 |
+| DEC-007     | Preserve explicit forecast status, provenance, units, and safety semantics      | Accepted   | 2026-07-15 |
+| DEC-008     | Keep generated/local data out of Git with a controlled fixture exception        | Accepted   | 2026-07-15 |
+| DEC-009     | Use short-lived ticket branches and pull-request review                         | Accepted   | 2026-07-15 |
+| DEC-010     | Organize the API by feature with manual dependency injection                    | Accepted   | 2026-07-17 |
+| DEC-011     | Use Zod as the runtime browser/API contract validator                           | Accepted   | 2026-07-17 |
+| DEC-012     | Use TSX and Vitest for the initial API development loop                         | Accepted   | 2026-07-17 |
+| DEC-013     | Use Pino logging and Problem Details HTTP errors                                | Accepted   | 2026-07-17 |
+| DEC-014     | Separate internal numeric site IDs from public slugs                            | Accepted   | 2026-07-20 |
+| DEC-015     | Add dashboard-specific forecast read models                                     | Accepted   | 2026-07-21 |
+| DEC-016     | Expose provisional map coordinates and confirm Pastrina spelling                | Accepted   | 2026-07-21 |
+| DEC-017     | Use a focused React dashboard stack with Leaflet                                | Accepted   | 2026-07-22 |
+| DEC-018     | Add a provisional detailed forecast-input read model                            | Accepted   | 2026-07-24 |
+| DEC-019     | Use Playwright Chromium for local browser smoke coverage                        | Accepted   | 2026-07-25 |
+| DEC-020     | Use a phased Drizzle-owned SQLite foundation for flight data                    | Accepted   | 2026-07-30 |
+| DEC-021     | Finalize the normalized T-012 flight foundation schema                          | Accepted   | 2026-08-02 |
+| DEC-022     | Collect XCContest list pages through the permitted rendered UI boundary         | Superseded | 2026-08-04 |
+| DEC-023     | Partition saturated XCContest first-page views through visible filters          | Accepted   | 2026-08-06 |
+| DEC-024     | Derive XCContest country scope from all canonical sites                         | Accepted   | 2026-08-06 |
+| DEC-025     | Use durable artifacts between versioned XCContest ingestion stages              | Accepted   | 2026-08-07 |
+| DEC-026     | Configure geographic catchments for every initial launch site                   | Accepted   | 2026-08-08 |
+| DEC-027     | Review source-site mappings before flight acceptance                            | Accepted   | 2026-08-08 |
+| DEC-028     | Default XCContest collection to conservative source pacing                      | Accepted   | 2026-08-11 |
+| DEC-029     | Gate one-command XCContest persistence on mapping review                        | Accepted   | 2026-08-11 |
+| DEC-030     | Reconcile repeated XCContest source flights without silent overwrite            | Accepted   | 2026-08-12 |
+| DEC-031     | Lock weather-source roles and canonical feature semantics                       | Accepted   | 2026-08-16 |
+| DEC-032     | Implement GFS and ERA5 weather ingestion in T-018                               | Accepted   | 2026-08-17 |
+| DEC-033     | Finalize the normalized T-018 weather persistence schema                        | Accepted   | 2026-08-20 |
+| DEC-034     | Use one packaged atmospheric catalogue and durable stage protocol               | Accepted   | 2026-08-21 |
+| DEC-035     | Pin GFS GRIB parser identity and preserve only canonical weather quality states | Accepted   | 2026-08-21 |
+| DEC-036     | Use reviewed site coordinates with bilinear points and radius evidence          | Accepted   | 2026-08-24 |
 
 ## Individual decisions
 
@@ -812,7 +814,6 @@ column.
 [`architecture.md`](architecture.md), [`handoff.md`](handoff.md),
 [`../data/README.md`](../data/README.md), [`../CONTRIBUTING.md`](../CONTRIBUTING.md).
 
-
 ### DEC-022 - Collect XCContest list pages through the permitted rendered UI boundary
 
 **Status:** Accepted
@@ -1040,6 +1041,7 @@ SQLite persistence remain later T-013 slices.
 **Consequences:** A reviewed custom Drizzle data migration applies the six 5 km values to existing and fresh databases. Matching code must use inclusive Haversine distance checks, quarantine overlaps, and never call an external geocoder. API/UI contracts remain unchanged because catchments are ingestion configuration.
 
 **Related files:** [`../packages/database/src/schema.ts`](../packages/database/src/schema.ts), [`../packages/database/drizzle/20260808175017_set_launch_area_catchments/migration.sql`](../packages/database/drizzle/20260808175017_set_launch_area_catchments/migration.sql), [`handoff.md`](handoff.md).
+
 ### DEC-027 - Review source-site mappings before flight acceptance
 
 **Status:** Accepted
@@ -1053,6 +1055,7 @@ SQLite persistence remain later T-013 slices.
 **Consequences:** Validation communicates only through parser-v2 JSONL, SQLite mapping rows, and versioned interim files. It neither contacts XCContest nor writes ingestion provenance or flight records; a later T-013 persistence slice owns those writes. Any change to source matching, proposal, review, or validation output semantics increments the corresponding mapping or validation version.
 
 **Related files:** [`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/site_mapping.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/site_mapping.py), [`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/validator.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/validator.py), [`../services/ml/README.md`](../services/ml/README.md).
+
 ### DEC-028 - Default XCContest collection to conservative source pacing
 
 **Status:** Accepted
@@ -1115,7 +1118,6 @@ retroactive traceability behavior.
 **Related files:** [`../services/ml/README.md`](../services/ml/README.md),
 [`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/pipeline.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/pipeline.py),
 [`handoff.md`](handoff.md).
-
 
 ### DEC-030 - Reconcile repeated XCContest source flights without silent overwrite
 
@@ -1426,6 +1428,7 @@ boundary. The T-017 report and all decisions link to the packaged resource.
 [`contracts.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/atmosphere/contracts.py),
 [`artifacts.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/artifacts.py),
 [`handoff.md`](handoff.md).
+
 ### DEC-035 - Pin GFS GRIB parser identity and preserve only canonical weather quality states
 
 **Status:** Accepted
@@ -1447,8 +1450,11 @@ masks and use only `real`, `derived`, `missing`, `sentinel_missing`, and
 positive magnitude while retaining the native sign convention; retain native
 U/V and derive wind speed/direction; retain a stated accumulation interval
 without inferred de-accumulation unless adjacent intervals and a reset are
-proven. GUST and orography have no T-017/S01 destination, so retain them only
-as native evidence with an explicit unsupported canonical mapping outcome.
+proven. GUST has no T-017/S01 destination, so retain it only as native evidence
+with an explicit unsupported canonical mapping outcome. Orography is not a
+canonical weather measurement, but it must cross the S04 boundary as static
+model-grid terrain evidence for S05 elevation diagnostics and below-terrain
+filtering.
 
 **Consequences:** S05 consumes hash-verified canonical grid artifacts, not raw
 GRIB. A new GUST persistence field requires a separate catalogue/schema decision.
@@ -1459,14 +1465,75 @@ or source identity.
 [`parser.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/parser.py),
 [`normalizer.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/normalizer.py),
 [`handoff.md`](handoff.md).
+
+### DEC-036 - Use reviewed site coordinates with bilinear points and radius evidence
+
+**Status:** Accepted
+
+**Date:** 2026-08-24
+
+**Context:** T-018/S05 needs one deterministic value at each approved weather
+site while retaining enough nearby-grid evidence for later spatial features.
+The regional Dobrich map centre is not a meaningful launch/sampling point, GFS
+terrain is much coarser than the reviewed site terrain, and silently selecting
+a nearest cell would discard useful sub-cell position information. The Project
+Brief asks for derived convergence and wind-shear indicators, but it does not
+require S05 itself to invent a pressure-gradient/divergence formula.
+
+**Decision:** Provision one reviewed `weather_site_sampling_configs` row for
+each of the seven canonical sites through committed data migrations. Six use
+their canonical site coordinate; Dobrich uses the accepted Kardam coordinate
+`43.746321, 28.074025`. Missing or incomplete configuration fails the offline
+sampling preflight and is never auto-created during ingestion.
+
+Fetch reviewed reference elevation through the explicit-network
+`copernicus-elevations` command using Copernicus DEM GLO-30, bilinear sampling,
+and EGM2008 orthometric height. The command is repeatable, not a refresh/resume
+protocol: it emits an ignored review artifact and never writes SQLite. A
+separate guarded migration pins the seven reviewed results and their reference;
+later provider changes require a new review and migration.
+
+The packaged `canonical-site-sampling-policy-v1` uses strict bilinear point
+sampling on the canonical regular latitude/longitude grid. Missing contributing
+nodes produce an explicit missing value; weights are never renormalized. Wind
+components are interpolated first, then speed and meteorological direction are
+derived. Nearest-point sampling remains schema-compatible for future policies
+but is not implemented by S05.
+
+Separately retain an inclusive 50 km Haversine node footprint for MSL pressure,
+surface U/V and 925 hPa U/V. S05 does not calculate convergence, divergence or
+pressure-gradient features; it preserves deterministic node evidence for the
+versioned S07 feature builder. Pressure-level geopotential height is MSL;
+subtract the reviewed site elevation and the bilinear model orography to expose
+site-AGL and model-AGL. Exclude a pressure level when either AGL value is
+negative. Always report signed and absolute model-minus-site terrain mismatch.
+
+Fingerprint the input manifest, canonical grid geometry and orography, reviewed
+site snapshot, packaged policy, point/radius footprints and component version.
+The per-sample identity key is an artifact-level deterministic identity, not a
+new SQLite column. Equal verified inputs and policy must produce byte-identical
+site and neighbourhood artifacts.
+
+**Consequences:** `gfs-sample --run-key <uuid>` is offline-only, reads the
+migrated SQLite configuration read-only, consumes only a complete normalized
+state event, and appends `spatially_aligned/complete`. Coarse GFS terrain/site
+differences remain visible and can affect pressure-level exclusion. S07 owns
+the scientific definition and validation of any neighbourhood-derived feature.
+
+**Related files:**
+[`canonical-site-sampling-policy-v1.json`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/resources/canonical-site-sampling-policy-v1.json),
+[`spatial.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/spatial.py),
+[`sites.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/sites.py),
+[`handoff.md`](handoff.md).
+
 ## Open decisions
 
-| Question | Options / constraints | Resolve by |
-| --- | --- | --- |
-| Which task owns the persisted prediction schema and SQLite forecast adapter? | The backlog has flight and weather schema tasks but no explicit owner for storing T-022-T-024 outputs and replacing the T-002 mock adapter. Public units/status/provenance must be mapped deliberately. | Backlog planning before real predictions are connected to the API. |
-| What are the final coordinates, aliases, and catchment radii for each site? | Current map points are provisional; Pastrina and the Dobrich regional model need particular confirmation. | T-009. |
-| What retention, attribution, licensing, and rate limits apply beyond the current XCContest browser workflow? | T-013 has a project-owner-confirmed ordinary low-volume UI workflow; do not extend it to bulk/commercial use or SkyNomad without explicit terms. | Before broader collection or product use. |
-| What final production attribution, retention, and archive-operation wording is required for the selected weather sources? | T-018 uses direct NOAA GFS and CDS ERA5. Preserve source/permission evidence for both and the applicable Copernicus/ECMWF attribution for ERA5; confirm final product wording and retention operations before commercial release. | Before a commercial release. |
-| Which first alert channel should be implemented? | Dashboard watchlist, email, Telegram, or another agreed channel; alerts require at least one-day lead time and deduplication. | T-027/T-028. |
-| What deployment/distribution model is required beyond local development? | The MVP is local-first; cloud/distributed infrastructure needs a demonstrated requirement. | No task assigned; decide when deployment becomes an accepted scope item. |
-| What license should the repository use? | No open-source license is currently selected. | Repository owner decision; no task assigned. |
+| Question                                                                                                                  | Options / constraints                                                                                                                                                                                                             | Resolve by                                                               |
+| ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Which task owns the persisted prediction schema and SQLite forecast adapter?                                              | The backlog has flight and weather schema tasks but no explicit owner for storing T-022-T-024 outputs and replacing the T-002 mock adapter. Public units/status/provenance must be mapped deliberately.                           | Backlog planning before real predictions are connected to the API.       |
+| What are the final coordinates, aliases, and catchment radii for each site?                                               | Current map points are provisional; Pastrina and the Dobrich regional model need particular confirmation.                                                                                                                         | T-009.                                                                   |
+| What retention, attribution, licensing, and rate limits apply beyond the current XCContest browser workflow?              | T-013 has a project-owner-confirmed ordinary low-volume UI workflow; do not extend it to bulk/commercial use or SkyNomad without explicit terms.                                                                                  | Before broader collection or product use.                                |
+| What final production attribution, retention, and archive-operation wording is required for the selected weather sources? | T-018 uses direct NOAA GFS and CDS ERA5. Preserve source/permission evidence for both and the applicable Copernicus/ECMWF attribution for ERA5; confirm final product wording and retention operations before commercial release. | Before a commercial release.                                             |
+| Which first alert channel should be implemented?                                                                          | Dashboard watchlist, email, Telegram, or another agreed channel; alerts require at least one-day lead time and deduplication.                                                                                                     | T-027/T-028.                                                             |
+| What deployment/distribution model is required beyond local development?                                                  | The MVP is local-first; cloud/distributed infrastructure needs a demonstrated requirement.                                                                                                                                        | No task assigned; decide when deployment becomes an accepted scope item. |
+| What license should the repository use?                                                                                   | No open-source license is currently selected.                                                                                                                                                                                     | Repository owner decision; no task assigned.                             |

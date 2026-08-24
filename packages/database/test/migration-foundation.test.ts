@@ -935,6 +935,8 @@ describe("weather foundation upgrade", () => {
     upgradeConnection.close();
     upgradeConnection = undefined;
 
-    expect(() => runMigrations(databaseUrl)).toThrow();
+    expect(() => {
+      runMigrations(databaseUrl);
+    }).toThrow();
   });
 });

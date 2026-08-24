@@ -1,46 +1,66 @@
-## T-018/S04 GFS GRIB parser and normalization handoff
+## T-018/S05 canonical site/grid sampling handoff
 
-T-018/S04 is implemented. The offline-only `gfs-parse` command accepts only a
-complete, hash-verified S03 raw GFS run. It uses the pinned Python `eccodes`
-2.47.0 binding and numeric NOAA `kwbc` GRIB2 profile (master table 2, local
-table 1) to verify every selected message's identity, level, reference/valid
-time, forecast step, statistic and grid metadata before storing immutable native
-arrays and missing masks. `HPBL` is matched numerically because its ecCodes
-short name is not stable enough to be a parser identity.
+T-018/S05 is implemented. Seven committed sampling configs are present before
+ingestion: six retain the canonical site coordinate and Dobrich uses the
+reviewed Kardam coordinate `43.746321, 28.074025`. A missing config or reviewed
+elevation fails preflight; collection and sampling never create configuration
+rows. The configured local migration was applied and a second migrator run was
+idempotent.
 
-The normalizer emits separate canonical surface/convection/interval and
-pressure-level grains for S05. It retains native U/V fields; derives speed and
-meteorological direction; converts signed GFS CIN to a positive magnitude while
-retaining the native convention; and maps GFS geopotential-height values to
-canonical height. Bitmap/sentinel cells are retained through masks and marked
-`sentinel_missing`; valid values are `real`; derived arrays are `derived`; and
-malformed boundary input is rejected as `invalid_payload`. The only accepted
-quality-state vocabulary is `real`, `derived`, `missing`, `sentinel_missing`,
-and `invalid_payload`.
+`copernicus-elevations --allow-live-network` is the explicit repeatable review
+command for all seven coordinates. It reads OAuth credentials from the ignored
+root `.env`, samples Copernicus DEM GLO-30 bilinearly as EGM2008 orthometric MSL
+height, writes an ignored JSON artifact and never writes SQLite. Two consecutive
+live calls produced byte-identical output SHA-256
+`0b517638eec1ea0f5048eaa5626aeaa9b23cfda87926f2014285f0e652fb4329`.
+The seven accepted values and reference are pinned by a guarded data migration;
+a later provider difference requires review and a new migration, not refresh or
+resume behavior.
 
-The parser preserves S03's shortest explicitly identified APCP interval. It
-does not infer a precipitation rate or de-accumulate across runs; a future
-multi-interval implementation may de-accumulate only when it proves adjacent
-interval continuity and reset behavior. `GUST` and orography remain parsed as
-native evidence but are explicit unsupported canonical mappings because neither
-has a T-017/S01 destination. No additional GUST metric was added: the Project
-Brief requests wind speed/direction and shear, while T-017 and the persisted
-weather schema contain no gust field.
+S04 now exposes explicit regular-latlon geometry and scan order, static model
+orography, distinct multi-valid-time artifact identities and per-time/per-level
+U/V derivation. GUST remains unsupported; orography is terrain evidence rather
+than a canonical weather field.
 
-A committed offline golden contract fixture locks the f007 numeric identities,
-selected-selector count, canonical-grain counts, GUST mapping outcome and
-quality policy. The fixture is intentionally small and contains no raw NOAA
-grid download; the parser's real f007 run was additionally exercised locally
-against ignored raw evidence on 2026-08-21.
+The packaged `canonical-site-sampling-policy-v1` implements strict bilinear
+point sampling and an inclusive physical 50 km Haversine neighbourhood. Nearest
+sampling is not implemented. A missing positive-weight bilinear node yields an
+explicit missing value without weight renormalization. U/V are interpolated
+before speed/direction are derived. The neighbourhood artifact retains MSL
+pressure, surface U/V and 925 hPa U/V nodes for later S07 spatial features; S05
+does not invent pressure-gradient, convergence or divergence formulas.
 
-Final verification: `uv run --project services/ml pytest -q` (106 passed),
-`uv run --project services/ml ruff check`, `uv run --project services/ml ruff
-format --check`, `uv run --project services/ml gfs-parse --help`, and `git diff
---check` all passed. No network request is made by default tests or `gfs-parse`.
+Every sample reports site elevation, interpolated GFS model terrain and signed
+plus absolute mismatch. Pressure-level geopotential height remains MSL evidence;
+site-AGL and model-AGL are derived and a level below either terrain reference is
+excluded with an auditable reason. Coarse-model terrain is never hidden or
+substituted for reviewed site elevation.
 
-Next slice: T-018/S05 must consume only hash-verified S04 canonical grid
-artifacts; it must not re-fetch raw GFS, reinterpret parser provenance, or add
-an unapproved GUST persistence field.
+`gfs-collect`, `gfs-parse`/normalize and `gfs-sample` now append the legal raw,
+parsed, normalized and spatial state boundaries. `gfs-sample --run-key <uuid>`
+is offline-only, reads SQLite read-only and consumes only a complete normalized
+event. The sampling fingerprint covers the normalized manifest, grid/orography,
+reviewed config snapshot, packaged policy, footprints and version. Integration
+tests prove byte-identical samples and fingerprints across two independent
+roots, multi-valid-time behavior, terrain diagnostics, below-terrain exclusion,
+no network and no database mutation. `sample_identity_key` exists only inside
+the artifact contract; it is not a database column.
+
+Provider PBL AGL storage is added separately on `weather_samples`, without
+conflating it with the derived PBL AGL feature field.
+
+Final verification on 2026-08-24: ML Ruff check and format-check passed; all
+130 ML tests passed; database 28, contracts 15, API 82 and web 121 tests passed;
+root build, typecheck and lint passed; Drizzle `db:check`, an idempotent
+`db:migrate`, repository structure, focused Prettier and `git diff --check`
+passed. The root format check reports only the pre-existing committed
+`20260811080029_add_browser_ui_ingestion_method/snapshot.json`; all new T-018
+files pass focused formatting.
+
+Next slice: T-018/S06 should validate these spatial artifacts and their explicit
+missing/exclusion states without recomputing footprints or concealing terrain
+mismatch. S07 owns any versioned radius-derived meteorological formulas.
+
 # Project Handoff
 
 ## Purpose and source of truth
@@ -55,15 +75,15 @@ not a project history. Use the following documents for the authoritative detail:
 5. `docs/decisions.md` for accepted durable decisions.
 6. Git history for prior implementation detail and validation evidence.
 
-## Current state (2026-08-20)
+## Current state (2026-08-24)
 
-| Field | Value |
-| --- | --- |
-| Branch | `feature/T-018-weather-ingestion`. |
-| Working tree at handoff update | T-018/S02 adds Python runtime contracts, immutable artifacts, state protocol, tests, and documentation. T-018/S01 is committed on this branch; its migration has not been applied to the configured local database. |
-| Task status in `docs/tasks.md` | Unchanged in this session; `tasks.md` was deliberately not edited. |
-| Next implementation focus | Implement S03 GFS request planning and immutable collection against the S02 contracts; do not add a placeholder CLI. |
-| Local storage | SQLite selected by `DATABASE_URL`; local databases, raw source data, and interim artifacts are ignored. |
+| Field                          | Value                                                                                                                                    |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Branch                         | `feature/T-018-weather-ingestion`.                                                                                                       |
+| Working tree at handoff update | T-018/S01 through S05 are committed on this branch; reviewed weather/config/AGL migrations are applied to the configured local database. |
+| Task status in `docs/tasks.md` | `T-018` remains In Progress because S06-S10 are not implemented.                                                                         |
+| Next implementation focus      | Implement S06 source-aware validation/quarantine against the immutable S05 spatial artifacts.                                            |
+| Local storage                  | SQLite selected by `DATABASE_URL`; local databases, raw source data, and interim artifacts are ignored.                                  |
 
 T-013 now has two successful local XCContest ingestion runs. The complete
 `fresh`/human-review/`resume` workflow was manually exercised successfully for
@@ -203,13 +223,13 @@ handling and a compatible model evaluation. IGRA soundings remain T-019.
 
 - `S00` (complete) — lock this scope in decisions and handoff; do not edit
   `tasks.md` except for lifecycle status changes.
-- `S01` (implementation complete; owner review pending) — Drizzle weather schema,
+- `S01` (complete; reviewed migrations applied locally) — Drizzle weather schema,
   manifest-backed run provenance, site/grid/sample/profile/feature identity,
   generated migration, constraints, indexes, and temporary migration tests.
 - `S02` (complete; 89 Python tests, Ruff, wheel-resource, and repository checks passed) — shared atmospheric contracts, durable artifacts, manifests, versions and stage state machine.
-- `S03` — implement the GFS request planner and immutable collector.
-- `S04` — implement GFS GRIB parsing and T-017 canonical normalization.
-- `S05` — implement deterministic canonical site/grid sampling and AGL policy.
+- `S03` (complete) — implement the GFS request planner and immutable collector.
+- `S04` (complete) — implement GFS GRIB parsing and T-017 canonical normalization.
+- `S05` (complete) — implement deterministic canonical site/grid sampling and AGL policy.
 - `S06` — implement source-aware validation, missingness and quarantine.
 - `S07` — implement the versioned meteorological feature builder.
 - `S08` — implement non-migrating SQLite persistence and the end-to-end GFS
@@ -242,6 +262,7 @@ feature builder, and persistence protocols plus independently versioned
 component slots. It intentionally adds no weather CLI command, source request,
 GRIB/NetCDF parser, or SQLite write. The synthetic proof covers the complete
 request-to-persistence hash chain without network or database access.
+
 ### T-018/S01 schema and migration review state
 
 The final weather section of `docs/T-012-flight-schema.drawio` is the S01
@@ -289,11 +310,12 @@ an initial generated draft tried to rebuild the parent table merely to rename
 those objects and failed correctly against populated FK data, so that draft was
 discarded and safely regenerated.
 
-The migration contains no source/site/grid seed data. Approved site sampling
-configs are pre-provisioned configuration; a missing config must fail preflight and
-request review rather than being auto-created halfway through ingestion. No
-`db:migrate` command has been run against the configured database, and nothing
-from S01 is committed.
+The foundation migration contains no source/site/grid seed data. Separate
+reviewed data migrations now pre-provision the seven site sampling configs and
+their Copernicus GLO-30 EGM2008 elevations. A missing config still fails
+preflight rather than being auto-created halfway through ingestion. The weather
+foundation, sampling-config, provider-PBL-AGL and elevation migrations have all
+been applied to the configured local database.
 Temporary migration tests cover a fresh file, constraints, and an upgrade from
 the four prior migrations with an existing linked flight row.
 
@@ -337,13 +359,13 @@ uv run --env-file .env --project services/ml xccontest-persist --run-key <uuid> 
 The recommended orchestration commands are:
 
 ```powershell
-uv run --env-file .env --project services/ml xccontest-ingest fresh 
-  --season <year> 
-  --headed 
+uv run --env-file .env --project services/ml xccontest-ingest fresh
+  --season <year>
+  --headed
   --policy-file data/local/xccontest-import-policy.json
 
-uv run --env-file .env --project services/ml xccontest-ingest resume 
-  --run-key <uuid> 
+uv run --env-file .env --project services/ml xccontest-ingest resume
+  --run-key <uuid>
   --policy-file data/local/xccontest-import-policy.json
 ```
 
@@ -412,9 +434,9 @@ not need it after a complete accepted/rejected review.
 All records below are local ignored data; never commit the database, raw HTML,
 or interim JSONL.
 
-| Ingestion run | Scope and result | Durable notes |
-| --- | --- | --- |
-| `f1032827-a98d-4c01-969e-e67b4885f90d` | First successful import: 267 accepted flights from the prior 2025/2026 collection; 1,200 seen, 664 rejected, 69 quarantined, 200 same-run duplicates removed. | Established the persistence slice and the first `flight_ingestion_runs` row. |
+| Ingestion run                          | Scope and result                                                                                                                                                                                              | Durable notes                                                                                                                                                                                               |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `f1032827-a98d-4c01-969e-e67b4885f90d` | First successful import: 267 accepted flights from the prior 2025/2026 collection; 1,200 seen, 664 rejected, 69 quarantined, 200 same-run duplicates removed.                                                 | Established the persistence slice and the first `flight_ingestion_runs` row.                                                                                                                                |
 | `8d809838-3ff8-42ce-9977-3997cd2536bc` | Manual 2024 `fresh`, review/apply, then successful `resume` on 2026-08-11. 600 seen; 208 normalized candidates; 182 persisted accepted flights; 295 rejected; 26 quarantined; 97 same-run duplicates removed. | `ingestion_run_id=2`; validation snapshot `fbe9bc251bc07b287d16e2c2127c70daf0b781754ca871931bd6530680ea2204`; 26 quarantines were explicitly reviewed/rejected and `actionable_mapping_quarantine_count=0`. |
 
 For the 2024 run, eight reviewed mappings were approved and inserted, while ten
@@ -442,6 +464,7 @@ committed pre-T-018 snapshot
 `packages/database/drizzle/20260811080029_add_browser_ui_ingestion_method/snapshot.json`.
 The new snapshot passes focused formatting. The old applied snapshot was not
 rewritten as unrelated cleanup.
+
 ## Verification baseline
 
 The latest T-015 code checks passed locally:

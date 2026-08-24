@@ -58,8 +58,20 @@ no `weather_artifacts` table. Field quality such as `real`, `derived`, or
 `missing` is stored per field in `weather_field_provenance`, not once for a
 multi-field record.
 
-The generated T-018 weather migration contains schema only. It does not seed
-GFS/ERA5 source rows, site sampling coordinates, grids, or footprints; those
-records require separately reviewed collector/configuration inputs. Applying
-the migration to the configured local database is an explicit review step and
-must not be inferred from migration generation or temporary test-database runs.
+The foundation migration contains schema only. Reviewed follow-up data
+migrations provision exactly one `weather_site_sampling_configs` row for every
+canonical site. Six use their canonical site coordinates; Dobrich uses the
+accepted Kardam weather coordinate `43.746321, 28.074025`. Ingestion never
+auto-creates or recommends these rows: a missing/incomplete row fails sampling
+preflight.
+
+`20260824184712_set_copernicus_site_elevations` pins the seven reviewed
+Copernicus DEM GLO-30 bilinear EGM2008 orthometric elevations. Its guard requires
+the exact coordinate/reference pre-state and aborts instead of overwriting
+drifted configuration. A repeatable live fetch is a review aid; it does not
+update the database. Grids and sampling footprints remain run/model-derived and
+are persisted later by T-018/S08.
+
+`20260824183235_add_provider_pbl_agl` adds the missing direct provider boundary-
+layer AGL field to `weather_samples`, distinct from the versioned derived PBL
+field on `weather_feature_snapshots`.

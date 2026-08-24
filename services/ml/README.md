@@ -13,7 +13,9 @@ GRIB, sample a site, write SQLite, join flights, or train a model.
 A GFS message is global at 0.25 degrees: `.idx` byte ranges reduce variables,
 levels and leads, but cannot reduce the geographic grid. The S03 collector
 therefore does **not** use `weather_site_sampling_configs` to choose bytes; S05
-will sample the already-provenanced global fields at those approved coordinates.
+samples the already-provenanced global fields at those approved coordinates.
+Successful collection initializes the append-only run ledger and records the
+verified raw-manifest boundary.
 
 Operational use should request the 10:00--20:00 `Europe/Sofia` thermal-XC window
 for today through D+2 from one selected complete GFS cycle. Historical/training
@@ -141,7 +143,9 @@ its numeric GRIB identity, not its ecCodes `shortName`.
 
 Parser output retains immutable native value arrays and missing masks. The
 normalizer writes separate canonical surface/convection/interval grains and
-pressure-level grains for S05. It retains native `u`/`v`, derives wind speed and
+pressure-level grains for S05. It exposes explicit regular-latlon geometry,
+verified scan order and static GFS orography, and keeps artifacts unique across
+multiple valid times. It retains native `u`/`v`, derives wind speed and
 meteorological direction, converts signed GFS CIN to positive magnitude while
 retaining the native convention, and records interval boundaries without
 inventing a rate. Precipitation is only de-accumulated when a proven reset and
@@ -155,6 +159,86 @@ or incompatible identity fails as `invalid_payload`. `GUST` remains parsed as
 native evidence but has no T-017 canonical field or S01 persistence destination,
 so it is listed as an unsupported mapping outcome rather than persisted as a
 quality-state measurement.
+
+### Canonical site/grid sampling (T-018/S05)
+
+`gfs-sample` is offline-only. It requires a complete normalized state event,
+verifies every input hash, reads the migrated SQLite site configuration in
+read-only mode, writes immutable site/neighbourhood artifacts, and appends a
+`spatially_aligned/complete` event:
+
+```powershell
+uv run --project services/ml gfs-sample --run-key <uuid>
+```
+
+The packaged `canonical-site-sampling-policy-v1` implements only:
+
+- bilinear point sampling on the canonical regular latitude/longitude grid;
+- an inclusive 50 km physical-radius footprint for later spatial features.
+
+Nearest-point sampling is deliberately not implemented. Bilinear weights are
+strict: if any positive-weight contributing node is missing, the result is
+missing and weights are not renormalized. U/V components are interpolated
+before wind speed and meteorological direction are derived, avoiding circular
+angle interpolation.
+
+The radius artifact retains node values for MSL pressure, surface U/V and 925
+hPa U/V. S05 does not calculate pressure gradients, convergence or divergence;
+the versioned S07 feature builder owns those formulas and their scientific
+validation. Keeping the physical-radius nodes now prevents S07 from having to
+reinterpret or re-read the source grid.
+
+Each sample records reviewed site elevation, bilinear GFS model orography, and
+both signed and absolute terrain mismatch. Pressure-level geopotential heights
+remain MSL evidence; S05 derives site-AGL and model-AGL and excludes a level if
+either is negative. Coarse GFS terrain is never substituted for site terrain or
+silently adjusted to match it.
+
+The deterministic fingerprint includes the normalized manifest, grid geometry
+and orography, the complete reviewed site-config snapshot, policy bytes,
+footprints and component version. `sample_identity_key` is an artifact identity
+used for deterministic audit/testing; it is not a SQLite field. Equal verified
+inputs produce byte-identical `canonical-site-samples.json` and
+`neighbourhood-node-samples.json` outputs.
+
+The real command chain is:
+
+```powershell
+uv run --project services/ml gfs-collect <reviewed options> --allow-live-network
+uv run --project services/ml gfs-parse --run-key <uuid>
+uv run --project services/ml gfs-sample --run-key <uuid>
+```
+
+Only collection can access NOAA. Parse/normalize and sampling are offline
+resume stages; sampling never writes SQLite.
+
+### Reviewed Copernicus site elevation command
+
+`copernicus-elevations` repeatably samples Copernicus DEM GLO-30 for every
+approved site coordinate. Create an OAuth client under User Settings in the
+[Copernicus Data Space Sentinel Hub dashboard](https://shapps.dataspace.copernicus.eu/dashboard/)
+([official authentication instructions](https://documentation.dataspace.copernicus.eu/APIs/SentinelHub/Overview/Authentication.html))
+and put its values only in the ignored root `.env` file:
+
+```dotenv
+CDSE_CLIENT_ID=<client-id>
+CDSE_CLIENT_SECRET=<client-secret>
+```
+
+Then run:
+
+```powershell
+uv run --project services/ml copernicus-elevations --allow-live-network
+```
+
+The command uses bilinear sampling and EGM2008 orthometric MSL height, writes an
+ignored JSON review artifact, and never writes SQLite. It is intentionally a
+single repeatable fetch command, not a refresh/resume workflow. A provider-side
+dataset or processing change may produce a different result later; accepting
+that result requires review and a new guarded data migration. The currently
+reviewed seven values are pinned by
+`20260824184712_set_copernicus_site_elevations`.
+
 ## Status
 
 The permitted XCContest browser collector and its offline parser/normalizer are
