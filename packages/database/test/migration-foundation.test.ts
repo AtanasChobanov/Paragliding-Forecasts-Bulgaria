@@ -251,7 +251,7 @@ describe("database foundation migrations", () => {
 
     expect(sqlite.prepare("PRAGMA foreign_keys").get()).toEqual({ foreign_keys: 1 });
     expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({
-      count: 7,
+      count: 8,
     });
 
     if (databaseUrl === undefined) {
@@ -261,7 +261,7 @@ describe("database foundation migrations", () => {
     runMigrations(databaseUrl);
 
     expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({
-      count: 7,
+      count: 8,
     });
     expect(
       sqlite
@@ -568,7 +568,7 @@ describe("database foundation migrations", () => {
     ]);
   });
 
-  it("seeds one reviewed weather sampling coordinate for every canonical site", () => {
+  it("seeds one reviewed sampling coordinate and Copernicus elevation per site", () => {
     const rows = activeConnection()
       .sqlite.prepare(
         `SELECT site_id, latitude_deg, longitude_deg, coordinate_reference,
@@ -584,56 +584,56 @@ describe("database foundation migrations", () => {
         latitude_deg: 42.6013,
         longitude_deg: 23.2844,
         coordinate_reference: "canonical_site_coordinate_v1",
-        reference_elevation_msl_m: null,
-        elevation_reference: null,
+        reference_elevation_msl_m: 1793.929,
+        elevation_reference: "copernicus_dem_glo30_egm2008_orthometric_bilinear_v1",
       },
       {
         site_id: 2,
         latitude_deg: 42.7302,
         longitude_deg: 24.0923,
         coordinate_reference: "canonical_site_coordinate_v1",
-        reference_elevation_msl_m: null,
-        elevation_reference: null,
+        reference_elevation_msl_m: 1129.007,
+        elevation_reference: "copernicus_dem_glo30_egm2008_orthometric_bilinear_v1",
       },
       {
         site_id: 3,
         latitude_deg: 42.68733,
         longitude_deg: 24.749962,
         coordinate_reference: "canonical_site_coordinate_v1",
-        reference_elevation_msl_m: null,
-        elevation_reference: null,
+        reference_elevation_msl_m: 1445.337,
+        elevation_reference: "copernicus_dem_glo30_egm2008_orthometric_bilinear_v1",
       },
       {
         site_id: 4,
         latitude_deg: 43.2622,
         longitude_deg: 27.2846,
         coordinate_reference: "canonical_site_coordinate_v1",
-        reference_elevation_msl_m: null,
-        elevation_reference: null,
+        reference_elevation_msl_m: 307.87,
+        elevation_reference: "copernicus_dem_glo30_egm2008_orthometric_bilinear_v1",
       },
       {
         site_id: 5,
         latitude_deg: 43.2575,
         longitude_deg: 26.9258,
         coordinate_reference: "canonical_site_coordinate_v1",
-        reference_elevation_msl_m: null,
-        elevation_reference: null,
+        reference_elevation_msl_m: 447.1,
+        elevation_reference: "copernicus_dem_glo30_egm2008_orthometric_bilinear_v1",
       },
       {
         site_id: 6,
         latitude_deg: 43.4282,
         longitude_deg: 23.3032,
         coordinate_reference: "canonical_site_coordinate_v1",
-        reference_elevation_msl_m: null,
-        elevation_reference: null,
+        reference_elevation_msl_m: 522.765,
+        elevation_reference: "copernicus_dem_glo30_egm2008_orthometric_bilinear_v1",
       },
       {
         site_id: 7,
         latitude_deg: 43.746321,
         longitude_deg: 28.074025,
         coordinate_reference: "kardam_accepted_flight_centroid_v1",
-        reference_elevation_msl_m: null,
-        elevation_reference: null,
+        reference_elevation_msl_m: 190.402,
+        elevation_reference: "copernicus_dem_glo30_egm2008_orthometric_bilinear_v1",
       },
     ]);
   });
@@ -778,6 +778,7 @@ describe("database foundation migrations", () => {
 const migrationsDirectory = fileURLToPath(new URL("../drizzle/", import.meta.url));
 const weatherMigrationDirectory = "20260820160216_create_weather_foundation";
 const pblAglMigrationDirectory = "20260824183235_add_provider_pbl_agl";
+const copernicusElevationMigrationDirectory = "20260824184712_set_copernicus_site_elevations";
 
 let upgradeConnection: DatabaseConnection | undefined;
 let upgradeTestDirectory: string | undefined;
@@ -909,5 +910,31 @@ describe("weather foundation upgrade", () => {
         .get(),
     ).toEqual({ count: 6 });
     expect(upgradeConnection.sqlite.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+  });
+
+  it("refuses to overwrite drifted sampling coordinates with Copernicus elevations", () => {
+    mkdirSync(dataLocalDirectory, { recursive: true });
+    upgradeTestDirectory = mkdtempSync(join(dataLocalDirectory, "t018-dem-guard-test-"));
+    const oldMigrationsDirectory = join(upgradeTestDirectory, "old-migrations");
+    mkdirSync(oldMigrationsDirectory);
+
+    for (const entry of readdirSync(migrationsDirectory, { withFileTypes: true })) {
+      if (entry.isDirectory() && entry.name < copernicusElevationMigrationDirectory) {
+        cpSync(join(migrationsDirectory, entry.name), join(oldMigrationsDirectory, entry.name), {
+          recursive: true,
+        });
+      }
+    }
+
+    const databaseUrl = `file:./data/local/${basename(upgradeTestDirectory)}/guard.db`;
+    upgradeConnection = openDatabase(databaseUrl);
+    migrate(upgradeConnection.db, { migrationsFolder: oldMigrationsDirectory });
+    upgradeConnection.sqlite.exec(
+      "UPDATE weather_site_sampling_configs SET latitude_deg = 43.7 WHERE site_id = 7",
+    );
+    upgradeConnection.close();
+    upgradeConnection = undefined;
+
+    expect(() => runMigrations(databaseUrl)).toThrow();
   });
 });
