@@ -135,10 +135,6 @@ const insertWeatherGraph = (): void => {
       10, 10
     );
 
-    INSERT INTO weather_site_sampling_configs (
-      site_id, latitude_deg, longitude_deg, coordinate_reference
-    ) VALUES (1, 42.6013, 23.2844, 'approved_site_coordinate_v1');
-
     INSERT INTO weather_grids (
       id, source_id, grid_key, grid_type, latitude_step_deg, longitude_step_deg,
       native_row_count, native_column_count, definition_sha256, is_active
@@ -255,7 +251,7 @@ describe("database foundation migrations", () => {
 
     expect(sqlite.prepare("PRAGMA foreign_keys").get()).toEqual({ foreign_keys: 1 });
     expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({
-      count: 5,
+      count: 6,
     });
 
     if (databaseUrl === undefined) {
@@ -265,7 +261,7 @@ describe("database foundation migrations", () => {
     runMigrations(databaseUrl);
 
     expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({
-      count: 5,
+      count: 6,
     });
     expect(
       sqlite
@@ -572,6 +568,76 @@ describe("database foundation migrations", () => {
     ]);
   });
 
+  it("seeds one reviewed weather sampling coordinate for every canonical site", () => {
+    const rows = activeConnection()
+      .sqlite.prepare(
+        `SELECT site_id, latitude_deg, longitude_deg, coordinate_reference,
+                reference_elevation_msl_m, elevation_reference
+         FROM weather_site_sampling_configs
+         ORDER BY site_id`,
+      )
+      .all();
+
+    expect(rows).toEqual([
+      {
+        site_id: 1,
+        latitude_deg: 42.6013,
+        longitude_deg: 23.2844,
+        coordinate_reference: "canonical_site_coordinate_v1",
+        reference_elevation_msl_m: null,
+        elevation_reference: null,
+      },
+      {
+        site_id: 2,
+        latitude_deg: 42.7302,
+        longitude_deg: 24.0923,
+        coordinate_reference: "canonical_site_coordinate_v1",
+        reference_elevation_msl_m: null,
+        elevation_reference: null,
+      },
+      {
+        site_id: 3,
+        latitude_deg: 42.68733,
+        longitude_deg: 24.749962,
+        coordinate_reference: "canonical_site_coordinate_v1",
+        reference_elevation_msl_m: null,
+        elevation_reference: null,
+      },
+      {
+        site_id: 4,
+        latitude_deg: 43.2622,
+        longitude_deg: 27.2846,
+        coordinate_reference: "canonical_site_coordinate_v1",
+        reference_elevation_msl_m: null,
+        elevation_reference: null,
+      },
+      {
+        site_id: 5,
+        latitude_deg: 43.2575,
+        longitude_deg: 26.9258,
+        coordinate_reference: "canonical_site_coordinate_v1",
+        reference_elevation_msl_m: null,
+        elevation_reference: null,
+      },
+      {
+        site_id: 6,
+        latitude_deg: 43.4282,
+        longitude_deg: 23.3032,
+        coordinate_reference: "canonical_site_coordinate_v1",
+        reference_elevation_msl_m: null,
+        elevation_reference: null,
+      },
+      {
+        site_id: 7,
+        latitude_deg: 43.746321,
+        longitude_deg: 28.074025,
+        coordinate_reference: "kardam_accepted_flight_centroid_v1",
+        reference_elevation_msl_m: null,
+        elevation_reference: null,
+      },
+    ]);
+  });
+
   it("accepts a normalized weather graph and explicit per-field missingness", () => {
     insertWeatherGraph();
 
@@ -721,7 +787,7 @@ describe("weather foundation upgrade", () => {
     mkdirSync(oldMigrationsDirectory);
 
     for (const entry of readdirSync(migrationsDirectory, { withFileTypes: true })) {
-      if (entry.isDirectory() && entry.name !== weatherMigrationDirectory) {
+      if (entry.isDirectory() && entry.name < weatherMigrationDirectory) {
         cpSync(join(migrationsDirectory, entry.name), join(oldMigrationsDirectory, entry.name), {
           recursive: true,
         });
