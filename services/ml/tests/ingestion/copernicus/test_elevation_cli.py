@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from paragliding_forecasts_ml.ingestion.copernicus.elevation_cli import (
-    _file_environment,
-    main,
-)
+from paragliding_forecasts_ml.ingestion.copernicus.elevation_cli import main
+from paragliding_forecasts_ml.storage.environment import file_environment
 
 
 def test_cli_refuses_network_without_explicit_acknowledgement(capsys) -> None:
@@ -24,7 +22,7 @@ UNRELATED=not-loaded
         encoding="utf-8",
     )
 
-    assert _file_environment(path) == {
+    assert file_environment(path, {"CDSE_CLIENT_ID", "CDSE_CLIENT_SECRET", "DATABASE_URL"}) == {
         "CDSE_CLIENT_ID": "client-id",
         "CDSE_CLIENT_SECRET": "client-secret",
         "DATABASE_URL": "file:./data/local/weather.db",

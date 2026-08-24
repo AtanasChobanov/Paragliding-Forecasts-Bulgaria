@@ -11,6 +11,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from ..weather.artifacts import WeatherArtifactStore
+from ..weather.state import RunStateLedger, StateError
 from .collector import GfsCollector
 from .models import GfsRequest
 from .planner import GfsPlanner, GfsPlanningError
@@ -68,13 +69,24 @@ def main(arguments: Sequence[str] | None = None) -> int:
             maximum_total_bytes=namespace.maximum_total_mib * 1024 * 1024,
         )
         transport = RetryingTransport(UrllibTransport())
-        plan = GfsPlanner(transport).plan(request, created_at_utc=_utc_now())
+        occurred_at_utc = _utc_now()
+        plan = GfsPlanner(transport).plan(request, created_at_utc=occurred_at_utc)
         store = WeatherArtifactStore.create_fresh(
             request.run_key, project_root=namespace.project_root
         )
+        ledger = RunStateLedger(store)
+        ledger.initialize(occurred_at_utc=occurred_at_utc)
         manifest_reference = GfsCollector(transport).fetch(plan, store)
         manifest = store.verify_raw_manifest(manifest_reference)
-    except (GfsPlanningError, ValueError, OSError) as error:
+        ledger.append(
+            invocation_mode="resume",
+            stage="raw_complete",
+            disposition="complete" if manifest.status == "complete" else manifest.status,
+            occurred_at_utc=_utc_now(),
+            evidence=manifest_reference,
+            detail="bounded NOAA GFS collection",
+        )
+    except (GfsPlanningError, StateError, ValueError, OSError) as error:
         print(f"GFS collection failed: {error}", file=sys.stderr)
         return 1
     print(

@@ -18,6 +18,7 @@ class SiteSamplingConfig:
     site_id: int
     site_slug: str
     site_name: str
+    site_time_zone: str
     latitude_deg: float
     longitude_deg: float
     coordinate_reference: str
@@ -43,6 +44,7 @@ def load_site_sampling_configs(
                   s.id AS site_id,
                   s.slug AS site_slug,
                   s.name AS site_name,
+                  s.time_zone AS site_time_zone,
                   c.latitude_deg,
                   c.longitude_deg,
                   c.coordinate_reference,
@@ -98,6 +100,7 @@ def load_site_sampling_configs(
                 site_id=int(row["site_id"]),
                 site_slug=str(row["site_slug"]),
                 site_name=str(row["site_name"]),
+                site_time_zone=str(row["site_time_zone"]),
                 latitude_deg=latitude,
                 longitude_deg=longitude,
                 coordinate_reference=coordinate_reference,

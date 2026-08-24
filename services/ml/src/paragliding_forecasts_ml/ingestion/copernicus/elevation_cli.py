@@ -9,6 +9,7 @@ import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
+from ...storage.environment import file_environment
 from ...storage.sqlite import configured_database_url
 from ..weather.sites import SiteSamplingConfigError, load_site_sampling_configs
 from .elevation import (
@@ -18,25 +19,6 @@ from .elevation import (
 )
 
 DEFAULT_OUTPUT = Path("data/interim/weather/site-elevations/copernicus-dem-glo30-v1.json")
-
-
-def _file_environment(path: Path) -> dict[str, str]:
-    if not path.is_file():
-        return {}
-    values: dict[str, str] = {}
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        name, value = line.removeprefix("export ").split("=", 1)
-        name = name.strip()
-        if name not in {"CDSE_CLIENT_ID", "CDSE_CLIENT_SECRET", "DATABASE_URL"}:
-            continue
-        value = value.strip()
-        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
-            value = value[1:-1]
-        values[name] = value
-    return values
 
 
 def _setting(name: str, file_values: Mapping[str, str]) -> str | None:
@@ -78,7 +60,9 @@ def main(arguments: Sequence[str] | None = None) -> int:
         return 2
 
     project_root = namespace.project_root.resolve()
-    file_values = _file_environment(project_root / ".env")
+    file_values = file_environment(
+        project_root / ".env", {"CDSE_CLIENT_ID", "CDSE_CLIENT_SECRET", "DATABASE_URL"}
+    )
     database_url = namespace.database_url or _setting("DATABASE_URL", file_values)
     try:
         sites = load_site_sampling_configs(

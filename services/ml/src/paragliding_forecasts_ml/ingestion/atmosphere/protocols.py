@@ -7,6 +7,7 @@ from typing import Any, Protocol
 
 from ..weather.artifacts import WeatherArtifactStore
 from .contracts import (
+    ArtifactReference,
     CanonicalSample,
     FeatureSnapshot,
     NativeBatch,
@@ -56,9 +57,12 @@ class SpatialAligner(Protocol):
     spatial_version: str
 
     def align(
-        self, samples: tuple[CanonicalSample, ...], profiles: tuple[ProfileLevel, ...]
-    ) -> tuple[tuple[CanonicalSample, ...], tuple[ProfileLevel, ...]]:
-        """Return deterministically aligned point/neighbourhood records."""
+        self,
+        canonical_grid_stage_manifest: ArtifactReference,
+        artifacts: WeatherArtifactStore,
+        database_url: str,
+    ) -> ArtifactReference:
+        """Return an immutable point/neighbourhood stage from a canonical grid boundary."""
 
 
 class AtmosphericValidator(Protocol):

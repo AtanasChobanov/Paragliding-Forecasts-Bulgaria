@@ -35,6 +35,7 @@ def _site() -> SiteSamplingConfig:
         site_id=7,
         site_slug="dobrich-region",
         site_name="Dobrich region",
+        site_time_zone="Europe/Sofia",
         latitude_deg=43.746321,
         longitude_deg=28.074025,
         coordinate_reference="kardam_accepted_flight_centroid_v1",

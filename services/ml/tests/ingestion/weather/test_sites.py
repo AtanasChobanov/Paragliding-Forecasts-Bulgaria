@@ -21,6 +21,7 @@ def _database(tmp_path, *, include_second_config: bool = True):
           id INTEGER PRIMARY KEY,
           slug TEXT NOT NULL,
           name TEXT NOT NULL,
+          time_zone TEXT NOT NULL,
           is_active INTEGER NOT NULL
         );
         CREATE TABLE weather_site_sampling_configs (
@@ -32,9 +33,9 @@ def _database(tmp_path, *, include_second_config: bool = True):
           elevation_reference TEXT
         );
         INSERT INTO sites VALUES
-          (1, 'first', 'First', 1),
-          (2, 'second', 'Second', 1),
-          (3, 'inactive', 'Inactive', 0);
+          (1, 'first', 'First', 'Europe/Sofia', 1),
+          (2, 'second', 'Second', 'Europe/Sofia', 1),
+          (3, 'inactive', 'Inactive', 'Europe/Sofia', 0);
         INSERT INTO weather_site_sampling_configs VALUES
           (1, 42.5, 23.5, 'canonical-v1', 800, 'dem-v1');
         """
