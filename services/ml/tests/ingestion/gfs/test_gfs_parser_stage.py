@@ -11,6 +11,7 @@ from paragliding_forecasts_ml.ingestion.gfs.parser import (
     GfsParserError,
     _grib_utc,
     _validate_identity,
+    _validate_regular_latlon,
 )
 from paragliding_forecasts_ml.ingestion.gfs.profile import PROFILE_BY_SELECTOR
 
@@ -76,6 +77,31 @@ def test_parser_rejects_wrong_grib_table_and_valid_time() -> None:
         )
 
 
+def test_parser_pins_canonical_gfs_regular_latlon_scan_order() -> None:
+    grid = {
+        "gridType": "regular_ll",
+        "Ni": 1440,
+        "Nj": 721,
+        "latitudeOfFirstGridPointInDegrees": 90.0,
+        "longitudeOfFirstGridPointInDegrees": 0.0,
+        "latitudeOfLastGridPointInDegrees": -90.0,
+        "longitudeOfLastGridPointInDegrees": 359.75,
+        "iDirectionIncrementInDegrees": 0.25,
+        "jDirectionIncrementInDegrees": 0.25,
+        "iScansNegatively": 0,
+        "jScansPositively": 0,
+        "jPointsAreConsecutive": 0,
+        "alternativeRowScanning": 0,
+    }
+
+    _validate_regular_latlon(grid, "tmp_2m")
+
+    with pytest.raises(GfsParserError, match="scan flags"):
+        _validate_regular_latlon(grid | {"jScansPositively": 1}, "tmp_2m")
+    with pytest.raises(GfsParserError, match="latitude endpoints"):
+        _validate_regular_latlon(grid | {"latitudeOfLastGridPointInDegrees": -89.75}, "tmp_2m")
+
+
 def test_time_and_missing_quality_helpers_preserve_explicit_states() -> None:
     assert _grib_utc(20260821, 700) == "2026-08-21T07:00:00Z"
     assert _derived_quality(np.array([1.0]), np.array([2.0])) == "derived"
@@ -95,7 +121,8 @@ def test_offline_f007_golden_contract_locks_parser_and_normalizer_outputs() -> N
     assert normalizer["canonical_grain_count"] == (
         normalizer["surface_grain_count"] + normalizer["pressure_level_grain_count"]
     )
-    assert normalizer["source_unsupported_selectors"] == ["gust_surface", "orog"]
+    assert normalizer["source_unsupported_selectors"] == ["gust_surface"]
+    assert normalizer["model_elevation_selector"] == "orog"
     assert normalizer["quality_states"] == [
         "real",
         "derived",

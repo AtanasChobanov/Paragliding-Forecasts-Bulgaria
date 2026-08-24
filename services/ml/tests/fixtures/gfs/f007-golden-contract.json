@@ -16,7 +16,8 @@
     "surface_grain_count": 21,
     "pressure_level_grain_count": 24,
     "canonical_grain_count": 45,
-    "source_unsupported_selectors": ["gust_surface", "orog"],
+    "source_unsupported_selectors": ["gust_surface"],
+    "model_elevation_selector": "orog",
     "quality_states": ["real", "derived", "missing", "sentinel_missing", "invalid_payload"],
     "cin_native_sign_convention": "signed_non_positive",
     "precipitation_method": "gfs_kg_m2_to_mm"

@@ -31,7 +31,7 @@ from .profile import (
     GfsMessageProfile,
 )
 
-GFS_PARSER_VERSION = "gfs-parser/1"
+GFS_PARSER_VERSION = "gfs-parser/2"
 
 
 class GfsParserError(RuntimeError):
@@ -74,6 +74,10 @@ class GfsNativeGridMessage(AtmosphericContract):
     longitude_of_last_grid_point_deg: float
     i_direction_increment_deg: float
     j_direction_increment_deg: float
+    i_scans_negatively: bool
+    j_scans_positively: bool
+    j_points_are_consecutive: bool
+    alternative_row_scanning: bool
     values: ArtifactReference
     missing_mask: ArtifactReference
     quality_state: Literal["real", "sentinel_missing"]
@@ -87,7 +91,7 @@ class GfsNativeGridMessage(AtmosphericContract):
 class GfsNativeGridBatch(AtmosphericContract):
     """Immutable parser output before canonical normalization or spatial sampling."""
 
-    gfs_native_grid_batch_schema_version: Literal[1] = 1
+    gfs_native_grid_batch_schema_version: Literal[2] = 2
     run_key: str
     source_id: Literal["noaa_gfs_0p25_aws_grib2"] = GFS_SOURCE_ID
     parser_version: str = GFS_PARSER_VERSION
@@ -330,7 +334,10 @@ def _parse_message(
         raise GfsParserError(f"No pinned GFS profile exists for selector {selector_key}.")
     metadata = _metadata(handle_id)
     _validate_identity(metadata, profile, selector_key, reference_at_utc, valid_at_utc, lead_hours)
+    _validate_regular_latlon(metadata, selector_key)
     values = np.asarray(eccodes.codes_get_array(handle_id, "values"), dtype="<f8")
+    if values.size != int(metadata["Ni"]) * int(metadata["Nj"]):
+        raise GfsParserError(f"{selector_key} value count does not match Ni*Nj.")
     missing_value = float(metadata["missingValue"])
     missing_mask = np.isclose(values, missing_value, rtol=0.0, atol=0.0)
     missing_count = int(metadata["numberOfMissing"])
@@ -377,6 +384,10 @@ def _parse_message(
         longitude_of_last_grid_point_deg=float(metadata["longitudeOfLastGridPointInDegrees"]),
         i_direction_increment_deg=float(metadata["iDirectionIncrementInDegrees"]),
         j_direction_increment_deg=float(metadata["jDirectionIncrementInDegrees"]),
+        i_scans_negatively=bool(metadata["iScansNegatively"]),
+        j_scans_positively=bool(metadata["jScansPositively"]),
+        j_points_are_consecutive=bool(metadata["jPointsAreConsecutive"]),
+        alternative_row_scanning=bool(metadata["alternativeRowScanning"]),
         values=value_reference,
         missing_mask=mask_reference,
         quality_state="sentinel_missing" if missing_count else "real",
@@ -432,6 +443,10 @@ def _metadata(handle_id: int) -> dict[str, object]:
         "longitudeOfLastGridPointInDegrees",
         "iDirectionIncrementInDegrees",
         "jDirectionIncrementInDegrees",
+        "iScansNegatively",
+        "jScansPositively",
+        "jPointsAreConsecutive",
+        "alternativeRowScanning",
         "dataDate",
         "dataTime",
         "validityDate",
@@ -490,6 +505,38 @@ def _validate_identity(
         raise GfsParserError(f"{selector_key} reference time does not match collection evidence.")
     if _grib_utc(metadata["validityDate"], metadata["validityTime"]) != valid_at_utc:
         raise GfsParserError(f"{selector_key} valid time does not match collection evidence.")
+
+
+def _validate_regular_latlon(metadata: dict[str, object], selector_key: str) -> None:
+    """Pin the NOAA GFS scan order that makes flat values canonical row-major grids."""
+
+    if metadata["gridType"] != "regular_ll":
+        raise GfsParserError(f"{selector_key} must use the regular_ll grid.")
+    scan_flags = (
+        int(metadata["iScansNegatively"]),
+        int(metadata["jScansPositively"]),
+        int(metadata["jPointsAreConsecutive"]),
+        int(metadata["alternativeRowScanning"]),
+    )
+    if scan_flags != (0, 0, 0, 0):
+        raise GfsParserError(
+            f"{selector_key} has unsupported GFS scan flags {scan_flags}; expected (0, 0, 0, 0)."
+        )
+    ni, nj = int(metadata["Ni"]), int(metadata["Nj"])
+    first_lat = float(metadata["latitudeOfFirstGridPointInDegrees"])
+    last_lat = float(metadata["latitudeOfLastGridPointInDegrees"])
+    first_lon = float(metadata["longitudeOfFirstGridPointInDegrees"])
+    last_lon = float(metadata["longitudeOfLastGridPointInDegrees"])
+    i_step = float(metadata["iDirectionIncrementInDegrees"])
+    j_step = float(metadata["jDirectionIncrementInDegrees"])
+    if i_step <= 0 or j_step <= 0:
+        raise GfsParserError(f"{selector_key} grid increments must be positive.")
+    expected_last_lat = first_lat - (nj - 1) * j_step
+    expected_last_lon = (first_lon + (ni - 1) * i_step) % 360.0
+    if not np.isclose(last_lat, expected_last_lat, rtol=0.0, atol=1e-9):
+        raise GfsParserError(f"{selector_key} latitude endpoints disagree with Nj and j step.")
+    if not np.isclose(last_lon % 360.0, expected_last_lon, rtol=0.0, atol=1e-9):
+        raise GfsParserError(f"{selector_key} longitude endpoints disagree with Ni and i step.")
 
 
 def _statistic_type(metadata: dict[str, object]) -> str | None:
