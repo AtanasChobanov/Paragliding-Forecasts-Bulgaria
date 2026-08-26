@@ -201,6 +201,34 @@ used for deterministic audit/testing; it is not a SQLite field. Equal verified
 inputs produce byte-identical `canonical-site-samples.json` and
 `neighbourhood-node-samples.json` outputs.
 
+### Source-aware validation and quarantine (T-018/S06)
+
+`weather-validate` is offline-only. It requires a complete S05 spatial event,
+verifies the complete hash chain to the raw manifest, reads the migrated
+`weather_sources` registry read-only, and writes an immutable
+`validator-v1/<fingerprint>/` boundary. The fingerprint includes the exact
+spatial-manifest hash, packaged source-policy bytes, and canonical registry-row
+hash.
+
+```powershell
+uv run --project services/ml weather-validate --run-key <uuid>
+```
+
+It validates GFS and ERA5 only. GFS requires forecast lead time and 925/850/700
+hPa core profiles; ERA5 requires no forecast lead and the 1000--700 hPa policy
+profile set. It checks source/kind, raw payload role/media type and GFS magic,
+catalogue units, finite/range values, time/lead/local-date consistency, field
+and sample duplicates, profile ordering, core nulls, and terrain mismatch.
+Below-terrain pressure-level exclusions and calm-wind direction are explicit
+non-penalizing missingness, not silent interpolation.
+
+The output partition is machine-readable: `accepted-samples.json`,
+`missing-evidence.json`, `quarantined-samples.json`, `validation-report.json`,
+`validation-snapshot.json`, and `stage-manifest.json`. Exit `0` means complete;
+exit `2` means quarantine (and blocks S07); exit `1` is an operational or hash
+chain failure. Repeating the same validated run reuses the prior immutable
+boundary and appends no duplicate ledger event. There is no manual alias or
+mapping approval file for weather validation.
 The real command chain is:
 
 ```powershell

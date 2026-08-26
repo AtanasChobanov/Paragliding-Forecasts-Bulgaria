@@ -58,6 +58,13 @@ no `weather_artifacts` table. Field quality such as `real`, `derived`, or
 `missing` is stored per field in `weather_field_provenance`, not once for a
 multi-field record.
 
+`weather_sources` is the approved persistent source registry and validator allow-list.
+`20260826120000_seed_approved_weather_sources` seeds the active GFS
+`noaa_gfs_0p25_aws_grib2` and ERA5 `copernicus_era5` rows with their public
+base URLs. It does not make the database a transport configuration store:
+source adapters retain their reviewed pinned endpoint and source-specific auth,
+path, rate-limit, and request construction. S06 snapshots and hashes the exact
+registry row that authorized a validation run.
 The foundation migration contains schema only. Reviewed follow-up data
 migrations provision exactly one `weather_site_sampling_configs` row for every
 canonical site. Six use their canonical site coordinates; Dobrich uses the

@@ -49,6 +49,7 @@ consequences. Temporary progress and Git state belong in
 | DEC-034     | Use one packaged atmospheric catalogue and durable stage protocol               | Accepted   | 2026-08-21 |
 | DEC-035     | Pin GFS GRIB parser identity and preserve only canonical weather quality states | Accepted   | 2026-08-21 |
 | DEC-036     | Use reviewed site coordinates with bilinear points and radius evidence          | Accepted   | 2026-08-24 |
+| DEC-037     | Validate weather sources through a hashed registry and policy                  | Accepted   | 2026-08-26 |
 
 ## Individual decisions
 
@@ -1526,6 +1527,47 @@ the scientific definition and validation of any neighbourhood-derived feature.
 [`sites.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/sites.py),
 [`handoff.md`](handoff.md).
 
+### DEC-037 - Validate weather sources through a hashed registry and policy
+
+**Status:** Accepted
+
+**Date:** 2026-08-26
+
+**Context:** T-018/S06 must decide whether validation needs invented model IDs,
+persisted response headers, or an XCContest-style manual mapping gate. GFS and
+ERA5 have different expected coverage, while a source-neutral validator must
+fail closed for an unknown or inactive source without turning `weather_sources`
+into mutable collector transport configuration.
+
+**Decision:** Seed GFS `noaa_gfs_0p25_aws_grib2` and ERA5 `copernicus_era5` as
+active `weather_sources` rows through a guarded migration. Treat that table as
+the persistent registry/allow-list and snapshot/hash the exact row in every S06
+validation boundary. Source adapters retain their pinned endpoint and their
+source-specific request construction; the registry base URL is provenance, not
+a runtime override. Do not add a fabricated `model_id`/`model_version`, retain
+observed HTTP response headers, or add a manual alias/mapping approval path.
+
+Use packaged `source-aware-weather-validation-policy/1`, keyed by registry
+source code. S06 is offline-only and validates hash-linked S05 artifacts against
+source/kind, payload media/shape evidence, canonical unit/range/time/lead,
+profile order/duplicates/core null policy, and terrain mismatch. GFS requires
+925/850/700 hPa profiles and a lead; ERA5 requires the 1000--700 hPa profile
+set and no lead. Accepted, missing, and quarantined artifacts are immutable;
+quarantine returns exit `2` and blocks S07. S05 v2 no longer assigns a coverage
+status; S06 owns that disposition while still reading legacy S05 v1 artifacts.
+
+**Consequences:** Missing required coverage is not equivalent to a corrupt
+payload: both receive stable machine-readable reasons, but only violated source
+policy/payload integrity quarantines the affected sample. A repeated validator
+invocation reuses its evidence and produces no duplicate state event. New source
+support or a changed policy requires a new versioned policy/validator and an
+explicit compatibility decision.
+
+**Related files:**
+[`weather-validation-policy.json`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/resources/weather-validation-policy.json),
+[`validation.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/validation.py),
+[`schema.ts`](../packages/database/src/schema.ts),
+[`handoff.md`](handoff.md).
 ## Open decisions
 
 | Question                                                                                                                  | Options / constraints                                                                                                                                                                                                             | Resolve by                                                               |
