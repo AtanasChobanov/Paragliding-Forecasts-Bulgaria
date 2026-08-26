@@ -251,7 +251,7 @@ describe("database foundation migrations", () => {
 
     expect(sqlite.prepare("PRAGMA foreign_keys").get()).toEqual({ foreign_keys: 1 });
     expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({
-      count: 8,
+      count: 9,
     });
 
     if (databaseUrl === undefined) {
@@ -261,7 +261,7 @@ describe("database foundation migrations", () => {
     runMigrations(databaseUrl);
 
     expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({
-      count: 8,
+      count: 9,
     });
     expect(
       sqlite
@@ -345,6 +345,31 @@ describe("database foundation migrations", () => {
     ]);
     expect(sqlite.prepare("SELECT code, name, is_active FROM flight_sources").all()).toEqual([
       { code: "xccontest", is_active: 1, name: "XCContest" },
+    ]);
+    expect(
+      sqlite
+        .prepare(
+          `SELECT code, provider_name, dataset_name, source_kind, base_url, is_active
+           FROM weather_sources ORDER BY code`,
+        )
+        .all(),
+    ).toEqual([
+      {
+        base_url: "https://cds.climate.copernicus.eu",
+        code: "copernicus_era5",
+        dataset_name: "ERA5",
+        is_active: 1,
+        provider_name: "Copernicus Climate Change Service (ECMWF)",
+        source_kind: "reanalysis",
+      },
+      {
+        base_url: "https://noaa-gfs-bdp-pds.s3.amazonaws.com",
+        code: "noaa_gfs_0p25_aws_grib2",
+        dataset_name: "Global Forecast System 0.25° GRIB2",
+        is_active: 1,
+        provider_name: "NOAA",
+        source_kind: "forecast",
+      },
     ]);
   });
 
