@@ -289,7 +289,11 @@ A weather run owns immutable raw evidence under
 under `data/interim/weather/<run-key>/`, with an append-only hash-linked state
 ledger under `state/events/`. Artifacts are written once, referenced by
 repository-relative path/SHA-256/byte count, and verified before a downstream
-stage can use them.
+stage can use them. A schema-v2 state event may explicitly supersede the current
+immutable parser/normalizer/spatial/validator boundary for the same run; it
+never overwrites the older artifact or event. Re-running a command reuses an
+exact version/fingerprint/upstream boundary, while a changed component version
+or upstream input appends a new event linked by `supersedes_sequence`.
 
 The contract stages are collector, parser, normalizer, spatial aligner,
 validator, feature builder, and persistence. Their versions are independent;

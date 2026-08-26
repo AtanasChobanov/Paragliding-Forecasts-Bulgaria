@@ -138,6 +138,9 @@ def parse(store: WeatherArtifactStore, *, occurred_at_utc: str) -> ArtifactRefer
             "grib_profile_version": GFS_GRIB_PROFILE_VERSION,
         },
     )
+    existing = store.existing_stage_manifest("parser", GFS_PARSER_VERSION, fingerprint)
+    if existing is not None:
+        return existing
     directory = store.begin_stage("parser", GFS_PARSER_VERSION, fingerprint)
     messages: list[GfsNativeGridMessage] = []
     grouped: dict[str, list[tuple[str, int, str, int]]] = {}

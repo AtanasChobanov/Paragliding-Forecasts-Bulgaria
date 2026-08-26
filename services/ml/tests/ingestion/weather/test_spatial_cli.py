@@ -46,6 +46,10 @@ def test_successful_cli_uses_normalized_evidence_and_appends_spatial_state(
         def append(self, **values):
             appended.append(values)
 
+        @staticmethod
+        def latest_stage_event(_events, _stage):
+            return None
+
     monkeypatch.setattr(
         "paragliding_forecasts_ml.ingestion.weather.spatial_cli.WeatherArtifactStore",
         lambda _run_key, project_root: SimpleNamespace(project_root=project_root),

@@ -144,16 +144,50 @@ class WeatherArtifactStore:
             self.verify_reference(artifact, expected_root=self.raw_dir)
         return manifest
 
+    def _stage_directory(
+        self, stage: str, component_version: str, input_fingerprint_sha256: str
+    ) -> Path:
+        return (
+            self.interim_dir
+            / f"{stage}-{output_directory_name(component_version)}"
+            / input_fingerprint_sha256
+        )
+
+    def existing_stage_manifest(
+        self, stage: str, component_version: str, input_fingerprint_sha256: str
+    ) -> ArtifactReference | None:
+        """Return a fully verified completed boundary for exact stage inputs, if present."""
+
+        manifest_path = (
+            self._stage_directory(stage, component_version, input_fingerprint_sha256)
+            / "stage-manifest.json"
+        )
+        if not manifest_path.is_file():
+            return None
+        reference = ArtifactReference(
+            artifact_key="stage_manifest",
+            relative_path=manifest_path.relative_to(self.project_root).as_posix(),
+            sha256=sha256_file(manifest_path),
+            byte_count=manifest_path.stat().st_size,
+            media_type="application/json",
+        )
+        manifest = self.read_stage_manifest(reference)
+        if (
+            manifest.stage != stage
+            or manifest.producer_version != component_version
+            or manifest.input_fingerprint_sha256 != input_fingerprint_sha256
+            or manifest.disposition
+            not in ({"complete", "quarantined"} if stage == "validator" else {"complete"})
+        ):
+            raise ArtifactError("Existing stage manifest does not match the requested boundary.")
+        return reference
+
     def begin_stage(
         self, stage: str, component_version: str, input_fingerprint_sha256: str
     ) -> Path:
         """Reserve an immutable version/fingerprint directory for one successful stage output."""
 
-        directory = (
-            self.interim_dir
-            / f"{stage}-{output_directory_name(component_version)}"
-            / input_fingerprint_sha256
-        )
+        directory = self._stage_directory(stage, component_version, input_fingerprint_sha256)
         directory.mkdir(parents=True, exist_ok=False)
         return directory
 
@@ -219,6 +253,19 @@ class WeatherArtifactStore:
         """Recursively verify a raw or stage manifest boundary and all of its inputs."""
 
         return self._verify_boundary(reference, visited=set())
+
+    def read_stage_manifest(self, reference: ArtifactReference) -> StageManifest:
+        """Return one hash-verified non-raw stage manifest."""
+
+        if reference.artifact_key != "stage_manifest":
+            raise ArtifactError("Expected a stage-manifest boundary reference.")
+        path = self.verify_boundary(reference)
+        try:
+            return StageManifest.model_validate_json(path.read_bytes(), strict=True)
+        except Exception as error:
+            raise ArtifactError(
+                "Stage manifest does not satisfy its versioned contract."
+            ) from error
 
     def _verify_boundary(self, reference: ArtifactReference, *, visited: set[str]) -> Path:
         if reference.sha256 in visited:

@@ -49,7 +49,10 @@ class StateError(RuntimeError):
 class RunStateEvent(AtmosphericContract):
     """One immutable, hash-linked transition in the weather-run lifecycle."""
 
-    state_event_schema_version: Literal[1] = 1
+    # Version 1 events remain readable. Version 2 adds an explicit link when
+    # an immutable derived boundary replaces an earlier boundary for the same
+    # run/stage.
+    state_event_schema_version: Literal[1, 2] = 2
     run_key: str
     sequence: int = Field(ge=1)
     invocation_mode: RunMode
@@ -58,6 +61,7 @@ class RunStateEvent(AtmosphericContract):
     occurred_at_utc: str
     previous_event_sha256: str | None = None
     evidence: ArtifactReference | None = None
+    supersedes_sequence: int | None = Field(default=None, ge=1)
     detail: str | None = None
 
     @field_validator("run_key")
@@ -89,6 +93,8 @@ class RunStateEvent(AtmosphericContract):
             raise ValueError("Only validation can produce a quarantined run state.")
         if self.disposition == "partial" and self.stage != "raw_complete":
             raise ValueError("Only incomplete raw coverage can produce a partial run state.")
+        if self.state_event_schema_version == 1 and self.supersedes_sequence is not None:
+            raise ValueError("State-event schema version 1 cannot supersede another event.")
         return self
 
 
@@ -126,6 +132,7 @@ class RunStateLedger:
         disposition: RunDisposition,
         occurred_at_utc: str,
         evidence: ArtifactReference | None = None,
+        supersedes_sequence: int | None = None,
         detail: str | None = None,
     ) -> RunStateEvent:
         """Append a verified legal transition; resume never recreates old evidence."""
@@ -138,6 +145,8 @@ class RunStateLedger:
             invocation_mode=invocation_mode,
             stage=stage,
             disposition=disposition,
+            evidence=evidence,
+            supersedes_sequence=supersedes_sequence,
         )
         previous_path = self._event_path(events[-1])
         event = RunStateEvent(
@@ -149,6 +158,7 @@ class RunStateLedger:
             occurred_at_utc=occurred_at_utc,
             previous_event_sha256=sha256_file(previous_path),
             evidence=evidence,
+            supersedes_sequence=supersedes_sequence,
             detail=detail,
         )
         self._write(event)
@@ -185,6 +195,8 @@ class RunStateLedger:
                     invocation_mode=event.invocation_mode,
                     stage=event.stage,
                     disposition=event.disposition,
+                    evidence=event.evidence,
+                    supersedes_sequence=event.supersedes_sequence,
                 )
             elif not (
                 event.invocation_mode == "fresh"
@@ -220,6 +232,20 @@ class RunStateLedger:
                 return event.stage
         raise StateError("State ledger does not contain a successful stage.")
 
+    @staticmethod
+    def latest_stage_event(
+        events: tuple[RunStateEvent, ...], stage: RunStage
+    ) -> RunStateEvent | None:
+        """Return the current completed/quarantined boundary for one stage."""
+
+        allowed = {"complete"}
+        if stage == "validated":
+            allowed.add("quarantined")
+        for event in reversed(events):
+            if event.stage == stage and event.disposition in allowed:
+                return event
+        return None
+
     def _validate_next(
         self,
         events: tuple[RunStateEvent, ...],
@@ -227,6 +253,8 @@ class RunStateLedger:
         invocation_mode: RunMode,
         stage: RunStage,
         disposition: RunDisposition,
+        evidence: ArtifactReference | None = None,
+        supersedes_sequence: int | None = None,
     ) -> None:
         latest = events[-1]
         if latest.disposition in {"partial", "persisted"}:
@@ -235,11 +263,22 @@ class RunStateLedger:
             raise StateError(
                 "Only a fresh initialization may use fresh mode; subsequent events use resume."
             )
-        successful = self._last_successful_stage(events)
-        successful_index = STAGE_ORDER.index(successful)
-        expected = STAGE_ORDER[successful_index + 1] if successful != "persisted" else "persisted"
-        if stage != expected:
-            raise StateError(f"Illegal transition: expected {expected}, received {stage}.")
+        if supersedes_sequence is not None:
+            self._validate_supersession(
+                events,
+                stage=stage,
+                disposition=disposition,
+                evidence=evidence,
+                supersedes_sequence=supersedes_sequence,
+            )
+        else:
+            successful = self._last_successful_stage(events)
+            successful_index = STAGE_ORDER.index(successful)
+            expected = (
+                STAGE_ORDER[successful_index + 1] if successful != "persisted" else "persisted"
+            )
+            if stage != expected:
+                raise StateError(f"Illegal transition: expected {expected}, received {stage}.")
         if disposition == "ready":
             raise StateError("Only the initial planned state may use ready disposition.")
         if disposition == "persisted" and stage != "persisted":
@@ -250,3 +289,43 @@ class RunStateLedger:
             raise StateError("Only validation can quarantine a weather run.")
         if disposition == "partial" and stage != "raw_complete":
             raise StateError("Only raw collection coverage can be partial.")
+
+    def _validate_supersession(
+        self,
+        events: tuple[RunStateEvent, ...],
+        *,
+        stage: RunStage,
+        disposition: RunDisposition,
+        evidence: ArtifactReference | None,
+        supersedes_sequence: int,
+    ) -> None:
+        """Validate a deliberate rerun of a versioned derived stage.
+
+        A supersession never rewrites history. It publishes a distinct,
+        hash-verified boundary and points to the previous effective boundary
+        for the same stage, so downstream commands can select the latest
+        lineage without scanning artifact directories.
+        """
+
+        if stage in {"planned", "raw_complete", "persisted"}:
+            raise StateError("Only derived weather stages can supersede prior evidence.")
+        if disposition not in {"complete", "quarantined"}:
+            raise StateError("A superseding event must publish a complete or quarantined boundary.")
+        if disposition == "quarantined" and stage != "validated":
+            raise StateError("Only validation can publish a quarantined boundary.")
+        if evidence is None:
+            raise StateError("A superseding event requires immutable boundary evidence.")
+        if supersedes_sequence > len(events):
+            raise StateError("A superseding event must reference an earlier state event.")
+        superseded = events[supersedes_sequence - 1]
+        if superseded.stage != stage or superseded.disposition not in {"complete", "quarantined"}:
+            raise StateError(
+                "A superseding event must reference a completed boundary of the same stage."
+            )
+        current = self.latest_stage_event(events, stage)
+        if current is None or current.sequence != supersedes_sequence:
+            raise StateError(
+                "A superseding event must reference the current boundary for its stage."
+            )
+        if superseded.evidence == evidence:
+            raise StateError("A superseding event must publish distinct boundary evidence.")

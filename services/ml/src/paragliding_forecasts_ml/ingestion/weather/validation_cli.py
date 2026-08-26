@@ -20,6 +20,7 @@ from .validation import (
     WeatherValidationError,
     validate_weather_run,
     validation_disposition,
+    validation_upstream_boundary,
     validation_version,
 )
 
@@ -72,11 +73,12 @@ def main(arguments: Sequence[str] | None = None) -> int:
         store = WeatherArtifactStore(namespace.run_key, project_root=project_root)
         ledger = RunStateLedger(store)
         existing_manifest = _validated_evidence(ledger)
+        spatial_manifest = _spatial_evidence(ledger)
         if (
             existing_manifest is None
             or validation_version(store, existing_manifest) != WEATHER_VALIDATOR_VERSION
+            or validation_upstream_boundary(store, existing_manifest) != spatial_manifest
         ):
-            spatial_manifest = _spatial_evidence(ledger)
             occurred_at_utc = _utc_now()
             validation_manifest = validate_weather_run(
                 store,
@@ -92,6 +94,12 @@ def main(arguments: Sequence[str] | None = None) -> int:
                 disposition=disposition,
                 occurred_at_utc=occurred_at_utc,
                 evidence=validation_manifest,
+                supersedes_sequence=(
+                    previous.sequence
+                    if (previous := ledger.latest_stage_event(ledger.load_events(), "validated"))
+                    is not None
+                    else None
+                ),
                 detail="source-aware offline validation and quarantine evidence",
             )
         else:

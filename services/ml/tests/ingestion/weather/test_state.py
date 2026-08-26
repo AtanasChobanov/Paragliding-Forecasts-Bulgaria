@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from paragliding_forecasts_ml.ingestion.atmosphere.contracts import ArtifactReference
 from paragliding_forecasts_ml.ingestion.weather.artifacts import WeatherArtifactStore
 from paragliding_forecasts_ml.ingestion.weather.state import RunStateLedger, StateError
 
@@ -14,6 +15,16 @@ def initialized_ledger(tmp_path) -> RunStateLedger:
     ledger = RunStateLedger(store)
     ledger.initialize(occurred_at_utc=UTC)
     return ledger
+
+
+def reference(key: str) -> ArtifactReference:
+    return ArtifactReference(
+        artifact_key="stage_manifest",
+        relative_path=f"data/interim/weather/{RUN_KEY}/{key}/stage-manifest.json",
+        sha256=(key[0] * 64),
+        byte_count=1,
+        media_type="application/json",
+    )
 
 
 def test_failed_stage_can_resume_from_last_verified_success(tmp_path) -> None:
@@ -134,3 +145,92 @@ def test_state_ledger_rejects_a_tampered_predecessor(tmp_path) -> None:
 
     with pytest.raises(StateError, match="predecessor hash"):
         ledger.load_events()
+
+
+def test_new_spatial_version_supersedes_the_prior_boundary_without_rewriting_it(
+    tmp_path, monkeypatch
+) -> None:
+    ledger = initialized_ledger(tmp_path)
+    monkeypatch.setattr(ledger.store, "verify_boundary", lambda _reference: tmp_path)
+    for stage in ("raw_complete", "parsed", "normalized"):
+        ledger.append(
+            invocation_mode="resume",
+            stage=stage,
+            disposition="complete",
+            occurred_at_utc=UTC,
+        )
+    spatial_v1 = reference("a")
+    ledger.append(
+        invocation_mode="resume",
+        stage="spatially_aligned",
+        disposition="complete",
+        occurred_at_utc=UTC,
+        evidence=spatial_v1,
+    )
+    ledger.append(
+        invocation_mode="resume",
+        stage="validated",
+        disposition="complete",
+        occurred_at_utc=UTC,
+    )
+
+    spatial_v2 = reference("b")
+    replacement = ledger.append(
+        invocation_mode="resume",
+        stage="spatially_aligned",
+        disposition="complete",
+        occurred_at_utc=UTC,
+        evidence=spatial_v2,
+        supersedes_sequence=5,
+    )
+
+    events = ledger.load_events()
+    assert replacement.sequence == 7
+    assert replacement.supersedes_sequence == 5
+    assert events[4].evidence == spatial_v1
+    assert RunStateLedger.latest_stage_event(events, "spatially_aligned") == replacement
+
+
+def test_supersession_must_reference_the_current_boundary_for_that_stage(
+    tmp_path, monkeypatch
+) -> None:
+    ledger = initialized_ledger(tmp_path)
+    monkeypatch.setattr(ledger.store, "verify_boundary", lambda _reference: tmp_path)
+    for stage in ("raw_complete", "parsed", "normalized"):
+        ledger.append(
+            invocation_mode="resume",
+            stage=stage,
+            disposition="complete",
+            occurred_at_utc=UTC,
+        )
+    ledger.append(
+        invocation_mode="resume",
+        stage="spatially_aligned",
+        disposition="complete",
+        occurred_at_utc=UTC,
+        evidence=reference("a"),
+    )
+    ledger.append(
+        invocation_mode="resume",
+        stage="validated",
+        disposition="complete",
+        occurred_at_utc=UTC,
+    )
+    ledger.append(
+        invocation_mode="resume",
+        stage="spatially_aligned",
+        disposition="complete",
+        occurred_at_utc=UTC,
+        evidence=reference("b"),
+        supersedes_sequence=5,
+    )
+
+    with pytest.raises(StateError, match="current boundary"):
+        ledger.append(
+            invocation_mode="resume",
+            stage="spatially_aligned",
+            disposition="complete",
+            occurred_at_utc=UTC,
+            evidence=reference("c"),
+            supersedes_sequence=5,
+        )

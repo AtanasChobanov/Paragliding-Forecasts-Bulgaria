@@ -96,9 +96,18 @@ def test_parse_records_parsed_and_normalized_boundaries(tmp_path, monkeypatch) -
                 )
             )
 
+        @staticmethod
+        def latest_stage_event(_events, _stage):
+            return None
+
     monkeypatch.setattr(parser_cli, "WeatherArtifactStore", lambda *_a, **_k: store)
     monkeypatch.setattr(parser_cli, "RunStateLedger", FakeLedger)
     monkeypatch.setattr(parser_cli, "raw_manifest_reference", lambda _store: raw)
+    monkeypatch.setattr(
+        parser_cli,
+        "_matches_current_boundary",
+        lambda _store, reference, **_kwargs: reference == parsed,
+    )
     monkeypatch.setattr(parser_cli, "parse", lambda *_a, **_k: parsed)
     monkeypatch.setattr(parser_cli, "normalize", lambda *_a, **_k: normalized)
 
@@ -130,9 +139,18 @@ def test_parse_resume_reuses_existing_parsed_evidence(tmp_path, monkeypatch) -> 
         def append(self, **values) -> None:
             appended.append(values)
 
+        @staticmethod
+        def latest_stage_event(_events, _stage):
+            return None
+
     monkeypatch.setattr(parser_cli, "WeatherArtifactStore", lambda *_a, **_k: object())
     monkeypatch.setattr(parser_cli, "RunStateLedger", FakeLedger)
     monkeypatch.setattr(parser_cli, "raw_manifest_reference", lambda _store: raw)
+    monkeypatch.setattr(
+        parser_cli,
+        "_matches_current_boundary",
+        lambda _store, reference, **_kwargs: reference == parsed,
+    )
     monkeypatch.setattr(
         parser_cli,
         "parse",

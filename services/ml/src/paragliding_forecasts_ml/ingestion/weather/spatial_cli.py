@@ -15,7 +15,7 @@ from ...storage.sqlite import configured_database_url
 from ..atmosphere.contracts import ArtifactReference
 from .artifacts import ArtifactError, WeatherArtifactStore
 from .sites import SiteSamplingConfigError
-from .spatial import SpatialSamplingError, sample_canonical_sites
+from .spatial import WEATHER_SPATIAL_VERSION, SpatialSamplingError, sample_canonical_sites
 from .state import RunStateLedger, StateError
 
 
@@ -37,6 +37,21 @@ def _normalizer_evidence(ledger: RunStateLedger) -> ArtifactReference:
     return matches[-1]
 
 
+def _matches_current_spatial_boundary(
+    store: WeatherArtifactStore,
+    reference: ArtifactReference | None,
+    normalizer_manifest: ArtifactReference,
+) -> bool:
+    if reference is None:
+        return False
+    manifest = store.read_stage_manifest(reference)
+    return (
+        manifest.stage == "spatial"
+        and manifest.producer_version == WEATHER_SPATIAL_VERSION
+        and manifest.inputs == (normalizer_manifest,)
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="gfs-sample")
     parser.add_argument("--run-key", required=True, help="Existing normalized GFS run UUID.")
@@ -56,22 +71,29 @@ def main(arguments: Sequence[str] | None = None) -> int:
         store = WeatherArtifactStore(namespace.run_key, project_root=project_root)
         ledger = RunStateLedger(store)
         normalizer_manifest = _normalizer_evidence(ledger)
-        occurred_at_utc = _utc_now()
-        spatial_manifest = sample_canonical_sites(
-            store,
-            normalizer_manifest,
-            database_url=configured_database_url(database_url),
-            occurred_at_utc=occurred_at_utc,
-            project_root=project_root,
-        )
-        ledger.append(
-            invocation_mode="resume",
-            stage="spatially_aligned",
-            disposition="complete",
-            occurred_at_utc=occurred_at_utc,
-            evidence=spatial_manifest,
-            detail="bilinear point samples and 50 km physical-radius node evidence",
-        )
+        previous = ledger.latest_stage_event(ledger.load_events(), "spatially_aligned")
+        if _matches_current_spatial_boundary(
+            store, previous.evidence if previous is not None else None, normalizer_manifest
+        ):
+            spatial_manifest = previous.evidence
+        else:
+            occurred_at_utc = _utc_now()
+            spatial_manifest = sample_canonical_sites(
+                store,
+                normalizer_manifest,
+                database_url=configured_database_url(database_url),
+                occurred_at_utc=occurred_at_utc,
+                project_root=project_root,
+            )
+            ledger.append(
+                invocation_mode="resume",
+                stage="spatially_aligned",
+                disposition="complete",
+                occurred_at_utc=occurred_at_utc,
+                evidence=spatial_manifest,
+                supersedes_sequence=previous.sequence if previous is not None else None,
+                detail="bilinear point samples and 50 km physical-radius node evidence",
+            )
     except (
         ArtifactError,
         OSError,

@@ -219,7 +219,7 @@ def _load_samples(
         payload = json.loads(path.read_bytes())
         version = payload.get("canonical_site_sample_batch_schema_version")
         if version == 2:
-            batch = CanonicalSiteSampleBatch.model_validate(payload, strict=True)
+            batch = CanonicalSiteSampleBatch.model_validate_json(path.read_bytes(), strict=True)
             samples = batch.samples
         elif version == 1:
             raw_samples = payload["samples"]
@@ -659,6 +659,9 @@ def validate_weather_run(
         inputs=(spatial_manifest_reference,),
         configuration=configuration,
     )
+    existing = store.existing_stage_manifest("validator", WEATHER_VALIDATOR_VERSION, fingerprint)
+    if existing is not None:
+        return existing
     directory = store.begin_stage("validator", WEATHER_VALIDATOR_VERSION, fingerprint)
     snapshot = store.write_stage_model(
         directory,
@@ -755,6 +758,17 @@ def validation_version(store: WeatherArtifactStore, reference: ArtifactReference
     """Return the producer version of one verified validator stage."""
 
     return _stage_manifest(store, reference).producer_version
+
+
+def validation_upstream_boundary(
+    store: WeatherArtifactStore, reference: ArtifactReference
+) -> ArtifactReference:
+    """Return the one spatial boundary that a validator boundary verified."""
+
+    manifest = _stage_manifest(store, reference)
+    if manifest.stage != "validator" or len(manifest.inputs) != 1:
+        raise WeatherValidationError("Validation boundary has an invalid upstream manifest shape.")
+    return manifest.inputs[0]
 
 
 def validation_disposition(store: WeatherArtifactStore, reference: ArtifactReference) -> str:

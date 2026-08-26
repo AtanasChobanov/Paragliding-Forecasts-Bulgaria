@@ -557,6 +557,9 @@ def sample_canonical_sites(
         inputs=(normalizer_stage_manifest,),
         configuration=configuration,
     )
+    existing = store.existing_stage_manifest("spatial", WEATHER_SPATIAL_VERSION, fingerprint)
+    if existing is not None:
+        return existing
     directory = store.begin_stage("spatial", WEATHER_SPATIAL_VERSION, fingerprint)
     point_footprints = tuple(
         bilinear_footprint(

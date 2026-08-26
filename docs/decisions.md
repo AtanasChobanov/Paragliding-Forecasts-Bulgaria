@@ -1568,6 +1568,42 @@ explicit compatibility decision.
 [`validation.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/validation.py),
 [`schema.ts`](../packages/database/src/schema.ts),
 [`handoff.md`](handoff.md).
+
+### DEC-038 - Preserve immutable weather artifacts through explicit stage supersession
+
+**Status:** Accepted
+
+**Date:** 2026-08-26
+
+**Context:** A weather run can contain valid artifacts from multiple component
+versions, for example `spatial-v1` followed by `spatial-v2`. The original
+linear state ledger accepted only the next stage, so a newer artifact could be
+written immutably but remain absent from the ledger. Selecting the highest
+filesystem directory would bypass the audited state history and is unsafe.
+
+**Decision:** Keep state events append-only and read schema-v1 events for
+backward compatibility. New schema-v2 events may set `supersedes_sequence` only
+for a derived stage (`parsed`, `normalized`, `spatially_aligned`, `validated`,
+or later derived stages). It must identify the current completed boundary for
+that same stage and carry distinct immutable evidence. Raw collection and
+persistence remain non-supersedable within a run. Stage commands reuse an exact
+producer-version/fingerprint/upstream match; otherwise they create or verify the
+versioned artifact and append the explicit superseding event. Downstream stages
+select the latest completed event for their immediate input; validation also
+requires its own recorded upstream spatial boundary to match it.
+
+**Consequences:** A run remains reproducible at every historical boundary while
+newer parser, normalizer, spatial, validator, or feature versions can progress
+without a new run UUID. A completed artifact left unledgered by older code can
+be hash-verified and attached once, never rewritten. This does not turn raw
+collection into a mutable resume operation; a new collection remains a new run.
+
+**Related files:**
+[`state.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/state.py),
+[`artifacts.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/artifacts.py),
+[`parser_cli.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/parser_cli.py),
+[`spatial_cli.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/spatial_cli.py),
+[`validation_cli.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/validation_cli.py).
 ## Open decisions
 
 | Question                                                                                                                  | Options / constraints                                                                                                                                                                                                             | Resolve by                                                               |

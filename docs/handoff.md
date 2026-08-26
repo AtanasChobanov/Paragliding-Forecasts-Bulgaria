@@ -112,10 +112,12 @@ and quality states against it at runtime; there is no copied Python field enum.
 payloads, and `manifest.json`. `data/interim/weather/<run-key>/` owns
 versioned/fingerprinted parser, normalizer, spatial, validation, feature, and
 persistence evidence plus an append-only hash-linked state-event ledger.
-`fresh` creates a UUID layout; offline `resume` may append only a legal next
-event after prior hashes are verified. `partial` and `persisted` are terminal;
-failed parser/normalizer stages may retry from the last complete state; only
-validation may emit or resolve `quarantined`.
+`fresh` creates a UUID layout. Offline `resume` may append the legal next event
+or a schema-v2 derived-boundary event with `supersedes_sequence`: the latter
+must name the current completed boundary for the same stage and publish distinct
+hash-verified evidence. Old state-event v1 records remain readable; no artifact
+or event is rewritten. `partial` and `persisted` are terminal; only validation
+may emit or resolve `quarantined`.
 
 S02 declares separately versioned source-adapter, parser, normalizer, spatial
 aligner, validator, feature-builder, and persistence protocols. It creates no
@@ -164,9 +166,12 @@ is excluded with an auditable reason. Coarse-model terrain is never hidden or
 substituted for reviewed site elevation.
 
 `gfs-sample --run-key <uuid>` is offline-only, reads SQLite read-only, and
-consumes only a complete normalized event. It appends the spatial boundary. Its
-fingerprint covers the normalized manifest, grid/orography, reviewed config
-snapshot, packaged policy, footprints, and version. Integration tests prove
+consumes only a complete normalized event. It reuses the current exact
+version/fingerprint boundary; a changed spatial version or upstream fingerprint
+appends a `spatially_aligned` event with `supersedes_sequence` rather than
+rewriting the old boundary. Its fingerprint covers the normalized manifest,
+grid/orography, reviewed config snapshot, packaged policy, footprints, and
+version. Integration tests prove
 byte-identical samples/fingerprints across independent roots, multi-valid-time
 behavior, terrain diagnostics, below-terrain exclusion, no network, and no
 database mutation. `sample_identity_key` is artifact-only, not a database
@@ -191,7 +196,9 @@ the packaged source-aware policy into the immutable validator boundary, verifies
 the spatial-to-raw hash chain, and writes accepted, missing, quarantined,
 report, snapshot, and stage-manifest evidence. It returns `0` for complete, `2`
 for quarantined, and `1` for operational/hash-chain failure. The command reuses
-an existing validated boundary without a duplicate event.
+an existing validated boundary only when its validator version and spatial input
+are current; otherwise it appends a versioned `validated` event that explicitly
+supersedes the prior validation boundary.
 
 S06 owns coverage disposition. GFS has a required lead and 925/850/700 hPa
 core profile policy; ERA5 has no lead and requires 1000--700 hPa profiles. No
@@ -209,6 +216,17 @@ repository structure, focused Prettier, and `git diff --check`.
 The root format check reports only the pre-existing committed
 `20260811080029_add_browser_ui_ingestion_method/snapshot.json`; all new T-018
 files pass focused formatting.
+
+### Latest state-supersession verification (2026-08-26)
+
+The S06 run `0e2c4771-acbc-42ab-b6f3-4b5f36946270` now has immutable
+`spatial-v1` and `spatial-v2` evidence recorded in order: state event 0008 is
+`spatially_aligned/complete` and explicitly supersedes event 0005. Its matching
+validator-v2 result is state event 0009 and explicitly supersedes the prior
+validator-v2 event 0007. An immediate offline replay of `gfs-sample` then
+`weather-validate` returned those v2 boundaries without creating extra events
+(9 before, 9 after). Full ML verification passed: 138 tests, Ruff format check,
+and Ruff check.
 
 ## Routine commands
 

@@ -181,6 +181,9 @@ def normalize(
         inputs=(parser_stage_manifest,),
         configuration={"catalogue": "t017-spike-v1", "normalization": GFS_NORMALIZER_VERSION},
     )
+    existing = store.existing_stage_manifest("normalizer", GFS_NORMALIZER_VERSION, fingerprint)
+    if existing is not None:
+        return existing
     directory = store.begin_stage("normalizer", GFS_NORMALIZER_VERSION, fingerprint)
     surface: list[GfsCanonicalGridMessage] = []
     pressure: list[GfsCanonicalGridMessage] = []

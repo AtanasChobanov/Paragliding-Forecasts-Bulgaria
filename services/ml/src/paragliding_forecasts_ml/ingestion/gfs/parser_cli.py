@@ -12,8 +12,8 @@ from pathlib import Path
 from ..atmosphere.contracts import ArtifactReference
 from ..weather.artifacts import WeatherArtifactStore
 from ..weather.state import RunStateLedger, StateError
-from .normalizer import normalize
-from .parser import GfsParserError, parse, raw_manifest_reference
+from .normalizer import GFS_NORMALIZER_VERSION, normalize
+from .parser import GFS_PARSER_VERSION, GfsParserError, parse, raw_manifest_reference
 
 
 def _utc_now() -> str:
@@ -36,6 +36,24 @@ def _complete_evidence(ledger: RunStateLedger, stage: str) -> ArtifactReference 
     return matches[-1] if matches else None
 
 
+def _matches_current_boundary(
+    store: WeatherArtifactStore,
+    reference: ArtifactReference | None,
+    *,
+    producer_version: str,
+    upstream: ArtifactReference,
+) -> bool:
+    if reference is None:
+        return False
+    manifest = store.read_stage_manifest(reference)
+    return manifest.producer_version == producer_version and manifest.inputs == (upstream,)
+
+
+def _superseded_sequence(ledger: RunStateLedger, stage: str) -> int | None:
+    previous = ledger.latest_stage_event(ledger.load_events(), stage)
+    return previous.sequence if previous is not None else None
+
+
 def main(arguments: Sequence[str] | None = None) -> int:
     namespace = build_parser().parse_args(arguments)
     try:
@@ -45,7 +63,12 @@ def main(arguments: Sequence[str] | None = None) -> int:
         if raw_evidence is None or raw_evidence != raw_manifest_reference(store):
             raise StateError("gfs-parse requires the current complete raw manifest state event.")
         parser_manifest = _complete_evidence(ledger, "parsed")
-        if parser_manifest is None:
+        if not _matches_current_boundary(
+            store,
+            parser_manifest,
+            producer_version=GFS_PARSER_VERSION,
+            upstream=raw_evidence,
+        ):
             occurred_at_utc = _utc_now()
             parser_manifest = parse(store, occurred_at_utc=occurred_at_utc)
             ledger.append(
@@ -54,20 +77,27 @@ def main(arguments: Sequence[str] | None = None) -> int:
                 disposition="complete",
                 occurred_at_utc=occurred_at_utc,
                 evidence=parser_manifest,
+                supersedes_sequence=_superseded_sequence(ledger, "parsed"),
                 detail="offline ecCodes native-grid parse",
             )
-        if _complete_evidence(ledger, "normalized") is not None:
-            raise StateError("This GFS run is already normalized; continue with gfs-sample.")
-        occurred_at_utc = _utc_now()
-        normalizer_manifest = normalize(store, parser_manifest, occurred_at_utc=occurred_at_utc)
-        ledger.append(
-            invocation_mode="resume",
-            stage="normalized",
-            disposition="complete",
-            occurred_at_utc=occurred_at_utc,
-            evidence=normalizer_manifest,
-            detail="canonical GFS grid normalization",
-        )
+        normalizer_manifest = _complete_evidence(ledger, "normalized")
+        if not _matches_current_boundary(
+            store,
+            normalizer_manifest,
+            producer_version=GFS_NORMALIZER_VERSION,
+            upstream=parser_manifest,
+        ):
+            occurred_at_utc = _utc_now()
+            normalizer_manifest = normalize(store, parser_manifest, occurred_at_utc=occurred_at_utc)
+            ledger.append(
+                invocation_mode="resume",
+                stage="normalized",
+                disposition="complete",
+                occurred_at_utc=occurred_at_utc,
+                evidence=normalizer_manifest,
+                supersedes_sequence=_superseded_sequence(ledger, "normalized"),
+                detail="canonical GFS grid normalization",
+            )
     except (GfsParserError, StateError, OSError, ValueError) as error:
         print(f"GFS parser failed: {error}", file=sys.stderr)
         return 1
