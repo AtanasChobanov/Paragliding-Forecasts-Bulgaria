@@ -23,7 +23,7 @@ from .sampling_policy import SamplingPolicy, load_sampling_policy
 from .serialization import canonical_json_bytes, sha256_bytes
 from .sites import SiteSamplingConfig, load_site_sampling_configs
 
-WEATHER_SPATIAL_VERSION = "weather-spatial/1"
+WEATHER_SPATIAL_VERSION = "weather-spatial/2"
 
 
 class SpatialSamplingError(RuntimeError):
@@ -116,15 +116,14 @@ class SiteAlignedSample(AtmosphericContract):
     reference_at_utc: str
     valid_at_utc: str
     valid_local_date: str
-    lead_hours: int = Field(ge=0, le=384)
-    coverage_status: Literal["complete", "partial", "insufficient"]
+    lead_hours: int | None = Field(default=None, ge=0, le=384)
     terrain: TerrainDiagnostic
     fields: tuple[SampledField, ...] = Field(min_length=1)
     profile_levels: tuple[SampledProfileLevel, ...]
 
 
 class CanonicalSiteSampleBatch(AtmosphericContract):
-    canonical_site_sample_batch_schema_version: Literal[1] = 1
+    canonical_site_sample_batch_schema_version: Literal[2] = 2
     run_key: str
     normalizer_stage_manifest: ArtifactReference
     spatial_version: str = WEATHER_SPATIAL_VERSION
@@ -711,19 +710,6 @@ def sample_canonical_sites(
                     )
                 )
 
-            missing_count = sum(
-                field.canonical_value is None
-                for field in surface_fields
-                if field.field_code != "wind_direction_degrees_from_north"
-            ) + sum(
-                field.canonical_value is None
-                for profile in profiles
-                for field in profile.fields
-                if field.field_code != "wind_direction_degrees_from_north"
-            )
-            coverage: Literal["complete", "partial", "insufficient"] = (
-                "complete" if missing_count == 0 else "partial"
-            )
             identity = sha256_bytes(
                 canonical_json_bytes(
                     {
@@ -745,7 +731,6 @@ def sample_canonical_sites(
                     valid_at_utc=valid_at_utc,
                     valid_local_date=_valid_local_date(valid_at_utc, site.site_time_zone),
                     lead_hours=next(iter(lead_hours)),
-                    coverage_status=coverage,
                     terrain=terrain,
                     fields=tuple(sorted(surface_fields, key=_field_sort_key)),
                     profile_levels=tuple(profiles),

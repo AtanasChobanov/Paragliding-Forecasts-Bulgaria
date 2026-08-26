@@ -23,6 +23,7 @@ xccontest-persist = "paragliding_forecasts_ml.ingestion.xccontest.persistence_cl
 gfs-collect = "paragliding_forecasts_ml.ingestion.gfs.cli:main"
 gfs-parse = "paragliding_forecasts_ml.ingestion.gfs.parser_cli:main"
 gfs-sample = "paragliding_forecasts_ml.ingestion.weather.spatial_cli:main"
+weather-validate = "paragliding_forecasts_ml.ingestion.weather.validation_cli:main"
 copernicus-elevations = "paragliding_forecasts_ml.ingestion.copernicus.elevation_cli:main"
 xccontest-ingest = "paragliding_forecasts_ml.ingestion.xccontest.pipeline_cli:main"
 
