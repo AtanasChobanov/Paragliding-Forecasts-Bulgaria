@@ -15,7 +15,13 @@ from ...storage.sqlite import configured_database_url
 from ..atmosphere.contracts import ArtifactReference
 from .artifacts import ArtifactError, WeatherArtifactStore
 from .state import RunStateLedger, StateError
-from .validation import WeatherValidationError, validate_weather_run, validation_disposition
+from .validation import (
+    WEATHER_VALIDATOR_VERSION,
+    WeatherValidationError,
+    validate_weather_run,
+    validation_disposition,
+    validation_version,
+)
 
 
 def _utc_now() -> str:
@@ -66,7 +72,10 @@ def main(arguments: Sequence[str] | None = None) -> int:
         store = WeatherArtifactStore(namespace.run_key, project_root=project_root)
         ledger = RunStateLedger(store)
         existing_manifest = _validated_evidence(ledger)
-        if existing_manifest is None:
+        if (
+            existing_manifest is None
+            or validation_version(store, existing_manifest) != WEATHER_VALIDATOR_VERSION
+        ):
             spatial_manifest = _spatial_evidence(ledger)
             occurred_at_utc = _utc_now()
             validation_manifest = validate_weather_run(

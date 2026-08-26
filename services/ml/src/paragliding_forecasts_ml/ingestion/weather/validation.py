@@ -25,7 +25,7 @@ from .artifacts import WeatherArtifactStore, stage_input_fingerprint
 from .serialization import canonical_json_bytes, sha256_bytes
 from .spatial import CanonicalSiteSampleBatch, SiteAlignedSample
 
-WEATHER_VALIDATOR_VERSION = "source-aware-weather-validator/1"
+WEATHER_VALIDATOR_VERSION = "source-aware-weather-validator/2"
 POLICY_RESOURCE = "weather-validation-policy.json"
 FIELD_RANGES: dict[str, tuple[float, float]] = {
     "air_temperature_k": (150.0, 350.0),
@@ -226,8 +226,10 @@ def _load_samples(
             if not isinstance(raw_samples, list):
                 raise ValueError("v1 samples must be an array")
             samples = tuple(
-                SiteAlignedSample.model_validate(
-                    {key: value for key, value in item.items() if key != "coverage_status"},
+                SiteAlignedSample.model_validate_json(
+                    json.dumps(
+                        {key: value for key, value in item.items() if key != "coverage_status"}
+                    ),
                     strict=True,
                 )
                 for item in raw_samples
@@ -308,46 +310,87 @@ def _grid_distance_reasons(
 def _verify_raw_payloads(
     store: WeatherArtifactStore, manifest: RawManifest
 ) -> list[WeatherValidationReason]:
+    """Verify the source-owned role, content type, and stable payload shape."""
+
     reasons: list[WeatherValidationReason] = []
     for artifact in manifest.artifacts:
         path = store.verify_reference(artifact, expected_root=store.raw_dir)
         content = path.read_bytes()
-        if manifest.source_id == "noaa_gfs_0p25_aws_grib2":
-            is_index = artifact.artifact_key.endswith("-index") or path.suffix == ".idx"
-            expected_type = "text/plain" if is_index else "application/x-grib2"
-            if artifact.media_type != expected_type:
+        if manifest.source_id != "noaa_gfs_0p25_aws_grib2":
+            if not artifact.media_type:
                 reasons.append(
                     WeatherValidationReason(
-                        code="payload_media_type_mismatch",
-                        message="GFS artifact media type is incompatible with its artifact role.",
+                        code="payload_media_type_missing",
+                        message="Raw payload has no declared media type.",
                         severity="quarantine",
                     )
                 )
-            elif not is_index and content[:4] != b"GRIB":
-                reasons.append(
-                    WeatherValidationReason(
-                        code="payload_magic_mismatch",
-                        message="GFS GRIB2 payload does not begin with GRIB magic bytes.",
-                        severity="quarantine",
-                    )
-                )
-            elif is_index and not content.strip():
-                reasons.append(
-                    WeatherValidationReason(
-                        code="payload_empty_index",
-                        message="GFS index payload is empty.",
-                        severity="quarantine",
-                    )
-                )
-        elif not artifact.media_type:
+            continue
+        if artifact.artifact_key.startswith("gfs_idx_"):
+            expected_type = "text/plain"
+            invalid_shape = not content.strip()
+            shape_code = "payload_empty_index"
+        elif artifact.artifact_key.startswith("gfs_grib_"):
+            expected_type = "application/x-grib2"
+            invalid_shape = content[:4] != b"GRIB"
+            shape_code = "payload_magic_mismatch"
+        elif artifact.artifact_key == "gfs_collection_record":
+            expected_type = "application/json"
+            try:
+                record = json.loads(content)
+                invalid_shape = not isinstance(record, dict)
+            except (TypeError, ValueError):
+                invalid_shape = True
+            shape_code = "payload_json_shape_mismatch"
+        else:
             reasons.append(
                 WeatherValidationReason(
-                    code="payload_media_type_missing",
-                    message="Raw payload has no declared media type.",
+                    code="payload_role_unknown",
+                    message="GFS raw manifest contains an unknown artifact role.",
+                    severity="quarantine",
+                )
+            )
+            continue
+        if artifact.media_type != expected_type:
+            reasons.append(
+                WeatherValidationReason(
+                    code="payload_media_type_mismatch",
+                    message="GFS artifact media type is incompatible with its artifact role.",
+                    severity="quarantine",
+                )
+            )
+        elif invalid_shape:
+            reasons.append(
+                WeatherValidationReason(
+                    code=shape_code,
+                    message="GFS payload does not satisfy the required artifact shape.",
                     severity="quarantine",
                 )
             )
     return reasons
+
+
+def _below_terrain_exclusions(
+    store: WeatherArtifactStore, reference: ArtifactReference
+) -> frozenset[tuple[int, str, float]]:
+    """Return S05's explicit non-penalizing below-terrain level exclusions."""
+
+    try:
+        payload = json.loads(
+            store.verify_reference(reference, expected_root=store.interim_dir).read_bytes()
+        )
+        exclusions = payload["pressure_level_exclusions"]
+    except (KeyError, TypeError, ValueError) as error:
+        raise WeatherValidationError(
+            "Spatial artifact lacks readable pressure-level exclusion evidence."
+        ) from error
+    if not isinstance(exclusions, list):
+        raise WeatherValidationError("Pressure-level exclusions have the wrong shape.")
+    return frozenset(
+        (int(item["site_id"]), str(item["valid_at_utc"]), float(item["pressure_pa"]))
+        for item in exclusions
+        if isinstance(item, dict) and item.get("code") == "below_site_or_model_terrain"
+    )
 
 
 def _reason(
@@ -363,7 +406,10 @@ def _reason(
 
 
 def _check_sample(
-    sample: SiteAlignedSample, policy: _SourcePolicy
+    sample: SiteAlignedSample,
+    policy: _SourcePolicy,
+    *,
+    below_terrain_exclusions: frozenset[tuple[int, str, float]] = frozenset(),
 ) -> tuple[list[WeatherValidationReason], list[WeatherValidationReason]]:
     quarantine: list[WeatherValidationReason] = []
     missing: list[WeatherValidationReason] = []
@@ -461,11 +507,23 @@ def _check_sample(
     for pressure in expected_pressures:
         profile = profiles.get(float(pressure))
         if profile is None:
-            quarantine.append(
-                _reason(
-                    "required_profile_missing", f"Required {pressure} Pa profile is absent.", sample
+            if (sample.site_id, sample.valid_at_utc, float(pressure)) in below_terrain_exclusions:
+                missing.append(
+                    WeatherValidationReason(
+                        code="profile_below_terrain",
+                        message="Required profile is explicitly below reviewed site or model terrain.",
+                        sample_identity_key=sample.sample_identity_key,
+                        severity="missing",
+                    )
                 )
-            )
+            else:
+                quarantine.append(
+                    _reason(
+                        "required_profile_missing",
+                        f"Required {pressure} Pa profile is absent.",
+                        sample,
+                    )
+                )
             continue
         by_field = {field.field_code: field for field in profile.fields}
         for field_code in policy.required_profile_field_codes:
@@ -559,6 +617,7 @@ def validate_weather_run(
             "Raw source kind conflicts with the registry or validation policy."
         )
     samples = _load_samples(store, samples_reference, store.run_key)
+    below_terrain_exclusions = _below_terrain_exclusions(store, samples_reference)
     grid_reasons = _grid_distance_reasons(store, samples_reference, samples, source_policy)
     payload_reasons = _verify_raw_payloads(store, raw_manifest)
     accepted: list[SiteAlignedSample] = []
@@ -567,7 +626,9 @@ def validate_weather_run(
     missing_reasons: list[WeatherValidationReason] = []
     seen_samples: set[str] = set()
     for sample in samples:
-        sample_reasons, sample_missing = _check_sample(sample, source_policy)
+        sample_reasons, sample_missing = _check_sample(
+            sample, source_policy, below_terrain_exclusions=below_terrain_exclusions
+        )
         if sample.sample_identity_key in seen_samples:
             sample_reasons.append(
                 _reason("duplicate_sample", "Sample identity occurs more than once.", sample)
@@ -688,6 +749,12 @@ def validate_weather_run(
             completed_at_utc=occurred_at_utc,
         ),
     )
+
+
+def validation_version(store: WeatherArtifactStore, reference: ArtifactReference) -> str:
+    """Return the producer version of one verified validator stage."""
+
+    return _stage_manifest(store, reference).producer_version
 
 
 def validation_disposition(store: WeatherArtifactStore, reference: ArtifactReference) -> str:

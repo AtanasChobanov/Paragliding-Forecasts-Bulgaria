@@ -206,7 +206,7 @@ inputs produce byte-identical `canonical-site-samples.json` and
 `weather-validate` is offline-only. It requires a complete S05 spatial event,
 verifies the complete hash chain to the raw manifest, reads the migrated
 `weather_sources` registry read-only, and writes an immutable
-`validator-v1/<fingerprint>/` boundary. The fingerprint includes the exact
+`validator-v2/<fingerprint>/` boundary. The fingerprint includes the exact
 spatial-manifest hash, packaged source-policy bytes, and canonical registry-row
 hash.
 

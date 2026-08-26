@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 
+from paragliding_forecasts_ml.ingestion.weather.artifacts import WeatherArtifactStore
 from paragliding_forecasts_ml.ingestion.weather.spatial import (
     SampledField,
     SampledProfileLevel,
@@ -11,6 +13,7 @@ from paragliding_forecasts_ml.ingestion.weather.spatial import (
 )
 from paragliding_forecasts_ml.ingestion.weather.validation import (
     _check_sample,
+    _load_samples,
     load_validation_policy,
     load_weather_source,
 )
@@ -141,3 +144,42 @@ def test_source_registry_snapshot_is_read_only_and_hashes_exact_row(tmp_path: Pa
     assert source.source_kind == "forecast"
     assert len(source.sha256) == 64
     assert database_path.read_bytes() == original_bytes
+
+
+def test_legacy_s05_v1_samples_are_loaded_from_json_without_coverage_status(tmp_path: Path) -> None:
+    run_key = "99999999-9999-4999-8999-999999999999"
+    store = WeatherArtifactStore.create_fresh(run_key, project_root=tmp_path)
+    directory = store.begin_stage("spatial", "weather-spatial/1", "d" * 64)
+    legacy_sample = _sample().model_dump(mode="json")
+    legacy_sample["coverage_status"] = "complete"
+    reference = store.write_stage_bytes(
+        directory,
+        "canonical-site-samples.json",
+        "canonical_site_sample_batch",
+        json.dumps(
+            {
+                "canonical_site_sample_batch_schema_version": 1,
+                "run_key": run_key,
+                "samples": [legacy_sample],
+            }
+        ).encode(),
+        media_type="application/json",
+    )
+
+    samples = _load_samples(store, reference, run_key)
+
+    assert samples == (_sample(),)
+
+
+def test_below_terrain_profile_exclusion_is_missing_not_quarantined() -> None:
+    policy, _ = load_validation_policy()
+    sample = _sample(pressures=(85000, 70000))
+
+    quarantined, missing = _check_sample(
+        sample,
+        policy.sources["noaa_gfs_0p25_aws_grib2"],
+        below_terrain_exclusions={(sample.site_id, sample.valid_at_utc, 92500.0)},
+    )
+
+    assert quarantined == []
+    assert [reason.code for reason in missing] == ["profile_below_terrain"]
