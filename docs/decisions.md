@@ -54,6 +54,8 @@ consequences. Temporary progress and Git state belong in
 | DEC-039     | Separate hourly weather facts from daily feature builds                         | Accepted   | 2026-09-08 |
 | DEC-040     | Fix S07 daily window, profile band, and accepted derivations                    | Superseded | 2026-09-08 |
 | DEC-041     | Correct the common GFS S07 profile source contract                              | Accepted   | 2026-09-09 |
+| DEC-042     | Activate audited S07 humidity and turbulent-flux inputs                         | Accepted   | 2026-09-09 |
+| DEC-043     | Remove unrequired S07 resolved-inversion metrics                                | Accepted   | 2026-09-09 |
 
 ## Individual decisions
 
@@ -1872,6 +1874,36 @@ identifies `SPFH` at 2 m and across the retained pressure band, and `SHTFL` /
 [`migration.sql`](../packages/database/drizzle/20260909123754_correct_s07_feature_inputs/migration.sql),
 and [`handoff.md`](handoff.md).
 
+### DEC-043 - Remove unrequired S07 resolved-inversion metrics
+
+**Status:** Accepted
+
+**Date:** 2026-09-09
+
+**Context:** The preliminary S07 plan and daily profile-layer schema contained
+`inversion_strength_max_k` and `inversion_depth_at_max_m`. These are model-level
+derivations from temperature and height profiles, not GPS or provider fields.
+They are not a project-brief requirement and have no accepted ML or prediction
+use. Their specialised detection method would add an unneeded second stability
+metric alongside the accepted lapse-rate and humidity profiles.
+
+**Decision:** Do not calculate, emit, catalogue, persist, or train on resolved
+inversion strength or depth in S07. Retain the accepted lapse-rate and humidity
+profile features as the S07 stability evidence. Remove both daily
+profile-layer columns and their paired SQLite constraint with the reviewed
+forward-only migration `20260909165706_remove_s07_inversion_metrics`; do not
+edit any applied migration.
+
+**Consequences:** The S07 vertical helper and test coverage exclude inversion
+run detection. Existing databases require the named forward migration before
+S08 persistence can rely on the cleaned profile-layer shape. No source
+collector, parser, normalizer, hourly sample, or field-catalogue change is
+required because these metrics were never raw canonical fields.
+
+**Related files:** [`T-018-S07-implementaion-plan.md`](T-018-S07-implementaion-plan.md),
+[`schema.ts`](../packages/database/src/schema.ts),
+[`migration.sql`](../packages/database/drizzle/20260909165706_remove_s07_inversion_metrics/migration.sql),
+and [`handoff.md`](handoff.md).
 ## Open decisions
 
 | Question                                                                                                                  | Options / constraints                                                                                                                                                                                                             | Resolve by                                                               |

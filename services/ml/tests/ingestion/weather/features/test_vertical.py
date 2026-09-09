@@ -3,16 +3,13 @@ from __future__ import annotations
 import pytest
 
 from paragliding_forecasts_ml.ingestion.weather.features.vertical import (
-    InversionCandidate,
     VerticalCoverageError,
     VerticalPoint,
     bulk_vector_shear_m_s_per_km,
     endpoint_lapse_rate_k_per_km,
     interpolate_linear,
     meteorological_direction_from_uv,
-    resolved_inversion_runs,
     scalar_speed_profile,
-    strongest_inversion,
     trapezoidal_mean,
 )
 
@@ -58,24 +55,3 @@ def test_scalar_speed_is_integrated_before_vector_direction_and_calm_is_null() -
     assert meteorological_direction_from_uv(0, 0) is None
     with pytest.raises(VerticalCoverageError, match="identical AGL heights"):
         scalar_speed_profile(u, _points((11, 4), (1500, 4)))
-
-
-def test_resolved_inversions_keep_maximal_non_decreasing_runs_and_tie_break_deterministically() -> (
-    None
-):
-    temperatures = _points((2, 290), (300, 292), (700, 291), (1000, 291), (1500, 293))
-
-    runs = resolved_inversion_runs(temperatures, 2, 1500)
-
-    assert [(item.strength_k, item.depth_m) for item in runs] == pytest.approx([(2, 298), (2, 800)])
-    assert strongest_inversion(runs) == runs[1]
-    assert (
-        strongest_inversion(
-            (
-                InversionCandidate(500, 1000, 2, 500),
-                InversionCandidate(200, 700, 2, 500),
-            )
-        ).base_height_agl_m
-        == 200
-    )
-    assert resolved_inversion_runs(_points((2, 292), (1500, 290)), 2, 1500) == ()

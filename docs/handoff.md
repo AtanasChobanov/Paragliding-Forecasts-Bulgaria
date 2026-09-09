@@ -10,7 +10,7 @@ slice, not a project history. Read, in order:
 3. This handoff for the implemented T-018 slice boundaries.
 4. The relevant sections of `docs/project-brief.md` and `docs/architecture.md`
    for product and system constraints.
-5. DEC-031 through DEC-042 in `docs/decisions.md` for accepted weather-source,
+5. DEC-031 through DEC-043 in `docs/decisions.md` for accepted weather-source,
    schema, protocol, parser, and spatial-sampling decisions.
 6. Git history and the owning code/tests for detailed prior implementation and
    validation evidence.
@@ -26,7 +26,7 @@ Record durable design choices in `docs/decisions.md`, task status in
 | Task status   | `T-018` is In Progress; S01–S06 are complete, S07–S10 remain.                                                                                                                                                                |
 | Next focus    | Implement S07 feature building from S06 accepted artifacts, using the approved daily schema and plan.                                                                                                                        |
 | Local storage | SQLite selected by `DATABASE_URL`; local databases, raw source data, and interim artifacts are ignored.                                                                                                                      |
-| Migrations    | Earlier weather/configuration migrations and the daily-weather reshape are applied locally. `20260909123754_correct_s07_feature_inputs` is also applied; a subsequent `db:migrate` run on 2026-09-09 completed idempotently. |
+| Migrations    | Earlier weather/configuration migrations and `20260909123754_correct_s07_feature_inputs` are applied locally. `20260909165706_remove_s07_inversion_metrics` is committed but still requires explicit owner-authorized application because it drops two daily profile-layer columns. |
 
 ## T-018 scope and non-negotiable boundaries
 
@@ -181,6 +181,18 @@ ML Ruff check, Drizzle `db:check`, all 29 database tests, focused Prettier,
 and `git diff --check`. The database migration test includes the new q range
 constraint, fresh migration, idempotence, and SQLite `STRICT` rebuild checks.
 
+### S07 inversion cleanup — committed, migration pending application
+
+DEC-043 removes `inversion_strength_max_k` and `inversion_depth_at_max_m` from
+S07 entirely. They were unrequired model-level temperature-profile diagnostics,
+not GPS evidence, raw provider fields, or an active catalogue identity. The
+S07 plan, vertical helper, and tests no longer calculate them; lapse-rate and
+humidity profiles remain the approved stability evidence. The forward-only
+SQLite `STRICT` rebuild migration
+`20260909165706_remove_s07_inversion_metrics` drops the two nullable daily
+profile-layer columns and their pair constraint. It has not been applied to the
+local database: ask the owner before running `npm.cmd run db:migrate --workspace
+@paragliding-forecasts/database` because it drops columns.
 ### S02 — durable atmospheric protocol
 
 The sole machine-readable T-017 field catalogue is the packaged resource

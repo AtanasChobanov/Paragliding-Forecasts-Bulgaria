@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from itertools import pairwise
 from math import atan2, degrees, hypot, isfinite
@@ -20,16 +20,6 @@ class VerticalPoint:
 
     height_agl_m: float
     value: float
-
-
-@dataclass(frozen=True)
-class InversionCandidate:
-    """One maximal resolved non-decreasing temperature run."""
-
-    base_height_agl_m: float
-    top_height_agl_m: float
-    strength_k: float
-    depth_m: float
 
 
 def interpolate_linear(points: Sequence[VerticalPoint], target_height_agl_m: float) -> float:
@@ -130,57 +120,6 @@ def meteorological_direction_from_uv(u_m_s: float, v_m_s: float) -> float | None
     if hypot(u_m_s, v_m_s) <= CALM_WIND_EPSILON_M_S:
         return None
     return (degrees(atan2(-u_m_s, -v_m_s)) + 360.0) % 360.0
-
-
-def resolved_inversion_runs(
-    temperature_points: Sequence[VerticalPoint],
-    lower_agl_m: float,
-    upper_agl_m: float,
-) -> tuple[InversionCandidate, ...]:
-    """Return maximal non-decreasing runs with at least one positive increase."""
-
-    profile = bounded_profile(temperature_points, lower_agl_m, upper_agl_m)
-    candidates: list[InversionCandidate] = []
-    start = 0
-    has_positive_increase = False
-    for index in range(1, len(profile)):
-        if profile[index].value >= profile[index - 1].value:
-            has_positive_increase = has_positive_increase or (
-                profile[index].value > profile[index - 1].value
-            )
-            continue
-        if has_positive_increase:
-            candidates.append(_inversion_candidate(profile[start], profile[index - 1]))
-        start = index
-        has_positive_increase = False
-    if has_positive_increase:
-        candidates.append(_inversion_candidate(profile[start], profile[-1]))
-    return tuple(candidates)
-
-
-def strongest_inversion(candidates: Iterable[InversionCandidate]) -> InversionCandidate | None:
-    """Choose strongest, then deepest, then lowest-base; stable order resolves final ties."""
-
-    ordered = tuple(candidates)
-    if not ordered:
-        return None
-    return max(
-        enumerate(ordered),
-        key=lambda item: (
-            item[1].strength_k,
-            item[1].depth_m,
-            -item[1].base_height_agl_m,
-            -item[0],
-        ),
-    )[1]
-
-
-def _inversion_candidate(start: VerticalPoint, end: VerticalPoint) -> InversionCandidate:
-    strength = end.value - start.value
-    depth = end.height_agl_m - start.height_agl_m
-    if strength <= 0 or depth <= 0:
-        raise VerticalCoverageError("An inversion candidate must have positive strength and depth.")
-    return InversionCandidate(start.height_agl_m, end.height_agl_m, strength, depth)
 
 
 def _validated_profile(points: Sequence[VerticalPoint]) -> tuple[VerticalPoint, ...]:

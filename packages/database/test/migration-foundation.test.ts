@@ -254,7 +254,7 @@ describe("database foundation migrations", () => {
 
     expect(sqlite.prepare("PRAGMA foreign_keys").get()).toEqual({ foreign_keys: 1 });
     expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({
-      count: 13,
+      count: 14,
     });
 
     if (databaseUrl === undefined) {
@@ -264,7 +264,7 @@ describe("database foundation migrations", () => {
     runMigrations(databaseUrl);
 
     expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({
-      count: 13,
+      count: 14,
     });
     expect(
       sqlite
@@ -567,6 +567,19 @@ describe("database foundation migrations", () => {
     `);
   });
 
+  it("removes rejected inversion metrics from daily profile layers", () => {
+    const columns = activeConnection()
+      .sqlite.prepare("SELECT name FROM pragma_table_info('weather_daily_feature_profile_layers') ORDER BY cid")
+      .all()
+      .map((row) => (row as { name: string }).name);
+    const createSql = activeConnection()
+      .sqlite.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?")
+      .get("weather_daily_feature_profile_layers") as { sql: string };
+
+    expect(columns).not.toContain("inversion_strength_max_k");
+    expect(columns).not.toContain("inversion_depth_at_max_m");
+    expect(createSql.sql).not.toContain("weather_daily_feature_profile_layers_inversion_pair_check");
+  });
   it("creates all accepted weather tables as STRICT tables", () => {
     const rows = activeConnection()
       .sqlite.prepare(

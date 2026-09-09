@@ -1385,8 +1385,6 @@ export const weatherDailyFeatureProfileLayers = sqliteTable(
     layerTopAglM: real("layer_top_agl_m").notNull(),
     temperatureLapseRateMeanKPerKm: real("temperature_lapse_rate_mean_k_per_km"),
     temperatureLapseRateMaxKPerKm: real("temperature_lapse_rate_max_k_per_km"),
-    inversionStrengthMaxK: real("inversion_strength_max_k"),
-    inversionDepthAtMaxM: real("inversion_depth_at_max_m"),
     relativeHumidityMeanPercent: real("relative_humidity_mean_percent"),
     specificHumidityMeanKgPerKg: real("specific_humidity_mean_kg_per_kg"),
     windUMeanMS: real("wind_u_mean_m_s"),
@@ -1408,11 +1406,6 @@ export const weatherDailyFeatureProfileLayers = sqliteTable(
     check(
       "weather_daily_feature_profile_layers_bounds_check",
       sql`${table.layerBaseAglM} >= 0 AND ${table.layerTopAglM} > ${table.layerBaseAglM}`,
-    ),
-    check(
-      "weather_daily_feature_profile_layers_inversion_pair_check",
-      sql`(${table.inversionStrengthMaxK} IS NULL AND ${table.inversionDepthAtMaxM} IS NULL)
-        OR (${table.inversionStrengthMaxK} IS NOT NULL AND ${table.inversionStrengthMaxK} >= 0 AND ${table.inversionDepthAtMaxM} IS NOT NULL AND ${table.inversionDepthAtMaxM} >= 0)`,
     ),
     check(
       "weather_daily_feature_profile_layers_humidity_range_check",
