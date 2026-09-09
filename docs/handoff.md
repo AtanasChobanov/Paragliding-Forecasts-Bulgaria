@@ -20,13 +20,13 @@ Record durable design choices in `docs/decisions.md`, task status in
 
 ## Current state (2026-09-09)
 
-| Field         | Value                                                                                                                                                                                                                                                                                                                                 |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Branch        | `feature/T-018-weather-ingestion`                                                                                                                                                                                                                                                                                                     |
-| Task status   | `T-018` is In Progress; S01–S06 are complete, S07–S10 remain.                                                                                                                                                                                                                                                                         |
-| Next focus    | Implement S07 feature building from S06 accepted artifacts, using the approved daily schema and plan.                                                                                                                                                                                                                                 |
-| Local storage | SQLite selected by `DATABASE_URL`; local databases, raw source data, and interim artifacts are ignored.                                                                                                                                                                                                                               |
-| Migrations    | Earlier weather/configuration migrations and the daily-weather reshape are applied locally. `20260909123754_correct_s07_feature_inputs` is generated, reviewed, and test-verified but **not applied** to the configured local database: it drops five legacy daily columns and needs explicit owner approval for that runtime change. |
+| Field         | Value                                                                                                                                                                                                                        |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Branch        | `feature/T-018-weather-ingestion`                                                                                                                                                                                            |
+| Task status   | `T-018` is In Progress; S01–S06 are complete, S07–S10 remain.                                                                                                                                                                |
+| Next focus    | Implement S07 feature building from S06 accepted artifacts, using the approved daily schema and plan.                                                                                                                        |
+| Local storage | SQLite selected by `DATABASE_URL`; local databases, raw source data, and interim artifacts are ignored.                                                                                                                      |
+| Migrations    | Earlier weather/configuration migrations and the daily-weather reshape are applied locally. `20260909123754_correct_s07_feature_inputs` is also applied; a subsequent `db:migrate` run on 2026-09-09 completed idempotently. |
 
 ## T-018 scope and non-negotiable boundaries
 
@@ -155,7 +155,7 @@ grain, though the ERA5 adapter remains S09 work. Focused GFS/weather ingestion
 tests, Ruff format/lint, and `git diff --check` pass. This was a source-contract
 change only: no SQLite migration was necessary.
 
-### S07 source-input contract — committed checkpoint, local migration pending
+### S07 source-input contract — committed and locally migrated
 
 DEC-042 extends the DEC-041 common-object profile with direct GFS `SPFH` at 2
 m and every retained pressure level, plus surface `SHTFL`/`LHTFL` interval
@@ -169,11 +169,10 @@ state; spatial sampling preserves it as null evidence. Four unaccepted field
 families have been removed from the active catalogue, and the schema/migration
 adds nullable `specific_humidity_2m_kg_per_kg` while removing the five matching
 unused daily columns. The reviewed forward-only migration is
-`20260909123754_correct_s07_feature_inputs`. It is intentionally not applied
-to the configured local database yet: a runtime `db:migrate` attempt was
-blocked because its legacy-column drops require explicit owner authorization.
-Do not work around that block; run the normal migration command only after the
-owner approves that local database change.
+`20260909123754_correct_s07_feature_inputs`. The owner applied it to the
+configured local database on 2026-09-09; the normal `db:migrate` command then
+completed idempotently. The five legacy daily columns are no longer present in
+that local database.
 
 Component versions are GFS collector/parser `/4`, GRIB profile `v3`,
 normalizer `/4`, spatial `/3`, validation policy `/3`, and validator `/4`.
