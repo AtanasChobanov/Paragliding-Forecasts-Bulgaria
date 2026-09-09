@@ -7,15 +7,15 @@
     "centre": "kwbc",
     "tables_version": 2,
     "local_tables_version": 1,
-    "selected_selector_count": 39,
+    "selected_selector_count": 81,
     "hpbl": {"discipline": 0, "parameter_category": 3, "parameter_number": 196, "type_of_level": "surface", "level": 0, "native_unit": "m"},
     "apcp": {"step_type": "accum", "statistic_type": "1", "start_step_hours": 6, "end_step_hours": 7},
     "dswrf": {"step_type": "avg", "statistic_type": "0", "start_step_hours": 6, "end_step_hours": 7}
   },
   "normalizer": {
     "surface_grain_count": 21,
-    "pressure_level_grain_count": 24,
-    "canonical_grain_count": 45,
+    "pressure_level_grain_count": 80,
+    "canonical_grain_count": 101,
     "source_unsupported_selectors": ["gust_surface"],
     "model_elevation_selector": "orog",
     "quality_states": ["real", "derived", "missing", "sentinel_missing", "invalid_payload"],

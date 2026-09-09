@@ -449,9 +449,10 @@ export const weatherIngestionRuns = sqliteTable(
   {
     id: integer("id").primaryKey(),
     runKey: text("run_key").notNull(),
-    sourceId: integer("source_id")
+    productRunId: integer("product_run_id")
       .notNull()
-      .references(() => weatherSources.id, { onDelete: "restrict" }),
+      .references(() => weatherProductRuns.id, { onDelete: "restrict" }),
+    targetLocalDate: text("target_local_date").notNull(),
     ingestionMethod: text("ingestion_method").notNull(),
     requestPurpose: text("request_purpose").notNull(),
     status: text("status").notNull(),
@@ -476,10 +477,9 @@ export const weatherIngestionRuns = sqliteTable(
   },
   (table) => [
     unique("weather_ingestion_runs_run_key_unique").on(table.runKey),
-    unique("weather_ingestion_runs_id_source_id_parent_key_unique").on(table.id, table.sourceId),
-    index("weather_ingestion_runs_source_started_at_index").on(
-      table.sourceId,
-      desc(table.startedAtUtc),
+    index("weather_ingestion_runs_product_target_date_index").on(
+      table.productRunId,
+      table.targetLocalDate,
     ),
     index("weather_ingestion_runs_status_started_at_index").on(
       table.status,
@@ -494,6 +494,10 @@ export const weatherIngestionRuns = sqliteTable(
     check(
       "weather_ingestion_runs_ingestion_method_check",
       sql`${table.ingestionMethod} IN ('public_object_archive', 'official_api', 'offline_replay')`,
+    ),
+    check(
+      "weather_ingestion_runs_target_local_date_shape_check",
+      sql`${table.targetLocalDate} GLOB '${sql.raw(localDateGlob)}'`,
     ),
     check(
       "weather_ingestion_runs_request_purpose_check",
@@ -597,10 +601,6 @@ export const weatherProductRuns = sqliteTable(
     sourceProductKey: text("source_product_key").notNull(),
     referenceAtUtc: text("reference_at_utc"),
     availableAtUtc: text("available_at_utc"),
-    validFromUtc: text("valid_from_utc").notNull(),
-    validToUtc: text("valid_to_utc").notNull(),
-    createdByIngestionRunId: integer("created_by_ingestion_run_id").notNull(),
-    lastValidatedByIngestionRunId: integer("last_validated_by_ingestion_run_id").notNull(),
   },
   (table) => [
     unique("weather_product_runs_source_product_unique").on(table.sourceId, table.sourceProductKey),
@@ -608,18 +608,6 @@ export const weatherProductRuns = sqliteTable(
       table.sourceId,
       desc(table.referenceAtUtc),
     ),
-    index("weather_product_runs_valid_range_index").on(table.validFromUtc, table.validToUtc),
-    index("weather_product_runs_created_by_ingestion_run_index").on(table.createdByIngestionRunId),
-    foreignKey({
-      columns: [table.createdByIngestionRunId, table.sourceId],
-      foreignColumns: [weatherIngestionRuns.id, weatherIngestionRuns.sourceId],
-      name: "weather_product_runs_created_run_source_fk",
-    }).onDelete("restrict"),
-    foreignKey({
-      columns: [table.lastValidatedByIngestionRunId, table.sourceId],
-      foreignColumns: [weatherIngestionRuns.id, weatherIngestionRuns.sourceId],
-      name: "weather_product_runs_last_validated_run_source_fk",
-    }).onDelete("restrict"),
     check(
       "weather_product_runs_source_product_key_non_empty_check",
       sql`length(trim(${table.sourceProductKey})) > 0`,
@@ -634,17 +622,32 @@ export const weatherProductRuns = sqliteTable(
       sql`${table.availableAtUtc} IS NULL
         OR ${table.availableAtUtc} GLOB '${sql.raw(utcTimestampGlob)}'`,
     ),
+  ],
+);
+
+export const weatherProductValidTimes = sqliteTable(
+  "weather_product_valid_times",
+  {
+    id: integer("id").primaryKey(),
+    productRunId: integer("product_run_id")
+      .notNull()
+      .references(() => weatherProductRuns.id, { onDelete: "restrict" }),
+    validAtUtc: text("valid_at_utc").notNull(),
+    leadHours: real("lead_hours"),
+  },
+  (table) => [
+    unique("weather_product_valid_times_product_valid_unique").on(
+      table.productRunId,
+      table.validAtUtc,
+    ),
+    index("weather_product_valid_times_valid_at_index").on(table.validAtUtc),
     check(
-      "weather_product_runs_valid_from_utc_shape_check",
-      sql`${table.validFromUtc} GLOB '${sql.raw(utcTimestampGlob)}'`,
+      "weather_product_valid_times_valid_at_utc_shape_check",
+      sql`${table.validAtUtc} GLOB '${sql.raw(utcTimestampGlob)}'`,
     ),
     check(
-      "weather_product_runs_valid_to_utc_shape_check",
-      sql`${table.validToUtc} GLOB '${sql.raw(utcTimestampGlob)}'`,
-    ),
-    check(
-      "weather_product_runs_valid_range_check",
-      sql`${table.validToUtc} >= ${table.validFromUtc}`,
+      "weather_product_valid_times_lead_hours_non_negative_check",
+      sql`${table.leadHours} IS NULL OR ${table.leadHours} >= 0`,
     ),
   ],
 );
@@ -701,36 +704,10 @@ export const weatherGrids = sqliteTable(
       .notNull()
       .references(() => weatherSources.id, { onDelete: "restrict" }),
     gridKey: text("grid_key").notNull(),
-    gridType: text("grid_type").notNull(),
-    latitudeStepDeg: real("latitude_step_deg").notNull(),
-    longitudeStepDeg: real("longitude_step_deg").notNull(),
-    nativeRowCount: integer("native_row_count").notNull(),
-    nativeColumnCount: integer("native_column_count").notNull(),
-    definitionSha256: text("definition_sha256").notNull(),
-    isActive: integer("is_active").notNull().default(1),
   },
   (table) => [
-    unique("weather_grids_source_key_definition_unique").on(
-      table.sourceId,
-      table.gridKey,
-      table.definitionSha256,
-    ),
-    uniqueIndex("weather_grids_active_key_unique")
-      .on(table.sourceId, table.gridKey)
-      .where(sql`${table.isActive} = 1`),
-    index("weather_grids_source_active_index").on(table.sourceId, table.isActive),
+    unique("weather_grids_source_key_unique").on(table.sourceId, table.gridKey),
     check("weather_grids_grid_key_non_empty_check", sql`length(trim(${table.gridKey})) > 0`),
-    check("weather_grids_grid_type_check", sql`${table.gridType} IN ('regular_latlon')`),
-    check("weather_grids_latitude_step_positive_check", sql`${table.latitudeStepDeg} > 0`),
-    check("weather_grids_longitude_step_positive_check", sql`${table.longitudeStepDeg} > 0`),
-    check("weather_grids_native_row_count_positive_check", sql`${table.nativeRowCount} > 0`),
-    check("weather_grids_native_column_count_positive_check", sql`${table.nativeColumnCount} > 0`),
-    check(
-      "weather_grids_definition_sha256_check",
-      sql`length(${table.definitionSha256}) = 64
-        AND ${table.definitionSha256} NOT GLOB '*[^0-9a-f]*'`,
-    ),
-    check("weather_grids_is_active_boolean_check", sql`${table.isActive} IN (0, 1)`),
   ],
 );
 
@@ -744,9 +721,6 @@ export const weatherGridPoints = sqliteTable(
     latitudeDeg: real("latitude_deg").notNull(),
     longitudeDeg: real("longitude_deg").notNull(),
     modelElevationMslM: real("model_elevation_msl_m"),
-    firstSeenIngestionRunId: integer("first_seen_ingestion_run_id")
-      .notNull()
-      .references(() => weatherIngestionRuns.id, { onDelete: "restrict" }),
   },
   (table) => [
     unique("weather_grid_points_grid_coordinate_unique").on(
@@ -754,7 +728,6 @@ export const weatherGridPoints = sqliteTable(
       table.latitudeDeg,
       table.longitudeDeg,
     ),
-    index("weather_grid_points_first_seen_run_index").on(table.firstSeenIngestionRunId),
     check("weather_grid_points_latitude_range_check", sql`${table.latitudeDeg} BETWEEN -90 AND 90`),
     check(
       "weather_grid_points_longitude_range_check",
@@ -777,21 +750,21 @@ export const weatherSamplingFootprints = sqliteTable(
     samplingMethod: text("sampling_method").notNull(),
     samplingMethodVersion: text("sampling_method_version").notNull(),
     radiusKm: real("radius_km"),
-    footprintVersion: integer("footprint_version").notNull(),
-    definitionSha256: text("definition_sha256").notNull(),
   },
   (table) => [
-    unique("weather_sampling_footprints_identity_unique").on(
-      table.siteId,
-      table.gridId,
-      table.purpose,
-      table.footprintVersion,
-    ),
-    index("weather_sampling_footprints_site_purpose_version_index").on(
-      table.siteId,
-      table.purpose,
-      desc(table.footprintVersion),
-    ),
+    uniqueIndex("weather_sampling_footprints_point_identity_unique")
+      .on(table.siteId, table.gridId, table.samplingMethod, table.samplingMethodVersion)
+      .where(sql`${table.purpose} = 'point'`),
+    uniqueIndex("weather_sampling_footprints_neighbourhood_identity_unique")
+      .on(
+        table.siteId,
+        table.gridId,
+        table.samplingMethod,
+        table.samplingMethodVersion,
+        table.radiusKm,
+      )
+      .where(sql`${table.purpose} = 'neighbourhood'`),
+    index("weather_sampling_footprints_site_purpose_index").on(table.siteId, table.purpose),
     index("weather_sampling_footprints_grid_index").on(table.gridId),
     check(
       "weather_sampling_footprints_purpose_check",
@@ -818,15 +791,6 @@ export const weatherSamplingFootprints = sqliteTable(
     check(
       "weather_sampling_footprints_method_version_non_empty_check",
       sql`length(trim(${table.samplingMethodVersion})) > 0`,
-    ),
-    check(
-      "weather_sampling_footprints_footprint_version_positive_check",
-      sql`${table.footprintVersion} > 0`,
-    ),
-    check(
-      "weather_sampling_footprints_definition_sha256_check",
-      sql`length(${table.definitionSha256}) = 64
-        AND ${table.definitionSha256} NOT GLOB '*[^0-9a-f]*'`,
     ),
   ],
 );
@@ -860,19 +824,19 @@ export const weatherSamplingFootprintNodes = sqliteTable(
     ),
   ],
 );
-export const weatherSamples = sqliteTable(
-  "weather_samples",
+export const weatherPointSamples = sqliteTable(
+  "weather_point_samples",
   {
     id: integer("id").primaryKey(),
-    productRunId: integer("product_run_id")
+    ingestionRunId: integer("ingestion_run_id")
       .notNull()
-      .references(() => weatherProductRuns.id, { onDelete: "restrict" }),
+      .references(() => weatherIngestionRuns.id, { onDelete: "restrict" }),
+    productValidTimeId: integer("product_valid_time_id")
+      .notNull()
+      .references(() => weatherProductValidTimes.id, { onDelete: "restrict" }),
     pointFootprintId: integer("point_footprint_id")
       .notNull()
       .references(() => weatherSamplingFootprints.id, { onDelete: "restrict" }),
-    validAtUtc: text("valid_at_utc").notNull(),
-    validLocalDate: text("valid_local_date").notNull(),
-    leadHours: real("lead_hours"),
     coverageStatus: text("coverage_status").notNull(),
     airTemperature2mK: real("air_temperature_2m_k"),
     dewPointTemperature2mK: real("dew_point_temperature_2m_k"),
@@ -884,46 +848,27 @@ export const weatherSamples = sqliteTable(
     windSpeed10mMS: real("wind_speed_10m_m_s"),
     windDirection10mDegreesFromNorth: real("wind_direction_10m_degrees_from_north"),
     providerBoundaryLayerHeightAglM: real("provider_boundary_layer_height_agl_m"),
-    providerBoundaryLayerHeightMslM: real("provider_boundary_layer_height_msl_m"),
     providerBoundaryLayerMethod: text("provider_boundary_layer_method"),
     providerCloudBaseAglM: real("provider_cloud_base_agl_m"),
-    providerCloudBaseMslM: real("provider_cloud_base_msl_m"),
     providerCloudBaseMethod: text("provider_cloud_base_method"),
     totalColumnWaterVapourKgM2: real("total_column_water_vapour_kg_m2"),
     totalCloudCoverPercent: real("total_cloud_cover_percent"),
     lowCloudCoverPercent: real("low_cloud_cover_percent"),
     midCloudCoverPercent: real("mid_cloud_cover_percent"),
     highCloudCoverPercent: real("high_cloud_cover_percent"),
-    createdByIngestionRunId: integer("created_by_ingestion_run_id")
-      .notNull()
-      .references(() => weatherIngestionRuns.id, { onDelete: "restrict" }),
-    lastValidatedByIngestionRunId: integer("last_validated_by_ingestion_run_id")
-      .notNull()
-      .references(() => weatherIngestionRuns.id, { onDelete: "restrict" }),
   },
   (table) => [
-    unique("weather_samples_product_footprint_valid_unique").on(
-      table.productRunId,
+    unique("weather_point_samples_run_footprint_valid_time_unique").on(
+      table.ingestionRunId,
       table.pointFootprintId,
-      table.validAtUtc,
+      table.productValidTimeId,
     ),
-    index("weather_samples_footprint_valid_at_index").on(table.pointFootprintId, table.validAtUtc),
-    index("weather_samples_product_valid_at_index").on(table.productRunId, table.validAtUtc),
-    index("weather_samples_valid_local_date_index").on(table.validLocalDate),
-    index("weather_samples_created_by_ingestion_run_index").on(table.createdByIngestionRunId),
-    index("weather_samples_coverage_status_index").on(table.coverageStatus),
-    check(
-      "weather_samples_valid_at_utc_shape_check",
-      sql`${table.validAtUtc} GLOB '${sql.raw(utcTimestampGlob)}'`,
+    index("weather_point_samples_footprint_index").on(table.pointFootprintId),
+    index("weather_point_samples_run_valid_time_index").on(
+      table.ingestionRunId,
+      table.productValidTimeId,
     ),
-    check(
-      "weather_samples_valid_local_date_shape_check",
-      sql`${table.validLocalDate} GLOB '${sql.raw(localDateGlob)}'`,
-    ),
-    check(
-      "weather_samples_lead_hours_non_negative_check",
-      sql`${table.leadHours} IS NULL OR ${table.leadHours} >= 0`,
-    ),
+    index("weather_point_samples_coverage_status_index").on(table.coverageStatus),
     check(
       "weather_samples_coverage_status_check",
       sql`${table.coverageStatus} IN ('complete', 'partial', 'insufficient')`,
@@ -971,8 +916,9 @@ export const weatherSamples = sqliteTable(
       sql`(${table.providerBoundaryLayerMethod} IS NULL
           OR length(trim(${table.providerBoundaryLayerMethod})) > 0)
         AND ((${table.providerBoundaryLayerHeightAglM} IS NULL
-            AND ${table.providerBoundaryLayerHeightMslM} IS NULL)
-          OR ${table.providerBoundaryLayerMethod} IS NOT NULL)`,
+            AND ${table.providerBoundaryLayerMethod} IS NULL)
+          OR (${table.providerBoundaryLayerHeightAglM} IS NOT NULL
+            AND ${table.providerBoundaryLayerMethod} IS NOT NULL))`,
     ),
     check(
       "weather_samples_cloud_base_agl_non_negative_check",
@@ -983,8 +929,9 @@ export const weatherSamples = sqliteTable(
       sql`(${table.providerCloudBaseMethod} IS NULL
           OR length(trim(${table.providerCloudBaseMethod})) > 0)
         AND ((${table.providerCloudBaseAglM} IS NULL
-            AND ${table.providerCloudBaseMslM} IS NULL)
-          OR ${table.providerCloudBaseMethod} IS NOT NULL)`,
+            AND ${table.providerCloudBaseMethod} IS NULL)
+          OR (${table.providerCloudBaseAglM} IS NOT NULL
+            AND ${table.providerCloudBaseMethod} IS NOT NULL))`,
     ),
     check(
       "weather_samples_total_column_water_vapour_non_negative_check",
@@ -1014,16 +961,16 @@ export const weatherSamples = sqliteTable(
   ],
 );
 
-export const weatherProfileLevels = sqliteTable(
-  "weather_profile_levels",
+export const weatherPointProfileLevels = sqliteTable(
+  "weather_point_profile_levels",
   {
     id: integer("id").primaryKey(),
-    weatherSampleId: integer("weather_sample_id")
+    weatherPointSampleId: integer("weather_point_sample_id")
       .notNull()
-      .references(() => weatherSamples.id, { onDelete: "restrict" }),
+      .references(() => weatherPointSamples.id, { onDelete: "restrict" }),
     pressurePa: real("pressure_pa").notNull(),
     geopotentialHeightMslM: real("geopotential_height_msl_m"),
-    levelHeightAglM: real("level_height_agl_m"),
+    levelHeightSiteAglM: real("level_height_site_agl_m"),
     airTemperatureK: real("air_temperature_k"),
     dewPointTemperatureK: real("dew_point_temperature_k"),
     relativeHumidityPercent: real("relative_humidity_percent"),
@@ -1032,20 +979,21 @@ export const weatherProfileLevels = sqliteTable(
     windVMS: real("wind_v_m_s"),
     windSpeedMS: real("wind_speed_m_s"),
     windDirectionDegreesFromNorth: real("wind_direction_degrees_from_north"),
+    verticalVelocityPaS: real("vertical_velocity_pa_s"),
   },
   (table) => [
     unique("weather_profile_levels_sample_pressure_unique").on(
-      table.weatherSampleId,
+      table.weatherPointSampleId,
       table.pressurePa,
     ),
     index("weather_profile_levels_pressure_sample_index").on(
       table.pressurePa,
-      table.weatherSampleId,
+      table.weatherPointSampleId,
     ),
     check("weather_profile_levels_pressure_positive_check", sql`${table.pressurePa} > 0`),
     check(
       "weather_profile_levels_height_agl_non_negative_check",
-      sql`${table.levelHeightAglM} IS NULL OR ${table.levelHeightAglM} >= 0`,
+      sql`${table.levelHeightSiteAglM} IS NULL OR ${table.levelHeightSiteAglM} >= 0`,
     ),
     check(
       "weather_profile_levels_air_temperature_positive_check",
@@ -1080,13 +1028,13 @@ export const weatherProfileLevels = sqliteTable(
   ],
 );
 
-export const weatherConvectionMeasurements = sqliteTable(
-  "weather_convection_measurements",
+export const weatherPointConvectionMeasurements = sqliteTable(
+  "weather_point_convection_measurements",
   {
     id: integer("id").primaryKey(),
-    weatherSampleId: integer("weather_sample_id")
+    weatherPointSampleId: integer("weather_point_sample_id")
       .notNull()
-      .references(() => weatherSamples.id, { onDelete: "restrict" }),
+      .references(() => weatherPointSamples.id, { onDelete: "restrict" }),
     parcelMethod: text("parcel_method").notNull(),
     calculationMethod: text("calculation_method").notNull(),
     calculationMethodVersion: text("calculation_method_version"),
@@ -1097,7 +1045,7 @@ export const weatherConvectionMeasurements = sqliteTable(
   },
   (table) => [
     uniqueIndex("weather_convection_no_layer_no_version_unique")
-      .on(table.weatherSampleId, table.parcelMethod, table.calculationMethod)
+      .on(table.weatherPointSampleId, table.parcelMethod, table.calculationMethod)
       .where(
         sql`${table.layerBottomPressureFromGroundPa} IS NULL
           AND ${table.layerTopPressureFromGroundPa} IS NULL
@@ -1105,7 +1053,7 @@ export const weatherConvectionMeasurements = sqliteTable(
       ),
     uniqueIndex("weather_convection_no_layer_version_unique")
       .on(
-        table.weatherSampleId,
+        table.weatherPointSampleId,
         table.parcelMethod,
         table.calculationMethod,
         table.calculationMethodVersion,
@@ -1117,7 +1065,7 @@ export const weatherConvectionMeasurements = sqliteTable(
       ),
     uniqueIndex("weather_convection_layer_no_version_unique")
       .on(
-        table.weatherSampleId,
+        table.weatherPointSampleId,
         table.parcelMethod,
         table.calculationMethod,
         table.layerBottomPressureFromGroundPa,
@@ -1130,7 +1078,7 @@ export const weatherConvectionMeasurements = sqliteTable(
       ),
     uniqueIndex("weather_convection_layer_version_unique")
       .on(
-        table.weatherSampleId,
+        table.weatherPointSampleId,
         table.parcelMethod,
         table.calculationMethod,
         table.layerBottomPressureFromGroundPa,
@@ -1142,7 +1090,7 @@ export const weatherConvectionMeasurements = sqliteTable(
           AND ${table.layerTopPressureFromGroundPa} IS NOT NULL
           AND ${table.calculationMethodVersion} IS NOT NULL`,
       ),
-    index("weather_convection_measurements_sample_index").on(table.weatherSampleId),
+    index("weather_point_convection_measurements_sample_index").on(table.weatherPointSampleId),
     check(
       "weather_convection_measurements_parcel_method_check",
       sql`${table.parcelMethod} IN (
@@ -1189,25 +1137,23 @@ export const weatherConvectionMeasurements = sqliteTable(
   ],
 );
 
-export const weatherIntervalMeasurements = sqliteTable(
-  "weather_interval_measurements",
+export const weatherPointIntervalMeasurements = sqliteTable(
+  "weather_point_interval_measurements",
   {
     id: integer("id").primaryKey(),
-    weatherSampleId: integer("weather_sample_id")
+    weatherPointSampleId: integer("weather_point_sample_id")
       .notNull()
-      .references(() => weatherSamples.id, { onDelete: "restrict" }),
+      .references(() => weatherPointSamples.id, { onDelete: "restrict" }),
     fieldCode: text("field_code").notNull(),
     component: text("component").notNull(),
     intervalStartUtc: text("interval_start_utc").notNull(),
     intervalEndUtc: text("interval_end_utc").notNull(),
     statisticType: text("statistic_type").notNull(),
     canonicalValue: real("canonical_value"),
-    sourceStepStartHours: real("source_step_start_hours"),
-    sourceStepEndHours: real("source_step_end_hours"),
   },
   (table) => [
     unique("weather_interval_measurements_identity_unique").on(
-      table.weatherSampleId,
+      table.weatherPointSampleId,
       table.fieldCode,
       table.component,
       table.statisticType,
@@ -1215,7 +1161,7 @@ export const weatherIntervalMeasurements = sqliteTable(
       table.intervalEndUtc,
     ),
     index("weather_interval_measurements_sample_interval_index").on(
-      table.weatherSampleId,
+      table.weatherPointSampleId,
       table.intervalStartUtc,
       table.intervalEndUtc,
     ),
@@ -1280,140 +1226,209 @@ export const weatherIntervalMeasurements = sqliteTable(
         )
         OR ${table.canonicalValue} >= 0`,
     ),
-    check(
-      "weather_interval_measurements_source_step_shape_check",
-      sql`(
-          ${table.sourceStepStartHours} IS NULL
-          AND ${table.sourceStepEndHours} IS NULL
-        )
-        OR (
-          ${table.sourceStepStartHours} IS NOT NULL
-          AND ${table.sourceStepEndHours} IS NOT NULL
-          AND ${table.sourceStepStartHours} >= 0
-          AND ${table.sourceStepEndHours} >= ${table.sourceStepStartHours}
-        )`,
-    ),
   ],
 );
-export const weatherFeatureSnapshots = sqliteTable(
-  "weather_feature_snapshots",
+export const weatherDailyFeatureSnapshots = sqliteTable(
+  "weather_daily_feature_snapshots",
   {
     id: integer("id").primaryKey(),
-    weatherSampleId: integer("weather_sample_id")
+    ingestionRunId: integer("ingestion_run_id")
       .notNull()
-      .references(() => weatherSamples.id, { onDelete: "restrict" }),
+      .references(() => weatherIngestionRuns.id, { onDelete: "restrict" }),
+    pointFootprintId: integer("point_footprint_id")
+      .notNull()
+      .references(() => weatherSamplingFootprints.id, { onDelete: "restrict" }),
     neighbourhoodFootprintId: integer("neighbourhood_footprint_id")
       .notNull()
       .references(() => weatherSamplingFootprints.id, { onDelete: "restrict" }),
     featureContractVersion: text("feature_contract_version").notNull(),
-    inputFingerprintSha256: text("input_fingerprint_sha256").notNull(),
-    derivedBoundaryLayerHeightAglM: real("derived_boundary_layer_height_agl_m"),
-    boundaryLayerMethod: text("boundary_layer_method"),
-    mixedLayerLclAglM: real("mixed_layer_lcl_agl_m"),
-    mixedLayerLclMslM: real("mixed_layer_lcl_msl_m"),
-    lclMethod: text("lcl_method"),
-    surfaceBuoyancyFluxKinematicKMS: real("surface_buoyancy_flux_kinematic_k_m_s"),
-    buoyancyFluxMethod: text("buoyancy_flux_method"),
-    convectiveVelocityScaleMS: real("convective_velocity_scale_m_s"),
-    convectiveVelocityMethod: text("convective_velocity_method"),
-    temperatureLapseRateKPerKm: real("temperature_lapse_rate_k_per_km"),
-    lapseLayerBaseAglM: real("lapse_layer_base_agl_m"),
-    lapseLayerTopAglM: real("lapse_layer_top_agl_m"),
-    windShearMSPerKm: real("wind_shear_m_s_per_km"),
-    shearLayerBaseAglM: real("shear_layer_base_agl_m"),
-    shearLayerTopAglM: real("shear_layer_top_agl_m"),
-    neighbourhoodPressureGradientPaPerKm: real("neighbourhood_pressure_gradient_pa_per_km"),
-    neighbourhoodLowLevelDivergenceSInverse: real("neighbourhood_low_level_divergence_s_inverse"),
-    spatialMethodVersion: text("spatial_method_version"),
-    createdByIngestionRunId: integer("created_by_ingestion_run_id")
-      .notNull()
-      .references(() => weatherIngestionRuns.id, { onDelete: "restrict" }),
+    airTemperature2mMeanK: real("air_temperature_2m_mean_k"),
+    airTemperature2mMinK: real("air_temperature_2m_min_k"),
+    airTemperature2mMaxK: real("air_temperature_2m_max_k"),
+    dewPointTemperature2mMeanK: real("dew_point_temperature_2m_mean_k"),
+    relativeHumidity2mMeanPercent: real("relative_humidity_2m_mean_percent"),
+    relativeHumidity2mMaxPercent: real("relative_humidity_2m_max_percent"),
+    surfacePressureMeanPa: real("surface_pressure_mean_pa"),
+    meanSeaLevelPressureMeanPa: real("mean_sea_level_pressure_mean_pa"),
+    windU10mMeanMS: real("wind_u_10m_mean_m_s"),
+    windV10mMeanMS: real("wind_v_10m_mean_m_s"),
+    windSpeed10mMeanMS: real("wind_speed_10m_mean_m_s"),
+    windSpeed10mMaxMS: real("wind_speed_10m_max_m_s"),
+    windDirection10mMeanDegreesFromNorth: real("wind_direction_10m_mean_degrees_from_north"),
+    providerBoundaryLayerHeightAglMeanM: real("provider_boundary_layer_height_agl_mean_m"),
+    providerBoundaryLayerHeightAglMaxM: real("provider_boundary_layer_height_agl_max_m"),
+    providerCloudBaseAglMeanM: real("provider_cloud_base_agl_mean_m"),
+    providerCloudBaseAglMinM: real("provider_cloud_base_agl_min_m"),
+    providerCloudBaseAglMaxM: real("provider_cloud_base_agl_max_m"),
+    totalColumnWaterVapourMeanKgM2: real("total_column_water_vapour_mean_kg_m2"),
+    totalCloudCoverMeanPercent: real("total_cloud_cover_mean_percent"),
+    totalCloudCoverMaxPercent: real("total_cloud_cover_max_percent"),
+    lowCloudCoverMeanPercent: real("low_cloud_cover_mean_percent"),
+    lowCloudCoverMaxPercent: real("low_cloud_cover_max_percent"),
+    midCloudCoverMeanPercent: real("mid_cloud_cover_mean_percent"),
+    highCloudCoverMeanPercent: real("high_cloud_cover_mean_percent"),
+    precipitationTotalMm: real("precipitation_total_mm"),
+    precipitationMaxHourlyMm: real("precipitation_max_hourly_mm"),
+    shortwaveRadiationMeanWM2: real("shortwave_radiation_mean_w_m2"),
+    shortwaveRadiationMaxWM2: real("shortwave_radiation_max_w_m2"),
+    surfaceSensibleHeatFluxMeanWM2: real("surface_sensible_heat_flux_mean_w_m2"),
+    surfaceLatentHeatFluxMeanWM2: real("surface_latent_heat_flux_mean_w_m2"),
+    capeMaxJPerKg: real("cape_max_j_per_kg"),
+    cinMagnitudeMaxJPerKg: real("cin_magnitude_max_j_per_kg"),
+    mixedLayerLclAglMeanM: real("mixed_layer_lcl_agl_mean_m"),
+    mixedLayerLclAglMaxM: real("mixed_layer_lcl_agl_max_m"),
+    surfaceBuoyancyFluxKinematicMeanKMS: real("surface_buoyancy_flux_kinematic_mean_k_m_s"),
+    convectiveVelocityScaleMeanMS: real("convective_velocity_scale_mean_m_s"),
+    convectiveVelocityScaleMaxMS: real("convective_velocity_scale_max_m_s"),
+    neighbourhoodPressureGradientMeanPaPerKm: real(
+      "neighbourhood_pressure_gradient_mean_pa_per_km",
+    ),
+    neighbourhoodPressureGradientMaxPaPerKm: real("neighbourhood_pressure_gradient_max_pa_per_km"),
+    neighbourhoodLowLevelDivergenceMeanSInverse: real(
+      "neighbourhood_low_level_divergence_mean_s_inverse",
+    ),
+    neighbourhoodLowLevelDivergenceMinSInverse: real(
+      "neighbourhood_low_level_divergence_min_s_inverse",
+    ),
   },
   (table) => [
-    unique("weather_feature_snapshots_identity_unique").on(
-      table.weatherSampleId,
-      table.neighbourhoodFootprintId,
+    unique("weather_daily_feature_snapshots_identity_unique").on(
+      table.ingestionRunId,
+      table.pointFootprintId,
       table.featureContractVersion,
     ),
-    index("weather_feature_snapshots_sample_index").on(table.weatherSampleId),
-    index("weather_feature_snapshots_contract_index").on(table.featureContractVersion),
-    index("weather_feature_snapshots_created_by_run_index").on(table.createdByIngestionRunId),
+    index("weather_daily_feature_snapshots_contract_index").on(table.featureContractVersion),
+    index("weather_daily_feature_snapshots_point_footprint_index").on(table.pointFootprintId),
     check(
-      "weather_feature_snapshots_contract_version_non_empty_check",
+      "weather_daily_feature_snapshots_contract_version_non_empty_check",
       sql`length(trim(${table.featureContractVersion})) > 0`,
     ),
     check(
-      "weather_feature_snapshots_input_fingerprint_sha256_check",
-      sql`length(${table.inputFingerprintSha256}) = 64
-        AND ${table.inputFingerprintSha256} NOT GLOB '*[^0-9a-f]*'`,
+      "weather_daily_feature_snapshots_temperature_positive_check",
+      sql`(${table.airTemperature2mMeanK} IS NULL OR ${table.airTemperature2mMeanK} > 0)
+        AND (${table.airTemperature2mMinK} IS NULL OR ${table.airTemperature2mMinK} > 0)
+        AND (${table.airTemperature2mMaxK} IS NULL OR ${table.airTemperature2mMaxK} > 0)
+        AND (${table.dewPointTemperature2mMeanK} IS NULL OR ${table.dewPointTemperature2mMeanK} > 0)`,
     ),
     check(
-      "weather_feature_snapshots_boundary_layer_shape_check",
-      sql`(${table.derivedBoundaryLayerHeightAglM} IS NULL
-          OR ${table.derivedBoundaryLayerHeightAglM} >= 0)
-        AND (${table.boundaryLayerMethod} IS NULL
-          OR length(trim(${table.boundaryLayerMethod})) > 0)
-        AND (${table.derivedBoundaryLayerHeightAglM} IS NULL
-          OR ${table.boundaryLayerMethod} IS NOT NULL)`,
+      "weather_daily_feature_snapshots_temperature_order_check",
+      sql`${table.airTemperature2mMinK} IS NULL OR ${table.airTemperature2mMaxK} IS NULL
+        OR ${table.airTemperature2mMaxK} >= ${table.airTemperature2mMinK}`,
     ),
     check(
-      "weather_feature_snapshots_lcl_shape_check",
-      sql`(${table.mixedLayerLclAglM} IS NULL OR ${table.mixedLayerLclAglM} >= 0)
-        AND (${table.lclMethod} IS NULL OR length(trim(${table.lclMethod})) > 0)
-        AND ((${table.mixedLayerLclAglM} IS NULL AND ${table.mixedLayerLclMslM} IS NULL)
-          OR ${table.lclMethod} IS NOT NULL)`,
+      "weather_daily_feature_snapshots_percent_range_check",
+      sql`(${table.relativeHumidity2mMeanPercent} IS NULL OR ${table.relativeHumidity2mMeanPercent} BETWEEN 0 AND 100)
+        AND (${table.relativeHumidity2mMaxPercent} IS NULL OR ${table.relativeHumidity2mMaxPercent} BETWEEN 0 AND 100)
+        AND (${table.totalCloudCoverMeanPercent} IS NULL OR ${table.totalCloudCoverMeanPercent} BETWEEN 0 AND 100)
+        AND (${table.totalCloudCoverMaxPercent} IS NULL OR ${table.totalCloudCoverMaxPercent} BETWEEN 0 AND 100)
+        AND (${table.lowCloudCoverMeanPercent} IS NULL OR ${table.lowCloudCoverMeanPercent} BETWEEN 0 AND 100)
+        AND (${table.lowCloudCoverMaxPercent} IS NULL OR ${table.lowCloudCoverMaxPercent} BETWEEN 0 AND 100)
+        AND (${table.midCloudCoverMeanPercent} IS NULL OR ${table.midCloudCoverMeanPercent} BETWEEN 0 AND 100)
+        AND (${table.highCloudCoverMeanPercent} IS NULL OR ${table.highCloudCoverMeanPercent} BETWEEN 0 AND 100)`,
     ),
     check(
-      "weather_feature_snapshots_buoyancy_flux_method_check",
-      sql`(${table.buoyancyFluxMethod} IS NULL
-          OR length(trim(${table.buoyancyFluxMethod})) > 0)
-        AND (${table.surfaceBuoyancyFluxKinematicKMS} IS NULL
-          OR ${table.buoyancyFluxMethod} IS NOT NULL)`,
+      "weather_daily_feature_snapshots_direction_range_check",
+      sql`${table.windDirection10mMeanDegreesFromNorth} IS NULL OR (${table.windDirection10mMeanDegreesFromNorth} >= 0 AND ${table.windDirection10mMeanDegreesFromNorth} < 360)`,
     ),
     check(
-      "weather_feature_snapshots_convective_velocity_shape_check",
-      sql`(${table.convectiveVelocityScaleMS} IS NULL
-          OR ${table.convectiveVelocityScaleMS} >= 0)
-        AND (${table.convectiveVelocityMethod} IS NULL
-          OR length(trim(${table.convectiveVelocityMethod})) > 0)
-        AND (${table.convectiveVelocityScaleMS} IS NULL
-          OR ${table.convectiveVelocityMethod} IS NOT NULL)`,
+      "weather_daily_feature_snapshots_non_negative_check",
+      sql`(${table.surfacePressureMeanPa} IS NULL OR ${table.surfacePressureMeanPa} > 0)
+        AND (${table.meanSeaLevelPressureMeanPa} IS NULL OR ${table.meanSeaLevelPressureMeanPa} > 0)
+        AND (${table.windSpeed10mMeanMS} IS NULL OR ${table.windSpeed10mMeanMS} >= 0)
+        AND (${table.windSpeed10mMaxMS} IS NULL OR ${table.windSpeed10mMaxMS} >= 0)
+        AND (${table.providerBoundaryLayerHeightAglMeanM} IS NULL OR ${table.providerBoundaryLayerHeightAglMeanM} >= 0)
+        AND (${table.providerBoundaryLayerHeightAglMaxM} IS NULL OR ${table.providerBoundaryLayerHeightAglMaxM} >= 0)
+        AND (${table.providerCloudBaseAglMeanM} IS NULL OR ${table.providerCloudBaseAglMeanM} >= 0)
+        AND (${table.providerCloudBaseAglMinM} IS NULL OR ${table.providerCloudBaseAglMinM} >= 0)
+        AND (${table.providerCloudBaseAglMaxM} IS NULL OR ${table.providerCloudBaseAglMaxM} >= 0)
+        AND (${table.totalColumnWaterVapourMeanKgM2} IS NULL OR ${table.totalColumnWaterVapourMeanKgM2} >= 0)
+        AND (${table.precipitationTotalMm} IS NULL OR ${table.precipitationTotalMm} >= 0)
+        AND (${table.precipitationMaxHourlyMm} IS NULL OR ${table.precipitationMaxHourlyMm} >= 0)
+        AND (${table.shortwaveRadiationMeanWM2} IS NULL OR ${table.shortwaveRadiationMeanWM2} >= 0)
+        AND (${table.shortwaveRadiationMaxWM2} IS NULL OR ${table.shortwaveRadiationMaxWM2} >= 0)
+        AND (${table.capeMaxJPerKg} IS NULL OR ${table.capeMaxJPerKg} >= 0)
+        AND (${table.cinMagnitudeMaxJPerKg} IS NULL OR ${table.cinMagnitudeMaxJPerKg} >= 0)
+        AND (${table.mixedLayerLclAglMeanM} IS NULL OR ${table.mixedLayerLclAglMeanM} >= 0)
+        AND (${table.mixedLayerLclAglMaxM} IS NULL OR ${table.mixedLayerLclAglMaxM} >= 0)
+        AND (${table.convectiveVelocityScaleMeanMS} IS NULL OR ${table.convectiveVelocityScaleMeanMS} >= 0)
+        AND (${table.convectiveVelocityScaleMaxMS} IS NULL OR ${table.convectiveVelocityScaleMaxMS} >= 0)
+        AND (${table.neighbourhoodPressureGradientMeanPaPerKm} IS NULL OR ${table.neighbourhoodPressureGradientMeanPaPerKm} >= 0)
+        AND (${table.neighbourhoodPressureGradientMaxPaPerKm} IS NULL OR ${table.neighbourhoodPressureGradientMaxPaPerKm} >= 0)`,
+    ),
+  ],
+);
+
+export const weatherDailyFeatureSnapshotInputs = sqliteTable(
+  "weather_daily_feature_snapshot_inputs",
+  {
+    dailyFeatureSnapshotId: integer("daily_feature_snapshot_id")
+      .notNull()
+      .references(() => weatherDailyFeatureSnapshots.id, { onDelete: "restrict" }),
+    weatherPointSampleId: integer("weather_point_sample_id")
+      .notNull()
+      .references(() => weatherPointSamples.id, { onDelete: "restrict" }),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.dailyFeatureSnapshotId, table.weatherPointSampleId],
+      name: "weather_daily_feature_snapshot_inputs_pk",
+    }),
+    index("weather_daily_feature_snapshot_inputs_sample_index").on(table.weatherPointSampleId),
+  ],
+);
+
+export const weatherDailyFeatureProfileLayers = sqliteTable(
+  "weather_daily_feature_profile_layers",
+  {
+    id: integer("id").primaryKey(),
+    dailyFeatureSnapshotId: integer("daily_feature_snapshot_id")
+      .notNull()
+      .references(() => weatherDailyFeatureSnapshots.id, { onDelete: "restrict" }),
+    layerBaseAglM: real("layer_base_agl_m").notNull(),
+    layerTopAglM: real("layer_top_agl_m").notNull(),
+    temperatureLapseRateMeanKPerKm: real("temperature_lapse_rate_mean_k_per_km"),
+    temperatureLapseRateMaxKPerKm: real("temperature_lapse_rate_max_k_per_km"),
+    inversionStrengthMaxK: real("inversion_strength_max_k"),
+    inversionDepthAtMaxM: real("inversion_depth_at_max_m"),
+    relativeHumidityMeanPercent: real("relative_humidity_mean_percent"),
+    specificHumidityMeanKgPerKg: real("specific_humidity_mean_kg_per_kg"),
+    windUMeanMS: real("wind_u_mean_m_s"),
+    windVMeanMS: real("wind_v_mean_m_s"),
+    windSpeedMeanMS: real("wind_speed_mean_m_s"),
+    windSpeedMaxMS: real("wind_speed_max_m_s"),
+    windDirectionMeanDegreesFromNorth: real("wind_direction_mean_degrees_from_north"),
+    windShearMeanMSPerKm: real("wind_shear_mean_m_s_per_km"),
+    windShearMaxMSPerKm: real("wind_shear_max_m_s_per_km"),
+    verticalVelocityMeanPaS: real("vertical_velocity_mean_pa_s"),
+    verticalVelocityMinPaS: real("vertical_velocity_min_pa_s"),
+  },
+  (table) => [
+    unique("weather_daily_feature_profile_layers_identity_unique").on(
+      table.dailyFeatureSnapshotId,
+      table.layerBaseAglM,
+      table.layerTopAglM,
     ),
     check(
-      "weather_feature_snapshots_lapse_layer_shape_check",
-      sql`(
-          ${table.temperatureLapseRateKPerKm} IS NULL
-          AND ${table.lapseLayerBaseAglM} IS NULL
-          AND ${table.lapseLayerTopAglM} IS NULL
-        )
-        OR (
-          ${table.temperatureLapseRateKPerKm} IS NOT NULL
-          AND ${table.lapseLayerBaseAglM} IS NOT NULL
-          AND ${table.lapseLayerTopAglM} IS NOT NULL
-          AND ${table.lapseLayerBaseAglM} >= 0
-          AND ${table.lapseLayerTopAglM} > ${table.lapseLayerBaseAglM}
-        )`,
+      "weather_daily_feature_profile_layers_bounds_check",
+      sql`${table.layerBaseAglM} >= 0 AND ${table.layerTopAglM} > ${table.layerBaseAglM}`,
     ),
     check(
-      "weather_feature_snapshots_shear_layer_shape_check",
-      sql`(
-          ${table.windShearMSPerKm} IS NULL
-          AND ${table.shearLayerBaseAglM} IS NULL
-          AND ${table.shearLayerTopAglM} IS NULL
-        )
-        OR (
-          ${table.windShearMSPerKm} IS NOT NULL
-          AND ${table.shearLayerBaseAglM} IS NOT NULL
-          AND ${table.shearLayerTopAglM} IS NOT NULL
-          AND ${table.windShearMSPerKm} >= 0
-          AND ${table.shearLayerBaseAglM} >= 0
-          AND ${table.shearLayerTopAglM} > ${table.shearLayerBaseAglM}
-        )`,
+      "weather_daily_feature_profile_layers_inversion_pair_check",
+      sql`(${table.inversionStrengthMaxK} IS NULL AND ${table.inversionDepthAtMaxM} IS NULL)
+        OR (${table.inversionStrengthMaxK} IS NOT NULL AND ${table.inversionStrengthMaxK} >= 0 AND ${table.inversionDepthAtMaxM} IS NOT NULL AND ${table.inversionDepthAtMaxM} >= 0)`,
     ),
     check(
-      "weather_feature_snapshots_spatial_method_version_non_empty_check",
-      sql`${table.spatialMethodVersion} IS NULL
-        OR length(trim(${table.spatialMethodVersion})) > 0`,
+      "weather_daily_feature_profile_layers_humidity_range_check",
+      sql`(${table.relativeHumidityMeanPercent} IS NULL OR ${table.relativeHumidityMeanPercent} BETWEEN 0 AND 100)
+        AND (${table.specificHumidityMeanKgPerKg} IS NULL OR ${table.specificHumidityMeanKgPerKg} >= 0)`,
+    ),
+    check(
+      "weather_daily_feature_profile_layers_wind_shape_check",
+      sql`(${table.windSpeedMeanMS} IS NULL OR ${table.windSpeedMeanMS} >= 0)
+        AND (${table.windSpeedMaxMS} IS NULL OR ${table.windSpeedMaxMS} >= 0)
+        AND (${table.windDirectionMeanDegreesFromNorth} IS NULL OR (${table.windDirectionMeanDegreesFromNorth} >= 0 AND ${table.windDirectionMeanDegreesFromNorth} < 360))
+        AND (${table.windShearMeanMSPerKm} IS NULL OR ${table.windShearMeanMSPerKm} >= 0)
+        AND (${table.windShearMaxMSPerKm} IS NULL OR ${table.windShearMaxMSPerKm} >= 0)`,
     ),
   ],
 );
@@ -1422,23 +1437,32 @@ export const weatherFieldProvenance = sqliteTable(
   "weather_field_provenance",
   {
     id: integer("id").primaryKey(),
-    weatherSampleId: integer("weather_sample_id").references(() => weatherSamples.id, {
-      onDelete: "restrict",
-    }),
-    convectionMeasurementId: integer("convection_measurement_id").references(
-      () => weatherConvectionMeasurements.id,
+    weatherPointSampleId: integer("weather_point_sample_id").references(
+      () => weatherPointSamples.id,
+      {
+        onDelete: "restrict",
+      },
+    ),
+    pointConvectionMeasurementId: integer("point_convection_measurement_id").references(
+      () => weatherPointConvectionMeasurements.id,
       { onDelete: "restrict" },
     ),
-    intervalMeasurementId: integer("interval_measurement_id").references(
-      () => weatherIntervalMeasurements.id,
+    pointIntervalMeasurementId: integer("point_interval_measurement_id").references(
+      () => weatherPointIntervalMeasurements.id,
       { onDelete: "restrict" },
     ),
-    profileLevelId: integer("profile_level_id").references(() => weatherProfileLevels.id, {
-      onDelete: "restrict",
-    }),
-    featureSnapshotId: integer("feature_snapshot_id").references(() => weatherFeatureSnapshots.id, {
-      onDelete: "restrict",
-    }),
+    pointProfileLevelId: integer("point_profile_level_id").references(
+      () => weatherPointProfileLevels.id,
+      { onDelete: "restrict" },
+    ),
+    dailyFeatureSnapshotId: integer("daily_feature_snapshot_id").references(
+      () => weatherDailyFeatureSnapshots.id,
+      { onDelete: "restrict" },
+    ),
+    dailyFeatureProfileLayerId: integer("daily_feature_profile_layer_id").references(
+      () => weatherDailyFeatureProfileLayers.id,
+      { onDelete: "restrict" },
+    ),
     fieldCode: text("field_code").notNull(),
     fieldVariant: text("field_variant").notNull().default("canonical"),
     qualityState: text("quality_state").notNull(),
@@ -1460,30 +1484,34 @@ export const weatherFieldProvenance = sqliteTable(
   },
   (table) => [
     uniqueIndex("weather_field_provenance_sample_field_unique")
-      .on(table.weatherSampleId, table.fieldCode, table.fieldVariant)
-      .where(sql`${table.weatherSampleId} IS NOT NULL`),
+      .on(table.weatherPointSampleId, table.fieldCode, table.fieldVariant)
+      .where(sql`${table.weatherPointSampleId} IS NOT NULL`),
     uniqueIndex("weather_field_provenance_convection_field_unique")
-      .on(table.convectionMeasurementId, table.fieldCode, table.fieldVariant)
-      .where(sql`${table.convectionMeasurementId} IS NOT NULL`),
+      .on(table.pointConvectionMeasurementId, table.fieldCode, table.fieldVariant)
+      .where(sql`${table.pointConvectionMeasurementId} IS NOT NULL`),
     uniqueIndex("weather_field_provenance_interval_field_unique")
-      .on(table.intervalMeasurementId, table.fieldCode, table.fieldVariant)
-      .where(sql`${table.intervalMeasurementId} IS NOT NULL`),
+      .on(table.pointIntervalMeasurementId, table.fieldCode, table.fieldVariant)
+      .where(sql`${table.pointIntervalMeasurementId} IS NOT NULL`),
     uniqueIndex("weather_field_provenance_profile_field_unique")
-      .on(table.profileLevelId, table.fieldCode, table.fieldVariant)
-      .where(sql`${table.profileLevelId} IS NOT NULL`),
+      .on(table.pointProfileLevelId, table.fieldCode, table.fieldVariant)
+      .where(sql`${table.pointProfileLevelId} IS NOT NULL`),
     uniqueIndex("weather_field_provenance_feature_field_unique")
-      .on(table.featureSnapshotId, table.fieldCode, table.fieldVariant)
-      .where(sql`${table.featureSnapshotId} IS NOT NULL`),
+      .on(table.dailyFeatureSnapshotId, table.fieldCode, table.fieldVariant)
+      .where(sql`${table.dailyFeatureSnapshotId} IS NOT NULL`),
+    uniqueIndex("weather_field_provenance_feature_layer_field_unique")
+      .on(table.dailyFeatureProfileLayerId, table.fieldCode, table.fieldVariant)
+      .where(sql`${table.dailyFeatureProfileLayerId} IS NOT NULL`),
     index("weather_field_provenance_field_quality_index").on(table.fieldCode, table.qualityState),
     index("weather_field_provenance_source_reference_index").on(table.sourceReferenceAtUtc),
     check(
       "weather_field_provenance_exactly_one_owner_check",
       sql`(
-          (${table.weatherSampleId} IS NOT NULL)
-          + (${table.convectionMeasurementId} IS NOT NULL)
-          + (${table.intervalMeasurementId} IS NOT NULL)
-          + (${table.profileLevelId} IS NOT NULL)
-          + (${table.featureSnapshotId} IS NOT NULL)
+          (${table.weatherPointSampleId} IS NOT NULL)
+          + (${table.pointConvectionMeasurementId} IS NOT NULL)
+          + (${table.pointIntervalMeasurementId} IS NOT NULL)
+          + (${table.pointProfileLevelId} IS NOT NULL)
+          + (${table.dailyFeatureSnapshotId} IS NOT NULL)
+          + (${table.dailyFeatureProfileLayerId} IS NOT NULL)
         ) = 1`,
     ),
     check(
@@ -1501,7 +1529,8 @@ export const weatherFieldProvenance = sqliteTable(
         'derived',
         'missing',
         'sentinel_missing',
-        'invalid_payload'
+        'invalid_payload',
+        'unsupported'
       )`,
     ),
     check(
@@ -1562,7 +1591,7 @@ export const weatherFieldProvenance = sqliteTable(
     ),
     check(
       "weather_field_provenance_missing_native_value_check",
-      sql`${table.qualityState} NOT IN ('missing', 'sentinel_missing')
+      sql`${table.qualityState} NOT IN ('missing', 'sentinel_missing', 'unsupported')
         OR ${table.nativeValue} IS NULL`,
     ),
   ],

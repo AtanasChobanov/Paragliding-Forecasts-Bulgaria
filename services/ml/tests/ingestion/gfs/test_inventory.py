@@ -88,6 +88,16 @@ def test_f007_selectors_use_native_levels_and_temporal_semantics() -> None:
     assert _default_selector("pwat").level.endswith("(considered as a single layer)")
 
 
+def test_feature_profile_selectors_cover_the_full_1000_to_700_hpa_band() -> None:
+    selected_pressures = {
+        int(selector.key.rsplit("_", 1)[1])
+        for selector in DEFAULT_SELECTORS
+        if selector.key.startswith("tmp_") and selector.key != "tmp_2m"
+    }
+
+    assert selected_pressures == {1000, 975, 950, 925, 900, 875, 850, 800, 750, 700}
+
+
 def test_apcp_collects_indistinguishable_shortest_interval_ties() -> None:
     entries = parse_index(
         b"1:0:d=2026082100:APCP:surface:0-1 hour acc fcst:\n"

@@ -17,6 +17,25 @@ samples the already-provenanced global fields at those approved coordinates.
 Successful collection initializes the append-only run ledger and records the
 verified raw-manifest boundary.
 
+### Daily flying-window follow-up for S07
+
+The accepted product policy is one local Europe/Sofia day, 10:00--20:00
+inclusive (eleven valid instants), from one selected product run. The current
+collector still takes repeatable `--valid-at` arguments; it does not yet expose
+the required `--local-date` mode that converts that fixed DST-aware window into
+the eleven UTC instants. Until that orchestration change is implemented, callers
+must calculate and pass the reviewed UTC instants explicitly in one collection
+run. Do not split the day into runs or build a cross-run assembler.
+
+GFS profile collection now includes HGT/TMP/RH/UGRD/VGRD/VVEL at
+1000/975/950/925/900/875/850/800/750/700 hPa. These pressure levels flow
+through parsing, normalization, canonical sampling, and source validation so
+the S07 builder can bracket AGL layers without a source-specific path.
+
+The default `--maximum-total-mib 128` remains a fail-closed safety limit. A
+full 11-hour, full-profile inventory must be measured before a reviewed larger
+daily cap is selected; do not parallelise requests merely to bypass it.
+
 Operational use should request the 10:00--20:00 `Europe/Sofia` thermal-XC window
 for today through D+2 from one selected complete GFS cycle. Historical/training
 use must be cohort-driven: request exact historical cycles only for the flight
@@ -214,9 +233,10 @@ hash.
 uv run --project services/ml weather-validate --run-key <uuid>
 ```
 
-It validates GFS and ERA5 only. GFS requires forecast lead time and 925/850/700
-hPa core profiles; ERA5 requires no forecast lead and the 1000--700 hPa policy
-profile set. It checks source/kind, raw payload role/media type and GFS magic,
+It validates GFS and ERA5 only. GFS requires forecast lead time and the
+1000/975/950/925/900/875/850/800/750/700 hPa profile band; ERA5 requires no
+forecast lead and the same 1000--700 hPa policy profile set. It checks
+source/kind, raw payload role/media type and GFS magic,
 catalogue units, finite/range values, time/lead/local-date consistency, field
 and sample duplicates, profile ordering, core nulls, and terrain mismatch.
 Below-terrain pressure-level exclusions and calm-wind direction are explicit

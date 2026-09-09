@@ -48,7 +48,11 @@ def _field(field_code: str, value: float | None, *, pressure_pa: float | None = 
     )
 
 
-def _sample(*, lead_hours: int | None = 6, pressures=(92500, 85000, 70000)):
+def _sample(
+    *,
+    lead_hours: int | None = 6,
+    pressures=(100000, 97500, 95000, 92500, 90000, 87500, 85000, 80000, 75000, 70000),
+):
     profiles = tuple(
         SampledProfileLevel(
             pressure_pa=pressure,
@@ -85,7 +89,8 @@ def test_policy_requires_gfs_core_profiles_and_allows_era5_without_lead() -> Non
     policy, _ = load_validation_policy()
 
     missing_gfs, _ = _check_sample(
-        _sample(pressures=(92500, 85000)), policy.sources["noaa_gfs_0p25_aws_grib2"]
+        _sample(pressures=(92500, 85000, 80000, 75000, 70000)),
+        policy.sources["noaa_gfs_0p25_aws_grib2"],
     )
     valid_era5, _ = _check_sample(
         _sample(
@@ -173,7 +178,7 @@ def test_legacy_s05_v1_samples_are_loaded_from_json_without_coverage_status(tmp_
 
 def test_below_terrain_profile_exclusion_is_missing_not_quarantined() -> None:
     policy, _ = load_validation_policy()
-    sample = _sample(pressures=(85000, 70000))
+    sample = _sample(pressures=(100000, 97500, 95000, 90000, 87500, 85000, 80000, 75000, 70000))
 
     quarantined, missing = _check_sample(
         sample,

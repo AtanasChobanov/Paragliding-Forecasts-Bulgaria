@@ -50,6 +50,9 @@ consequences. Temporary progress and Git state belong in
 | DEC-035     | Pin GFS GRIB parser identity and preserve only canonical weather quality states | Accepted   | 2026-08-21 |
 | DEC-036     | Use reviewed site coordinates with bilinear points and radius evidence          | Accepted   | 2026-08-24 |
 | DEC-037     | Validate weather sources through a hashed registry and policy                  | Accepted   | 2026-08-26 |
+| DEC-038     | Preserve immutable weather artifacts through explicit stage supersession       | Accepted   | 2026-08-26 |
+| DEC-039     | Separate hourly weather facts from daily feature builds                         | Accepted   | 2026-09-08 |
+| DEC-040     | Fix S07 daily window, profile band, and accepted derivations                    | Accepted   | 2026-09-08 |
 
 ## Individual decisions
 
@@ -1551,8 +1554,10 @@ Use packaged `source-aware-weather-validation-policy/1`, keyed by registry
 source code. S06 is offline-only and validates hash-linked S05 artifacts against
 source/kind, payload media/shape evidence, canonical unit/range/time/lead,
 profile order/duplicates/core null policy, and terrain mismatch. GFS requires
-925/850/700 hPa profiles and a lead; ERA5 requires the 1000--700 hPa profile
-set and no lead. Accepted, missing, and quarantined artifacts are immutable;
+a lead and, as superseded by DEC-040, the
+1000/975/950/925/900/875/850/800/750/700 hPa profile band; ERA5 requires the
+same 1000--700 hPa profile set and no lead. Accepted, missing, and quarantined
+artifacts are immutable;
 quarantine returns exit `2` and blocks S07. S05 v2 no longer assigns a coverage
 status; S06 owns that disposition while still reading legacy S05 v1 artifacts.
 
@@ -1604,6 +1609,137 @@ collection into a mutable resume operation; a new collection remains a new run.
 [`parser_cli.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/parser_cli.py),
 [`spatial_cli.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/spatial_cli.py),
 [`validation_cli.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/validation_cli.py).
+
+### DEC-039 - Separate hourly weather facts from daily feature builds
+
+**Status:** Accepted
+
+**Date:** 2026-09-08
+
+**Context:** DEC-033 mixed provider-time facts with an ML feature row designed
+around one valid instant. S07 instead needs one feature build for a site's
+local flying day, calculated from accepted hourly inputs inside the fixed local
+flying window. The old schema also retained repeated valid ranges, hashes, and
+grid metadata that are derivable or belong in immutable artifacts rather than
+stable relational facts.
+
+**Decision:** Supersede the weather-storage portion of DEC-033 with a
+source-neutral hourly-to-daily contract. A provider cycle remains
+`weather_product_runs` and owns its `weather_sources` reference. Exact provider
+times live in `weather_product_valid_times` as unique
+`(product_run_id, valid_at_utc)` rows with optional non-negative lead.
+`weather_ingestion_runs` references one product run and one
+`target_local_date`; it does not repeat `source_id`. Its lifecycle, permission,
+manifest SHA-256, pipeline version, counters, and error fields remain because
+they describe the ingestion execution.
+
+Provider-time facts become `weather_point_samples` linked to their ingestion
+run, product valid time, and point footprint. Their child tables become
+`weather_point_profile_levels`, `weather_point_convection_measurements`, and
+`weather_point_interval_measurements`. Interval rows retain canonical
+start/end and statistic but not duplicate native step columns; native step
+evidence remains in `weather_field_provenance`. Profile levels retain provider
+geopotential MSL height, derived site-AGL height, and pressure-level vertical
+velocity. Model-AGL remains an interim diagnostic, not a relational column.
+
+Replace the one-sample feature row with one typed
+`weather_daily_feature_snapshots` row per ingestion, point footprint, and
+feature contract. `weather_daily_feature_snapshot_inputs` records the exact
+hourly input set as a relational many-to-many mapping, so one immutable hourly
+fact can participate in different feature-contract versions without copying
+it. `weather_daily_feature_profile_layers` stores repeatable daily vertical
+features with explicit AGL boundaries. `weather_field_provenance` gains daily
+snapshot and layer owners; its exactly-one-owner rule and partial unique
+indexes remain the field-quality and missing/unsupported source of truth.
+
+Provider PBL and cloud base remain explicitly provider-named. No derived-PBL
+column duplicates a provider value. Mixed-layer LCL, buoyancy flux, and
+convective velocity scale are nullable typed daily outputs and may be
+populated only by an accepted, versioned derivation; otherwise provenance must
+record `missing` or `unsupported`.
+
+Keep `weather_grids` as minimal provider grid identity
+`(source_id, grid_key)`. Grid points, footprints, and footprint nodes retain
+the interpolation geometry. Remove grid dimensions/step/hash, grid first-seen
+run, footprint version/hash, and feature input hash. Sampling identity is its
+method version plus immutable relational site/grid/node definition; daily input
+identity is the join table. The raw manifest hash is the only relational
+SHA-256 retained. Do not add a grid-point-measurement table or database
+window-policy table; raw node fields and the versioned flying-window policy
+remain immutable artifacts/code until database configuration has a product
+need.
+
+The generated migration is intentionally lossy for the unused pre-persistence
+weather runtime tables. It must fail before DDL when any legacy runtime weather
+row exists. Apply it only after owner review and confirmation that the target
+database has no weather runtime rows requiring conversion.
+
+**Consequences:** S07 can consume the same validated canonical contract from
+GFS or ERA5, aggregate hourly facts into one local-day build, and rebuild
+another feature-contract version from the recorded inputs. Local date is
+stored once on the ingestion run and exact UTC time once on the product valid
+time. Cross-row provider/run, footprint-role, complete-input, and flying-window
+rules remain persistence and feature-builder transaction responsibilities.
+
+**Related files:** [`schema.ts`](../packages/database/src/schema.ts),
+[`migration.sql`](../packages/database/drizzle/20260908181331_refactor_daily_weather_persistence/migration.sql),
+[`handoff.md`](handoff.md).
+
+### DEC-040 - Fix S07 daily window, profile band, and accepted derivations
+
+**Status:** Accepted
+
+**Date:** 2026-09-08
+
+**Context:** S07 needs one ML-ready site/day feature snapshot, while source
+artifacts remain hourly. The prior GFS selector and validation policy only kept
+925/850/700 hPa, which cannot reliably bracket the adopted AGL layers. The
+earlier feature plan also proposed aggregates that are not part of the reviewed
+typed daily schema.
+
+**Decision:** Use Europe/Sofia, 10:00--20:00 inclusive, as
+sofia-flying-window/1: exactly eleven expected hourly valid instants after
+DST-aware ZoneInfo conversion. An aggregate is missing only when that feature's
+required hourly or interval input coverage is incomplete; another feature in
+the same daily snapshot may remain complete. Do not split the day across runs
+or assemble one feature snapshot from multiple run keys.
+
+Collect, normalize, sample, and validate GFS HGT/TMP/RH/UGRD/VGRD/VVEL at
+1000/975/950/925/900/875/850/800/750/700 hPa, matching ERA5's first profile
+band. Pressure surfaces remain MSL evidence; site-AGL is height MSL minus
+reviewed site elevation MSL, and a level below site or model terrain is
+excluded. S07 uses no extrapolation: layer boundaries must be bracketed by
+valid retained profile values.
+
+Accepted formulas are component wind speed sqrt(u²+v²), meteorological
+direction from atan2(-u,-v), linear vertical interpolation, endpoint lapse and
+vector shear, trapezoidal height-weighted humidity, and full-rank
+least-squares planes for neighbourhood pressure-gradient and divergence
+∂u/∂x + ∂v/∂y. Arithmetic mean U/V precedes daily wind speed/direction.
+Positive canonical CIN is aggregated with maximum, not minimum. The applied
+schema correction migration records that decision.
+
+Provider PBL/cloud base remain provider facts. Derived PBL, mixed-layer LCL,
+surface buoyancy flux, and Deardorff convective velocity scale are unsupported
+until their source inputs and project methods are separately accepted. VVEL,
+gust, and TKE never fill those slots. S07 must emit missing/unsupported
+provenance and a machine-readable reason instead of a fabricated value.
+
+Keep the collector's 128 MiB default as a fail-closed per-command limit until
+a real full-profile 11-hour inventory establishes a reviewed larger daily cap.
+The next orchestration change must add a local-date/window option that derives
+the eleven UTC valid-at values in one run; it must not use a cross-run
+assembler or parallel requests merely to evade the cap.
+
+**Consequences:** S07 receives a source-neutral, sufficiently dense vertical
+profile and has exact, constrained formulas and missingness behavior. The
+remaining work is implementation of the feature artifact contract, builder,
+and daily collection orchestration; it is not another database redesign.
+
+**Related files:** [`T-018-S07-implementaion-plan.md`](T-018-S07-implementaion-plan.md),
+[`profile.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/profile.py),
+[`weather-validation-policy.json`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/resources/weather-validation-policy.json).
+
 ## Open decisions
 
 | Question                                                                                                                  | Options / constraints                                                                                                                                                                                                             | Resolve by                                                               |

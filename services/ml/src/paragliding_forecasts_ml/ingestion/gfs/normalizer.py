@@ -17,6 +17,7 @@ from .parser import (
     load_array,
     load_batch,
 )
+from .profile import GFS_FEATURE_PROFILE_PRESSURES_HPA
 
 GFS_NORMALIZER_VERSION = "gfs-normalizer/2"
 
@@ -379,7 +380,7 @@ def _wind_derivations(
     valid_times = sorted({valid_at_utc for valid_at_utc, _selector in messages})
     for valid_at_utc in valid_times:
         if pressure:
-            for level in (925, 850, 700):
+            for level in GFS_FEATURE_PROFILE_PRESSURES_HPA:
                 u = messages.get((valid_at_utc, f"ugrd_{level}"))
                 v = messages.get((valid_at_utc, f"vgrd_{level}"))
                 if u and v:

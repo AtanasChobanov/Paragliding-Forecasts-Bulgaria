@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal
 
+from .profile import GFS_FEATURE_PROFILE_PRESSURES_HPA
+
 
 class InventoryError(ValueError):
     """An official GFS inventory cannot safely define byte ranges."""
@@ -94,7 +96,7 @@ DEFAULT_SELECTORS: tuple[GfsSelector, ...] = (
     GfsSelector("cin_layer", "CIN", "180-0 mb above ground"),
     *(
         GfsSelector(f"{name.lower()}_{pressure}", name, f"{pressure} mb")
-        for pressure in (925, 850, 700)
+        for pressure in GFS_FEATURE_PROFILE_PRESSURES_HPA
         for name in ("HGT", "TMP", "RH", "UGRD", "VGRD", "VVEL")
     ),
 )

@@ -110,101 +110,98 @@ const insertWeatherGraph = (targetConnection = activeConnection()): void => {
       'https://nomads.ncep.noaa.gov/', 1
     );
 
-    INSERT INTO weather_ingestion_runs (
-      id, run_key, source_id, ingestion_method, request_purpose, status, source_url,
-      permission_basis, permission_reference, model_training_allowed,
-      operational_use_allowed, raw_manifest_path, raw_manifest_sha256,
-      pipeline_version, started_at_utc, completed_at_utc, samples_seen, samples_accepted
+    INSERT INTO weather_product_runs (
+      id, source_id, source_product_key, reference_at_utc, available_at_utc
     ) VALUES (
-      10, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 10, 'public_object_archive',
-      'historical_forecast', 'succeeded', 'https://noaa.example/gfs-cycle',
-      'us_government_work', 'https://www.noaa.gov/disclaimer', 1, 1,
+      10, 10, 'gfs.20260820/00/atmos', '2026-08-20T00:00:00Z',
+      '2026-08-20T03:30:00Z'
+    );
+
+    INSERT INTO weather_product_valid_times (
+      id, product_run_id, valid_at_utc, lead_hours
+    ) VALUES (
+      10, 10, '2026-08-20T06:00:00Z', 6
+    );
+
+    INSERT INTO weather_ingestion_runs (
+      id, run_key, product_run_id, target_local_date, ingestion_method,
+      request_purpose, status, source_url, permission_basis, permission_reference,
+      model_training_allowed, operational_use_allowed, raw_manifest_path,
+      raw_manifest_sha256, pipeline_version, started_at_utc, completed_at_utc,
+      samples_seen, samples_accepted
+    ) VALUES (
+      10, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 10, '2026-08-20',
+      'public_object_archive', 'historical_forecast', 'succeeded',
+      'https://noaa.example/gfs-cycle', 'us_government_work',
+      'https://www.noaa.gov/disclaimer', 1, 1,
       'data/raw/weather/noaa-gfs/test/manifest.json',
       'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       'gfs-collector/1|gfs-decoder/1|weather-validation/1|weather-persistence/1',
       '2026-08-20T00:00:00Z', '2026-08-20T00:05:00Z', 1, 1
     );
 
-    INSERT INTO weather_product_runs (
-      id, source_id, source_product_key, reference_at_utc, available_at_utc,
-      valid_from_utc, valid_to_utc, created_by_ingestion_run_id,
-      last_validated_by_ingestion_run_id
-    ) VALUES (
-      10, 10, 'gfs.20260820/00/atmos', '2026-08-20T00:00:00Z',
-      '2026-08-20T03:30:00Z', '2026-08-20T00:00:00Z', '2026-08-20T06:00:00Z',
-      10, 10
-    );
-
-    INSERT INTO weather_grids (
-      id, source_id, grid_key, grid_type, latitude_step_deg, longitude_step_deg,
-      native_row_count, native_column_count, definition_sha256, is_active
-    ) VALUES (
-      10, 10, 'gfs_0p25_global', 'regular_latlon', 0.25, 0.25, 721, 1440,
-      'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 1
-    );
+    INSERT INTO weather_grids (id, source_id, grid_key)
+    VALUES (10, 10, 'gfs_0p25_global');
 
     INSERT INTO weather_grid_points (
-      id, grid_id, latitude_deg, longitude_deg, model_elevation_msl_m,
-      first_seen_ingestion_run_id
-    ) VALUES (10, 10, 42.5, 23.25, 830, 10);
+      id, grid_id, latitude_deg, longitude_deg, model_elevation_msl_m
+    ) VALUES (10, 10, 42.5, 23.25, 830);
 
     INSERT INTO weather_sampling_footprints (
-      id, site_id, grid_id, purpose, sampling_method, sampling_method_version,
-      radius_km, footprint_version, definition_sha256
+      id, site_id, grid_id, purpose, sampling_method, sampling_method_version, radius_km
     ) VALUES
-      (
-        10, 1, 10, 'point', 'bilinear', 'bilinear-v1', NULL, 1,
-        'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'
-      ),
-      (
-        11, 1, 10, 'neighbourhood', 'radius', 'radius-v1', 50, 1,
-        'dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd'
-      );
+      (10, 1, 10, 'point', 'bilinear', 'bilinear-v1', NULL),
+      (11, 1, 10, 'neighbourhood', 'radius', 'radius-v1', 50);
 
     INSERT INTO weather_sampling_footprint_nodes (
       footprint_id, grid_point_id, distance_km, interpolation_weight
     ) VALUES (10, 10, 12.5, 1), (11, 10, 12.5, NULL);
 
-    INSERT INTO weather_samples (
-      id, product_run_id, point_footprint_id, valid_at_utc, valid_local_date,
-      lead_hours, coverage_status, air_temperature_2m_k, wind_speed_10m_m_s,
-      wind_direction_10m_degrees_from_north, created_by_ingestion_run_id,
-      last_validated_by_ingestion_run_id
+    INSERT INTO weather_point_samples (
+      id, ingestion_run_id, product_valid_time_id, point_footprint_id,
+      coverage_status, air_temperature_2m_k, wind_speed_10m_m_s,
+      wind_direction_10m_degrees_from_north
     ) VALUES (
-      10, 10, 10, '2026-08-20T06:00:00Z', '2026-08-20', 6, 'complete',
-      293.15, 4.2, 270, 10, 10
+      10, 10, 10, 10, 'complete', 293.15, 4.2, 270
     );
 
-    INSERT INTO weather_profile_levels (
-      id, weather_sample_id, pressure_pa, geopotential_height_msl_m,
-      level_height_agl_m, air_temperature_k, wind_speed_m_s,
-      wind_direction_degrees_from_north
-    ) VALUES (10, 10, 85000, 1500, 700, 285.15, 7, 280);
+    INSERT INTO weather_point_profile_levels (
+      id, weather_point_sample_id, pressure_pa, geopotential_height_msl_m,
+      level_height_site_agl_m, air_temperature_k, wind_speed_m_s,
+      wind_direction_degrees_from_north, vertical_velocity_pa_s
+    ) VALUES (10, 10, 85000, 1500, 700, 285.15, 7, 280, -0.2);
 
-    INSERT INTO weather_convection_measurements (
-      id, weather_sample_id, parcel_method, calculation_method,
+    INSERT INTO weather_point_convection_measurements (
+      id, weather_point_sample_id, parcel_method, calculation_method,
       cape_j_per_kg, cin_magnitude_j_per_kg
     ) VALUES (10, 10, 'provider_unspecified', 'provider', NULL, NULL);
 
-    INSERT INTO weather_interval_measurements (
-      id, weather_sample_id, field_code, component, interval_start_utc,
-      interval_end_utc, statistic_type, canonical_value,
-      source_step_start_hours, source_step_end_hours
+    INSERT INTO weather_point_interval_measurements (
+      id, weather_point_sample_id, field_code, component, interval_start_utc,
+      interval_end_utc, statistic_type, canonical_value
     ) VALUES (
       10, 10, 'precipitation_amount_mm', 'total', '2026-08-20T03:00:00Z',
-      '2026-08-20T06:00:00Z', 'accumulation', 0, 3, 6
+      '2026-08-20T06:00:00Z', 'accumulation', 0
     );
 
-    INSERT INTO weather_feature_snapshots (
-      id, weather_sample_id, neighbourhood_footprint_id, feature_contract_version,
-      input_fingerprint_sha256, created_by_ingestion_run_id
+    INSERT INTO weather_daily_feature_snapshots (
+      id, ingestion_run_id, point_footprint_id, neighbourhood_footprint_id,
+      feature_contract_version, air_temperature_2m_mean_k
     ) VALUES (
-      10, 10, 11, 'weather-features-v1',
-      'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', 10
+      10, 10, 10, 11, 'weather-features-v1', 293.15
     );
+
+    INSERT INTO weather_daily_feature_snapshot_inputs (
+      daily_feature_snapshot_id, weather_point_sample_id
+    ) VALUES (10, 10);
+
+    INSERT INTO weather_daily_feature_profile_layers (
+      id, daily_feature_snapshot_id, layer_base_agl_m, layer_top_agl_m,
+      temperature_lapse_rate_mean_k_per_km
+    ) VALUES (10, 10, 0, 1500, 6.5);
 
     INSERT INTO weather_field_provenance (
-      weather_sample_id, field_code, quality_state, source_reference_at_utc,
+      weather_point_sample_id, field_code, quality_state, source_reference_at_utc,
       native_field_name, native_unit, native_value, normalization_method,
       normalization_version, raw_artifact_key, native_message_reference
     ) VALUES (
@@ -214,13 +211,13 @@ const insertWeatherGraph = (targetConnection = activeConnection()): void => {
     );
 
     INSERT INTO weather_field_provenance (
-      convection_measurement_id, field_code, quality_state
+      point_convection_measurement_id, field_code, quality_state
     ) VALUES
       (10, 'cape_j_per_kg', 'missing'),
       (10, 'cin_magnitude_j_per_kg', 'missing');
 
     INSERT INTO weather_field_provenance (
-      interval_measurement_id, field_code, quality_state, source_reference_at_utc,
+      point_interval_measurement_id, field_code, quality_state, source_reference_at_utc,
       native_field_name, native_unit, native_value, normalization_method,
       normalization_version
     ) VALUES (
@@ -229,18 +226,24 @@ const insertWeatherGraph = (targetConnection = activeConnection()): void => {
     );
 
     INSERT INTO weather_field_provenance (
-      profile_level_id, field_code, quality_state, native_field_name,
+      point_profile_level_id, field_code, quality_state, native_field_name,
       native_unit, native_value, normalization_method, normalization_version
     ) VALUES (
       10, 'air_temperature_k', 'real', 'TMP:850 mb', 'K', 285.15, 'identity', '1'
     );
 
     INSERT INTO weather_field_provenance (
-      feature_snapshot_id, field_code, quality_state, derivation_method,
+      daily_feature_snapshot_id, field_code, quality_state, derivation_method,
       derivation_version
     ) VALUES (
-      10, 'derived_boundary_layer_height_agl_m', 'derived',
-      'profile_threshold', '1'
+      10, 'air_temperature_2m_mean_k', 'derived', 'arithmetic_mean', '1'
+    );
+
+    INSERT INTO weather_field_provenance (
+      daily_feature_profile_layer_id, field_code, quality_state,
+      derivation_method, derivation_version
+    ) VALUES (
+      10, 'temperature_lapse_rate_mean_k_per_km', 'derived', 'endpoint_difference', '1'
     );
   `);
 };
@@ -251,7 +254,7 @@ describe("database foundation migrations", () => {
 
     expect(sqlite.prepare("PRAGMA foreign_keys").get()).toEqual({ foreign_keys: 1 });
     expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({
-      count: 9,
+      count: 12,
     });
 
     if (databaseUrl === undefined) {
@@ -261,7 +264,7 @@ describe("database foundation migrations", () => {
     runMigrations(databaseUrl);
 
     expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({
-      count: 9,
+      count: 12,
     });
     expect(
       sqlite
@@ -573,19 +576,22 @@ describe("database foundation migrations", () => {
       )
       .all();
 
-    expect(rows).toHaveLength(14);
+    expect(rows).toHaveLength(17);
     expect(rows.every((row) => (row as { strict: number }).strict === 1)).toBe(true);
     expect(rows.map((row) => (row as { name: string }).name)).toEqual([
-      "weather_convection_measurements",
-      "weather_feature_snapshots",
+      "weather_daily_feature_profile_layers",
+      "weather_daily_feature_snapshot_inputs",
+      "weather_daily_feature_snapshots",
       "weather_field_provenance",
       "weather_grid_points",
       "weather_grids",
       "weather_ingestion_runs",
-      "weather_interval_measurements",
+      "weather_point_convection_measurements",
+      "weather_point_interval_measurements",
+      "weather_point_profile_levels",
+      "weather_point_samples",
       "weather_product_runs",
-      "weather_profile_levels",
-      "weather_samples",
+      "weather_product_valid_times",
       "weather_sampling_footprint_nodes",
       "weather_sampling_footprints",
       "weather_site_sampling_configs",
@@ -670,12 +676,12 @@ describe("database foundation migrations", () => {
       activeConnection()
         .sqlite.prepare("SELECT count(*) AS count FROM weather_field_provenance")
         .get(),
-    ).toEqual({ count: 6 });
+    ).toEqual({ count: 7 });
     expect(
       activeConnection()
         .sqlite.prepare(
           `SELECT cape_j_per_kg, cin_magnitude_j_per_kg
-           FROM weather_convection_measurements WHERE id = 10`,
+           FROM weather_point_convection_measurements WHERE id = 10`,
         )
         .get(),
     ).toEqual({ cape_j_per_kg: null, cin_magnitude_j_per_kg: null });
@@ -684,60 +690,27 @@ describe("database foundation migrations", () => {
   it("rejects broken source, interval, footprint, identity, and provenance semantics", () => {
     insertWeatherGraph();
 
-    activeConnection().sqlite.exec(`
-      INSERT INTO weather_sources (
-        id, code, provider_name, dataset_name, source_kind, base_url
-      ) VALUES (11, 'cds_era5', 'ECMWF', 'ERA5', 'reanalysis', 'https://cds.climate.copernicus.eu/');
-
-      INSERT INTO weather_ingestion_runs (
-        id, run_key, source_id, ingestion_method, request_purpose, status,
-        source_url, permission_basis, permission_reference, raw_manifest_path,
-        raw_manifest_sha256, pipeline_version, started_at_utc, completed_at_utc
-      ) VALUES (
-        11, 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 11, 'official_api',
-        'reanalysis_backfill', 'succeeded', 'https://cds.example/request',
-        'copernicus_licence', 'https://cds.example/licence',
-        'data/raw/weather/era5/test/manifest.json',
-        'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
-        'era5-collector/1|era5-decoder/1|weather-persistence/1',
-        '2026-08-20T00:00:00Z', '2026-08-20T01:00:00Z'
-      );
-    `);
-
     expectSqlFailure(`
-      INSERT INTO weather_product_runs (
-        id, source_id, source_product_key, valid_from_utc, valid_to_utc,
-        created_by_ingestion_run_id, last_validated_by_ingestion_run_id
-      ) VALUES (
-        99, 10, 'wrong-source-run', '2026-08-20T00:00:00Z',
-        '2026-08-20T01:00:00Z', 11, 10
-      );
+      INSERT INTO weather_product_valid_times (
+        id, product_run_id, valid_at_utc, lead_hours
+      ) VALUES (99, 10, '2026-08-20T06:00:00Z', 6);
     `);
     expectSqlFailure(`
-      INSERT INTO weather_grids (
-        id, source_id, grid_key, grid_type, latitude_step_deg, longitude_step_deg,
-        native_row_count, native_column_count, definition_sha256, is_active
+      INSERT INTO weather_grids (id, source_id, grid_key)
+      VALUES (99, 10, 'gfs_0p25_global');
+    `);
+    expectSqlFailure(`
+      INSERT INTO weather_sampling_footprints (
+        id, site_id, grid_id, purpose, sampling_method, sampling_method_version, radius_km
       ) VALUES (
-        99, 10, 'gfs_0p25_global', 'regular_latlon', 0.25, 0.25, 721, 1440,
-        '9999999999999999999999999999999999999999999999999999999999999999', 1
+        99, 1, 10, 'point', 'radius', 'bad-v1', 25
       );
     `);
     expectSqlFailure(`
       INSERT INTO weather_sampling_footprints (
-        id, site_id, grid_id, purpose, sampling_method, sampling_method_version,
-        radius_km, footprint_version, definition_sha256
+        id, site_id, grid_id, purpose, sampling_method, sampling_method_version, radius_km
       ) VALUES (
-        99, 1, 10, 'point', 'radius', 'bad-v1', 25, 2,
-        '9999999999999999999999999999999999999999999999999999999999999999'
-      );
-    `);
-    expectSqlFailure(`
-      INSERT INTO weather_sampling_footprints (
-        id, site_id, grid_id, purpose, sampling_method, sampling_method_version,
-        radius_km, footprint_version, definition_sha256
-      ) VALUES (
-        98, 1, 10, 'neighbourhood', 'radius', 'bad-v2', NULL, 2,
-        '9898989898989898989898989898989898989898989898989898989898989898'
+        98, 1, 10, 'neighbourhood', 'radius', 'bad-v2', NULL
       );
     `);
     expectSqlFailure(`
@@ -746,25 +719,25 @@ describe("database foundation migrations", () => {
       ) VALUES (10, 10, 12.5, 1.1);
     `);
     expectSqlFailure(`
-      UPDATE weather_samples
+      UPDATE weather_point_samples
       SET provider_boundary_layer_height_agl_m = -1,
           provider_boundary_layer_method = 'provider'
       WHERE id = 10;
     `);
     expectSqlFailure(`
-      UPDATE weather_samples
+      UPDATE weather_point_samples
       SET provider_boundary_layer_height_agl_m = 100,
           provider_boundary_layer_method = NULL
       WHERE id = 10;
     `);
     expectSqlFailure(`
-      INSERT INTO weather_convection_measurements (
-        weather_sample_id, parcel_method, calculation_method
+      INSERT INTO weather_point_convection_measurements (
+        weather_point_sample_id, parcel_method, calculation_method
       ) VALUES (10, 'provider_unspecified', 'provider');
     `);
     expectSqlFailure(`
-      INSERT INTO weather_interval_measurements (
-        weather_sample_id, field_code, component, interval_start_utc,
+      INSERT INTO weather_point_interval_measurements (
+        weather_point_sample_id, field_code, component, interval_start_utc,
         interval_end_utc, statistic_type, canonical_value
       ) VALUES (
         10, 'shortwave_radiation_w_m2', 'not_applicable',
@@ -772,29 +745,26 @@ describe("database foundation migrations", () => {
       );
     `);
     expectSqlFailure(`
-      INSERT INTO weather_feature_snapshots (
-        id, weather_sample_id, neighbourhood_footprint_id,
-        feature_contract_version, input_fingerprint_sha256,
-        temperature_lapse_rate_k_per_km, created_by_ingestion_run_id
+      INSERT INTO weather_daily_feature_snapshots (
+        id, ingestion_run_id, point_footprint_id, neighbourhood_footprint_id,
+        feature_contract_version, air_temperature_2m_min_k, air_temperature_2m_max_k
       ) VALUES (
-        99, 10, 11, 'invalid-lapse-v1',
-        '9999999999999999999999999999999999999999999999999999999999999999',
-        -6.5, 10
+        99, 10, 10, 11, 'invalid-temperature-order-v1', 300, 290
       );
     `);
     expectSqlFailure(`
       INSERT INTO weather_field_provenance (
-        weather_sample_id, interval_measurement_id, field_code, quality_state
+        weather_point_sample_id, point_interval_measurement_id, field_code, quality_state
       ) VALUES (10, 10, 'invalid_owner', 'real');
     `);
     expectSqlFailure(`
       INSERT INTO weather_field_provenance (
-        weather_sample_id, field_code, quality_state
+        weather_point_sample_id, field_code, quality_state
       ) VALUES (10, 'air_temperature_2m_k', 'real');
     `);
     expectSqlFailure(`
       INSERT INTO weather_field_provenance (
-        weather_sample_id, field_code, quality_state, native_value
+        weather_point_sample_id, field_code, quality_state, native_value
       ) VALUES (10, 'missing_with_value', 'missing', 0);
     `);
   });
@@ -802,7 +772,7 @@ describe("database foundation migrations", () => {
 
 const migrationsDirectory = fileURLToPath(new URL("../drizzle/", import.meta.url));
 const weatherMigrationDirectory = "20260820160216_create_weather_foundation";
-const pblAglMigrationDirectory = "20260824183235_add_provider_pbl_agl";
+const dailyWeatherMigrationDirectory = "20260908181331_refactor_daily_weather_persistence";
 const copernicusElevationMigrationDirectory = "20260824184712_set_copernicus_site_elevations";
 
 let upgradeConnection: DatabaseConnection | undefined;
@@ -894,14 +864,14 @@ describe("weather foundation upgrade", () => {
     expect(upgradeConnection.sqlite.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
   });
 
-  it("adds provider PBL AGL storage without losing an existing weather graph", () => {
+  it("refuses the lossy weather refactor when legacy runtime weather rows exist", () => {
     mkdirSync(dataLocalDirectory, { recursive: true });
-    upgradeTestDirectory = mkdtempSync(join(dataLocalDirectory, "t018-pbl-upgrade-test-"));
+    upgradeTestDirectory = mkdtempSync(join(dataLocalDirectory, "t018-weather-guard-test-"));
     const oldMigrationsDirectory = join(upgradeTestDirectory, "old-migrations");
     mkdirSync(oldMigrationsDirectory);
 
     for (const entry of readdirSync(migrationsDirectory, { withFileTypes: true })) {
-      if (entry.isDirectory() && entry.name < pblAglMigrationDirectory) {
+      if (entry.isDirectory() && entry.name < dailyWeatherMigrationDirectory) {
         cpSync(join(migrationsDirectory, entry.name), join(oldMigrationsDirectory, entry.name), {
           recursive: true,
         });
@@ -911,30 +881,32 @@ describe("weather foundation upgrade", () => {
     const databaseUrl = `file:./data/local/${basename(upgradeTestDirectory)}/upgrade.db`;
     upgradeConnection = openDatabase(databaseUrl);
     migrate(upgradeConnection.db, { migrationsFolder: oldMigrationsDirectory });
-    insertWeatherGraph(upgradeConnection);
+    upgradeConnection.sqlite.exec(`
+      INSERT INTO weather_sources (
+        id, code, provider_name, dataset_name, source_kind, base_url, is_active
+      ) VALUES (
+        10, 'guard_source', 'Guard provider', 'Guard dataset', 'forecast',
+        'https://example.test/weather', 1
+      );
+
+      INSERT INTO weather_ingestion_runs (
+        id, run_key, source_id, ingestion_method, request_purpose, status,
+        source_url, permission_basis, permission_reference, raw_manifest_path,
+        raw_manifest_sha256, pipeline_version, started_at_utc
+      ) VALUES (
+        10, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 10, 'official_api',
+        'historical_forecast', 'running', 'https://example.test/weather',
+        'test', 'test', 'data/raw/weather/guard/manifest.json',
+        'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        'weather-collector/1', '2026-08-20T00:00:00Z'
+      );
+    `);
     upgradeConnection.close();
     upgradeConnection = undefined;
 
-    runMigrations(databaseUrl);
-    upgradeConnection = openDatabase(databaseUrl);
-
-    expect(
-      upgradeConnection.sqlite
-        .prepare(
-          `SELECT air_temperature_2m_k, provider_boundary_layer_height_agl_m
-           FROM weather_samples WHERE id = 10`,
-        )
-        .get(),
-    ).toEqual({
-      air_temperature_2m_k: 293.15,
-      provider_boundary_layer_height_agl_m: null,
-    });
-    expect(
-      upgradeConnection.sqlite
-        .prepare("SELECT count(*) AS count FROM weather_field_provenance")
-        .get(),
-    ).toEqual({ count: 6 });
-    expect(upgradeConnection.sqlite.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+    expect(() => {
+      runMigrations(databaseUrl);
+    }).toThrow();
   });
 
   it("refuses to overwrite drifted sampling coordinates with Copernicus elevations", () => {

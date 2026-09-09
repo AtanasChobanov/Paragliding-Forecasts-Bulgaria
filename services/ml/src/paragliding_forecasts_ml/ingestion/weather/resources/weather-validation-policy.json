@@ -4,7 +4,7 @@
     "noaa_gfs_0p25_aws_grib2": {
       "source_kind": "forecast",
       "lead_hours": "required",
-      "required_profile_pressures_pa": [92500, 85000, 70000],
+      "required_profile_pressures_pa": [100000, 97500, 95000, 92500, 90000, 87500, 85000, 80000, 75000, 70000],
       "required_profile_field_codes": ["geopotential_height_msl_m", "air_temperature_k", "relative_humidity_percent", "wind_u_m_s", "wind_v_m_s"],
       "nullable_field_codes": ["cloud_base_height_agl_m", "convective_inhibition_j_per_kg", "wind_direction_degrees_from_north"],
       "max_terrain_mismatch_m": 2500,

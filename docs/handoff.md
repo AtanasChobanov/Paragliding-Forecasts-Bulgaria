@@ -10,7 +10,7 @@ slice, not a project history. Read, in order:
 3. This handoff for the implemented T-018 slice boundaries.
 4. The relevant sections of `docs/project-brief.md` and `docs/architecture.md`
    for product and system constraints.
-5. DEC-031 through DEC-037 in `docs/decisions.md` for accepted weather-source,
+5. DEC-031 through DEC-040 in `docs/decisions.md` for accepted weather-source,
    schema, protocol, parser, and spatial-sampling decisions.
 6. Git history and the owning code/tests for detailed prior implementation and
    validation evidence.
@@ -18,15 +18,15 @@ slice, not a project history. Read, in order:
 Record durable design choices in `docs/decisions.md`, task status in
 `docs/tasks.md`, and only the current operational state here.
 
-## Current state (2026-08-26)
+## Current state (2026-09-09)
 
 | Field | Value |
 | --- | --- |
 | Branch | `feature/T-018-weather-ingestion` |
 | Task status | `T-018` is In Progress; S01–S06 are complete, S07–S10 remain. |
-| Next focus | Implement S07 versioned feature building from S06 accepted artifacts; quarantines must remain blocked. |
+| Next focus | Implement S07 feature building from S06 accepted artifacts, using the approved daily schema and plan. |
 | Local storage | SQLite selected by `DATABASE_URL`; local databases, raw source data, and interim artifacts are ignored. |
-| Migrations | Weather foundation, sampling/elevation configuration, and provider-PBL-AGL are applied locally. The committed GFS/ERA5 source-registry migration must be applied with `db:migrate` before `weather-validate`. |
+| Migrations | Earlier weather/configuration migrations and the daily-weather reshape are applied locally. Latest applied: `20260908181331_refactor_daily_weather_persistence`, `20260908202837_correct_daily_cin_aggregate`, and `20260908202923_restore_daily_feature_snapshot_strict`. |
 
 ## T-018 scope and non-negotiable boundaries
 
@@ -100,6 +100,46 @@ Important semantics:
 - The weather foundation, approved sampling-config, provider-PBL-AGL, and
   Copernicus-elevation migrations are reviewed/applied locally. Never alter an
   applied migration; add a reviewed migration for any schema/data change.
+
+### S07 persistence preparation — applied and verified
+
+DEC-039 supersedes the S01 weather-storage shape before S07. The Drizzle schema
+now separates hourly provider facts from daily model features:
+
+- `weather_product_valid_times` owns exact UTC/lead values beneath a product
+  run; a weather ingestion run owns one product run and `target_local_date`
+  without repeating `source_id`;
+- `weather_point_samples` and their renamed profile/convection/interval
+  children are hourly facts; profile rows add `vertical_velocity_pa_s` and
+  distinguish persisted site-AGL from artifact-only model-AGL;
+- `weather_daily_feature_snapshots` is the typed daily wide row,
+  `weather_daily_feature_snapshot_inputs` records all contributing hourly
+  rows, and `weather_daily_feature_profile_layers` stores repeatable AGL
+  layer results;
+- `weather_field_provenance` owns explicit quality/missingness for hourly,
+  daily, and daily-layer fields. No snapshot input SHA, footprint SHA/version,
+  grid-definition SHA, or grid-point measurements are persisted.
+
+The daily reshape migration was reviewed and applied. Its up-front guard rejects
+any non-empty legacy runtime weather graph because the reshape is intentionally
+lossy. A follow-up migration corrected the positive-CIN daily extreme from
+`min` to `max`; another immediately restored `STRICT` after Drizzle's generated
+rename rebuild omitted it. Fresh temporary-database migration, idempotence,
+strict-table, foreign-key, constraint, and guard tests pass.
+
+GFS profile selection now covers
+1000/975/950/925/900/875/850/800/750/700 hPa for HGT/TMP/RH/UGRD/VGRD/VVEL.
+The old GFS-only 925/850/700 validation band is superseded, enabling S07's
+strict AGL layer interpolation without a source-specific profile path. The
+current `gfs-collect` CLI still uses repeatable `--valid-at` and a 128 MiB
+default cap; adding one-run `--local-date` flying-window orchestration and
+measuring its reviewed larger cap remain explicit follow-up work.
+
+Verification on 2026-09-09: the configured database accepted the three daily
+weather migrations and a second `db:migrate` was idempotent. Drizzle
+`db:check`, all 29 database tests, all 139 ML tests, ML Ruff check and format
+check, workspace TypeScript typecheck, and `git diff --check` passed. These
+changes are intentionally uncommitted for owner review.
 
 ### S02 — durable atmospheric protocol
 
@@ -200,8 +240,9 @@ an existing validated boundary only when its validator version and spatial input
 are current; otherwise it appends a versioned `validated` event that explicitly
 supersedes the prior validation boundary.
 
-S06 owns coverage disposition. GFS has a required lead and 925/850/700 hPa
-core profile policy; ERA5 has no lead and requires 1000--700 hPa profiles. No
+S06 owns coverage disposition. GFS has a required lead and the
+1000/975/950/925/900/875/850/800/750/700 hPa profile policy; ERA5 has no lead
+and requires the same 1000--700 hPa profile band. No
 invented model ID/version, captured HTTP header, manual alias approval, or
 endpoint override is used. `weather_sources` is a registry/allow-list and
 provenance snapshot; adapters retain their pinned transport endpoints.

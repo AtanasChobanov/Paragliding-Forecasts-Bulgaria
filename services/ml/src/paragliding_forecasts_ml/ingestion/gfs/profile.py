@@ -8,6 +8,7 @@ GFS_GRIB_PROFILE_VERSION = "noaa-gfs-grib2-table-v1"
 GFS_CENTRE = "kwbc"
 GFS_TABLES_VERSION = 2
 GFS_LOCAL_TABLES_VERSION = 1
+GFS_FEATURE_PROFILE_PRESSURES_HPA = (1000, 975, 950, 925, 900, 875, 850, 800, 750, 700)
 
 
 @dataclass(frozen=True)
@@ -51,7 +52,7 @@ PROFILES: tuple[GfsMessageProfile, ...] = (
     GfsMessageProfile("cin_layer", 0, 7, 7, "pressureFromGroundLayer", 18000),
     *(
         _pressure(f"{name.lower()}_{pressure}", category, number, pressure)
-        for pressure in (925, 850, 700)
+        for pressure in GFS_FEATURE_PROFILE_PRESSURES_HPA
         for name, category, number in (
             ("HGT", 3, 5),
             ("TMP", 0, 0),

@@ -38,7 +38,7 @@ def _metadata() -> dict[str, object]:
 
 
 def test_profile_pins_every_collected_selector_and_numeric_hpbl_identity() -> None:
-    assert len(PROFILE_BY_SELECTOR) == 39
+    assert len(PROFILE_BY_SELECTOR) == 81
     assert PROFILE_BY_SELECTOR["hpbl"].number == 196
     assert PROFILE_BY_SELECTOR["hpbl"].native_unit_override == "m"
 
