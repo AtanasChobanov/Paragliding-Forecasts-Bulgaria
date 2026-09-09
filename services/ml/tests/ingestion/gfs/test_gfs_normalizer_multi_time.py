@@ -91,7 +91,7 @@ def test_normalizer_keeps_multi_valid_time_arrays_unique_and_promotes_orography(
     tmp_path, monkeypatch
 ) -> None:
     store = WeatherArtifactStore.create_fresh(RUN_KEY, project_root=tmp_path)
-    directory = store.begin_stage("parser", "gfs-parser/3", "c" * 64)
+    directory = store.begin_stage("parser", "gfs-parser/4", "c" * 64)
     parser_manifest = store.write_stage_bytes(
         directory,
         "parser-stage-manifest.json",
@@ -146,3 +146,69 @@ def test_normalizer_keeps_multi_valid_time_arrays_unique_and_promotes_orography(
     artifact_keys = [grain.values.artifact_key for grain in batch.surface_grains]
     assert len(artifact_keys) == len(set(artifact_keys))
     assert batch.grid.values_order == "row_major_north_to_south_west_to_east"
+
+
+def test_normalizer_retains_specific_humidity_and_upward_interval_fluxes(
+    tmp_path, monkeypatch
+) -> None:
+    store = WeatherArtifactStore.create_fresh(RUN_KEY, project_root=tmp_path)
+    directory = store.begin_stage("parser", "gfs-parser/4", "d" * 64)
+    parser_manifest = store.write_stage_bytes(
+        directory,
+        "parser-stage-manifest.json",
+        "stage_manifest",
+        b"{}\n",
+        media_type="application/json",
+    )
+    messages = tuple(
+        _message(
+            store,
+            directory,
+            selector=selector,
+            valid_at_utc="2026-08-24T06:00:00Z",
+            lead_hours=6,
+            value=value,
+        )
+        for selector, value in (
+            ("orog", 150.0),
+            ("spfh_2m", 0.006),
+            ("spfh_850", 0.005),
+            ("shtfl", 25.0),
+            ("lhtfl", 50.0),
+        )
+    )
+    native = GfsNativeGridBatch(
+        run_key=RUN_KEY,
+        raw_manifest=parser_manifest,
+        eccodes_version="2.47.0",
+        messages=messages,
+    )
+    monkeypatch.setattr(
+        "paragliding_forecasts_ml.ingestion.gfs.normalizer.load_batch",
+        lambda _store, _reference: native,
+    )
+
+    normalizer_manifest = normalize(store, parser_manifest, occurred_at_utc="2026-08-24T12:00:00Z")
+    stage = StageManifest.model_validate_json(
+        store.verify_reference(normalizer_manifest).read_bytes(), strict=True
+    )
+    batch_reference = next(
+        item for item in stage.outputs if item.artifact_key == "gfs_canonical_grid_batch"
+    )
+    batch = GfsCanonicalGridBatch.model_validate_json(
+        store.verify_reference(batch_reference).read_bytes(), strict=True
+    )
+    surface_by_selector = {item.source_selector_keys[0]: item for item in batch.surface_grains}
+    pressure_by_selector = {
+        item.source_selector_keys[0]: item for item in batch.pressure_level_grains
+    }
+
+    assert surface_by_selector["spfh_2m"].field_code == "specific_humidity_kg_per_kg"
+    assert surface_by_selector["spfh_2m"].dimension == "2m_above_ground"
+    assert pressure_by_selector["spfh_850"].field_code == "specific_humidity_kg_per_kg"
+    assert pressure_by_selector["spfh_850"].pressure_pa == 85_000
+    for selector in ("shtfl", "lhtfl"):
+        grain = surface_by_selector[selector]
+        assert grain.statistic_type == "interval_average"
+        assert grain.native_sign_convention == "upward_positive"
+        assert grain.normalization_method == "gfs_upward_positive_interval_average_retained"

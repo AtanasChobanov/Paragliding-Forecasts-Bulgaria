@@ -24,7 +24,9 @@ UUID_V4_PATTERN = re.compile(
 VERSION_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]*/[1-9][0-9]*$")
 
 SourceKind = Literal["forecast", "reanalysis"]
-QualityState = Literal["real", "derived", "missing", "sentinel_missing", "invalid_payload"]
+QualityState = Literal[
+    "real", "derived", "missing", "sentinel_missing", "invalid_payload", "unsupported"
+]
 StageName = Literal[
     "parser",
     "normalizer",
@@ -248,7 +250,10 @@ class FieldProvenance(AtmosphericContract):
 
     @model_validator(mode="after")
     def missing_values_and_method_pairs_must_be_consistent(self) -> FieldProvenance:
-        if self.quality_state in {"missing", "sentinel_missing"} and self.native_value is not None:
+        if (
+            self.quality_state in {"missing", "sentinel_missing", "unsupported"}
+            and self.native_value is not None
+        ):
             raise ValueError("Missing native values must be represented as null.")
         if (self.normalization_method is None) != (self.normalization_version is None):
             raise ValueError("Normalization method and version must be supplied together.")
@@ -284,7 +289,7 @@ class CanonicalFieldValue(AtmosphericContract):
         catalogue = load_catalogue()
         if self.canonical_unit != catalogue.field_unit(self.field_code):
             raise ValueError("Canonical unit must match the T-017 catalogue.")
-        if self.provenance.quality_state in {"missing", "sentinel_missing"}:
+        if self.provenance.quality_state in {"missing", "sentinel_missing", "unsupported"}:
             if self.canonical_value is not None:
                 raise ValueError("Missing canonical values must be null.")
         elif self.provenance.quality_state in {"real", "derived"} and self.canonical_value is None:

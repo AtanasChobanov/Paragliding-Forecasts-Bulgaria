@@ -841,6 +841,7 @@ export const weatherPointSamples = sqliteTable(
     airTemperature2mK: real("air_temperature_2m_k"),
     dewPointTemperature2mK: real("dew_point_temperature_2m_k"),
     relativeHumidity2mPercent: real("relative_humidity_2m_percent"),
+    specificHumidity2mKgPerKg: real("specific_humidity_2m_kg_per_kg"),
     surfacePressurePa: real("surface_pressure_pa"),
     meanSeaLevelPressurePa: real("mean_sea_level_pressure_pa"),
     windU10mMS: real("wind_u_10m_m_s"),
@@ -885,6 +886,11 @@ export const weatherPointSamples = sqliteTable(
       "weather_samples_relative_humidity_2m_range_check",
       sql`${table.relativeHumidity2mPercent} IS NULL
         OR ${table.relativeHumidity2mPercent} BETWEEN 0 AND 100`,
+    ),
+    check(
+      "weather_samples_specific_humidity_2m_range_check",
+      sql`${table.specificHumidity2mKgPerKg} IS NULL
+        OR ${table.specificHumidity2mKgPerKg} BETWEEN 0 AND 1`,
     ),
     check(
       "weather_samples_surface_pressure_positive_check",
@@ -1275,11 +1281,6 @@ export const weatherDailyFeatureSnapshots = sqliteTable(
     surfaceLatentHeatFluxMeanWM2: real("surface_latent_heat_flux_mean_w_m2"),
     capeMaxJPerKg: real("cape_max_j_per_kg"),
     cinMagnitudeMaxJPerKg: real("cin_magnitude_max_j_per_kg"),
-    mixedLayerLclAglMeanM: real("mixed_layer_lcl_agl_mean_m"),
-    mixedLayerLclAglMaxM: real("mixed_layer_lcl_agl_max_m"),
-    surfaceBuoyancyFluxKinematicMeanKMS: real("surface_buoyancy_flux_kinematic_mean_k_m_s"),
-    convectiveVelocityScaleMeanMS: real("convective_velocity_scale_mean_m_s"),
-    convectiveVelocityScaleMaxMS: real("convective_velocity_scale_max_m_s"),
     neighbourhoodPressureGradientMeanPaPerKm: real(
       "neighbourhood_pressure_gradient_mean_pa_per_km",
     ),
@@ -1348,10 +1349,6 @@ export const weatherDailyFeatureSnapshots = sqliteTable(
         AND (${table.shortwaveRadiationMaxWM2} IS NULL OR ${table.shortwaveRadiationMaxWM2} >= 0)
         AND (${table.capeMaxJPerKg} IS NULL OR ${table.capeMaxJPerKg} >= 0)
         AND (${table.cinMagnitudeMaxJPerKg} IS NULL OR ${table.cinMagnitudeMaxJPerKg} >= 0)
-        AND (${table.mixedLayerLclAglMeanM} IS NULL OR ${table.mixedLayerLclAglMeanM} >= 0)
-        AND (${table.mixedLayerLclAglMaxM} IS NULL OR ${table.mixedLayerLclAglMaxM} >= 0)
-        AND (${table.convectiveVelocityScaleMeanMS} IS NULL OR ${table.convectiveVelocityScaleMeanMS} >= 0)
-        AND (${table.convectiveVelocityScaleMaxMS} IS NULL OR ${table.convectiveVelocityScaleMaxMS} >= 0)
         AND (${table.neighbourhoodPressureGradientMeanPaPerKm} IS NULL OR ${table.neighbourhoodPressureGradientMeanPaPerKm} >= 0)
         AND (${table.neighbourhoodPressureGradientMaxPaPerKm} IS NULL OR ${table.neighbourhoodPressureGradientMaxPaPerKm} >= 0)`,
     ),

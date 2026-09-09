@@ -56,6 +56,21 @@ def test_canonical_field_uses_catalogue_unit_and_explicit_missingness() -> None:
     )
     assert missing.canonical_value is None
 
+    unsupported = CanonicalFieldValue(
+        field_code="provider_cloud_base_agl_m",
+        canonical_unit="m",
+        canonical_value=None,
+        provenance=FieldProvenance(quality_state="unsupported"),
+    )
+    assert unsupported.canonical_value is None
+    with pytest.raises(ValidationError, match="Missing canonical values"):
+        CanonicalFieldValue(
+            field_code="provider_cloud_base_agl_m",
+            canonical_unit="m",
+            canonical_value=900.0,
+            provenance=FieldProvenance(quality_state="unsupported"),
+        )
+
     with pytest.raises(ValidationError, match="Canonical unit"):
         CanonicalFieldValue(
             field_code="air_temperature_k",

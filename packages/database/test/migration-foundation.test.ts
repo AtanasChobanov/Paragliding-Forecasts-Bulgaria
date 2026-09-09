@@ -254,7 +254,7 @@ describe("database foundation migrations", () => {
 
     expect(sqlite.prepare("PRAGMA foreign_keys").get()).toEqual({ foreign_keys: 1 });
     expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({
-      count: 12,
+      count: 13,
     });
 
     if (databaseUrl === undefined) {
@@ -264,7 +264,7 @@ describe("database foundation migrations", () => {
     runMigrations(databaseUrl);
 
     expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({
-      count: 12,
+      count: 13,
     });
     expect(
       sqlite
@@ -717,6 +717,11 @@ describe("database foundation migrations", () => {
       INSERT INTO weather_sampling_footprint_nodes (
         footprint_id, grid_point_id, distance_km, interpolation_weight
       ) VALUES (10, 10, 12.5, 1.1);
+    `);
+    expectSqlFailure(`
+      UPDATE weather_point_samples
+      SET specific_humidity_2m_kg_per_kg = -0.1
+      WHERE id = 10;
     `);
     expectSqlFailure(`
       UPDATE weather_point_samples

@@ -1,12 +1,13 @@
 {
-  "policy_version": "source-aware-weather-validation-policy/2",
+  "policy_version": "source-aware-weather-validation-policy/3",
   "sources": {
     "noaa_gfs_0p25_aws_grib2": {
       "source_kind": "forecast",
       "lead_hours": "required",
       "required_profile_pressures_pa": [100000, 97500, 95000, 92500, 90000, 85000, 80000, 75000, 70000, 65000, 60000, 55000, 50000],
-      "required_profile_field_codes": ["geopotential_height_msl_m", "air_temperature_k", "relative_humidity_percent", "wind_u_m_s", "wind_v_m_s"],
-      "nullable_field_codes": ["cloud_base_height_agl_m", "convective_inhibition_j_per_kg", "wind_direction_degrees_from_north"],
+      "required_surface_fields": [{"field_code": "specific_humidity_kg_per_kg", "dimension": "2m_above_ground"}],
+      "required_profile_field_codes": ["geopotential_height_msl_m", "air_temperature_k", "relative_humidity_percent", "specific_humidity_kg_per_kg", "wind_u_m_s", "wind_v_m_s"],
+      "nullable_field_codes": ["provider_cloud_base_agl_m", "convective_inhibition_magnitude_j_per_kg", "wind_direction_degrees_from_north"],
       "max_terrain_mismatch_m": 2500,
       "max_point_grid_distance_km": 50
     },
@@ -14,8 +15,9 @@
       "source_kind": "reanalysis",
       "lead_hours": "forbidden",
       "required_profile_pressures_pa": [100000, 97500, 95000, 92500, 90000, 85000, 80000, 75000, 70000, 65000, 60000, 55000, 50000],
-      "required_profile_field_codes": ["geopotential_height_msl_m", "air_temperature_k", "relative_humidity_percent", "wind_u_m_s", "wind_v_m_s"],
-      "nullable_field_codes": ["cloud_base_height_agl_m", "convective_inhibition_j_per_kg", "wind_direction_degrees_from_north"],
+      "required_surface_fields": [{"field_code": "specific_humidity_kg_per_kg", "dimension": "2m_above_ground"}],
+      "required_profile_field_codes": ["geopotential_height_msl_m", "air_temperature_k", "relative_humidity_percent", "specific_humidity_kg_per_kg", "wind_u_m_s", "wind_v_m_s"],
+      "nullable_field_codes": ["provider_cloud_base_agl_m", "convective_inhibition_magnitude_j_per_kg", "wind_direction_degrees_from_north"],
       "max_terrain_mismatch_m": 2500,
       "max_point_grid_distance_km": 50
     }

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-GFS_GRIB_PROFILE_VERSION = "noaa-gfs-grib2-table-v2"
+GFS_GRIB_PROFILE_VERSION = "noaa-gfs-grib2-table-v3"
 GFS_CENTRE = "kwbc"
 GFS_TABLES_VERSION = 2
 GFS_LOCAL_TABLES_VERSION = 1
@@ -49,6 +49,7 @@ PROFILES: tuple[GfsMessageProfile, ...] = (
     GfsMessageProfile("tmp_2m", 0, 0, 0, "heightAboveGround", 2),
     GfsMessageProfile("dpt_2m", 0, 0, 6, "heightAboveGround", 2),
     GfsMessageProfile("rh_2m", 0, 1, 1, "heightAboveGround", 2),
+    GfsMessageProfile("spfh_2m", 0, 1, 0, "heightAboveGround", 2),
     GfsMessageProfile("ugrd_10m", 0, 2, 2, "heightAboveGround", 10),
     GfsMessageProfile("vgrd_10m", 0, 2, 3, "heightAboveGround", 10),
     GfsMessageProfile("gust_surface", 0, 2, 22, "surface"),
@@ -62,6 +63,8 @@ PROFILES: tuple[GfsMessageProfile, ...] = (
     GfsMessageProfile("hcdc", 0, 6, 5, "highCloudLayer"),
     GfsMessageProfile("apcp", 0, 1, 8, "surface"),
     GfsMessageProfile("dswrf", 0, 4, 192, "surface"),
+    GfsMessageProfile("shtfl", 0, 0, 11, "surface"),
+    GfsMessageProfile("lhtfl", 0, 0, 10, "surface"),
     GfsMessageProfile("pwat", 0, 1, 3, "atmosphereSingleLayer"),
     GfsMessageProfile("cape_surface", 0, 7, 6, "surface"),
     GfsMessageProfile("cin_surface", 0, 7, 7, "surface"),
@@ -74,6 +77,7 @@ PROFILES: tuple[GfsMessageProfile, ...] = (
             ("HGT", 3, 5),
             ("TMP", 0, 0),
             ("RH", 1, 1),
+            ("SPFH", 1, 0),
             ("UGRD", 2, 2),
             ("VGRD", 2, 3),
             ("VVEL", 2, 8),

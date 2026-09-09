@@ -104,7 +104,7 @@ def test_feature_profile_selectors_cover_the_common_pgrb2_1000_to_500_hpa_band()
         550,
         500,
     }
-    profile_fields = ("hgt", "tmp", "rh", "ugrd", "vgrd", "vvel")
+    profile_fields = ("hgt", "tmp", "rh", "spfh", "ugrd", "vgrd", "vvel")
     selected_pressures = {
         field: {
             int(selector.key.rsplit("_", 1)[1])
@@ -116,6 +116,20 @@ def test_feature_profile_selectors_cover_the_common_pgrb2_1000_to_500_hpa_band()
 
     assert selected_pressures == {field: expected_pressures for field in profile_fields}
     assert all(875 not in pressures for pressures in selected_pressures.values())
+
+
+def test_specific_humidity_and_turbulent_flux_selectors_pin_native_semantics() -> None:
+    specific_humidity = _default_selector("spfh_2m")
+    sensible = _default_selector("shtfl")
+    latent = _default_selector("lhtfl")
+
+    assert (specific_humidity.parameter, specific_humidity.level) == ("SPFH", "2 m above ground")
+    assert (sensible.parameter, sensible.level, sensible.temporal_kind) == (
+        "SHTFL",
+        "surface",
+        "average",
+    )
+    assert (latent.parameter, latent.level, latent.minimum_lead_hours) == ("LHTFL", "surface", 1)
 
 
 def test_apcp_collects_indistinguishable_shortest_interval_ties() -> None:

@@ -1806,6 +1806,72 @@ fluxes.
 [`T-018-S07-implementaion-plan.md`](T-018-S07-implementaion-plan.md),
 [`handoff.md`](handoff.md).
 
+### DEC-042 - Activate audited S07 humidity and turbulent-flux inputs
+
+**Status:** Accepted
+
+**Date:** 2026-09-09
+
+**Context:** DEC-041 corrects the available common-object vertical band, but
+S07 still requires direct 2 m and pressure-level specific humidity plus
+validated sensible/latent heat-flux intervals. The pre-S07 catalogue and daily
+schema also retained four unaccepted derived field families and their five
+unused daily columns.
+
+**Decision:** Collect GFS `SPFH` at 2 m and at every DEC-041 pressure level.
+Normalize both as direct `specific_humidity_kg_per_kg` evidence, retaining the
+2 m `dimension` as `2m_above_ground` and profile `pressure_pa`; neither form is
+derived from temperature, relative humidity, or pressure. Require the direct 2
+m field and the profile field in the source-aware policy for both source
+contracts. The S09 ERA5 adapter remains responsible for providing the same
+canonical inputs through its separately specified source-normalization method.
+
+Collect GFS `SHTFL` and `LHTFL` at surface only for lead hours at least one.
+Their GRIB statistic must be an interval average; retain their verified
+upward-positive GFS sign as canonical upward-positive W/m² interval evidence.
+They populate distinct sensible and latent heat-flux inputs. Do not calculate
+the removed kinematic buoyancy flux or Deardorff convective velocity scale.
+
+The active catalogue is `t017-spike-v2`: it admits the `unsupported` quality
+state with null native/canonical value invariants and removes
+`derived_boundary_layer_height_agl_m`, `mixed_layer_lcl_agl_m`,
+`surface_buoyancy_flux_kinematic_k_m_s`, and
+`convective_velocity_scale_m_s`. Spatial sampling preserves `unsupported` as
+null evidence rather than converting it into a real value.
+
+Add nullable hourly `specific_humidity_2m_kg_per_kg` with a `[0,1]` SQLite
+constraint. Remove the unused daily
+`mixed_layer_lcl_agl_{mean,max}_m`,
+`surface_buoyancy_flux_kinematic_mean_k_m_s`, and
+`convective_velocity_scale_{mean,max}_m_s` columns through the reviewed
+forward-only migration `20260909123754_correct_s07_feature_inputs`; never edit
+an applied migration.
+
+Version the changed immutable boundaries: GFS collector `gfs-collector/4`,
+parser `gfs-parser/4`, numeric GRIB profile
+`noaa-gfs-grib2-table-v3`, normalizer `gfs-normalizer/4`, spatial sampler
+`weather-spatial/3`, policy
+`source-aware-weather-validation-policy/3`, and validator
+`source-aware-weather-validator/4`.
+
+**Consequences:** A source artifact now has the direct humidity anchors and
+verified flux intervals that S07 needs, while unsupported values stay explicit
+null evidence. The forward migration is approved and covered by fresh-db,
+idempotence, strict-table, foreign-key, and constraint tests. Applying it to a
+non-test local database remains an explicit owner-authorized operation because
+it drops the five legacy daily columns.
+
+**Evidence:** [NOAA GFS pgrb2.0p25 f003 inventory](https://www.nco.ncep.noaa.gov/pmb/products/gfs/gfs.t00z.pgrb2.0p25.f003.shtml)
+identifies `SPFH` at 2 m and across the retained pressure band, and `SHTFL` /
+`LHTFL` as surface average fields.
+
+**Related files:** [`inventory.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/inventory.py),
+[`normalizer.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/normalizer.py),
+[`weather-validation-policy.json`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/resources/weather-validation-policy.json),
+[`schema.ts`](../packages/database/src/schema.ts),
+[`migration.sql`](../packages/database/drizzle/20260909123754_correct_s07_feature_inputs/migration.sql),
+and [`handoff.md`](handoff.md).
+
 ## Open decisions
 
 | Question                                                                                                                  | Options / constraints                                                                                                                                                                                                             | Resolve by                                                               |

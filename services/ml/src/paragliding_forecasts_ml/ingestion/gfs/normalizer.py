@@ -19,7 +19,7 @@ from .parser import (
 )
 from .profile import GFS_FEATURE_PROFILE_PRESSURES_HPA
 
-GFS_NORMALIZER_VERSION = "gfs-normalizer/3"
+GFS_NORMALIZER_VERSION = "gfs-normalizer/4"
 
 
 class GfsCanonicalGridDefinition(AtmosphericContract):
@@ -52,7 +52,9 @@ class GfsCanonicalGridMessage(AtmosphericContract):
     source_native_message_references: tuple[str, ...] = Field(min_length=1)
     canonical_unit: str
     values: ArtifactReference
-    quality_state: Literal["real", "derived", "missing", "sentinel_missing", "invalid_payload"]
+    quality_state: Literal[
+        "real", "derived", "missing", "sentinel_missing", "invalid_payload", "unsupported"
+    ]
     valid_at_utc: str
     reference_at_utc: str
     lead_hours: int = Field(ge=0, le=384)
@@ -85,6 +87,7 @@ _DIRECT: dict[str, tuple[str, str, str | None]] = {
     "tmp_2m": ("air_temperature_k", "surface", None),
     "dpt_2m": ("dew_point_temperature_k", "surface", None),
     "rh_2m": ("relative_humidity_percent", "surface", None),
+    "spfh_2m": ("specific_humidity_kg_per_kg", "surface", "2m_above_ground"),
     "ugrd_10m": ("wind_u_m_s", "surface", None),
     "vgrd_10m": ("wind_v_m_s", "surface", None),
     "pres_surface": ("air_pressure_pa", "surface", "surface"),
@@ -101,6 +104,7 @@ _PRESSURE_FIELDS = {
     "hgt": "geopotential_height_msl_m",
     "tmp": "air_temperature_k",
     "rh": "relative_humidity_percent",
+    "spfh": "specific_humidity_kg_per_kg",
     "ugrd": "wind_u_m_s",
     "vgrd": "wind_v_m_s",
     "vvel": "vertical_velocity_pa_s",
@@ -180,7 +184,7 @@ def normalize(
         stage="normalizer",
         producer_version=GFS_NORMALIZER_VERSION,
         inputs=(parser_stage_manifest,),
-        configuration={"catalogue": "t017-spike-v1", "normalization": GFS_NORMALIZER_VERSION},
+        configuration={"catalogue": "t017-spike-v2", "normalization": GFS_NORMALIZER_VERSION},
     )
     existing = store.existing_stage_manifest("normalizer", GFS_NORMALIZER_VERSION, fingerprint)
     if existing is not None:
@@ -211,6 +215,23 @@ def normalize(
         elif message.selector_key == "dswrf":
             surface.append(
                 _interval(store, directory, message, "shortwave_radiation_w_m2", "interval_average")
+            )
+        elif message.selector_key in {"shtfl", "lhtfl"}:
+            field_code = (
+                "surface_sensible_heat_flux_upward_w_m2"
+                if message.selector_key == "shtfl"
+                else "surface_latent_heat_flux_upward_w_m2"
+            )
+            surface.append(
+                _interval(
+                    store,
+                    directory,
+                    message,
+                    field_code,
+                    "interval_average",
+                    native_sign_convention="upward_positive",
+                    normalization_method="gfs_upward_positive_interval_average_retained",
+                )
             )
     surface.extend(_wind_derivations(store, directory, messages, pressure=False))
     pressure.extend(_wind_derivations(store, directory, messages, pressure=True))
@@ -252,7 +273,7 @@ def normalize(
             input_fingerprint_sha256=fingerprint,
             inputs=(parser_stage_manifest,),
             outputs=outputs,
-            configuration={"catalogue": "t017-spike-v1", "normalization": GFS_NORMALIZER_VERSION},
+            configuration={"catalogue": "t017-spike-v2", "normalization": GFS_NORMALIZER_VERSION},
             disposition="complete",
             started_at_utc=occurred_at_utc,
             completed_at_utc=occurred_at_utc,
@@ -348,11 +369,13 @@ def _interval(
     message: GfsNativeGridMessage,
     field_code: str,
     statistic_type: Literal["accumulation", "interval_average"],
+    native_sign_convention: str | None = None,
+    normalization_method: str | None = None,
 ) -> GfsCanonicalGridMessage:
     values = load_array(store, message.values)
     start = _add_hours(message.reference_at_utc, message.step_start_hours)
     end = _add_hours(message.reference_at_utc, message.step_end_hours)
-    method = (
+    method = normalization_method or (
         "gfs_kg_m2_to_mm"
         if field_code == "precipitation_amount_mm"
         else "gfs_interval_average_retained"
@@ -365,6 +388,7 @@ def _interval(
         interval_start_utc=start,
         interval_end_utc=end,
         statistic_type=statistic_type,
+        native_sign_convention=native_sign_convention,
         normalization_method=method,
     )
 
@@ -436,7 +460,9 @@ def _message(
     field_code: str,
     grain: str,
     values: ArtifactReference,
-    quality_state: Literal["real", "derived", "missing", "sentinel_missing", "invalid_payload"]
+    quality_state: Literal[
+        "real", "derived", "missing", "sentinel_missing", "invalid_payload", "unsupported"
+    ]
     | None = None,
     pressure_pa: float | None = None,
     dimension: str | None = None,
@@ -519,6 +545,7 @@ def _unit(field_code: str) -> str:
         "air_temperature_k": "K",
         "dew_point_temperature_k": "K",
         "relative_humidity_percent": "%",
+        "specific_humidity_kg_per_kg": "kg/kg",
         "air_pressure_pa": "Pa",
         "wind_u_m_s": "m/s",
         "wind_v_m_s": "m/s",
@@ -531,6 +558,8 @@ def _unit(field_code: str) -> str:
         "total_column_water_vapour_kg_m2": "kg/m2",
         "precipitation_amount_mm": "mm",
         "shortwave_radiation_w_m2": "W/m2",
+        "surface_sensible_heat_flux_upward_w_m2": "W/m2",
+        "surface_latent_heat_flux_upward_w_m2": "W/m2",
         "convective_available_potential_energy_j_per_kg": "J/kg",
         "convective_inhibition_magnitude_j_per_kg": "J/kg",
     }[field_code]

@@ -1,5 +1,5 @@
 {
-  "catalogueVersion": "t017-spike-v1",
+  "catalogueVersion": "t017-spike-v2",
   "generatedAt": "2026-08-16",
   "status": "verified_source_lock",
   "notForSafetyCriticalUse": true,
@@ -23,7 +23,7 @@
     "derivation_version",
     "quality_state"
   ],
-  "qualityStates": ["real", "derived", "missing", "sentinel_missing", "unavailable_run", "invalid_payload"],
+  "qualityStates": ["real", "derived", "missing", "sentinel_missing", "unavailable_run", "invalid_payload", "unsupported"],
   "canonicalFields": [
     {
       "name": "air_temperature_k",
@@ -115,36 +115,16 @@
       "notes": "Provider/model definition is mandatory and is not interchangeable with a derived PBL."
     },
     {
-      "name": "derived_boundary_layer_height_agl_m",
-      "unit": "m",
-      "kind": "derived",
-      "candidateMethods": ["bulk_richardson_v1", "potential_temperature_threshold_v1"]
-    },
-    {
       "name": "provider_cloud_base_agl_m",
       "unit": "m",
       "kind": "direct",
       "notes": "Do not alias to an LCL without provider evidence."
     },
     {
-      "name": "mixed_layer_lcl_agl_m",
-      "unit": "m",
-      "kind": "derived",
-      "candidateMethod": "project_mixed_layer_lcl_v1",
-      "notes": "Mix the lowest approximately 100 hPa; keep MSL counterpart and method inputs."
-    },
-    {
-      "name": "convective_velocity_scale_m_s",
-      "unit": "m/s",
-      "kind": "derived_optional",
-      "formula": "((g / theta_v) * surface_buoyancy_flux * boundary_layer_height)^(1/3)",
-      "notes": "Only calculate when flux sign/interval and PBL inputs are valid; do not substitute vertical velocity or sqrt(TKE)."
-    },
-    {
       "name": "specific_humidity_kg_per_kg",
       "unit": "kg/kg",
       "kind": "direct",
-      "notes": "Retain the source pressure level and vertical coordinate."
+      "notes": "Retain the source height or pressure level and vertical coordinate."
     },
     {
       "name": "total_column_water_vapour_kg_m2",
@@ -163,13 +143,6 @@
       "unit": "W/m2",
       "kind": "direct_or_deaccumulated",
       "notes": "Canonical sign is upward-positive. Negate ERA5/CERRA native downward-positive values after validating the statistic and interval."
-    },
-    {
-      "name": "surface_buoyancy_flux_kinematic_k_m_s",
-      "unit": "K m/s",
-      "kind": "derived_optional",
-      "formula": "sensible_heat_flux_upward / (air_density * cp) + 0.61 * theta_v * latent_heat_flux_upward / (air_density * latent_heat_of_vaporization)",
-      "notes": "Version constants and density/theta-v inputs; required before deriving convective velocity scale."
     },
     {
       "name": "turbulent_kinetic_energy_j_per_kg",
@@ -291,12 +264,16 @@
         "surface_weather_fields",
         "pressure_level_temperature",
         "pressure_level_relative_humidity",
+        "2m_specific_humidity",
+        "pressure_level_specific_humidity",
         "pressure_level_wind",
         "pressure_level_geopotential_height",
         "pressure_level_vertical_velocity",
         "convective_available_potential_energy_j_per_kg",
         "native_signed_cin",
-        "provider_boundary_layer_height_agl_m"
+        "provider_boundary_layer_height_agl_m",
+        "surface_sensible_heat_flux",
+        "surface_latent_heat_flux"
       ],
       "limitations": ["approximately_0p25_degree_grid", "grib_table_version_must_be_pinned", "accumulation_steps_must_be_deaccumulated"]
     },

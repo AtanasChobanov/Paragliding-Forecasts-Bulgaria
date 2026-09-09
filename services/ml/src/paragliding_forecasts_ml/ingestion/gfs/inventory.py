@@ -63,6 +63,7 @@ DEFAULT_SELECTORS: tuple[GfsSelector, ...] = (
     GfsSelector("tmp_2m", "TMP", "2 m above ground"),
     GfsSelector("dpt_2m", "DPT", "2 m above ground"),
     GfsSelector("rh_2m", "RH", "2 m above ground"),
+    GfsSelector("spfh_2m", "SPFH", "2 m above ground"),
     GfsSelector("ugrd_10m", "UGRD", "10 m above ground"),
     GfsSelector("vgrd_10m", "VGRD", "10 m above ground"),
     GfsSelector("gust_surface", "GUST", "surface"),
@@ -89,6 +90,20 @@ DEFAULT_SELECTORS: tuple[GfsSelector, ...] = (
         temporal_kind="average",
         minimum_lead_hours=1,
     ),
+    GfsSelector(
+        "shtfl",
+        "SHTFL",
+        "surface",
+        temporal_kind="average",
+        minimum_lead_hours=1,
+    ),
+    GfsSelector(
+        "lhtfl",
+        "LHTFL",
+        "surface",
+        temporal_kind="average",
+        minimum_lead_hours=1,
+    ),
     GfsSelector("pwat", "PWAT", "entire atmosphere (considered as a single layer)"),
     GfsSelector("cape_surface", "CAPE", "surface"),
     GfsSelector("cin_surface", "CIN", "surface"),
@@ -97,7 +112,7 @@ DEFAULT_SELECTORS: tuple[GfsSelector, ...] = (
     *(
         GfsSelector(f"{name.lower()}_{pressure}", name, f"{pressure} mb")
         for pressure in GFS_FEATURE_PROFILE_PRESSURES_HPA
-        for name in ("HGT", "TMP", "RH", "UGRD", "VGRD", "VVEL")
+        for name in ("HGT", "TMP", "RH", "SPFH", "UGRD", "VGRD", "VVEL")
     ),
 )
 

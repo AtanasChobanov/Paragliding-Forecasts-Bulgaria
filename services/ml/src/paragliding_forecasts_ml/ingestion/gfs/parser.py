@@ -31,7 +31,7 @@ from .profile import (
     GfsMessageProfile,
 )
 
-GFS_PARSER_VERSION = "gfs-parser/3"
+GFS_PARSER_VERSION = "gfs-parser/4"
 
 
 class GfsParserError(RuntimeError):

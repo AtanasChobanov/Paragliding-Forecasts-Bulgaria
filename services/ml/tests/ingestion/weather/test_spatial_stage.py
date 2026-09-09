@@ -20,6 +20,7 @@ from paragliding_forecasts_ml.ingestion.weather.artifacts import WeatherArtifact
 from paragliding_forecasts_ml.ingestion.weather.spatial import (
     CanonicalSiteSampleBatch,
     NeighbourhoodNodeBatch,
+    _sampled_field,
     sample_canonical_sites,
 )
 
@@ -251,6 +252,16 @@ def _run(root: Path, monkeypatch):
         store.verify_reference(neighbourhood_reference).read_bytes(), strict=True
     )
     return sample_reference, neighbourhood_reference, samples, neighbourhoods
+
+
+def test_spatial_sampler_preserves_unsupported_as_null_evidence(tmp_path) -> None:
+    _store, _input_manifest, batch = _fixture(tmp_path)
+    unsupported_grain = batch.surface_grains[0].model_copy(update={"quality_state": "unsupported"})
+
+    sampled = _sampled_field(unsupported_grain, 101_325.0)
+
+    assert sampled.quality_state == "unsupported"
+    assert sampled.canonical_value is None
 
 
 def test_spatial_stage_handles_multi_time_terrain_agl_exclusions_and_fingerprints(

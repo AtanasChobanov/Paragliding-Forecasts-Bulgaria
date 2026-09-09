@@ -23,7 +23,7 @@ from .sampling_policy import SamplingPolicy, load_sampling_policy
 from .serialization import canonical_json_bytes, sha256_bytes
 from .sites import SiteSamplingConfig, load_site_sampling_configs
 
-WEATHER_SPATIAL_VERSION = "weather-spatial/2"
+WEATHER_SPATIAL_VERSION = "weather-spatial/3"
 
 
 class SpatialSamplingError(RuntimeError):
@@ -67,7 +67,7 @@ class SampledField(AtmosphericContract):
     grain: Literal["surface", "convection", "interval", "pressure_level"]
     canonical_unit: str
     canonical_value: float | None
-    quality_state: Literal["real", "derived", "missing", "sentinel_missing"]
+    quality_state: Literal["real", "derived", "missing", "sentinel_missing", "unsupported"]
     dimension: str | None = None
     pressure_pa: float | None = Field(default=None, gt=0)
     interval_start_utc: str | None = None
@@ -369,12 +369,14 @@ def pressure_level_agl_heights(
 
 
 def _sampled_field(grain: GfsCanonicalGridMessage, value: float | None) -> SampledField:
-    quality: Literal["real", "derived", "missing", "sentinel_missing"]
-    quality = (
-        "sentinel_missing"
-        if value is None
-        else ("derived" if grain.quality_state == "derived" else "real")
-    )
+    quality: Literal["real", "derived", "missing", "sentinel_missing", "unsupported"]
+    if grain.quality_state == "unsupported":
+        quality = "unsupported"
+        value = None
+    elif value is None:
+        quality = "sentinel_missing"
+    else:
+        quality = "derived" if grain.quality_state == "derived" else "real"
     return SampledField(
         field_code=grain.field_code,
         grain=grain.grain,

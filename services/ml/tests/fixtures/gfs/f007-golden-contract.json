@@ -1,24 +1,26 @@
 {
-  "fixture_version": 2,
+  "fixture_version": 3,
   "description": "Offline golden parser/normalizer contract derived from the common pgrb2.0p25 source-contract verification on 2026-09-09; it intentionally stores identities and expected outputs, not raw grid data.",
   "parser": {
     "eccodes_version": "2.47.0",
-    "grib_profile_version": "noaa-gfs-grib2-table-v2",
+    "grib_profile_version": "noaa-gfs-grib2-table-v3",
     "centre": "kwbc",
     "tables_version": 2,
     "local_tables_version": 1,
-    "selected_selector_count": 99,
+    "selected_selector_count": 115,
     "hpbl": {"discipline": 0, "parameter_category": 3, "parameter_number": 196, "type_of_level": "surface", "level": 0, "native_unit": "m"},
     "apcp": {"step_type": "accum", "statistic_type": "1", "start_step_hours": 6, "end_step_hours": 7},
-    "dswrf": {"step_type": "avg", "statistic_type": "0", "start_step_hours": 6, "end_step_hours": 7}
+    "dswrf": {"step_type": "avg", "statistic_type": "0", "start_step_hours": 6, "end_step_hours": 7},
+    "shtfl": {"step_type": "avg", "statistic_type": "0", "start_step_hours": 6, "end_step_hours": 7},
+    "lhtfl": {"step_type": "avg", "statistic_type": "0", "start_step_hours": 6, "end_step_hours": 7}
   },
   "normalizer": {
-    "surface_grain_count": 21,
-    "pressure_level_grain_count": 104,
-    "canonical_grain_count": 125,
+    "surface_grain_count": 24,
+    "pressure_level_grain_count": 117,
+    "canonical_grain_count": 141,
     "source_unsupported_selectors": ["gust_surface"],
     "model_elevation_selector": "orog",
-    "quality_states": ["real", "derived", "missing", "sentinel_missing", "invalid_payload"],
+    "quality_states": ["real", "derived", "missing", "sentinel_missing", "invalid_payload", "unsupported"],
     "cin_native_sign_convention": "signed_non_positive",
     "precipitation_method": "gfs_kg_m2_to_mm"
   }

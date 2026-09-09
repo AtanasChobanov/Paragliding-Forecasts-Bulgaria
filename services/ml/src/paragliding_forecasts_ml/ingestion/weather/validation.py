@@ -25,12 +25,13 @@ from .artifacts import WeatherArtifactStore, stage_input_fingerprint
 from .serialization import canonical_json_bytes, sha256_bytes
 from .spatial import CanonicalSiteSampleBatch, SiteAlignedSample
 
-WEATHER_VALIDATOR_VERSION = "source-aware-weather-validator/3"
+WEATHER_VALIDATOR_VERSION = "source-aware-weather-validator/4"
 POLICY_RESOURCE = "weather-validation-policy.json"
 FIELD_RANGES: dict[str, tuple[float, float]] = {
     "air_temperature_k": (150.0, 350.0),
     "dew_point_temperature_k": (150.0, 350.0),
     "relative_humidity_percent": (0.0, 100.0),
+    "specific_humidity_kg_per_kg": (0.0, 1.0),
     "cloud_cover_percent": (0.0, 100.0),
     "air_pressure_pa": (1_000.0, 110_000.0),
     "geopotential_height_msl_m": (-500.0, 30_000.0),
@@ -110,9 +111,15 @@ class WeatherValidationReport(AtmosphericContract):
     disposition: Literal["complete", "quarantined"]
 
 
+class _SurfaceFieldRequirement(AtmosphericContract):
+    field_code: str
+    dimension: str | None = None
+
+
 class _SourcePolicy(AtmosphericContract):
     source_kind: Literal["forecast", "reanalysis"]
     lead_hours: Literal["required", "forbidden"]
+    required_surface_fields: tuple[_SurfaceFieldRequirement, ...] = ()
     required_profile_pressures_pa: tuple[int, ...] = Field(min_length=1)
     required_profile_field_codes: tuple[str, ...] = Field(min_length=1)
     nullable_field_codes: tuple[str, ...]
@@ -133,7 +140,16 @@ def load_validation_policy() -> tuple[_ValidationPolicy, str]:
     )
     try:
         policy = _ValidationPolicy.model_validate_json(payload, strict=True)
-    except Exception as error:
+        catalogue = load_catalogue()
+        for source_policy in policy.sources.values():
+            for requirement in source_policy.required_surface_fields:
+                catalogue.validate_field_code(requirement.field_code)
+            for field_code in (
+                *source_policy.required_profile_field_codes,
+                *source_policy.nullable_field_codes,
+            ):
+                catalogue.validate_field_code(field_code)
+    except (CatalogueError, ValueError, TypeError) as error:
         raise WeatherValidationError("Packaged weather validation policy is invalid.") from error
     return policy, sha256_bytes(payload)
 
@@ -491,6 +507,18 @@ def _check_sample(
                 sample,
             )
         )
+    surface_by_identity = {(field.field_code, field.dimension): field for field in sample.fields}
+    for requirement in policy.required_surface_fields:
+        field = surface_by_identity.get((requirement.field_code, requirement.dimension))
+        if field is None or field.canonical_value is None:
+            quarantine.append(
+                _reason(
+                    "required_surface_field_missing",
+                    "Required source surface field is missing.",
+                    sample,
+                    requirement.field_code,
+                )
+            )
     expected_pressures = tuple(sorted(policy.required_profile_pressures_pa, reverse=True))
     actual_pressures = tuple(profile.pressure_pa for profile in sample.profile_levels)
     if actual_pressures != tuple(sorted(actual_pressures, reverse=True)) or len(

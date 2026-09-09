@@ -23,6 +23,7 @@ _FIELD_VALUES = {
     "geopotential_height_msl_m": 1500.0,
     "air_temperature_k": 280.0,
     "relative_humidity_percent": 50.0,
+    "specific_humidity_kg_per_kg": 0.005,
     "wind_u_m_s": 1.0,
     "wind_v_m_s": 1.0,
 }
@@ -30,12 +31,19 @@ _FIELD_UNITS = {
     "geopotential_height_msl_m": "m",
     "air_temperature_k": "K",
     "relative_humidity_percent": "%",
+    "specific_humidity_kg_per_kg": "kg/kg",
     "wind_u_m_s": "m/s",
     "wind_v_m_s": "m/s",
 }
 
 
-def _field(field_code: str, value: float | None, *, pressure_pa: float | None = None):
+def _field(
+    field_code: str,
+    value: float | None,
+    *,
+    pressure_pa: float | None = None,
+    dimension: str | None = None,
+):
     return SampledField(
         field_code=field_code,
         grain="pressure_level" if pressure_pa is not None else "surface",
@@ -43,6 +51,7 @@ def _field(field_code: str, value: float | None, *, pressure_pa: float | None = 
         canonical_value=value,
         quality_state="real" if value is not None else "missing",
         pressure_pa=pressure_pa,
+        dimension=dimension,
         source_selector_keys=(field_code,),
         source_raw_artifact_keys=("raw",),
         source_native_message_references=("message",),
@@ -80,7 +89,10 @@ def _sample(*, lead_hours: int | None = 6, pressures=GFS_PROFILE_PRESSURES_PA):
             model_minus_site_elevation_m=50.0,
             absolute_mismatch_m=50.0,
         ),
-        fields=(_field("air_temperature_k", 280.0),),
+        fields=(
+            _field("air_temperature_k", 280.0),
+            _field("specific_humidity_kg_per_kg", 0.005, dimension="2m_above_ground"),
+        ),
         profile_levels=profiles,
     )
 
@@ -104,11 +116,26 @@ def test_policy_requires_gfs_core_profiles_and_allows_era5_without_lead() -> Non
     assert valid_era5 == []
 
 
+def test_policy_quarantines_missing_required_2m_specific_humidity() -> None:
+    policy, _ = load_validation_policy()
+    sample = _sample().model_copy(update={"fields": (_field("air_temperature_k", 280.0),)})
+
+    quarantined, missing = _check_sample(sample, policy.sources["noaa_gfs_0p25_aws_grib2"])
+
+    assert missing == []
+    assert [reason.code for reason in quarantined] == ["required_surface_field_missing"]
+
+
 def test_gfs_validation_policy_matches_the_pinned_common_object_profile() -> None:
     policy, _ = load_validation_policy()
 
     assert all(
         source.required_profile_pressures_pa == GFS_PROFILE_PRESSURES_PA
+        for source in policy.sources.values()
+    )
+    assert all(
+        source.required_surface_fields[0].field_code == "specific_humidity_kg_per_kg"
+        and source.required_surface_fields[0].dimension == "2m_above_ground"
         for source in policy.sources.values()
     )
 

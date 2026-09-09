@@ -38,7 +38,7 @@ def _metadata() -> dict[str, object]:
 
 
 def test_profile_pins_every_collected_selector_and_numeric_hpbl_identity() -> None:
-    assert len(PROFILE_BY_SELECTOR) == 99
+    assert len(PROFILE_BY_SELECTOR) == 115
     assert PROFILE_BY_SELECTOR["hpbl"].number == 196
     assert PROFILE_BY_SELECTOR["hpbl"].native_unit_override == "m"
 
@@ -71,6 +71,41 @@ def test_parser_rejects_wrong_grib_table_and_valid_time() -> None:
             wrong_time,
             PROFILE_BY_SELECTOR["hpbl"],
             "hpbl",
+            "2026-08-21T00:00:00Z",
+            "2026-08-21T07:00:00Z",
+            7,
+        )
+
+
+def test_parser_pins_specific_humidity_and_upward_flux_identities() -> None:
+    _validate_identity(
+        _metadata()
+        | {
+            "parameterCategory": 1,
+            "parameterNumber": 0,
+            "typeOfLevel": "heightAboveGround",
+            "level": 2,
+        },
+        PROFILE_BY_SELECTOR["spfh_2m"],
+        "spfh_2m",
+        "2026-08-21T00:00:00Z",
+        "2026-08-21T07:00:00Z",
+        7,
+    )
+    for selector_key, parameter_number in (("shtfl", 11), ("lhtfl", 10)):
+        _validate_identity(
+            _metadata()
+            | {
+                "parameterCategory": 0,
+                "parameterNumber": parameter_number,
+                "typeOfLevel": "surface",
+                "level": 0,
+                "stepType": "avg",
+                "typeOfStatisticalProcessing": 0,
+                "startStep": 6,
+            },
+            PROFILE_BY_SELECTOR[selector_key],
+            selector_key,
             "2026-08-21T00:00:00Z",
             "2026-08-21T07:00:00Z",
             7,
@@ -129,5 +164,6 @@ def test_offline_f007_golden_contract_locks_parser_and_normalizer_outputs() -> N
         "missing",
         "sentinel_missing",
         "invalid_payload",
+        "unsupported",
     ]
     assert GfsParserError.quality_state == "invalid_payload"
