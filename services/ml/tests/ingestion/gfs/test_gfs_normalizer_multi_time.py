@@ -91,7 +91,7 @@ def test_normalizer_keeps_multi_valid_time_arrays_unique_and_promotes_orography(
     tmp_path, monkeypatch
 ) -> None:
     store = WeatherArtifactStore.create_fresh(RUN_KEY, project_root=tmp_path)
-    directory = store.begin_stage("parser", "gfs-parser/2", "c" * 64)
+    directory = store.begin_stage("parser", "gfs-parser/3", "c" * 64)
     parser_manifest = store.write_stage_bytes(
         directory,
         "parser-stage-manifest.json",

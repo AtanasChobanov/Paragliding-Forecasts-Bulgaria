@@ -25,7 +25,7 @@ from .artifacts import WeatherArtifactStore, stage_input_fingerprint
 from .serialization import canonical_json_bytes, sha256_bytes
 from .spatial import CanonicalSiteSampleBatch, SiteAlignedSample
 
-WEATHER_VALIDATOR_VERSION = "source-aware-weather-validator/2"
+WEATHER_VALIDATOR_VERSION = "source-aware-weather-validator/3"
 POLICY_RESOURCE = "weather-validation-policy.json"
 FIELD_RANGES: dict[str, tuple[float, float]] = {
     "air_temperature_k": (150.0, 350.0),

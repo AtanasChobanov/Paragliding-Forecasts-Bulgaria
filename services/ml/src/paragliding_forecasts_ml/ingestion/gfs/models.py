@@ -10,7 +10,7 @@ from ..atmosphere.contracts import ArtifactReference, AtmosphericContract, valid
 
 GFS_SOURCE_ID = "noaa_gfs_0p25_aws_grib2"
 GFS_BUCKET_URL = "https://noaa-gfs-bdp-pds.s3.amazonaws.com"
-GFS_COLLECTOR_VERSION = "gfs-collector/2"
+GFS_COLLECTOR_VERSION = "gfs-collector/3"
 
 
 class GfsRequest(AtmosphericContract):

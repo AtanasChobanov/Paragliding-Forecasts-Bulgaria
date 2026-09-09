@@ -4,6 +4,7 @@ import json
 import sqlite3
 from pathlib import Path
 
+from paragliding_forecasts_ml.ingestion.gfs.profile import GFS_FEATURE_PROFILE_PRESSURES_HPA
 from paragliding_forecasts_ml.ingestion.weather.artifacts import WeatherArtifactStore
 from paragliding_forecasts_ml.ingestion.weather.spatial import (
     SampledField,
@@ -48,11 +49,10 @@ def _field(field_code: str, value: float | None, *, pressure_pa: float | None = 
     )
 
 
-def _sample(
-    *,
-    lead_hours: int | None = 6,
-    pressures=(100000, 97500, 95000, 92500, 90000, 87500, 85000, 80000, 75000, 70000),
-):
+GFS_PROFILE_PRESSURES_PA = tuple(level * 100 for level in GFS_FEATURE_PROFILE_PRESSURES_HPA)
+
+
+def _sample(*, lead_hours: int | None = 6, pressures=GFS_PROFILE_PRESSURES_PA):
     profiles = tuple(
         SampledProfileLevel(
             pressure_pa=pressure,
@@ -95,7 +95,7 @@ def test_policy_requires_gfs_core_profiles_and_allows_era5_without_lead() -> Non
     valid_era5, _ = _check_sample(
         _sample(
             lead_hours=None,
-            pressures=(100000, 97500, 95000, 92500, 90000, 87500, 85000, 80000, 75000, 70000),
+            pressures=GFS_PROFILE_PRESSURES_PA,
         ),
         policy.sources["copernicus_era5"],
     )
@@ -104,12 +104,21 @@ def test_policy_requires_gfs_core_profiles_and_allows_era5_without_lead() -> Non
     assert valid_era5 == []
 
 
+def test_gfs_validation_policy_matches_the_pinned_common_object_profile() -> None:
+    policy, _ = load_validation_policy()
+
+    assert all(
+        source.required_profile_pressures_pa == GFS_PROFILE_PRESSURES_PA
+        for source in policy.sources.values()
+    )
+
+
 def test_policy_quarantines_reanalysis_with_forecast_lead() -> None:
     policy, _ = load_validation_policy()
     reasons, _ = _check_sample(
         _sample(
             lead_hours=6,
-            pressures=(100000, 97500, 95000, 92500, 90000, 87500, 85000, 80000, 75000, 70000),
+            pressures=GFS_PROFILE_PRESSURES_PA,
         ),
         policy.sources["copernicus_era5"],
     )
@@ -178,7 +187,7 @@ def test_legacy_s05_v1_samples_are_loaded_from_json_without_coverage_status(tmp_
 
 def test_below_terrain_profile_exclusion_is_missing_not_quarantined() -> None:
     policy, _ = load_validation_policy()
-    sample = _sample(pressures=(100000, 97500, 95000, 90000, 87500, 85000, 80000, 75000, 70000))
+    sample = _sample(pressures=tuple(item for item in GFS_PROFILE_PRESSURES_PA if item != 92500))
 
     quarantined, missing = _check_sample(
         sample,

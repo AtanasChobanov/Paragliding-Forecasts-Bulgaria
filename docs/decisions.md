@@ -49,10 +49,11 @@ consequences. Temporary progress and Git state belong in
 | DEC-034     | Use one packaged atmospheric catalogue and durable stage protocol               | Accepted   | 2026-08-21 |
 | DEC-035     | Pin GFS GRIB parser identity and preserve only canonical weather quality states | Accepted   | 2026-08-21 |
 | DEC-036     | Use reviewed site coordinates with bilinear points and radius evidence          | Accepted   | 2026-08-24 |
-| DEC-037     | Validate weather sources through a hashed registry and policy                  | Accepted   | 2026-08-26 |
-| DEC-038     | Preserve immutable weather artifacts through explicit stage supersession       | Accepted   | 2026-08-26 |
+| DEC-037     | Validate weather sources through a hashed registry and policy                   | Accepted   | 2026-08-26 |
+| DEC-038     | Preserve immutable weather artifacts through explicit stage supersession        | Accepted   | 2026-08-26 |
 | DEC-039     | Separate hourly weather facts from daily feature builds                         | Accepted   | 2026-09-08 |
-| DEC-040     | Fix S07 daily window, profile band, and accepted derivations                    | Accepted   | 2026-09-08 |
+| DEC-040     | Fix S07 daily window, profile band, and accepted derivations                    | Superseded | 2026-09-08 |
+| DEC-041     | Correct the common GFS S07 profile source contract                              | Accepted   | 2026-09-09 |
 
 ## Individual decisions
 
@@ -1554,9 +1555,9 @@ Use packaged `source-aware-weather-validation-policy/1`, keyed by registry
 source code. S06 is offline-only and validates hash-linked S05 artifacts against
 source/kind, payload media/shape evidence, canonical unit/range/time/lead,
 profile order/duplicates/core null policy, and terrain mismatch. GFS requires
-a lead and, as superseded by DEC-040, the
-1000/975/950/925/900/875/850/800/750/700 hPa profile band; ERA5 requires the
-same 1000--700 hPa profile set and no lead. Accepted, missing, and quarantined
+a lead and, as superseded by DEC-041, the
+1000/975/950/925/900/850/800/750/700/650/600/550/500 hPa profile grain; ERA5 requires
+the same profile grain and no lead. Accepted, missing, and quarantined
 artifacts are immutable;
 quarantine returns exit `2` and blocks S07. S05 v2 no longer assigns a coverage
 status; S06 owns that disposition while still reading legacy S05 v1 artifacts.
@@ -1739,6 +1740,71 @@ and daily collection orchestration; it is not another database redesign.
 **Related files:** [`T-018-S07-implementaion-plan.md`](T-018-S07-implementaion-plan.md),
 [`profile.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/profile.py),
 [`weather-validation-policy.json`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/resources/weather-validation-policy.json).
+
+### DEC-041 - Correct the common GFS S07 profile source contract
+
+**Status:** Accepted
+
+**Date:** 2026-09-09
+
+**Supersedes:** The GFS profile-band and mean-wind-speed wording in DEC-040.
+
+**Context:** DEC-040 required 875 hPa in the common
+`gfs.tCCz.pgrb2.0p25.fFFF` object. The official NOAA f003 inventory does not
+publish the required HGT/TMP/RH/UGRD/VGRD/VVEL messages at 875 hPa in that
+object, so the existing selector fails closed before collection. Its 700 hPa
+ceiling also cannot conservatively promise a 3000 m site-AGL boundary at all
+reviewed Bulgarian sites.
+
+**Decision:** Keep one GFS `pgrb2.0p25` object per valid instant; do not join
+`pgrb2b` merely to obtain 875 hPa. Ignore 875 hPa and require the ordered
+profile pressure grain
+`1000/975/950/925/900/850/800/750/700/650/600/550/500 hPa` for the current
+HGT/TMP/RH/UGRD/VGRD/VVEL GFS profile inputs. The 500 hPa top is conservative
+bracketing evidence for the fixed 1500 and 3000 m AGL feature boundaries, not
+a new daily pressure-band feature.
+
+The source-aware validation policy records the same profile pressure grain for
+both registered source contracts so a source-neutral S07 build has one required
+vertical shape. This slice changes only the implemented GFS collector/parser/
+normalizer path; the future ERA5 adapter must supply that already-declared
+shape through its own source implementation.
+
+Version the changed immutable boundaries: GFS collector `gfs-collector/3`,
+parser `gfs-parser/3`, numeric GRIB profile
+`noaa-gfs-grib2-table-v2`, normalizer `gfs-normalizer/3`, validation policy
+`source-aware-weather-validation-policy/2`, and validator
+`source-aware-weather-validator/3`. This preserves prior artifact boundaries
+and causes changed upstream evidence to be explicitly superseded rather than
+rewritten.
+
+For daily wind semantics, mean U/V produces only the resultant direction.
+`wind_speed_*_mean_m_s` is the arithmetic time/height mean of scalar
+`hypot(u, v)`, not `hypot(mean(u), mean(v))`; the separately stored component
+means retain the resultant-vector information.
+
+**Consequences:** Selector, numeric parser identity, canonical normalization,
+spatial input, source validation, fixtures, and tests use one 13-level
+contract and reject 875 hPa. A source artifact that lacks a required level is
+quarantined or reported as the existing explicit below-terrain missing state;
+no level is substituted or extrapolated. No database migration is needed for
+this source-contract correction.
+
+The next source-input checkpoint still has to add direct 2 m and
+pressure-level SPFH, and verify/pin SHTFL/LHTFL interval/sign metadata before
+S07 uses those accepted feature inputs. It must not infer either quantity from
+other fields.
+
+**Evidence:** [NOAA GFS pgrb2.0p25 f003 inventory](https://www.nco.ncep.noaa.gov/pmb/products/gfs/gfs.t00z.pgrb2.0p25.f003.shtml)
+shows 500--650 hPa HGT/TMP/RH/SPFH/VVEL/UGRD/VGRD and no 875 hPa entries;
+its surface section identifies 2 m SPFH and `SHTFL`/`LHTFL` as interval-average
+fluxes.
+
+**Related files:** [`profile.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/profile.py),
+[`inventory.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/inventory.py),
+[`weather-validation-policy.json`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/resources/weather-validation-policy.json),
+[`T-018-S07-implementaion-plan.md`](T-018-S07-implementaion-plan.md),
+[`handoff.md`](handoff.md).
 
 ## Open decisions
 

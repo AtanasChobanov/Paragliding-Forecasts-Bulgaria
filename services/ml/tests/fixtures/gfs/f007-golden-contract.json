@@ -1,21 +1,21 @@
 {
-  "fixture_version": 1,
-  "description": "Offline golden parser/normalizer contract derived from the bounded NOAA GFS f007 verification on 2026-08-21; it intentionally stores identities and expected outputs, not raw grid data.",
+  "fixture_version": 2,
+  "description": "Offline golden parser/normalizer contract derived from the common pgrb2.0p25 source-contract verification on 2026-09-09; it intentionally stores identities and expected outputs, not raw grid data.",
   "parser": {
     "eccodes_version": "2.47.0",
-    "grib_profile_version": "noaa-gfs-grib2-table-v1",
+    "grib_profile_version": "noaa-gfs-grib2-table-v2",
     "centre": "kwbc",
     "tables_version": 2,
     "local_tables_version": 1,
-    "selected_selector_count": 81,
+    "selected_selector_count": 99,
     "hpbl": {"discipline": 0, "parameter_category": 3, "parameter_number": 196, "type_of_level": "surface", "level": 0, "native_unit": "m"},
     "apcp": {"step_type": "accum", "statistic_type": "1", "start_step_hours": 6, "end_step_hours": 7},
     "dswrf": {"step_type": "avg", "statistic_type": "0", "start_step_hours": 6, "end_step_hours": 7}
   },
   "normalizer": {
     "surface_grain_count": 21,
-    "pressure_level_grain_count": 80,
-    "canonical_grain_count": 101,
+    "pressure_level_grain_count": 104,
+    "canonical_grain_count": 125,
     "source_unsupported_selectors": ["gust_surface"],
     "model_elevation_selector": "orog",
     "quality_states": ["real", "derived", "missing", "sentinel_missing", "invalid_payload"],

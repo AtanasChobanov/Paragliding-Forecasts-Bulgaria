@@ -88,14 +88,34 @@ def test_f007_selectors_use_native_levels_and_temporal_semantics() -> None:
     assert _default_selector("pwat").level.endswith("(considered as a single layer)")
 
 
-def test_feature_profile_selectors_cover_the_full_1000_to_700_hpa_band() -> None:
+def test_feature_profile_selectors_cover_the_common_pgrb2_1000_to_500_hpa_band() -> None:
+    expected_pressures = {
+        1000,
+        975,
+        950,
+        925,
+        900,
+        850,
+        800,
+        750,
+        700,
+        650,
+        600,
+        550,
+        500,
+    }
+    profile_fields = ("hgt", "tmp", "rh", "ugrd", "vgrd", "vvel")
     selected_pressures = {
-        int(selector.key.rsplit("_", 1)[1])
-        for selector in DEFAULT_SELECTORS
-        if selector.key.startswith("tmp_") and selector.key != "tmp_2m"
+        field: {
+            int(selector.key.rsplit("_", 1)[1])
+            for selector in DEFAULT_SELECTORS
+            if selector.key.startswith(f"{field}_") and selector.key.rsplit("_", 1)[1].isdigit()
+        }
+        for field in profile_fields
     }
 
-    assert selected_pressures == {1000, 975, 950, 925, 900, 875, 850, 800, 750, 700}
+    assert selected_pressures == {field: expected_pressures for field in profile_fields}
+    assert all(875 not in pressures for pressures in selected_pressures.values())
 
 
 def test_apcp_collects_indistinguishable_shortest_interval_ties() -> None:

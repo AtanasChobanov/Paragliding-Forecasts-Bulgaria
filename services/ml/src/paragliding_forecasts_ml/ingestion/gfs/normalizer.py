@@ -19,7 +19,7 @@ from .parser import (
 )
 from .profile import GFS_FEATURE_PROFILE_PRESSURES_HPA
 
-GFS_NORMALIZER_VERSION = "gfs-normalizer/2"
+GFS_NORMALIZER_VERSION = "gfs-normalizer/3"
 
 
 class GfsCanonicalGridDefinition(AtmosphericContract):

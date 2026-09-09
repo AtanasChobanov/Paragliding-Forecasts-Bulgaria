@@ -10,7 +10,7 @@ slice, not a project history. Read, in order:
 3. This handoff for the implemented T-018 slice boundaries.
 4. The relevant sections of `docs/project-brief.md` and `docs/architecture.md`
    for product and system constraints.
-5. DEC-031 through DEC-040 in `docs/decisions.md` for accepted weather-source,
+5. DEC-031 through DEC-041 in `docs/decisions.md` for accepted weather-source,
    schema, protocol, parser, and spatial-sampling decisions.
 6. Git history and the owning code/tests for detailed prior implementation and
    validation evidence.
@@ -20,13 +20,13 @@ Record durable design choices in `docs/decisions.md`, task status in
 
 ## Current state (2026-09-09)
 
-| Field | Value |
-| --- | --- |
-| Branch | `feature/T-018-weather-ingestion` |
-| Task status | `T-018` is In Progress; S01–S06 are complete, S07–S10 remain. |
-| Next focus | Implement S07 feature building from S06 accepted artifacts, using the approved daily schema and plan. |
-| Local storage | SQLite selected by `DATABASE_URL`; local databases, raw source data, and interim artifacts are ignored. |
-| Migrations | Earlier weather/configuration migrations and the daily-weather reshape are applied locally. Latest applied: `20260908181331_refactor_daily_weather_persistence`, `20260908202837_correct_daily_cin_aggregate`, and `20260908202923_restore_daily_feature_snapshot_strict`. |
+| Field         | Value                                                                                                                                                                                                                                                                      |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Branch        | `feature/T-018-weather-ingestion`                                                                                                                                                                                                                                          |
+| Task status   | `T-018` is In Progress; S01–S06 are complete, S07–S10 remain.                                                                                                                                                                                                              |
+| Next focus    | Implement S07 feature building from S06 accepted artifacts, using the approved daily schema and plan.                                                                                                                                                                      |
+| Local storage | SQLite selected by `DATABASE_URL`; local databases, raw source data, and interim artifacts are ignored.                                                                                                                                                                    |
+| Migrations    | Earlier weather/configuration migrations and the daily-weather reshape are applied locally. Latest applied: `20260908181331_refactor_daily_weather_persistence`, `20260908202837_correct_daily_cin_aggregate`, and `20260908202923_restore_daily_feature_snapshot_strict`. |
 
 ## T-018 scope and non-negotiable boundaries
 
@@ -128,7 +128,9 @@ rename rebuild omitted it. Fresh temporary-database migration, idempotence,
 strict-table, foreign-key, constraint, and guard tests pass.
 
 GFS profile selection now covers
-1000/975/950/925/900/875/850/800/750/700 hPa for HGT/TMP/RH/UGRD/VGRD/VVEL.
+1000/975/950/925/900/850/800/750/700/650/600/550/500 hPa for
+HGT/TMP/RH/UGRD/VGRD/VVEL; 875 hPa is deliberately excluded because the common
+`pgrb2.0p25` object does not provide it.
 The old GFS-only 925/850/700 validation band is superseded, enabling S07's
 strict AGL layer interpolation without a source-specific profile path. The
 current `gfs-collect` CLI still uses repeatable `--valid-at` and a 128 MiB
@@ -140,6 +142,18 @@ weather migrations and a second `db:migrate` was idempotent. Drizzle
 `db:check`, all 29 database tests, all 139 ML tests, ML Ruff check and format
 check, workspace TypeScript typecheck, and `git diff --check` passed. These
 changes are intentionally uncommitted for owner review.
+
+### S07 source-contract correction — applied and verified
+
+DEC-041 supersedes the impossible GFS 875 hPa selector in DEC-040. The pipeline
+uses only the common `pgrb2.0p25` object and its 13-level
+1000/975/950/925/900/850/800/750/700/650/600/550/500 hPa band for the current
+HGT/TMP/RH/UGRD/VGRD/VVEL profile inputs. The collector, numeric GRIB parser,
+normalizer, and validation boundary were versioned to preserve prior immutable
+evidence; the GFS and ERA5 validation-policy contracts declare the same vertical
+grain, though the ERA5 adapter remains S09 work. Focused GFS/weather ingestion
+tests, Ruff format/lint, and `git diff --check` pass. This was a source-contract
+change only: no SQLite migration was necessary.
 
 ### S02 — durable atmospheric protocol
 
@@ -240,9 +254,9 @@ an existing validated boundary only when its validator version and spatial input
 are current; otherwise it appends a versioned `validated` event that explicitly
 supersedes the prior validation boundary.
 
-S06 owns coverage disposition. GFS has a required lead and the
-1000/975/950/925/900/875/850/800/750/700 hPa profile policy; ERA5 has no lead
-and requires the same 1000--700 hPa profile band. No
+S06 owns coverage disposition. GFS has a required lead and both registered
+sources require the DEC-041 1000/975/950/925/900/850/800/750/700/650/600/550/500
+hPa profile grain; ERA5 has no lead. No
 invented model ID/version, captured HTTP header, manual alias approval, or
 endpoint override is used. `weather_sources` is a registry/allow-list and
 provenance snapshot; adapters retain their pinned transport endpoints.

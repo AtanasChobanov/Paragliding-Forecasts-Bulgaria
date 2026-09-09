@@ -4,11 +4,28 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-GFS_GRIB_PROFILE_VERSION = "noaa-gfs-grib2-table-v1"
+GFS_GRIB_PROFILE_VERSION = "noaa-gfs-grib2-table-v2"
 GFS_CENTRE = "kwbc"
 GFS_TABLES_VERSION = 2
 GFS_LOCAL_TABLES_VERSION = 1
-GFS_FEATURE_PROFILE_PRESSURES_HPA = (1000, 975, 950, 925, 900, 875, 850, 800, 750, 700)
+# The common pgrb2.0p25 object does not publish 875 hPa. Keep this exact
+# contract in descending pressure order; collector, parser, and normalizer all
+# consume it, while source-aware validation is parity-tested against it.
+GFS_FEATURE_PROFILE_PRESSURES_HPA = (
+    1000,
+    975,
+    950,
+    925,
+    900,
+    850,
+    800,
+    750,
+    700,
+    650,
+    600,
+    550,
+    500,
+)
 
 
 @dataclass(frozen=True)
