@@ -177,6 +177,42 @@ def test_local_date_window_is_dst_aware_and_includes_eleven_instants() -> None:
     )
 
 
+def test_resolved_local_date_plan_allows_multiple_ranges_per_valid_instant() -> None:
+    from paragliding_forecasts_ml.ingestion.gfs.models import GfsPlannedRange, GfsResolvedPlan
+
+    instants = cli.sofia_window_instants("2026-06-15")
+    ranges = tuple(
+        GfsPlannedRange(
+            lead_hours=24 + index,
+            valid_at_utc=instant,
+            grib_url="https://example.invalid/gfs",
+            index_url="https://example.invalid/gfs.idx",
+            index_sha256="a" * 64,
+            object_content_length=10_000,
+            object_last_modified_utc="2026-06-14T00:00:00Z",
+            byte_start=0,
+            byte_end=100,
+            selector_keys=("one",),
+            message_numbers=(1,),
+            forecast_descriptors=("anl",),
+        )
+        for index, instant in enumerate(instants)
+        for _ in range(2)
+    )
+    resolved = GfsResolvedPlan(
+        gfs_request_schema_version=2,
+        selection_mode="explicit",
+        resolved_run_at_utc="2026-06-14T00:00:00Z",
+        available_at_utc="2026-06-14T00:00:00Z",
+        source_product_key="gfs.t00z.pgrb2.0p25",
+        ranges=ranges,
+        target_local_date="2026-06-15",
+        flying_window_version="sofia-flying-window/1",
+    )
+
+    assert resolved.target_local_date == "2026-06-15"
+
+
 def test_local_date_requires_extended_iso_format() -> None:
     try:
         cli.sofia_window_instants("20260615")

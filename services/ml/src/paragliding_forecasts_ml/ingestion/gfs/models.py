@@ -144,7 +144,7 @@ class GfsResolvedPlan(AtmosphericContract):
                 "Resolved GFS local-date request uses an unknown flying-window version."
             )
         expected = sofia_window_instants(self.target_local_date)
-        if tuple(sorted(item.valid_at_utc for item in self.ranges)) != expected:
+        if tuple(sorted({item.valid_at_utc for item in self.ranges})) != expected:
             raise ValueError("Resolved GFS local-date ranges must equal its Sofia flying window.")
         return self
 

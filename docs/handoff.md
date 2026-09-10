@@ -255,11 +255,12 @@ has an additive schema-v2 daily form and collector `gfs-collector/5`; prior
 schema-v1 explicit-UTC plans stay readable. Summer/winter DST, strict date
 format, provenance, and CLI exclusivity tests pass.
 
-No larger default byte cap was guessed. A real bounded eleven-hour NOAA
-inventory is still needed to select a reviewed explicit daily cap before a
-live full-day collection; it is an external operational measurement, not a
-fabricated configuration value. The user-owned S07 implementation plan remains
-unstaged.
+No larger default byte cap was guessed. The bounded NOAA HEAD/`.idx` check on
+2026-09-10 resolved `2026-09-10T00:00:00Z` for local date `2026-09-11`:
+594 selected ranges require `1,168,112,596` bytes (`1114 MiB` minimum). It
+downloaded no payload and wrote no artifact. `--maximum-total-mib 1114` is
+reviewed only for that exact replay scope; another local date/run needs a new
+bounded measurement. The user-owned S07 implementation plan remains unstaged.
 ### S02 — durable atmospheric protocol
 
 The sole machine-readable T-017 field catalogue is the packaged resource

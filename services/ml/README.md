@@ -33,8 +33,12 @@ through parsing, normalization, canonical sampling, and source validation so
 the S07 builder can bracket AGL layers without a source-specific path.
 
 The default `--maximum-total-mib 128` remains a fail-closed safety limit. A
-full 11-hour, full-profile inventory must be measured before a reviewed larger
-daily cap is selected; do not parallelise requests merely to bypass it.
+bounded NOAA HEAD/`.idx` measurement on 2026-09-10 for local date `2026-09-11`
+resolved the `2026-09-10T00:00:00Z` run, selected 594 ranges, and required
+`1,168,112,596` bytes (`1114 MiB` minimum). It downloaded no GRIB payload and
+wrote no artifact. Use `--maximum-total-mib 1114` only when replaying that exact
+resolved day/run; measure and review each different daily scope rather than
+raising the global default or parallelising around it.
 
 Operational use should request the 10:00--20:00 `Europe/Sofia` thermal-XC window
 for today through D+2 from one selected complete GFS cycle. Historical/training

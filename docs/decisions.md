@@ -1926,8 +1926,11 @@ readable. One local day stays in one selected GFS cycle/run.
 
 **Consequences:** DST conversion cannot be silently supplied by callers.
 The 128 MiB default remains fail-closed; no larger default is inferred here.
-A real bounded eleven-hour inventory still must establish a reviewed explicit
-daily `--maximum-total-mib` before live operational collection.
+The bounded 2026-09-10 inventory check for local date `2026-09-11` resolved
+the `2026-09-10T00:00:00Z` GFS cycle, selected 594 ranges, and measured
+`1,168,112,596` bytes (`1114 MiB` minimum), with no payload download or
+artifact write. `--maximum-total-mib 1114` is therefore reviewed only for
+that exact replay scope; every new scope needs its own bounded measurement.
 
 **Related files:** [`cli.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/cli.py),
 [`models.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/models.py),
