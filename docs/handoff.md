@@ -207,7 +207,19 @@ unit identities, derivation versions, and the 0--1500/1500--3000 m AGL layers.
 It excludes the DEC-043 inversion metrics. The legacy atmospheric
 `FeatureSnapshot` v1 remains untouched for synthetic compatibility. New S07
 contract/policy tests plus the complete ML suite (157 tests), Ruff check/format,
-and `git diff --check` passed on 2026-09-10. The source-neutral neighbourhood`r`nplanar-fit calculation is now also implemented and tested; the next S07 checkpoint`r`nis builder/artifact orchestration.
+and `git diff --check` passed on 2026-09-10. The source-neutral neighbourhood
+planar-fit calculation is now also implemented and tested; the next S07 checkpoint
+is builder/artifact orchestration.
+### S07 profile-layer builder reduction — committed and verified
+
+The builder now reduces the two policy-defined AGL layers directly from accepted
+S06 `SiteAlignedSample` evidence. It uses the real 2 m temperature/RH/q and 10
+m wind anchors for the lower layer, retains no-extrapolation bounds, applies the
+strict eleven-hour window independently per feature, derives direction only
+from reduced mean U/V, and emits `lower_boundary_not_bracketed` for lower omega.
+Analytic coverage/anchor tests and the complete ML suite (162 tests), Ruff
+check/format, and `git diff --check` passed on 2026-09-10. Daily surface/
+interval reductions and immutable builder artifact orchestration remain.
 ### S02 — durable atmospheric protocol
 
 The sole machine-readable T-017 field catalogue is the packaged resource
