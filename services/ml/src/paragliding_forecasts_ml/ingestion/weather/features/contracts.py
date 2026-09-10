@@ -24,8 +24,6 @@ FEATURE_KEY_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 MISSING_REASON_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
-
-
 class FeatureValue(AtmosphericContract):
     """One named S07 output with catalogue identity and derivation evidence."""
 

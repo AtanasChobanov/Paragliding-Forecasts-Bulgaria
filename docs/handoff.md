@@ -207,8 +207,7 @@ unit identities, derivation versions, and the 0--1500/1500--3000 m AGL layers.
 It excludes the DEC-043 inversion metrics. The legacy atmospheric
 `FeatureSnapshot` v1 remains untouched for synthetic compatibility. New S07
 contract/policy tests plus the complete ML suite (157 tests), Ruff check/format,
-and `git diff --check` passed on 2026-09-10. The next S07 checkpoint is the
-source-neutral neighbourhood calculation and builder/artifact orchestration.
+and `git diff --check` passed on 2026-09-10. The source-neutral neighbourhood`r`nplanar-fit calculation is now also implemented and tested; the next S07 checkpoint`r`nis builder/artifact orchestration.
 ### S02 — durable atmospheric protocol
 
 The sole machine-readable T-017 field catalogue is the packaged resource
