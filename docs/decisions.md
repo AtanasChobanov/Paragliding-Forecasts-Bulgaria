@@ -56,7 +56,9 @@ consequences. Temporary progress and Git state belong in
 | DEC-041     | Correct the common GFS S07 profile source contract                              | Accepted   | 2026-09-09 |
 | DEC-042     | Activate audited S07 humidity and turbulent-flux inputs                         | Accepted   | 2026-09-09 |
 | DEC-043     | Remove unrequired S07 resolved-inversion metrics                                | Accepted   | 2026-09-09 |
-| DEC-044     | Bind daily GFS collection to the Sofia flying-window policy                      | Accepted   | 2026-09-10 |
+| DEC-044     | Bind daily GFS collection to the Sofia flying-window policy                     | Accepted   | 2026-09-10 |
+| DEC-045     | Normalize GFS interval products to exact adjacent UTC windows                   | Accepted   | 2026-09-10 |
+| DEC-046     | Make weather persistence immutable, atomic, and artifact-replayable             | Accepted   | 2026-09-10 |
 
 ## Individual decisions
 
@@ -1905,6 +1907,7 @@ required because these metrics were never raw canonical fields.
 [`schema.ts`](../packages/database/src/schema.ts),
 [`migration.sql`](../packages/database/drizzle/20260909165706_remove_s07_inversion_metrics/migration.sql),
 and [`handoff.md`](handoff.md).
+
 ### DEC-044 - Bind daily GFS collection to the Sofia flying-window policy
 
 **Status:** Accepted
@@ -1936,6 +1939,75 @@ that exact replay scope; every new scope needs its own bounded measurement.
 [`models.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/models.py),
 [`planner.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/planner.py),
 and [`README.md`](../services/ml/README.md).
+
+### DEC-045 - GFS interval products are normalized to exact adjacent UTC windows
+
+**Status:** Accepted
+
+**Date:** 2026-09-10
+
+**Decision:**
+
+- Keep provider interval metadata (`startStep`, `endStep`, and step type)
+  as the authority for GFS accumulated and averaged fields.
+- Normalize accumulated fields such as total precipitation by subtracting
+  two values with the same accumulation anchor.
+- Normalize averaged fluxes such as downward short-wave, sensible-heat, and
+  latent-heat flux by subtracting their time integrals and dividing by the
+  requested adjacent interval duration.
+- Treat a valid numeric zero after normalization as observed information,
+  not as missing data.
+- Use the `[09:00, 10:00)` value only when needed as a boundary baseline;
+  the daily flying-window aggregate remains exactly `[10:00, 20:00)` local.
+- Stop requesting GFS gust because it has no accepted feature, persistence,
+  or model use in the current contract.
+- Rationale:
+  - GFS may encode forecast-hour 32 as an accumulation or average over
+    forecast hours 30-32 rather than only 31-32. Treating that value as a
+    one-hour quantity biases precipitation and energy-flux features.
+  - Exact interval reconstruction makes fresh and offline replay deterministic
+    and keeps temporal semantics explicit.
+
+### DEC-046 - Weather persistence is immutable, atomic, and artifact-replayable
+
+**Status:** Accepted
+
+**Date:** 2026-09-10
+
+**Decision:**
+
+- Python owns weather DML but never creates or migrates schema. It may write
+  only to a database already migrated by the committed Drizzle migrations.
+- Persist the complete weather graph in one `BEGIN IMMEDIATE` transaction
+  and mark the run `succeeded` last. Any failure rolls back the entire
+  graph, so no partially succeeded run is visible.
+- Identify an acquisition by its natural run key and immutable input
+  fingerprint. Replaying an exact persisted run fully revalidates the stored
+  graph and is a no-op; any mismatch is an explicit conflict and never an
+  overwrite.
+- Enrichment is append-only under a new feature-contract or replay run;
+  provider revisions use a new source/product run identity. An existing null
+  becoming a value under the same immutable identity is a conflict, not an
+  in-place patch.
+- Preserve expected missing values as SQL `NULL` with field-level
+  provenance and a reason code. Unsupported fields are absent from the
+  active contract and selector rather than stored as perpetually missing
+  metrics.
+- `weather-ingest resume` is artifact-only: it must neither instantiate a
+  network transport nor make a source request. Verified raw/interim artifacts
+  may rebuild derived stages and restore database writes into another freshly
+  migrated database.
+- GFS provider cloud base remains explicitly unsupported. Add a separately
+  named mixed-layer LCL estimate and PBL-minus-LCL gap, plus physically
+  derived surface buoyancy flux and convective velocity scale. Remove lower
+  layer omega from the feature contract while retaining upper-layer omega and
+  the shared persistence columns required to store it.
+- Rationale:
+  - The policy prevents silent data mutation and duplicate training examples,
+    makes recovery independent of another large GFS download, and preserves the
+    distinction between provider observations, physical estimates, and missing
+    information.
+
 ## Open decisions
 
 | Question                                                                                                                  | Options / constraints                                                                                                                                                                                                             | Resolve by                                                               |

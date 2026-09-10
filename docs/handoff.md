@@ -10,7 +10,7 @@ slice, not a project history. Read, in order:
 3. This handoff for the implemented T-018 slice boundaries.
 4. The relevant sections of `docs/project-brief.md` and `docs/architecture.md`
    for product and system constraints.
-5. DEC-031 through DEC-043 in `docs/decisions.md` for accepted weather-source,
+5. DEC-031 through DEC-046 in `docs/decisions.md` for accepted weather-source,
    schema, protocol, parser, and spatial-sampling decisions.
 6. Git history and the owning code/tests for detailed prior implementation and
    validation evidence.
@@ -18,14 +18,14 @@ slice, not a project history. Read, in order:
 Record durable design choices in `docs/decisions.md`, task status in
 `docs/tasks.md`, and only the current operational state here.
 
-## Current state (2026-09-09)
+## Current state (2026-09-10)
 
-| Field         | Value                                                                                                                                                                                                                        |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Branch        | `feature/T-018-weather-ingestion`                                                                                                                                                                                            |
-| Task status   | `T-018` is In Progress; S01–S07 are complete, S08–S10 remain.                                                                                                                                                                |
-| Next focus    | Implement S08 persistence of the verified S07 v2 feature artifacts; no SQLite writes occur in S07.                                                                                                                         |
-| Local storage | SQLite selected by `DATABASE_URL`; local databases, raw source data, and interim artifacts are ignored.                                                                                                                      |
+| Field         | Value                                                                                                                                                                                                                                       |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Branch        | `feature/T-018-weather-ingestion`                                                                                                                                                                                                           |
+| Task status   | `T-018` is In Progress; S01–S07 are complete, S08–S10 remain.                                                                                                                                                                               |
+| Next focus    | Execute `docs/T-018-S08-implementation-plan.md`: first correct interval/cloudbase/thermal/layer contracts, then implement atomic persistence and GFS fresh/offline-resume orchestration. No SQLite writes occur in S07.                     |
+| Local storage | SQLite selected by `DATABASE_URL`; local databases, raw source data, and interim artifacts are ignored.                                                                                                                                     |
 | Migrations    | Earlier weather/configuration migrations, `20260909123754_correct_s07_feature_inputs`, and `20260909165706_remove_s07_inversion_metrics` are applied locally; normal `db:migrate` runs completed idempotently on 2026-09-09 and 2026-09-10. |
 
 ## T-018 scope and non-negotiable boundaries
@@ -62,7 +62,7 @@ placeholder collectors.
 - `S04` (complete) — GFS GRIB parsing and T-017 canonical normalization.
 - `S05` (complete) — deterministic canonical site/grid sampling and AGL policy.
 - `S06` (complete) — source-aware validation, missingness, and quarantine.
-- `S07` — versioned meteorological feature builder.
+- `S07` (complete) — versioned meteorological feature builder.
 - `S08` — non-migrating SQLite persistence and end-to-end GFS `fresh`/offline
   `resume` walking skeleton.
 - `S09` — ERA5 CDS collector/parser/normalizer through the same validation and
@@ -193,6 +193,7 @@ SQLite `STRICT` rebuild migration
 profile-layer columns and their pair constraint from the configured local
 database on 2026-09-10. A subsequent normal `db:migrate` completed
 idempotently.
+
 ### S07 v2 artifact contracts and policy — committed and verified
 
 The S07 v2 boundary now has strict source-neutral contracts for hourly and
@@ -210,6 +211,7 @@ contract/policy tests plus the complete ML suite (157 tests), Ruff check/format,
 and `git diff --check` passed on 2026-09-10. The source-neutral neighbourhood
 planar-fit calculation is now also implemented and tested; the next S07 checkpoint
 is builder/artifact orchestration.
+
 ### S07 profile-layer builder reduction — committed and verified
 
 The builder now reduces the two policy-defined AGL layers directly from accepted
@@ -220,6 +222,7 @@ from reduced mean U/V, and emits `lower_boundary_not_bracketed` for lower omega.
 Analytic coverage/anchor tests and the complete ML suite (162 tests), Ruff
 check/format, and `git diff --check` passed on 2026-09-10. Daily surface/
 interval reductions and immutable builder artifact orchestration remain.
+
 ### S07 artifact builder and CLI — committed and verified
 
 S07 is complete. `weather-build-features --run-key <uuid>` is an offline-only
@@ -245,6 +248,7 @@ Python compile check, Drizzle `db:check`, root build/typecheck/lint/test/
 repo:check, and `git diff --check` passed. The earlier 875 hPa and DEC-043
 inversion decisions remain authoritative; the ML README now reflects them. The
 user-owned `docs/T-018-S07-implementaion-plan.md` remains unstaged.
+
 ### S07 daily GFS collection orchestration — committed and verified
 
 DEC-044 implements the previously outstanding `--local-date YYYY-MM-DD` GFS
@@ -262,6 +266,78 @@ No larger default byte cap was guessed. The bounded NOAA HEAD/`.idx` check on
 downloaded no payload and wrote no artifact. `--maximum-total-mib 1114` is
 reviewed only for that exact replay scope; another local date/run needs a new
 bounded measurement. The user-owned S07 implementation plan remains unstaged.
+
+### S08 accepted planning checkpoint — 2026-09-10
+
+The owner accepted the pre-S08 corrections and S08 persistence/orchestration
+policies recorded in DEC-045 and DEC-046. The implementation authority is
+`docs/T-018-S08-implementation-plan.md`; it covers both the corrections that
+must precede persistence and the complete S08 walking skeleton. Do not modify
+or stage the user-owned `docs/T-018-S07-implementaion-plan.md`.
+
+The full live GFS run
+`403c5135-8ced-4b54-a999-1c27e7ec78a3` was inspected. It selected
+`gfs.20260910/00/atmos` for target local date 2026-09-11 and produced 77
+hourly and 7 daily feature snapshots from about 1.17 GB of source payload.
+Across the inspected output there were 1,001 real, 441 derived, and 154 missing
+feature states. The missing states were 77 hourly provider-cloud-base values,
+21 daily provider-cloud-base aggregates, 42 daily interval-derived values, and
+14 lower-layer omega values.
+
+The interval values exposed a source-semantics defect, not absent weather:
+GFS APCP and flux messages may describe anchored multi-hour windows such as
+30-32 rather than the adjacent hour alone. Implement source-aware
+deaccumulation/deaveraging from the message interval metadata. A valid numeric
+zero, including zero precipitation, remains real evidence. The 09:00-10:00
+local interval may be used only as the baseline needed to reconstruct
+10:00-11:00; it is not a flying-window contribution. GUST is unused and must
+be removed from the selector rather than fetched or persisted.
+
+GFS provider cloud base stays explicitly missing with reason
+`source_field_unavailable`; cloud ceiling is not a substitute. Add a
+separately named lowest-100-hPa mixed-layer LCL estimate using Romps' exact LCL
+equation, plus signed PBL-minus-LCL gap. ERA5 cloud-base height may later serve
+as a weak S09 label, but it is neither observation truth nor a same-example GFS
+input. Add signed kinematic surface buoyancy flux and nonnegative convective
+velocity scale from the already selected pressure, temperature, humidity,
+SHTFL/LHTFL, and PBL evidence. These are physical derived features, not
+provider facts.
+
+Lower-layer omega is neither a project-brief requirement nor the thermal
+strength feature. Remove it only from the 0-1500 m feature contract; retain
+omega for 1500-3000 m and retain the shared database columns. This asymmetry is
+safe because training and inference use the same fixed, layer-specific schema.
+
+Before Python persistence, add a forward-only Drizzle migration for the new
+typed LCL/gap/buoyancy/convective fields, field-level missing reason, corrected
+daily/layer provenance uniqueness including statistic type, and the persisted
+feature-manifest/fingerprint link. Never edit an applied migration. Python is
+DML-only and must reject an unmigrated database.
+
+Persistence writes the entire source/run/valid-time/hourly/profile/convection/
+interval/daily/input/layer/provenance graph in one `BEGIN IMMEDIATE`
+transaction, marks success last, and rolls everything back on failure. Exact
+replay revalidates every expected row and is a timestamp-preserving no-op.
+Mismatch is a conflict; there is no blind ignore/replace and no null-to-value
+mutation under the same immutable identity. Enrichment uses a new feature
+contract/replay identity and provider revisions use a new source/product run.
+
+`weather-ingest fresh` owns preflight and the single allowed collection
+step. `weather-ingest resume` is strictly artifact-only: it must not
+instantiate transport or make any source request, and it may rebuild derived
+boundaries or restore a database write into a newly migrated empty database.
+The S08 integration gate must migrate a temporary SQLite database with the real
+Drizzle migrator, prove repeat-run no-duplication, prove conflict
+non-overwrite, prove total rollback, and prove raw/interim recovery with a
+zero-request network spy.
+
+The main planning blockers are therefore resolved: interval missingness becomes
+exact reconstruction, provider cloud base is distinguished from an LCL
+estimate, lower omega becomes a deliberate layer-specific absence, and schema
+gaps are assigned to a reviewed forward migration before persistence. Any new
+material architectural choice discovered during implementation must still be
+raised rather than silently inferred.
+
 ### S02 — durable atmospheric protocol
 
 The sole machine-readable T-017 field catalogue is the packaged resource
