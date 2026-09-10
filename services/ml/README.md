@@ -234,8 +234,8 @@ uv run --project services/ml weather-validate --run-key <uuid>
 ```
 
 It validates GFS and ERA5 only. GFS requires forecast lead time and the
-1000/975/950/925/900/875/850/800/750/700 hPa profile band; ERA5 requires no
-forecast lead and the same 1000--700 hPa policy profile set. It checks
+1000/975/950/925/900/850/800/750/700/650/600/550/500 hPa profile band; ERA5 requires no
+forecast lead and the same policy profile set. The 875 hPa level is deliberately excluded. It checks
 source/kind, raw payload role/media type and GFS magic,
 catalogue units, finite/range values, time/lead/local-date consistency, field
 and sample duplicates, profile ordering, core nulls, and terrain mismatch.
@@ -280,6 +280,8 @@ The real command chain is:
 uv run --project services/ml gfs-collect <reviewed options> --allow-live-network
 uv run --project services/ml gfs-parse --run-key <uuid>
 uv run --project services/ml gfs-sample --run-key <uuid>
+uv run --project services/ml weather-validate --run-key <uuid>
+uv run --project services/ml weather-build-features --run-key <uuid>
 ```
 
 Only collection can access NOAA. Parse/normalize and sampling are offline
