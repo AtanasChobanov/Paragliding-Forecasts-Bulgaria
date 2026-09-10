@@ -6,9 +6,28 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from math import isfinite
 
-from ..spatial import SampledField, SiteAlignedSample
-from .aggregation import TimedValue, strict_hourly_reduction
+from ..spatial import (
+    NeighbourhoodNodeRecord,
+    SampledField,
+    SamplingFootprint,
+    SiteAlignedSample,
+    SiteConfigSnapshot,
+)
+from .aggregation import (
+    IntervalValue,
+    TimedValue,
+    hourly_amount_maximum,
+    interval_maximum,
+    interval_total,
+    interval_weighted_mean,
+    strict_hourly_reduction,
+)
 from .contracts import FeatureLayer, FeatureValue
+from .neighbourhood import (
+    NeighbourhoodCoverageError,
+    NeighbourhoodObservation,
+    fit_neighbourhood_metrics,
+)
 from .policy import FeatureLayerPolicy, FeaturePolicyEntry
 from .vertical import (
     VerticalCoverageError,
@@ -98,6 +117,157 @@ def build_daily_point_features(
     return tuple(values)
 
 
+def build_daily_interval_features(
+    samples: tuple[SiteAlignedSample, ...],
+    entries: tuple[FeaturePolicyEntry, ...],
+    *,
+    expected_instants_utc: tuple[str, ...],
+) -> tuple[FeatureValue, ...]:
+    """Reduce interval evidence only after exact half-open flying-window coverage."""
+
+    window = _window(expected_instants_utc)
+    values: list[FeatureValue] = []
+    for entry in entries:
+        intervals = tuple(
+            IntervalValue(
+                field.interval_start_utc or "",
+                field.interval_end_utc or "",
+                _available_value(field),
+            )
+            for sample in samples
+            for field in sample.fields
+            if field.grain == "interval" and field.field_code == entry.field_code
+        )
+        if entry.feature_key == "precipitation_total_mm":
+            result = interval_total(intervals, window)
+        elif entry.feature_key == "precipitation_max_hourly_mm":
+            result = hourly_amount_maximum(intervals, window)
+        elif entry.feature_key in {
+            "shortwave_radiation_mean_w_m2",
+            "surface_sensible_heat_flux_mean_w_m2",
+            "surface_latent_heat_flux_mean_w_m2",
+        }:
+            result = interval_weighted_mean(intervals, window)
+        elif entry.feature_key == "shortwave_radiation_max_w_m2":
+            result = interval_maximum(intervals, window)
+        else:
+            continue
+        values.append(
+            _missing_feature(entry, result.missing_reason or "interval_feature_missing")
+            if result.value is None
+            else _derived_feature(entry, result.value)
+        )
+    return tuple(values)
+
+
+def build_daily_neighbourhood_features(
+    samples: tuple[SiteAlignedSample, ...],
+    records: tuple[NeighbourhoodNodeRecord, ...],
+    footprints: tuple[SamplingFootprint, ...],
+    sites: tuple[SiteConfigSnapshot, ...],
+    entries: tuple[FeaturePolicyEntry, ...],
+    *,
+    expected_instants_utc: tuple[str, ...],
+) -> tuple[FeatureValue, ...]:
+    """Fit complete S05 neighbourhood evidence once per hour, then reduce strictly."""
+
+    values: list[FeatureValue] = []
+    for entry in entries:
+        if entry.feature_key not in {
+            "neighbourhood_pressure_gradient_mean_pa_per_km",
+            "neighbourhood_pressure_gradient_max_pa_per_km",
+            "neighbourhood_low_level_divergence_mean_s_inverse",
+            "neighbourhood_low_level_divergence_min_s_inverse",
+        }:
+            continue
+        metric_index = 0 if "pressure_gradient" in entry.feature_key else 1
+        reduction = strict_hourly_reduction(
+            tuple(
+                TimedValue(
+                    sample.valid_at_utc,
+                    _neighbourhood_metric_value(sample, records, footprints, sites, metric_index),
+                )
+                for sample in samples
+            ),
+            _window(expected_instants_utc),
+            _reducer(entry),
+        )
+        values.append(
+            _missing_feature(entry, reduction.missing_reason or "neighbourhood_feature_missing")
+            if reduction.value is None
+            else _derived_feature(entry, reduction.value)
+        )
+    return tuple(values)
+
+
+def _neighbourhood_metric_value(
+    sample: SiteAlignedSample,
+    records: tuple[NeighbourhoodNodeRecord, ...],
+    footprints: tuple[SamplingFootprint, ...],
+    sites: tuple[SiteConfigSnapshot, ...],
+    metric_index: int,
+) -> float | None:
+    matching_records = [
+        item
+        for item in records
+        if item.site_id == sample.site_id
+        and item.footprint_key == sample.neighbourhood_footprint_key
+        and item.valid_at_utc == sample.valid_at_utc
+    ]
+    matching_footprints = [
+        item
+        for item in footprints
+        if item.footprint_key == sample.neighbourhood_footprint_key
+        and item.site_id == sample.site_id
+        and item.purpose == "neighbourhood"
+    ]
+    matching_sites = [item for item in sites if item.site_id == sample.site_id]
+    if len(matching_records) != 1 or len(matching_footprints) != 1 or len(matching_sites) != 1:
+        return None
+    record, footprint, site = matching_records[0], matching_footprints[0], matching_sites[0]
+    pressure = _neighbourhood_field(record, "air_pressure_pa", "mean_sea_level")
+    wind_u = _neighbourhood_field(record, "wind_u_m_s", None)
+    wind_v = _neighbourhood_field(record, "wind_v_m_s", None)
+    if pressure is None or wind_u is None or wind_v is None:
+        return None
+    if not (len(pressure) == len(wind_u) == len(wind_v) == len(footprint.nodes)):
+        return None
+    try:
+        metrics = fit_neighbourhood_metrics(
+            site.latitude_deg,
+            site.longitude_deg,
+            tuple(
+                NeighbourhoodObservation(
+                    node_key=f"{node.row_index}:{node.column_index}",
+                    latitude_deg=node.latitude_deg,
+                    longitude_deg=node.longitude_deg,
+                    mean_sea_level_pressure_pa=pressure[index],
+                    wind_u_m_s=wind_u[index],
+                    wind_v_m_s=wind_v[index],
+                )
+                for index, node in enumerate(footprint.nodes)
+            ),
+        )
+    except (NeighbourhoodCoverageError, TypeError):
+        return None
+    return (
+        metrics.pressure_gradient_pa_per_km
+        if metric_index == 0
+        else metrics.low_level_divergence_s_inverse
+    )
+
+
+def _neighbourhood_field(
+    record: NeighbourhoodNodeRecord, field_code: str, dimension: str | None
+) -> tuple[float, ...] | None:
+    matches = [
+        field
+        for field in record.fields
+        if field.field_code == field_code and field.dimension == dimension and field.grain == "surface"
+    ]
+    if len(matches) != 1 or any(value is None or not isfinite(value) for value in matches[0].values):
+        return None
+    return tuple(float(value) for value in matches[0].values if value is not None)
 def _point_hour_value(sample: SiteAlignedSample, entry: FeaturePolicyEntry) -> float | None:
     if entry.field_code == "wind_speed_m_s":
         u_value, v_value = (

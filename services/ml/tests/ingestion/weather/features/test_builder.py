@@ -3,14 +3,21 @@ from __future__ import annotations
 import pytest
 
 from paragliding_forecasts_ml.ingestion.weather.features.builder import (
+    build_daily_interval_features,
+    build_daily_neighbourhood_features,
     build_daily_point_features,
     build_profile_layer,
 )
 from paragliding_forecasts_ml.ingestion.weather.features.policy import load_feature_policy
 from paragliding_forecasts_ml.ingestion.weather.spatial import (
+    NeighbourhoodFieldValues,
+    NeighbourhoodNodeRecord,
     SampledField,
     SampledProfileLevel,
+    SamplingFootprint,
+    SamplingNode,
     SiteAlignedSample,
+    SiteConfigSnapshot,
     TerrainDiagnostic,
 )
 
@@ -144,3 +151,128 @@ def test_point_builder_reduces_daily_scalar_wind_and_leaves_intervals_for_their_
     assert by_key["wind_speed_10m_mean_m_s"].canonical_value == pytest.approx(5**0.5)
     assert by_key["wind_direction_10m_mean_degrees_from_north"].canonical_value is not None
     assert "precipitation_total_mm" not in by_key
+
+
+def _interval(field_code: str, value: float, start_hour: int) -> SampledField:
+    units = {
+        "precipitation_amount_mm": "mm",
+        "shortwave_radiation_w_m2": "W/m2",
+        "surface_sensible_heat_flux_upward_w_m2": "W/m2",
+        "surface_latent_heat_flux_upward_w_m2": "W/m2",
+    }
+    return SampledField(
+        field_code=field_code,
+        grain="interval",
+        canonical_unit=units[field_code],
+        canonical_value=value,
+        quality_state="real",
+        interval_start_utc=f"2026-09-10T{start_hour:02d}:00:00Z",
+        interval_end_utc=f"2026-09-10T{start_hour + 1:02d}:00:00Z",
+        source_selector_keys=(field_code,),
+        source_raw_artifact_keys=("raw",),
+        source_native_message_references=("message",),
+    )
+
+
+def test_interval_builder_requires_complete_exact_coverage() -> None:
+    policy, _ = load_feature_policy()
+    samples = tuple(
+        _sample(hour).model_copy(
+            update={
+                "fields": (
+                    *_sample(hour).fields,
+                    _interval("precipitation_amount_mm", float(hour - 9), hour),
+                    _interval("shortwave_radiation_w_m2", float(hour), hour),
+                    _interval("surface_sensible_heat_flux_upward_w_m2", 40.0, hour),
+                    _interval("surface_latent_heat_flux_upward_w_m2", 20.0, hour),
+                )
+            }
+        )
+        for hour in range(10, 19)
+    )
+    values = build_daily_interval_features(
+        samples,
+        policy.daily_fields,
+        expected_instants_utc=tuple(f"2026-09-10T{hour:02d}:00:00Z" for hour in range(10, 21)),
+    )
+    by_key = {value.feature_key: value for value in values}
+
+    assert by_key["precipitation_total_mm"].canonical_value is None
+    assert by_key["precipitation_total_mm"].missing_reason == "interval_coverage_gap"
+
+
+def test_interval_builder_reduces_exact_hourly_coverage() -> None:
+    policy, _ = load_feature_policy()
+    samples = tuple(
+        _sample(hour).model_copy(
+            update={
+                "fields": (
+                    *_sample(hour).fields,
+                    _interval("precipitation_amount_mm", float(hour - 9), hour),
+                    _interval("shortwave_radiation_w_m2", float(hour), hour),
+                    _interval("surface_sensible_heat_flux_upward_w_m2", 40.0, hour),
+                    _interval("surface_latent_heat_flux_upward_w_m2", 20.0, hour),
+                )
+            }
+        )
+        for hour in range(10, 20)
+    )
+    values = build_daily_interval_features(
+        samples,
+        policy.daily_fields,
+        expected_instants_utc=tuple(f"2026-09-10T{hour:02d}:00:00Z" for hour in range(10, 21)),
+    )
+    by_key = {value.feature_key: value for value in values}
+
+    assert by_key["precipitation_total_mm"].canonical_value == 55.0
+    assert by_key["precipitation_max_hourly_mm"].canonical_value == 10.0
+    assert by_key["shortwave_radiation_mean_w_m2"].canonical_value == 14.5
+    assert by_key["shortwave_radiation_max_w_m2"].canonical_value == 19.0
+
+
+def _neighbourhood_inputs(hours: range):
+    footprint = SamplingFootprint(
+        footprint_key="b" * 64,
+        site_id=1,
+        purpose="neighbourhood",
+        sampling_method="radius",
+        sampling_method_version="radius/1",
+        radius_km=5.0,
+        definition_sha256="c" * 64,
+        nodes=(
+            SamplingNode(row_index=0, column_index=0, latitude_deg=42.0, longitude_deg=23.0, distance_km=1.0),
+            SamplingNode(row_index=0, column_index=1, latitude_deg=42.0, longitude_deg=23.1, distance_km=1.0),
+            SamplingNode(row_index=1, column_index=0, latitude_deg=42.1, longitude_deg=23.0, distance_km=1.0),
+        ),
+    )
+    site = SiteConfigSnapshot(
+        site_id=1, site_slug="site", site_name="Site", site_time_zone="Europe/Sofia",
+        latitude_deg=42.0, longitude_deg=23.0, coordinate_reference="WGS84",
+        reference_elevation_msl_m=100.0, elevation_reference="msl",
+    )
+    records = tuple(
+        NeighbourhoodNodeRecord(
+            site_id=1, footprint_key="b" * 64, valid_at_utc=f"2026-09-10T{hour:02d}:00:00Z",
+            fields=(
+                NeighbourhoodFieldValues(field_code="air_pressure_pa", grain="surface", dimension="mean_sea_level", canonical_unit="Pa", values=(100000.0, 100010.0, 100020.0), source_selector_keys=("p",)),
+                NeighbourhoodFieldValues(field_code="wind_u_m_s", grain="surface", canonical_unit="m/s", values=(1.0, 2.0, 1.0), source_selector_keys=("u",)),
+                NeighbourhoodFieldValues(field_code="wind_v_m_s", grain="surface", canonical_unit="m/s", values=(1.0, 1.0, 2.0), source_selector_keys=("v",)),
+            ),
+        )
+        for hour in hours
+    )
+    return (footprint,), (site,), records
+
+
+def test_neighbourhood_builder_is_strict_and_uses_surface_msl_inputs() -> None:
+    policy, _ = load_feature_policy()
+    samples = tuple(_sample(hour) for hour in range(10, 21))
+    footprints, sites, records = _neighbourhood_inputs(range(10, 21))
+    values = build_daily_neighbourhood_features(
+        samples, records, footprints, sites, policy.daily_fields,
+        expected_instants_utc=tuple(sample.valid_at_utc for sample in samples),
+    )
+    by_key = {value.feature_key: value for value in values}
+
+    assert by_key["neighbourhood_pressure_gradient_mean_pa_per_km"].canonical_value is not None
+    assert by_key["neighbourhood_low_level_divergence_mean_s_inverse"].canonical_value is not None
