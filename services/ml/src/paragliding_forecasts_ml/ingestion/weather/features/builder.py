@@ -34,6 +34,98 @@ class FeatureBuildError(ValueError):
     """Validated evidence cannot be reduced under the S07 feature policy."""
 
 
+def build_daily_point_features(
+    samples: tuple[SiteAlignedSample, ...],
+    entries: tuple[FeaturePolicyEntry, ...],
+    *,
+    expected_instants_utc: tuple[str, ...],
+) -> tuple[FeatureValue, ...]:
+    """Reduce strict instantaneous point/provider evidence; interval and neighbourhood facts stay separate."""
+    deferred = {
+        "precipitation_total_mm",
+        "precipitation_max_hourly_mm",
+        "shortwave_radiation_mean_w_m2",
+        "shortwave_radiation_max_w_m2",
+        "surface_sensible_heat_flux_mean_w_m2",
+        "surface_latent_heat_flux_mean_w_m2",
+        "neighbourhood_pressure_gradient_mean_pa_per_km",
+        "neighbourhood_pressure_gradient_max_pa_per_km",
+        "neighbourhood_low_level_divergence_mean_s_inverse",
+        "neighbourhood_low_level_divergence_min_s_inverse",
+    }
+    computed: dict[str, FeatureValue] = {}
+    for entry in entries:
+        if (
+            entry.feature_key in deferred
+            or entry.feature_key == "wind_direction_10m_mean_degrees_from_north"
+        ):
+            continue
+        reduction = strict_hourly_reduction(
+            tuple(
+                TimedValue(sample.valid_at_utc, _point_hour_value(sample, entry))
+                for sample in samples
+            ),
+            _window(expected_instants_utc),
+            _reducer(entry),
+        )
+        computed[entry.feature_key] = (
+            _missing_feature(entry, reduction.missing_reason or "point_feature_missing")
+            if reduction.value is None
+            else _derived_feature(entry, reduction.value)
+        )
+    values: list[FeatureValue] = []
+    for entry in entries:
+        if entry.feature_key in deferred:
+            continue
+        if entry.feature_key != "wind_direction_10m_mean_degrees_from_north":
+            values.append(computed[entry.feature_key])
+            continue
+        u_value = computed["wind_u_10m_mean_m_s"].canonical_value
+        v_value = computed["wind_v_10m_mean_m_s"].canonical_value
+        direction = (
+            None
+            if u_value is None or v_value is None
+            else meteorological_direction_from_uv(u_value, v_value)
+        )
+        values.append(
+            _missing_feature(
+                entry,
+                "wind_components_missing" if direction is None else "wind_direction_undefined",
+            )
+            if direction is None
+            else _derived_feature(entry, direction)
+        )
+    return tuple(values)
+
+
+def _point_hour_value(sample: SiteAlignedSample, entry: FeaturePolicyEntry) -> float | None:
+    if entry.field_code == "wind_speed_m_s":
+        u_value, v_value = (
+            _surface_field(sample, "wind_u_m_s"),
+            _surface_field(sample, "wind_v_m_s"),
+        )
+        return None if u_value is None or v_value is None else (u_value**2 + v_value**2) ** 0.5
+    dimension = {
+        "2m": None,
+        "10m": None,
+        "surface": "surface",
+        "mean_sea_level": "mean_sea_level",
+        "surface_parcel": "surface",
+        "total": "total",
+        "low": "low",
+        "mid": "mid",
+        "high": "high",
+    }.get(entry.variant)
+    matches = [
+        field
+        for field in sample.fields
+        if field.field_code == entry.field_code
+        and field.dimension == dimension
+        and (entry.variant != "surface_parcel" or field.grain == "convection")
+    ]
+    return _available_value(matches[0]) if len(matches) == 1 else None
+
+
 def build_profile_layer(
     samples: tuple[SiteAlignedSample, ...],
     layer: FeatureLayerPolicy,

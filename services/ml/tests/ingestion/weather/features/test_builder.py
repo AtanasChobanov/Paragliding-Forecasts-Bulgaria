@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import pytest
 
-from paragliding_forecasts_ml.ingestion.weather.features.builder import build_profile_layer
+from paragliding_forecasts_ml.ingestion.weather.features.builder import (
+    build_daily_point_features,
+    build_profile_layer,
+)
 from paragliding_forecasts_ml.ingestion.weather.features.policy import load_feature_policy
 from paragliding_forecasts_ml.ingestion.weather.spatial import (
     SampledField,
@@ -123,3 +126,21 @@ def test_profile_builder_keeps_each_feature_strict_when_an_hour_is_missing() -> 
     assert (
         values["wind_direction_mean_degrees_from_north"].missing_reason == "wind_components_missing"
     )
+
+
+def test_point_builder_reduces_daily_scalar_wind_and_leaves_intervals_for_their_own_reducer() -> (
+    None
+):
+    policy, _ = load_feature_policy()
+    samples = tuple(_sample(hour) for hour in range(10, 21))
+    values = build_daily_point_features(
+        samples,
+        policy.daily_fields,
+        expected_instants_utc=tuple(sample.valid_at_utc for sample in samples),
+    )
+    by_key = {value.feature_key: value for value in values}
+
+    assert by_key["air_temperature_2m_mean_k"].canonical_value == 290.0
+    assert by_key["wind_speed_10m_mean_m_s"].canonical_value == pytest.approx(5**0.5)
+    assert by_key["wind_direction_10m_mean_degrees_from_north"].canonical_value is not None
+    assert "precipitation_total_mm" not in by_key
