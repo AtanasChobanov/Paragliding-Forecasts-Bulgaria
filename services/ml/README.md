@@ -20,13 +20,13 @@ verified raw-manifest boundary.
 ### Daily flying-window follow-up for S07
 
 The accepted product policy is one local Europe/Sofia day, 10:00--20:00
-inclusive (eleven valid instants), from one selected product run. The current
-collector still takes repeatable `--valid-at` arguments; it does not yet expose
-the required `--local-date` mode that converts that fixed DST-aware window into
-the eleven UTC instants. Until that orchestration change is implemented, callers
-must calculate and pass the reviewed UTC instants explicitly in one collection
-run. Do not split the day into runs or build a cross-run assembler.
-
+inclusive (eleven valid instants), from one selected product run. Use
+`--local-date YYYY-MM-DD` for this operational mode: it derives and records the
+exact DST-aware eleven UTC instants under `sofia-flying-window/1`. The older,
+repeatable `--valid-at` interface remains available only for low-level,
+explicitly scoped collection and is mutually exclusive with `--local-date`.
+One local day must stay in one collection run; do not split it into child runs
+or build a cross-run assembler.
 GFS profile collection now includes HGT/TMP/RH/UGRD/VGRD/VVEL at
 1000/975/950/925/900/850/800/750/700/650/600/550/500 hPa. These pressure levels flow
 through parsing, normalization, canonical sampling, and source validation so
@@ -74,7 +74,8 @@ uv run --project services/ml gfs-collect [options]
 | Option | Required | Behaviour |
 | --- | --- | --- |
 | `--purpose operational_forecast` or `historical_forecast` | Yes | Immutable provenance for intended use. It does not change native GFS message selection. |
-| `--valid-at <UTC>` | Yes, repeatable | Forecast valid timestamp in `YYYY-MM-DDTHH:MM:SSZ`. Each must be from the selected run and at most 384 hours after it. |
+| `--local-date <YYYY-MM-DD>` | One time-scope mode | Derive and record the fixed DST-aware 10:00--20:00 Europe/Sofia window. Mutually exclusive with `--valid-at`. |
+| `--valid-at <UTC>` | One time-scope mode, repeatable | Low-level explicit forecast valid timestamp in `YYYY-MM-DDTHH:MM:SSZ`. Mutually exclusive with `--local-date`. |
 | `--explicit-run-at <UTC>` | One selection mode | Use this exact 00/06/12/18Z GFS cycle. Recommended for historical/training. |
 | `--newest-complete-before <UTC>` | One selection mode | Select the newest complete cycle available at or before this UTC cutoff. |
 | `--maximum-total-mib <integer>` | No; default `128` | Fail closed if selected byte ranges exceed the cap. One valid hour is currently about 31 MB. |
@@ -87,6 +88,17 @@ used; this is intentionally not a CLI override.
 
 ### Operational examples
 
+For the normal daily S07 collection mode, use one local date rather than eleven
+manual UTC flags:
+
+```powershell
+uv run --project services/ml gfs-collect `
+  --purpose operational_forecast `
+  --explicit-run-at <UTC-cycle> `
+  --local-date <YYYY-MM-DD> `
+  --maximum-total-mib <reviewed-daily-cap> `
+  --allow-live-network
+```
 Use an explicit reviewed cycle when you know which run to use:
 
 ```powershell
@@ -110,10 +122,10 @@ uv run --project services/ml gfs-collect `
   --allow-live-network
 ```
 
-For the intended 10:00--20:00 `Europe/Sofia` thermal-XC window, convert each
-local hour to UTC for that date (DST matters), repeat `--valid-at`, and split
-into small same-cycle batches below `--maximum-total-mib`. Do not mix GFS cycles
-inside one run.
+For the intended 10:00--20:00 `Europe/Sofia` thermal-XC window, pass one
+`--local-date YYYY-MM-DD`. The CLI derives the UTC instants (DST-aware) and
+keeps them in one same-cycle run. Supply a reviewed explicit daily cap when the
+default 128 MiB cap proves insufficient; do not split the window into batches.
 
 ### Historical example
 

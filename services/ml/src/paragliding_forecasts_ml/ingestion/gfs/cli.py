@@ -13,7 +13,11 @@ from uuid import uuid4
 from ..weather.artifacts import WeatherArtifactStore
 from ..weather.state import RunStateLedger, StateError
 from .collector import GfsCollector
-from .models import GfsRequest
+from .models import (
+    SOFIA_FLYING_WINDOW_VERSION,
+    GfsRequest,
+    sofia_window_instants,
+)
 from .planner import GfsPlanner, GfsPlanningError
 from .transport import RetryingTransport, UrllibTransport
 
@@ -24,12 +28,17 @@ def _utc_now() -> str:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="gfs-collect")
-    parser.add_argument(
+    time_scope = parser.add_mutually_exclusive_group(required=True)
+    time_scope.add_argument(
         "--valid-at",
         action="append",
-        required=True,
         metavar="UTC",
-        help="Required valid timestamp (repeatable, Z suffix).",
+        help="One low-level UTC valid timestamp (repeatable; mutually exclusive with --local-date).",
+    )
+    time_scope.add_argument(
+        "--local-date",
+        metavar="YYYY-MM-DD",
+        help="One Europe/Sofia date; derives the fixed 10:00--20:00 Sofia flying window.",
     )
     selection = parser.add_mutually_exclusive_group(required=True)
     selection.add_argument(
@@ -63,10 +72,18 @@ def main(arguments: Sequence[str] | None = None) -> int:
         request = GfsRequest(
             run_key=str(uuid4()),
             request_purpose=namespace.purpose,
-            valid_at_utc=tuple(namespace.valid_at),
+            valid_at_utc=(
+                sofia_window_instants(namespace.local_date)
+                if namespace.local_date is not None
+                else tuple(namespace.valid_at)
+            ),
             explicit_run_at_utc=namespace.explicit_run_at,
             newest_complete_before_utc=namespace.newest_complete_before,
             maximum_total_bytes=namespace.maximum_total_mib * 1024 * 1024,
+            target_local_date=namespace.local_date,
+            flying_window_version=(
+                SOFIA_FLYING_WINDOW_VERSION if namespace.local_date is not None else None
+            ),
         )
         transport = RetryingTransport(UrllibTransport())
         occurred_at_utc = _utc_now()

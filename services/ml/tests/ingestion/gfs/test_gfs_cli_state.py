@@ -166,3 +166,96 @@ def test_parse_resume_reuses_existing_parsed_evidence(tmp_path, monkeypatch) -> 
 
     assert result == 0
     assert [item["stage"] for item in appended] == ["normalized"]
+
+
+def test_local_date_window_is_dst_aware_and_includes_eleven_instants() -> None:
+    assert cli.sofia_window_instants("2026-06-15") == tuple(
+        f"2026-06-15T{hour:02d}:00:00Z" for hour in range(7, 18)
+    )
+    assert cli.sofia_window_instants("2026-01-15") == tuple(
+        f"2026-01-15T{hour:02d}:00:00Z" for hour in range(8, 19)
+    )
+
+
+def test_local_date_requires_extended_iso_format() -> None:
+    try:
+        cli.sofia_window_instants("20260615")
+    except ValueError as error:
+        assert str(error) == "local_date must be YYYY-MM-DD."
+    else:
+        raise AssertionError("Collector must reject a non-extended local date.")
+
+
+def test_collect_local_date_records_the_flying_window_metadata(tmp_path, monkeypatch) -> None:
+    raw = _reference("raw")
+    captured: list[object] = []
+    store = SimpleNamespace(
+        verify_raw_manifest=lambda reference: SimpleNamespace(status="complete")
+    )
+
+    class FakeLedger:
+        def __init__(self, _store) -> None:
+            pass
+
+        def initialize(self, **_values) -> None:
+            pass
+
+        def append(self, **_values) -> None:
+            pass
+
+    def plan(request, **_kwargs):
+        captured.append(request)
+        return object()
+
+    monkeypatch.setattr(cli, "uuid4", lambda: RUN_KEY)
+    monkeypatch.setattr(cli, "UrllibTransport", lambda: object())
+    monkeypatch.setattr(cli, "RetryingTransport", lambda transport: transport)
+    monkeypatch.setattr(cli, "GfsPlanner", lambda _transport: SimpleNamespace(plan=plan))
+    monkeypatch.setattr(cli.WeatherArtifactStore, "create_fresh", lambda *_a, **_k: store)
+    monkeypatch.setattr(
+        cli, "GfsCollector", lambda _transport: SimpleNamespace(fetch=lambda *_a: raw)
+    )
+    monkeypatch.setattr(cli, "RunStateLedger", FakeLedger)
+
+    result = cli.main(
+        [
+            "--local-date",
+            "2026-06-15",
+            "--explicit-run-at",
+            "2026-06-14T00:00:00Z",
+            "--purpose",
+            "historical_forecast",
+            "--project-root",
+            str(tmp_path),
+            "--allow-live-network",
+        ]
+    )
+
+    assert result == 0
+    assert captured[0].target_local_date == "2026-06-15"
+    assert captured[0].flying_window_version == "sofia-flying-window/1"
+    assert captured[0].valid_at_utc == tuple(
+        f"2026-06-15T{hour:02d}:00:00Z" for hour in range(7, 18)
+    )
+
+
+def test_collect_rejects_mixing_local_date_and_low_level_valid_time() -> None:
+    parser = cli.build_parser()
+
+    try:
+        parser.parse_args(
+            [
+                "--local-date",
+                "2026-06-15",
+                "--valid-at",
+                "2026-06-15T07:00:00Z",
+                "--explicit-run-at",
+                "2026-06-14T00:00:00Z",
+                "--purpose",
+                "historical_forecast",
+            ]
+        )
+    except SystemExit as error:
+        assert error.code == 2
+    else:
+        raise AssertionError("Collector must reject mixed local-date and valid-at inputs.")

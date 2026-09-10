@@ -190,9 +190,12 @@ class GfsPlanner:
             )
         key, _url, _idx = _object_urls(run_at_utc, 0)
         return GfsResolvedPlan(
+            gfs_request_schema_version=2 if request.target_local_date is not None else 1,
             selection_mode=mode,
             resolved_run_at_utc=run_at_utc,
             available_at_utc=available_at,
             source_product_key=key.rsplit("/", maxsplit=1)[0],
             ranges=tuple(planned),
+            target_local_date=request.target_local_date,
+            flying_window_version=request.flying_window_version,
         )

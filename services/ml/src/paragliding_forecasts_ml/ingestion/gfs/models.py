@@ -2,15 +2,34 @@
 
 from __future__ import annotations
 
+from datetime import UTC, date, datetime, time
 from typing import Literal
+from zoneinfo import ZoneInfo
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from ..atmosphere.contracts import ArtifactReference, AtmosphericContract, validate_utc_timestamp
 
 GFS_SOURCE_ID = "noaa_gfs_0p25_aws_grib2"
 GFS_BUCKET_URL = "https://noaa-gfs-bdp-pds.s3.amazonaws.com"
-GFS_COLLECTOR_VERSION = "gfs-collector/4"
+GFS_COLLECTOR_VERSION = "gfs-collector/5"
+SOFIA_TIME_ZONE = "Europe/Sofia"
+SOFIA_FLYING_WINDOW_VERSION = "sofia-flying-window/1"
+
+
+def sofia_window_instants(local_date: str) -> tuple[str, ...]:
+    """Return the fixed DST-aware local 10:00--20:00 collection instants."""
+
+    day = date.fromisoformat(local_date)
+    if local_date != day.isoformat():
+        raise ValueError("local_date must be YYYY-MM-DD.")
+    zone = ZoneInfo(SOFIA_TIME_ZONE)
+    return tuple(
+        datetime.combine(day, time(hour), tzinfo=zone)
+        .astimezone(UTC)
+        .strftime("%Y-%m-%dT%H:%M:%SZ")
+        for hour in range(10, 21)
+    )
 
 
 class GfsRequest(AtmosphericContract):
@@ -24,6 +43,8 @@ class GfsRequest(AtmosphericContract):
     maximum_cycles_back: int = Field(default=8, ge=1, le=16)
     maximum_range_bytes: int = Field(default=8 * 1024 * 1024, ge=1024)
     maximum_total_bytes: int = Field(default=128 * 1024 * 1024, ge=1024)
+    target_local_date: str | None = None
+    flying_window_version: str | None = None
 
     @field_validator("valid_at_utc", "explicit_run_at_utc", "newest_complete_before_utc")
     @classmethod
@@ -42,6 +63,23 @@ class GfsRequest(AtmosphericContract):
         if not value:
             raise ValueError("GFS run key is required.")
         return value
+
+    @model_validator(mode="after")
+    def local_date_metadata_must_be_complete(self) -> GfsRequest:
+        if (self.target_local_date is None) != (self.flying_window_version is None):
+            raise ValueError("GFS local-date requests require both date and flying-window version.")
+        if self.target_local_date is not None:
+            if self.flying_window_version != SOFIA_FLYING_WINDOW_VERSION:
+                raise ValueError("GFS local-date requests require sofia-flying-window/1.")
+            try:
+                expected = sofia_window_instants(self.target_local_date)
+            except ValueError as error:
+                raise ValueError("target_local_date must be YYYY-MM-DD.") from error
+            if self.valid_at_utc != expected:
+                raise ValueError(
+                    "GFS local-date request valid times must equal its Sofia flying window."
+                )
+        return self
 
     def selection_mode(self) -> Literal["explicit", "newest_complete_before"]:
         if (self.explicit_run_at_utc is None) == (self.newest_complete_before_utc is None):
@@ -76,7 +114,7 @@ class GfsPlannedRange(AtmosphericContract):
 class GfsResolvedPlan(AtmosphericContract):
     """Source-owned resolved GFS plan embedded in S02 RequestPlan.adapter_request."""
 
-    gfs_request_schema_version: Literal[1] = 1
+    gfs_request_schema_version: Literal[1, 2] = 1
     selection_mode: Literal["explicit", "newest_complete_before"]
     resolved_run_at_utc: str
     available_at_utc: str
@@ -84,10 +122,31 @@ class GfsResolvedPlan(AtmosphericContract):
     selector_set_version: Literal[2] = 2
     spatial_footprint: Literal["global_regular_latlon_0p25"] = "global_regular_latlon_0p25"
     ranges: tuple[GfsPlannedRange, ...] = Field(min_length=1)
+    target_local_date: str | None = None
+    flying_window_version: str | None = None
     licence_reference: str = "https://registry.opendata.aws/noaa-gfs-bdp-pds/"
     attribution_text: str = (
         "NOAA Global Forecast System (GFS), accessed from NOAA Open Data on AWS."
     )
+
+    @model_validator(mode="after")
+    def resolved_local_date_metadata_must_match_schema(self) -> GfsResolvedPlan:
+        if (self.target_local_date is None) != (self.flying_window_version is None):
+            raise ValueError("Resolved GFS local-date metadata must be supplied together.")
+        if self.target_local_date is None:
+            if self.gfs_request_schema_version != 1:
+                raise ValueError("GFS request schema v2 requires local-date metadata.")
+            return self
+        if self.gfs_request_schema_version != 2:
+            raise ValueError("GFS local-date metadata requires request schema v2.")
+        if self.flying_window_version != SOFIA_FLYING_WINDOW_VERSION:
+            raise ValueError(
+                "Resolved GFS local-date request uses an unknown flying-window version."
+            )
+        expected = sofia_window_instants(self.target_local_date)
+        if tuple(sorted(item.valid_at_utc for item in self.ranges)) != expected:
+            raise ValueError("Resolved GFS local-date ranges must equal its Sofia flying window.")
+        return self
 
     @field_validator("resolved_run_at_utc", "available_at_utc")
     @classmethod
