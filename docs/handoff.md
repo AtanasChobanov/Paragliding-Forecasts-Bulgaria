@@ -244,6 +244,22 @@ Verification on 2026-09-10: full ML suite (`169 passed`), Ruff check/format,
 Python compile check, and `git diff --check` passed. The earlier 875 hPa and
 DEC-043 inversion decisions remain authoritative; the ML README now reflects
 them. The user-owned `docs/T-018-S07-implementaion-plan.md` remains unstaged.
+### S07 daily GFS collection orchestration — committed and verified
+
+DEC-044 implements the previously outstanding `--local-date YYYY-MM-DD` GFS
+collection mode. It derives the exact eleven Europe/Sofia 10:00--20:00 UTC
+instants through `zoneinfo`, records `target_local_date` and
+`sofia-flying-window/1` in the immutable request/resolved plan, and rejects a
+mixed `--local-date`/`--valid-at` invocation. The resolved GFS request contract
+has an additive schema-v2 daily form and collector `gfs-collector/5`; prior
+schema-v1 explicit-UTC plans stay readable. Summer/winter DST, strict date
+format, provenance, and CLI exclusivity tests pass.
+
+No larger default byte cap was guessed. A real bounded eleven-hour NOAA
+inventory is still needed to select a reviewed explicit daily cap before a
+live full-day collection; it is an external operational measurement, not a
+fabricated configuration value. The user-owned S07 implementation plan remains
+unstaged.
 ### S02 — durable atmospheric protocol
 
 The sole machine-readable T-017 field catalogue is the packaged resource

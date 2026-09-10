@@ -56,6 +56,7 @@ consequences. Temporary progress and Git state belong in
 | DEC-041     | Correct the common GFS S07 profile source contract                              | Accepted   | 2026-09-09 |
 | DEC-042     | Activate audited S07 humidity and turbulent-flux inputs                         | Accepted   | 2026-09-09 |
 | DEC-043     | Remove unrequired S07 resolved-inversion metrics                                | Accepted   | 2026-09-09 |
+| DEC-044     | Bind daily GFS collection to the Sofia flying-window policy                      | Accepted   | 2026-09-10 |
 
 ## Individual decisions
 
@@ -1904,6 +1905,34 @@ required because these metrics were never raw canonical fields.
 [`schema.ts`](../packages/database/src/schema.ts),
 [`migration.sql`](../packages/database/drizzle/20260909165706_remove_s07_inversion_metrics/migration.sql),
 and [`handoff.md`](handoff.md).
+### DEC-044 - Bind daily GFS collection to the Sofia flying-window policy
+
+**Status:** Accepted
+
+**Date:** 2026-09-10
+
+**Context:** The approved S07 feature contract is one `Europe/Sofia` local
+10:00--20:00 day, but the prior GFS collector exposed only repeatable raw UTC
+`--valid-at` arguments. This made the required DST conversion an error-prone
+caller responsibility and permitted accidental incomplete/cross-window runs.
+
+**Decision:** `gfs-collect --local-date YYYY-MM-DD` is the daily operational
+mode. It is mutually exclusive with low-level `--valid-at`, derives exactly the
+eleven Sofia 10:00--20:00 instants through IANA `zoneinfo`, and records
+`target_local_date` plus `sofia-flying-window/1` in request/resolved-plan
+provenance. The resolved-plan local-date shape is schema v2 and the collector
+is versioned as `gfs-collector/5`; existing schema-v1 explicit-UTC plans remain
+readable. One local day stays in one selected GFS cycle/run.
+
+**Consequences:** DST conversion cannot be silently supplied by callers.
+The 128 MiB default remains fail-closed; no larger default is inferred here.
+A real bounded eleven-hour inventory still must establish a reviewed explicit
+daily `--maximum-total-mib` before live operational collection.
+
+**Related files:** [`cli.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/cli.py),
+[`models.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/models.py),
+[`planner.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/planner.py),
+and [`README.md`](../services/ml/README.md).
 ## Open decisions
 
 | Question                                                                                                                  | Options / constraints                                                                                                                                                                                                             | Resolve by                                                               |
