@@ -240,10 +240,11 @@ Neighbourhood fitting consumes only S05 MSL pressure and surface 10 m U/V, not
 the retained 925 hPa node fields. S07 writes no SQLite rows; S08 owns that
 persistence boundary.
 
-Verification on 2026-09-10: full ML suite (`169 passed`), Ruff check/format,
-Python compile check, and `git diff --check` passed. The earlier 875 hPa and
-DEC-043 inversion decisions remain authoritative; the ML README now reflects
-them. The user-owned `docs/T-018-S07-implementaion-plan.md` remains unstaged.
+Final verification on 2026-09-10: full ML suite (`174 passed`), Ruff check/format,
+Python compile check, Drizzle `db:check`, root build/typecheck/lint/test/
+repo:check, and `git diff --check` passed. The earlier 875 hPa and DEC-043
+inversion decisions remain authoritative; the ML README now reflects them. The
+user-owned `docs/T-018-S07-implementaion-plan.md` remains unstaged.
 ### S07 daily GFS collection orchestration — committed and verified
 
 DEC-044 implements the previously outstanding `--local-date YYYY-MM-DD` GFS
