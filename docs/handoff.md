@@ -24,7 +24,7 @@ Record durable design choices in `docs/decisions.md`, task status in
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Branch        | `feature/T-018-weather-ingestion`                                                                                                                                                                                            |
 | Task status   | `T-018` is In Progress; S01–S06 are complete, S07–S10 remain.                                                                                                                                                                |
-| Next focus    | Implement S07 feature building from S06 accepted artifacts, using the approved daily schema and plan.                                                                                                                        |
+| Next focus    | Implement the S07 source-neutral builder/artifact stage from S06 accepted artifacts; v2 contracts and policy are committed.                                                                                             |
 | Local storage | SQLite selected by `DATABASE_URL`; local databases, raw source data, and interim artifacts are ignored.                                                                                                                      |
 | Migrations    | Earlier weather/configuration migrations, `20260909123754_correct_s07_feature_inputs`, and `20260909165706_remove_s07_inversion_metrics` are applied locally; normal `db:migrate` runs completed idempotently on 2026-09-09 and 2026-09-10. |
 
@@ -193,6 +193,22 @@ SQLite `STRICT` rebuild migration
 profile-layer columns and their pair constraint from the configured local
 database on 2026-09-10. A subsequent normal `db:migrate` completed
 idempotently.
+### S07 v2 artifact contracts and policy — committed and verified
+
+The S07 v2 boundary now has strict source-neutral contracts for hourly and
+daily feature snapshots, feature values, AGL layers, explicit missing-feature
+locators, and quality summaries. Daily profile identity is the approved tuple
+`(layer_base_agl_m, layer_top_agl_m, feature_key)`; keys therefore stay aligned
+with database column names rather than acquiring synthetic layer prefixes.
+
+The hash-pinned `weather-feature-policy-v1.json` declares the fixed Sofia
+window, all 37 daily and 13 profile-layer output keys, their catalogue field/
+unit identities, derivation versions, and the 0--1500/1500--3000 m AGL layers.
+It excludes the DEC-043 inversion metrics. The legacy atmospheric
+`FeatureSnapshot` v1 remains untouched for synthetic compatibility. New S07
+contract/policy tests plus the complete ML suite (157 tests), Ruff check/format,
+and `git diff --check` passed on 2026-09-10. The next S07 checkpoint is the
+source-neutral neighbourhood calculation and builder/artifact orchestration.
 ### S02 — durable atmospheric protocol
 
 The sole machine-readable T-017 field catalogue is the packaged resource
