@@ -6,6 +6,7 @@ from paragliding_forecasts_ml.ingestion.weather.features.builder import (
     build_daily_interval_features,
     build_daily_neighbourhood_features,
     build_daily_point_features,
+    build_hourly_point_features,
     build_profile_layer,
 )
 from paragliding_forecasts_ml.ingestion.weather.features.policy import load_feature_policy
@@ -22,7 +23,14 @@ from paragliding_forecasts_ml.ingestion.weather.spatial import (
 )
 
 
-def _field(field_code: str, value: float, *, grain: str = "surface", pressure: float | None = None):
+def _field(
+    field_code: str,
+    value: float,
+    *,
+    grain: str = "surface",
+    pressure: float | None = None,
+    dimension: str | None = None,
+):
     units = {
         "air_temperature_k": "K",
         "relative_humidity_percent": "%",
@@ -38,6 +46,7 @@ def _field(field_code: str, value: float, *, grain: str = "surface", pressure: f
         canonical_value=value,
         quality_state="real",
         pressure_pa=pressure,
+        dimension=dimension,
         source_selector_keys=(field_code,),
         source_raw_artifact_keys=("raw",),
         source_native_message_references=("message",),
@@ -90,7 +99,7 @@ def _sample(hour: int) -> SiteAlignedSample:
         fields=(
             _field("air_temperature_k", 290.0),
             _field("relative_humidity_percent", 60.0),
-            _field("specific_humidity_kg_per_kg", 0.006),
+            _field("specific_humidity_kg_per_kg", 0.006, dimension="2m_above_ground"),
             _field("wind_u_m_s", 1.0),
             _field("wind_v_m_s", 2.0),
         ),
@@ -148,9 +157,18 @@ def test_point_builder_reduces_daily_scalar_wind_and_leaves_intervals_for_their_
     by_key = {value.feature_key: value for value in values}
 
     assert by_key["air_temperature_2m_mean_k"].canonical_value == 290.0
+
     assert by_key["wind_speed_10m_mean_m_s"].canonical_value == pytest.approx(5**0.5)
     assert by_key["wind_direction_10m_mean_degrees_from_north"].canonical_value is not None
     assert "precipitation_total_mm" not in by_key
+
+
+def test_hourly_builder_selects_the_normalized_2m_specific_humidity_dimension() -> None:
+    policy, _ = load_feature_policy()
+    values = build_hourly_point_features(_sample(10), policy.hourly_fields)
+    by_key = {value.feature_key: value for value in values}
+
+    assert by_key["specific_humidity_2m_kg_per_kg"].canonical_value == 0.006
 
 
 def _interval(field_code: str, value: float, start_hour: int) -> SampledField:
@@ -240,23 +258,56 @@ def _neighbourhood_inputs(hours: range):
         radius_km=5.0,
         definition_sha256="c" * 64,
         nodes=(
-            SamplingNode(row_index=0, column_index=0, latitude_deg=42.0, longitude_deg=23.0, distance_km=1.0),
-            SamplingNode(row_index=0, column_index=1, latitude_deg=42.0, longitude_deg=23.1, distance_km=1.0),
-            SamplingNode(row_index=1, column_index=0, latitude_deg=42.1, longitude_deg=23.0, distance_km=1.0),
+            SamplingNode(
+                row_index=0, column_index=0, latitude_deg=42.0, longitude_deg=23.0, distance_km=1.0
+            ),
+            SamplingNode(
+                row_index=0, column_index=1, latitude_deg=42.0, longitude_deg=23.1, distance_km=1.0
+            ),
+            SamplingNode(
+                row_index=1, column_index=0, latitude_deg=42.1, longitude_deg=23.0, distance_km=1.0
+            ),
         ),
     )
     site = SiteConfigSnapshot(
-        site_id=1, site_slug="site", site_name="Site", site_time_zone="Europe/Sofia",
-        latitude_deg=42.0, longitude_deg=23.0, coordinate_reference="WGS84",
-        reference_elevation_msl_m=100.0, elevation_reference="msl",
+        site_id=1,
+        site_slug="site",
+        site_name="Site",
+        site_time_zone="Europe/Sofia",
+        latitude_deg=42.0,
+        longitude_deg=23.0,
+        coordinate_reference="WGS84",
+        reference_elevation_msl_m=100.0,
+        elevation_reference="msl",
     )
     records = tuple(
         NeighbourhoodNodeRecord(
-            site_id=1, footprint_key="b" * 64, valid_at_utc=f"2026-09-10T{hour:02d}:00:00Z",
+            site_id=1,
+            footprint_key="b" * 64,
+            valid_at_utc=f"2026-09-10T{hour:02d}:00:00Z",
             fields=(
-                NeighbourhoodFieldValues(field_code="air_pressure_pa", grain="surface", dimension="mean_sea_level", canonical_unit="Pa", values=(100000.0, 100010.0, 100020.0), source_selector_keys=("p",)),
-                NeighbourhoodFieldValues(field_code="wind_u_m_s", grain="surface", canonical_unit="m/s", values=(1.0, 2.0, 1.0), source_selector_keys=("u",)),
-                NeighbourhoodFieldValues(field_code="wind_v_m_s", grain="surface", canonical_unit="m/s", values=(1.0, 1.0, 2.0), source_selector_keys=("v",)),
+                NeighbourhoodFieldValues(
+                    field_code="air_pressure_pa",
+                    grain="surface",
+                    dimension="mean_sea_level",
+                    canonical_unit="Pa",
+                    values=(100000.0, 100010.0, 100020.0),
+                    source_selector_keys=("p",),
+                ),
+                NeighbourhoodFieldValues(
+                    field_code="wind_u_m_s",
+                    grain="surface",
+                    canonical_unit="m/s",
+                    values=(1.0, 2.0, 1.0),
+                    source_selector_keys=("u",),
+                ),
+                NeighbourhoodFieldValues(
+                    field_code="wind_v_m_s",
+                    grain="surface",
+                    canonical_unit="m/s",
+                    values=(1.0, 1.0, 2.0),
+                    source_selector_keys=("v",),
+                ),
             ),
         )
         for hour in hours
@@ -269,7 +320,11 @@ def test_neighbourhood_builder_is_strict_and_uses_surface_msl_inputs() -> None:
     samples = tuple(_sample(hour) for hour in range(10, 21))
     footprints, sites, records = _neighbourhood_inputs(range(10, 21))
     values = build_daily_neighbourhood_features(
-        samples, records, footprints, sites, policy.daily_fields,
+        samples,
+        records,
+        footprints,
+        sites,
+        policy.daily_fields,
         expected_instants_utc=tuple(sample.valid_at_utc for sample in samples),
     )
     by_key = {value.feature_key: value for value in values}

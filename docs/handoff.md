@@ -23,8 +23,8 @@ Record durable design choices in `docs/decisions.md`, task status in
 | Field         | Value                                                                                                                                                                                                                        |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Branch        | `feature/T-018-weather-ingestion`                                                                                                                                                                                            |
-| Task status   | `T-018` is In Progress; S01–S06 are complete, S07–S10 remain.                                                                                                                                                                |
-| Next focus    | Implement the S07 source-neutral builder/artifact stage from S06 accepted artifacts; v2 contracts and policy are committed.                                                                                             |
+| Task status   | `T-018` is In Progress; S01–S07 are complete, S08–S10 remain.                                                                                                                                                                |
+| Next focus    | Implement S08 persistence of the verified S07 v2 feature artifacts; no SQLite writes occur in S07.                                                                                                                         |
 | Local storage | SQLite selected by `DATABASE_URL`; local databases, raw source data, and interim artifacts are ignored.                                                                                                                      |
 | Migrations    | Earlier weather/configuration migrations, `20260909123754_correct_s07_feature_inputs`, and `20260909165706_remove_s07_inversion_metrics` are applied locally; normal `db:migrate` runs completed idempotently on 2026-09-09 and 2026-09-10. |
 
@@ -220,6 +220,30 @@ from reduced mean U/V, and emits `lower_boundary_not_bracketed` for lower omega.
 Analytic coverage/anchor tests and the complete ML suite (162 tests), Ruff
 check/format, and `git diff --check` passed on 2026-09-10. Daily surface/
 interval reductions and immutable builder artifact orchestration remain.
+### S07 artifact builder and CLI — committed and verified
+
+S07 is complete. `weather-build-features --run-key <uuid>` is an offline-only
+resume command. It requires the current `validated/complete` boundary; a
+quarantined validator returns `2` and creates neither feature evidence nor a
+state event. A successful feature build writes the immutable
+`feature_builder/weather-feature-builder-1/<fingerprint>/` boundary with:
+`feature-snapshots.json` (hourly v2), `day-feature-snapshots.json` (daily v2),
+`feature-quality-report.json`, and its stage manifest, then appends or
+supersedes `features_built/complete` in the state ledger. It returns `0` for a
+new or reused complete boundary and `1` for operational or hash-chain failure.
+
+The fingerprint includes the validator manifest, accepted and missing S06
+artifacts, exact S05 neighbourhood artifact, policy bytes, and v2 contract/
+builder versions. Daily values have the fixed eleven Sofia instants and exact
+interval coverage; missing values stay explicit, with no partial aggregate.
+Neighbourhood fitting consumes only S05 MSL pressure and surface 10 m U/V, not
+the retained 925 hPa node fields. S07 writes no SQLite rows; S08 owns that
+persistence boundary.
+
+Verification on 2026-09-10: full ML suite (`169 passed`), Ruff check/format,
+Python compile check, and `git diff --check` passed. The earlier 875 hPa and
+DEC-043 inversion decisions remain authoritative; the ML README now reflects
+them. The user-owned `docs/T-018-S07-implementaion-plan.md` remains unstaged.
 ### S02 — durable atmospheric protocol
 
 The sole machine-readable T-017 field catalogue is the packaged resource

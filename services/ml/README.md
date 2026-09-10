@@ -28,7 +28,7 @@ must calculate and pass the reviewed UTC instants explicitly in one collection
 run. Do not split the day into runs or build a cross-run assembler.
 
 GFS profile collection now includes HGT/TMP/RH/UGRD/VGRD/VVEL at
-1000/975/950/925/900/875/850/800/750/700 hPa. These pressure levels flow
+1000/975/950/925/900/850/800/750/700/650/600/550/500 hPa. These pressure levels flow
 through parsing, normalization, canonical sampling, and source validation so
 the S07 builder can bracket AGL layers without a source-specific path.
 
@@ -249,6 +249,31 @@ exit `2` means quarantine (and blocks S07); exit `1` is an operational or hash
 chain failure. Repeating the same validated run reuses the prior immutable
 boundary and appends no duplicate ledger event. There is no manual alias or
 mapping approval file for weather validation.
+### Versioned daily feature artifacts (T-018/S07)
+
+`weather-build-features` is offline-only. It requires the current S06
+`validated/complete` state, verifies the complete S05/S06/raw hash chain, and
+writes one immutable `feature-builder/<fingerprint>/` boundary:
+
+```powershell
+uv run --project services/ml weather-build-features --run-key <uuid>
+```
+
+The stage never calls a provider and never writes SQLite. It emits ordered v2
+hourly feature snapshots, one daily site/local-date snapshot with the two
+approved AGL layers, and a machine-readable quality report. The fingerprint
+covers the validator manifest, accepted and missing S06 evidence, exact S05
+neighbourhood evidence, packaged feature-policy bytes, contract/builder
+versions. A missing feature is retained as `null` with its machine-readable
+reason; it does not turn a complete validation boundary into a failed feature
+build. Strict daily values need all eleven Europe/Sofia 10:00--20:00 instants,
+and interval values need exact non-overlapping `[10:00,20:00)` coverage.
+
+The planner fit uses only S05 neighbourhood mean-sea-level pressure and surface
+U/V nodes. It does not substitute the retained 925 hPa node values. A quarantined
+validator boundary returns exit `2` and creates no S07 artifact or state event;
+operational/hash-chain failures return exit `1`; a complete or reused boundary
+returns exit `0`.
 The real command chain is:
 
 ```powershell

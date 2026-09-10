@@ -327,3 +327,68 @@ def _validate_mask_and_summary(
         ]
         if locator.missing_reason != value.missing_reason:
             raise ValueError("Missing feature locator reason must match its feature value.")
+
+
+class HourlyFeatureSnapshotBatch(AtmosphericContract):
+    """One immutable artifact containing all hourly v2 feature snapshots for a run."""
+
+    hourly_feature_snapshot_batch_schema_version: Literal[1] = 1
+    run_key: str
+    snapshots: tuple[HourlyFeatureSnapshot, ...]
+
+    @field_validator("run_key")
+    @classmethod
+    def batch_run_key_must_be_uuid_v4(cls, value: str) -> str:
+        if UUID_V4_PATTERN.fullmatch(value) is None:
+            raise ValueError("run_key must be a lowercase UUID v4.")
+        return value
+
+
+class DailyFeatureSnapshotBatch(AtmosphericContract):
+    """One immutable artifact containing all daily v2 feature snapshots for a run."""
+
+    daily_feature_snapshot_batch_schema_version: Literal[1] = 1
+    run_key: str
+    snapshots: tuple[DailyFeatureSnapshot, ...]
+
+    @field_validator("run_key")
+    @classmethod
+    def daily_batch_run_key_must_be_uuid_v4(cls, value: str) -> str:
+        if UUID_V4_PATTERN.fullmatch(value) is None:
+            raise ValueError("run_key must be a lowercase UUID v4.")
+        return value
+
+
+class FeatureQualityReport(AtmosphericContract):
+    """Run-wide countable quality evidence for S07 feature snapshots."""
+
+    feature_quality_report_schema_version: Literal[1] = 1
+    run_key: str
+    feature_contract_version: str
+    policy_version: str
+    policy_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    hourly_snapshot_count: int = Field(ge=0)
+    daily_snapshot_count: int = Field(ge=0)
+    total_features: int = Field(ge=0)
+    quality_counts: dict[QualityState, int]
+    missing_feature_count: int = Field(ge=0)
+
+    @field_validator("run_key")
+    @classmethod
+    def report_run_key_must_be_uuid_v4(cls, value: str) -> str:
+        if UUID_V4_PATTERN.fullmatch(value) is None:
+            raise ValueError("run_key must be a lowercase UUID v4.")
+        return value
+
+    @field_validator("feature_contract_version")
+    @classmethod
+    def report_contract_version_must_be_versioned(cls, value: str) -> str:
+        return validate_component_version(value)
+
+    @model_validator(mode="after")
+    def report_counts_must_balance(self) -> FeatureQualityReport:
+        if any(value < 0 for value in self.quality_counts.values()):
+            raise ValueError("quality_counts cannot be negative.")
+        if sum(self.quality_counts.values()) != self.total_features:
+            raise ValueError("quality_counts must total total_features.")
+        return self

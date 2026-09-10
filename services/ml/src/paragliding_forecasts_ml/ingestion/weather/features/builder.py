@@ -53,6 +53,43 @@ class FeatureBuildError(ValueError):
     """Validated evidence cannot be reduced under the S07 feature policy."""
 
 
+def build_hourly_point_features(
+    sample: SiteAlignedSample, entries: tuple[FeaturePolicyEntry, ...]
+) -> tuple[FeatureValue, ...]:
+    """Materialize the policy-ordered hourly point/provider view for one accepted sample."""
+
+    values: list[FeatureValue] = []
+    for entry in entries:
+        if entry.feature_key == "wind_direction_10m_degrees_from_north":
+            u_value = _point_hour_value(sample, _entry_for(entries, "wind_u_10m_m_s"))
+            v_value = _point_hour_value(sample, _entry_for(entries, "wind_v_10m_m_s"))
+            direction = (
+                None
+                if u_value is None or v_value is None
+                else meteorological_direction_from_uv(u_value, v_value)
+            )
+            values.append(
+                _missing_feature(entry, "wind_components_missing")
+                if direction is None
+                else _derived_feature(entry, direction)
+            )
+            continue
+        value = _point_hour_value(sample, entry)
+        values.append(
+            _missing_feature(entry, "hour_value_missing")
+            if value is None
+            else _source_feature(entry, value)
+        )
+    return tuple(values)
+
+
+def _entry_for(entries: tuple[FeaturePolicyEntry, ...], feature_key: str) -> FeaturePolicyEntry:
+    matches = [entry for entry in entries if entry.feature_key == feature_key]
+    if len(matches) != 1:
+        raise FeatureBuildError(f"Hourly policy is missing {feature_key}.")
+    return matches[0]
+
+
 def build_daily_point_features(
     samples: tuple[SiteAlignedSample, ...],
     entries: tuple[FeaturePolicyEntry, ...],
@@ -263,11 +300,17 @@ def _neighbourhood_field(
     matches = [
         field
         for field in record.fields
-        if field.field_code == field_code and field.dimension == dimension and field.grain == "surface"
+        if field.field_code == field_code
+        and field.dimension == dimension
+        and field.grain == "surface"
     ]
-    if len(matches) != 1 or any(value is None or not isfinite(value) for value in matches[0].values):
+    if len(matches) != 1 or any(
+        value is None or not isfinite(value) for value in matches[0].values
+    ):
         return None
     return tuple(float(value) for value in matches[0].values if value is not None)
+
+
 def _point_hour_value(sample: SiteAlignedSample, entry: FeaturePolicyEntry) -> float | None:
     if entry.field_code == "wind_speed_m_s":
         u_value, v_value = (
@@ -286,6 +329,8 @@ def _point_hour_value(sample: SiteAlignedSample, entry: FeaturePolicyEntry) -> f
         "mid": "mid",
         "high": "high",
     }.get(entry.variant)
+    if entry.field_code == "specific_humidity_kg_per_kg" and entry.variant == "2m":
+        dimension = "2m_above_ground"
     matches = [
         field
         for field in sample.fields
@@ -516,6 +561,23 @@ def _reducer(entry: FeaturePolicyEntry) -> Callable[[tuple[float, ...]], float]:
     if entry.statistic == "max":
         return max
     raise FeatureBuildError(f"Profile feature has unsupported statistic: {entry.statistic}")
+
+
+def _source_feature(entry: FeaturePolicyEntry, value: float) -> FeatureValue:
+    from ...atmosphere.catalogue import load_catalogue
+
+    return FeatureValue(
+        feature_key=entry.feature_key,
+        field_code=entry.field_code,
+        canonical_unit=load_catalogue().field_unit(entry.field_code),
+        variant=entry.variant,
+        statistic=entry.statistic,
+        canonical_value=value,
+        quality_state="real",
+        derivation_method=entry.derivation_method,
+        derivation_version=entry.derivation_method,
+        input_field_codes=(entry.field_code,),
+    )
 
 
 def _derived_feature(entry: FeaturePolicyEntry, value: float) -> FeatureValue:
