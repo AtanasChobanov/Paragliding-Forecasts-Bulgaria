@@ -33,6 +33,8 @@ def _field(
 ):
     units = {
         "air_temperature_k": "K",
+        "air_pressure_pa": "Pa",
+        "provider_boundary_layer_height_agl_m": "m",
         "relative_humidity_percent": "%",
         "specific_humidity_kg_per_kg": "kg/kg",
         "wind_u_m_s": "m/s",
@@ -113,7 +115,7 @@ def test_profile_builder_uses_surface_anchors_and_marks_lower_omega_missing() ->
     layer = build_profile_layer(
         samples,
         policy.profile_layers[0],
-        policy.profile_layer_fields,
+        policy.entries_for_layer(policy.profile_layers[0]),
         expected_instants_utc=tuple(sample.valid_at_utc for sample in samples),
     )
     values = {field.feature_key: field for field in layer.fields}
@@ -121,8 +123,8 @@ def test_profile_builder_uses_surface_anchors_and_marks_lower_omega_missing() ->
     assert values["temperature_lapse_rate_mean_k_per_km"].canonical_value == pytest.approx(
         10000.0 / 1498.0
     )
-    assert values["vertical_velocity_mean_pa_s"].canonical_value is None
-    assert values["vertical_velocity_mean_pa_s"].missing_reason == "lower_boundary_not_bracketed"
+    assert "vertical_velocity_mean_pa_s" not in values
+    assert "vertical_velocity_min_pa_s" not in values
     assert values["wind_direction_mean_degrees_from_north"].canonical_value is not None
 
 
@@ -132,7 +134,7 @@ def test_profile_builder_keeps_each_feature_strict_when_an_hour_is_missing() -> 
     layer = build_profile_layer(
         samples,
         policy.profile_layers[1],
-        policy.profile_layer_fields,
+        policy.entries_for_layer(policy.profile_layers[0]),
         expected_instants_utc=tuple(f"2026-09-10T{hour:02d}:00:00Z" for hour in range(10, 21)),
     )
 
@@ -189,6 +191,91 @@ def _interval(field_code: str, value: float, start_hour: int) -> SampledField:
         source_selector_keys=(field_code,),
         source_raw_artifact_keys=("raw",),
         source_native_message_references=("message",),
+    )
+
+
+def _thermal_sample(
+    hour: int, sensible_heat_flux: float, latent_heat_flux: float
+) -> SiteAlignedSample:
+    sample = _sample(hour)
+    return sample.model_copy(
+        update={
+            "fields": (
+                *sample.fields,
+                _field("air_pressure_pa", 90_000.0, dimension="surface"),
+                _field("provider_boundary_layer_height_agl_m", 1_000.0),
+                _interval("surface_sensible_heat_flux_upward_w_m2", sensible_heat_flux, hour - 1),
+                _interval("surface_latent_heat_flux_upward_w_m2", latent_heat_flux, hour - 1),
+            )
+        }
+    )
+
+
+def test_s08_derived_hourly_features_keep_gfs_cloudbase_and_pbl_lcl_separate() -> None:
+    policy, _ = load_feature_policy()
+    sample = _thermal_sample(10, 150.0, 100.0)
+    values = {
+        value.feature_key: value
+        for value in build_hourly_point_features(
+            sample, policy.hourly_fields, source_id="noaa_gfs_0p25_aws_grib2"
+        )
+    }
+
+    assert values["provider_cloud_base_agl_m"].quality_state == "unsupported"
+    assert values["provider_cloud_base_agl_m"].missing_reason == "source_field_unavailable"
+    assert values["mixed_layer_lcl_agl_m"].canonical_value is not None
+    assert values["pbl_minus_lcl_m"].canonical_value == pytest.approx(
+        1_000.0 - values["mixed_layer_lcl_agl_m"].canonical_value
+    )
+    assert values["surface_buoyancy_flux_kinematic_m2_s3"].canonical_value is not None
+    assert values["convective_velocity_scale_m_s"].canonical_value is not None
+
+
+def test_s08_daily_thermal_features_exclude_the_preceding_baseline_interval() -> None:
+    policy, _ = load_feature_policy()
+    samples = tuple(
+        _thermal_sample(
+            hour,
+            10_000.0 if hour == 10 else float(hour),
+            50.0,
+        )
+        for hour in range(10, 21)
+    )
+    expected_instants = tuple(sample.valid_at_utc for sample in samples)
+    hourly = tuple(
+        {
+            value.feature_key: value
+            for value in build_hourly_point_features(sample, policy.hourly_fields)
+        }
+        for sample in samples
+    )
+    values = {
+        value.feature_key: value
+        for value in build_daily_interval_features(
+            samples,
+            policy.daily_fields,
+            expected_instants_utc=expected_instants,
+        )
+    }
+    buoyancy = [
+        value["surface_buoyancy_flux_kinematic_m2_s3"].canonical_value for value in hourly[1:]
+    ]
+    convective_velocity = [
+        value["convective_velocity_scale_m_s"].canonical_value for value in hourly[1:]
+    ]
+
+    assert all(value is not None for value in (*buoyancy, *convective_velocity))
+    assert values["surface_buoyancy_flux_kinematic_mean_m2_s3"].canonical_value == pytest.approx(
+        sum(value for value in buoyancy if value is not None) / 10
+    )
+    assert values["surface_buoyancy_flux_kinematic_max_m2_s3"].canonical_value == pytest.approx(
+        max(value for value in buoyancy if value is not None)
+    )
+    assert values["convective_velocity_scale_mean_m_s"].canonical_value == pytest.approx(
+        sum(value for value in convective_velocity if value is not None) / 10
+    )
+    assert values["convective_velocity_scale_max_m_s"].canonical_value == pytest.approx(
+        max(value for value in convective_velocity if value is not None)
     )
 
 

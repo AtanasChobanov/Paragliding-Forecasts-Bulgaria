@@ -1,4 +1,4 @@
-"""Packaged, hash-pinned output policy for S07 v2 feature artifacts."""
+"""Packaged, hash-pinned output policy for versioned weather feature artifacts."""
 
 from __future__ import annotations
 
@@ -13,11 +13,11 @@ from ..serialization import sha256_bytes
 from .aggregation import SOFIA_TIME_ZONE, SOFIA_WINDOW_VERSION
 from .contracts import FEATURE_KEY_PATTERN
 
-POLICY_RESOURCE = "weather-feature-policy-v1.json"
+POLICY_RESOURCE = "weather-feature-policy-v2.json"
 
 
 class FeaturePolicyError(ValueError):
-    """The packaged S07 feature policy is invalid or drifts from the catalogue."""
+    """A packaged weather feature policy is invalid or drifts from the catalogue."""
 
 
 class FeaturePolicyEntry(AtmosphericContract):
@@ -51,38 +51,41 @@ class FeaturePolicyEntry(AtmosphericContract):
 
 
 class FeatureLayerPolicy(AtmosphericContract):
-    """One ordered AGL layer identity retained in daily v2 output."""
+    """One AGL layer identity and the keys that apply to that layer."""
 
     layer_base_agl_m: float = Field(ge=0)
     layer_top_agl_m: float = Field(gt=0)
+    fields: tuple[FeaturePolicyEntry, ...] = ()
 
     @model_validator(mode="after")
-    def bounds_must_increase(self) -> FeatureLayerPolicy:
+    def bounds_and_fields_must_be_valid(self) -> FeatureLayerPolicy:
         if self.layer_top_agl_m <= self.layer_base_agl_m:
             raise ValueError("Feature layer bounds must be strictly increasing.")
+        keys = [entry.feature_key for entry in self.fields]
+        if len(keys) != len(set(keys)):
+            raise ValueError("Layer feature keys must be unique.")
         return self
 
 
 class FeaturePolicy(AtmosphericContract):
-    """All deterministic output order and formula identities for S07 v2."""
+    """All deterministic output order and formula identities for v1/v2 artifacts."""
 
-    feature_policy_schema_version: Literal[1] = 1
-    policy_version: Literal["weather-feature-policy-v1"]
-    feature_contract_version: Literal["weather-feature-contract/2"]
-    feature_builder_version: Literal["weather-feature-builder/1"]
+    feature_policy_schema_version: Literal[1, 2] = 2
+    policy_version: Literal["weather-feature-policy-v1", "weather-feature-policy-v2"]
+    feature_contract_version: Literal["weather-feature-contract/2", "weather-feature-contract/3"]
+    feature_builder_version: Literal["weather-feature-builder/1", "weather-feature-builder/2"]
     time_zone: Literal["Europe/Sofia"]
     flying_window_version: Literal["sofia-flying-window/1"]
     hourly_fields: tuple[FeaturePolicyEntry, ...] = Field(min_length=1)
     daily_fields: tuple[FeaturePolicyEntry, ...] = Field(min_length=1)
     profile_layers: tuple[FeatureLayerPolicy, ...] = Field(min_length=1)
-    profile_layer_fields: tuple[FeaturePolicyEntry, ...] = Field(min_length=1)
+    profile_layer_fields: tuple[FeaturePolicyEntry, ...] = ()
 
     @model_validator(mode="after")
     def entries_and_layers_must_be_unique(self) -> FeaturePolicy:
         for label, values in (
             ("hourly_fields", self.hourly_fields),
             ("daily_fields", self.daily_fields),
-            ("profile_layer_fields", self.profile_layer_fields),
         ):
             keys = [value.feature_key for value in values]
             if len(keys) != len(set(keys)):
@@ -91,16 +94,46 @@ class FeaturePolicy(AtmosphericContract):
         if len(layers) != len(set(layers)):
             raise ValueError("profile_layers must be unique.")
         if self.time_zone != SOFIA_TIME_ZONE or self.flying_window_version != SOFIA_WINDOW_VERSION:
-            raise ValueError("S07 feature policy must use the fixed Sofia flying-window contract.")
+            raise ValueError("Feature policy must use the fixed Sofia flying-window contract.")
+        expected_versions = {
+            1: (
+                "weather-feature-policy-v1",
+                "weather-feature-contract/2",
+                "weather-feature-builder/1",
+            ),
+            2: (
+                "weather-feature-policy-v2",
+                "weather-feature-contract/3",
+                "weather-feature-builder/2",
+            ),
+        }[self.feature_policy_schema_version]
+        if (
+            self.policy_version,
+            self.feature_contract_version,
+            self.feature_builder_version,
+        ) != expected_versions:
+            raise ValueError("Feature policy/version tuple is inconsistent.")
+        if self.feature_policy_schema_version == 1:
+            if not self.profile_layer_fields or any(layer.fields for layer in self.profile_layers):
+                raise ValueError("v1 policy requires one shared non-empty profile field list.")
+        elif self.profile_layer_fields or any(not layer.fields for layer in self.profile_layers):
+            raise ValueError("v2 policy requires non-empty fields on every layer only.")
         return self
 
+    def entries_for_layer(self, layer: FeatureLayerPolicy) -> tuple[FeaturePolicyEntry, ...]:
+        """Return the policy fields applicable to one explicit AGL layer."""
 
-def load_feature_policy() -> tuple[FeaturePolicy, str]:
-    """Load the exact packaged policy bytes and reject catalogue drift."""
+        return (
+            self.profile_layer_fields if self.feature_policy_schema_version == 1 else layer.fields
+        )
+
+
+def load_feature_policy(resource_name: str = POLICY_RESOURCE) -> tuple[FeaturePolicy, str]:
+    """Load exact packaged policy bytes and reject catalogue drift."""
 
     payload = (
         files("paragliding_forecasts_ml.ingestion.weather.resources")
-        .joinpath(POLICY_RESOURCE)
+        .joinpath(resource_name)
         .read_bytes()
     )
     try:

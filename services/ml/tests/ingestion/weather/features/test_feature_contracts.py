@@ -39,74 +39,40 @@ def _value(
     )
 
 
-def test_feature_policy_uses_database_aligned_keys_and_excludes_inversion_metrics() -> None:
+def test_feature_policy_uses_database_aligned_keys_and_layer_specific_omega() -> None:
     policy, policy_sha256 = load_feature_policy()
 
     assert len(policy_sha256) == 64
+    assert policy.feature_policy_schema_version == 2
+    assert policy.feature_contract_version == "weather-feature-contract/3"
     assert [(layer.layer_base_agl_m, layer.layer_top_agl_m) for layer in policy.profile_layers] == [
         (0.0, 1500.0),
         (1500.0, 3000.0),
     ]
-    assert [entry.feature_key for entry in policy.daily_fields] == [
-        "air_temperature_2m_mean_k",
-        "air_temperature_2m_min_k",
-        "air_temperature_2m_max_k",
-        "dew_point_temperature_2m_mean_k",
-        "relative_humidity_2m_mean_percent",
-        "relative_humidity_2m_max_percent",
-        "surface_pressure_mean_pa",
-        "mean_sea_level_pressure_mean_pa",
-        "wind_u_10m_mean_m_s",
-        "wind_v_10m_mean_m_s",
-        "wind_speed_10m_mean_m_s",
-        "wind_speed_10m_max_m_s",
-        "wind_direction_10m_mean_degrees_from_north",
-        "provider_boundary_layer_height_agl_mean_m",
-        "provider_boundary_layer_height_agl_max_m",
-        "provider_cloud_base_agl_mean_m",
-        "provider_cloud_base_agl_min_m",
-        "provider_cloud_base_agl_max_m",
-        "total_column_water_vapour_mean_kg_m2",
-        "total_cloud_cover_mean_percent",
-        "total_cloud_cover_max_percent",
-        "low_cloud_cover_mean_percent",
-        "low_cloud_cover_max_percent",
-        "mid_cloud_cover_mean_percent",
-        "high_cloud_cover_mean_percent",
-        "precipitation_total_mm",
-        "precipitation_max_hourly_mm",
-        "shortwave_radiation_mean_w_m2",
-        "shortwave_radiation_max_w_m2",
-        "surface_sensible_heat_flux_mean_w_m2",
-        "surface_latent_heat_flux_mean_w_m2",
-        "cape_max_j_per_kg",
-        "cin_magnitude_max_j_per_kg",
-        "neighbourhood_pressure_gradient_mean_pa_per_km",
-        "neighbourhood_pressure_gradient_max_pa_per_km",
-        "neighbourhood_low_level_divergence_mean_s_inverse",
-        "neighbourhood_low_level_divergence_min_s_inverse",
-    ]
-    assert [entry.feature_key for entry in policy.profile_layer_fields] == [
-        "temperature_lapse_rate_mean_k_per_km",
-        "temperature_lapse_rate_max_k_per_km",
-        "relative_humidity_mean_percent",
-        "specific_humidity_mean_kg_per_kg",
-        "wind_u_mean_m_s",
-        "wind_v_mean_m_s",
-        "wind_speed_mean_m_s",
-        "wind_speed_max_m_s",
-        "wind_direction_mean_degrees_from_north",
-        "wind_shear_mean_m_s_per_km",
-        "wind_shear_max_m_s_per_km",
-        "vertical_velocity_mean_pa_s",
-        "vertical_velocity_min_pa_s",
-    ]
-    all_keys = [
-        *(entry.feature_key for entry in policy.hourly_fields),
-        *(entry.feature_key for entry in policy.daily_fields),
-        *(entry.feature_key for entry in policy.profile_layer_fields),
-    ]
-    assert not any("inversion" in key for key in all_keys)
+    hourly = {entry.feature_key for entry in policy.hourly_fields}
+    daily = {entry.feature_key for entry in policy.daily_fields}
+    assert {
+        "mixed_layer_lcl_agl_m",
+        "pbl_minus_lcl_m",
+        "surface_buoyancy_flux_kinematic_m2_s3",
+        "convective_velocity_scale_m_s",
+    } <= hourly
+    assert {
+        "mixed_layer_lcl_agl_mean_m",
+        "mixed_layer_lcl_agl_min_m",
+        "mixed_layer_lcl_agl_max_m",
+        "pbl_minus_lcl_mean_m",
+        "pbl_minus_lcl_max_m",
+        "surface_buoyancy_flux_kinematic_mean_m2_s3",
+        "surface_buoyancy_flux_kinematic_max_m2_s3",
+        "convective_velocity_scale_mean_m_s",
+        "convective_velocity_scale_max_m_s",
+    } <= daily
+    lower = {entry.feature_key for entry in policy.entries_for_layer(policy.profile_layers[0])}
+    upper = {entry.feature_key for entry in policy.entries_for_layer(policy.profile_layers[1])}
+    assert not {"vertical_velocity_mean_pa_s", "vertical_velocity_min_pa_s"} & lower
+    assert {"vertical_velocity_mean_pa_s", "vertical_velocity_min_pa_s"} <= upper
+    assert not any("inversion" in key for key in (*hourly, *daily, *lower, *upper))
 
 
 def test_v2_daily_contract_keeps_layer_identity_outside_feature_key() -> None:

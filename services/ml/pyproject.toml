@@ -9,6 +9,7 @@ dependencies = [
     "numpy>=2.0,<3",
     "playwright>=1.62.0",
     "pydantic>=2.12.0,<3",
+    "scipy>=1.18.1",
     "selectolax>=0.4.11",
     "tifffile>=2025.6.11,<2027",
     "tzdata>=2025.2,<2027",
@@ -25,6 +26,8 @@ gfs-parse = "paragliding_forecasts_ml.ingestion.gfs.parser_cli:main"
 gfs-sample = "paragliding_forecasts_ml.ingestion.weather.spatial_cli:main"
 weather-validate = "paragliding_forecasts_ml.ingestion.weather.validation_cli:main"
 weather-build-features = "paragliding_forecasts_ml.ingestion.weather.feature_cli:main"
+weather-persist = "paragliding_forecasts_ml.ingestion.weather.persistence_cli:main"
+weather-ingest = "paragliding_forecasts_ml.ingestion.weather.pipeline_cli:main"
 copernicus-elevations = "paragliding_forecasts_ml.ingestion.copernicus.elevation_cli:main"
 xccontest-ingest = "paragliding_forecasts_ml.ingestion.xccontest.pipeline_cli:main"
 

@@ -35,7 +35,7 @@ from .validation import (
     validation_upstream_boundary,
 )
 
-FEATURE_BUILDER_VERSION = "weather-feature-builder/1"
+FEATURE_BUILDER_VERSION = "weather-feature-builder/2"
 
 
 class WeatherFeatureBuildError(RuntimeError):
@@ -99,7 +99,9 @@ def build_weather_features(
         "feature_builder", FEATURE_BUILDER_VERSION, fingerprint
     ):
         return existing
-    hourly = _build_hourly_snapshots(accepted.samples, policy, store.run_key, fingerprint)
+    hourly = _build_hourly_snapshots(
+        accepted.samples, policy, store.run_key, fingerprint, raw_manifest.source_id
+    )
     daily = _build_daily_snapshots(
         accepted.samples,
         spatial_batch,
@@ -108,6 +110,7 @@ def build_weather_features(
         store.run_key,
         raw_manifest.source_product_key,
         fingerprint,
+        raw_manifest.source_id,
     )
     report = _quality_report(store.run_key, policy, policy_sha256, hourly, daily)
     directory = store.begin_stage("feature_builder", FEATURE_BUILDER_VERSION, fingerprint)
@@ -149,7 +152,11 @@ def build_weather_features(
 
 
 def _build_hourly_snapshots(
-    samples: tuple[SiteAlignedSample, ...], policy: FeaturePolicy, run_key: str, fingerprint: str
+    samples: tuple[SiteAlignedSample, ...],
+    policy: FeaturePolicy,
+    run_key: str,
+    fingerprint: str,
+    source_id: str,
 ) -> tuple[HourlyFeatureSnapshot, ...]:
     return tuple(
         HourlyFeatureSnapshot(
@@ -162,7 +169,11 @@ def _build_hourly_snapshots(
             valid_local_date=sample.valid_local_date,
             feature_contract_version=policy.feature_contract_version,
             input_fingerprint_sha256=fingerprint,
-            fields=(fields := build_hourly_point_features(sample, policy.hourly_fields)),
+            fields=(
+                fields := build_hourly_point_features(
+                    sample, policy.hourly_fields, source_id=source_id
+                )
+            ),
             missing_features=_missing_locators(fields, ()),
             quality_summary=_quality_summary(fields, ()),
         )
@@ -180,6 +191,7 @@ def _build_daily_snapshots(
     run_key: str,
     source_product_key: str,
     fingerprint: str,
+    source_id: str,
 ) -> tuple[DailyFeatureSnapshot, ...]:
     grouped: dict[tuple[int, str], list[SiteAlignedSample]] = defaultdict(list)
     for sample in samples:
@@ -191,7 +203,10 @@ def _build_daily_snapshots(
         )
         window = sofia_flying_window(date.fromisoformat(local_date))
         point = build_daily_point_features(
-            ordered, policy.daily_fields, expected_instants_utc=window.expected_instants_utc
+            ordered,
+            policy.daily_fields,
+            expected_instants_utc=window.expected_instants_utc,
+            source_id=source_id,
         )
         interval = build_daily_interval_features(
             ordered, policy.daily_fields, expected_instants_utc=window.expected_instants_utc
@@ -210,7 +225,7 @@ def _build_daily_snapshots(
             build_profile_layer(
                 ordered,
                 layer,
-                policy.profile_layer_fields,
+                policy.entries_for_layer(layer),
                 expected_instants_utc=window.expected_instants_utc,
             )
             for layer in policy.profile_layers

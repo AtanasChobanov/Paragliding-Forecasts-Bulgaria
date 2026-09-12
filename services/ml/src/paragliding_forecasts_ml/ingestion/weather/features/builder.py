@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from math import isfinite
 
+from ...gfs.models import GFS_SOURCE_ID
 from ..spatial import (
     NeighbourhoodNodeRecord,
     SampledField,
@@ -29,6 +31,13 @@ from .neighbourhood import (
     fit_neighbourhood_metrics,
 )
 from .policy import FeatureLayerPolicy, FeaturePolicyEntry
+from .thermodynamics import (
+    HeightProfilePoint,
+    PressureProfilePoint,
+    ThermodynamicError,
+    mixed_layer_lcl_agl_m,
+    thermal_strength_from_surface_fluxes,
+)
 from .vertical import (
     VerticalCoverageError,
     VerticalPoint,
@@ -43,9 +52,17 @@ from .vertical import (
 
 @dataclass(frozen=True)
 class FeatureResult:
-    """One intermediate feature result before it is materialized as a v2 contract value."""
+    """One scalar intermediate result before it is materialized as a contract value."""
 
     value: float | None
+    missing_reason: str | None = None
+
+
+@dataclass(frozen=True)
+class ThermalFeatureResult:
+    """The coupled signed buoyancy and non-negative convective-scale values."""
+
+    values: tuple[float, float] | None
     missing_reason: str | None = None
 
 
@@ -54,9 +71,12 @@ class FeatureBuildError(ValueError):
 
 
 def build_hourly_point_features(
-    sample: SiteAlignedSample, entries: tuple[FeaturePolicyEntry, ...]
+    sample: SiteAlignedSample,
+    entries: tuple[FeaturePolicyEntry, ...],
+    *,
+    source_id: str | None = None,
 ) -> tuple[FeatureValue, ...]:
-    """Materialize the policy-ordered hourly point/provider view for one accepted sample."""
+    """Materialize policy-ordered hourly provider and project-derived features."""
 
     values: list[FeatureValue] = []
     for entry in entries:
@@ -74,6 +94,17 @@ def build_hourly_point_features(
                 else _derived_feature(entry, direction)
             )
             continue
+        if entry.feature_key in _HOURLY_DERIVED_KEYS:
+            result = _derived_hour_value(sample, entry.feature_key)
+            values.append(
+                _missing_feature(entry, result.missing_reason or "derived_feature_missing")
+                if result.value is None
+                else _derived_feature(entry, result.value)
+            )
+            continue
+        if entry.feature_key == "provider_cloud_base_agl_m" and source_id == GFS_SOURCE_ID:
+            values.append(_unsupported_feature(entry, "source_field_unavailable"))
+            continue
         value = _point_hour_value(sample, entry)
         values.append(
             _missing_feature(entry, "hour_value_missing")
@@ -81,6 +112,140 @@ def build_hourly_point_features(
             else _source_feature(entry, value)
         )
     return tuple(values)
+
+
+_HOURLY_DERIVED_KEYS = frozenset(
+    {
+        "mixed_layer_lcl_agl_m",
+        "pbl_minus_lcl_m",
+        "surface_buoyancy_flux_kinematic_m2_s3",
+        "convective_velocity_scale_m_s",
+    }
+)
+
+
+def _derived_hour_value(sample: SiteAlignedSample, feature_key: str) -> FeatureResult:
+    if feature_key == "mixed_layer_lcl_agl_m":
+        return _mixed_layer_lcl_result(sample)
+    if feature_key == "pbl_minus_lcl_m":
+        lcl = _mixed_layer_lcl_result(sample)
+        if lcl.value is None:
+            return lcl
+        provider_pbl = _surface_field(sample, "provider_boundary_layer_height_agl_m")
+        if provider_pbl is None:
+            return FeatureResult(None, "provider_boundary_layer_height_missing")
+        return FeatureResult(provider_pbl - lcl.value)
+    thermal = _thermal_strength_result(sample)
+    if thermal.values is None:
+        return FeatureResult(None, thermal.missing_reason)
+    buoyancy, convective_velocity = thermal.values
+    return FeatureResult(
+        buoyancy if feature_key == "surface_buoyancy_flux_kinematic_m2_s3" else convective_velocity
+    )
+
+
+def _mixed_layer_lcl_result(sample: SiteAlignedSample) -> FeatureResult:
+    surface_pressure = _surface_field(sample, "air_pressure_pa", dimension="surface")
+    surface_temperature = _surface_field(sample, "air_temperature_k")
+    surface_humidity = _surface_field(
+        sample, "specific_humidity_kg_per_kg", dimension="2m_above_ground"
+    )
+    if surface_pressure is None or surface_temperature is None or surface_humidity is None:
+        return FeatureResult(None, "mixed_layer_surface_input_missing")
+    profile: list[PressureProfilePoint] = []
+    for level in sample.profile_levels:
+        temperature = _profile_field(level.fields, "air_temperature_k")
+        humidity = _profile_field(level.fields, "specific_humidity_kg_per_kg")
+        if temperature is None or humidity is None:
+            return FeatureResult(None, "mixed_layer_profile_input_missing")
+        profile.append(PressureProfilePoint(level.pressure_pa, temperature, humidity))
+    try:
+        return FeatureResult(
+            mixed_layer_lcl_agl_m(
+                surface_pressure_pa=surface_pressure,
+                surface_temperature_k=surface_temperature,
+                surface_specific_humidity_kg_per_kg=surface_humidity,
+                profile=tuple(profile),
+            )
+        )
+    except ThermodynamicError as error:
+        return FeatureResult(None, str(error))
+
+
+def _thermal_strength_result(sample: SiteAlignedSample) -> ThermalFeatureResult:
+    surface_pressure = _surface_field(sample, "air_pressure_pa", dimension="surface")
+    surface_temperature = _surface_field(sample, "air_temperature_k")
+    surface_humidity = _surface_field(
+        sample, "specific_humidity_kg_per_kg", dimension="2m_above_ground"
+    )
+    provider_pbl = _surface_field(sample, "provider_boundary_layer_height_agl_m")
+    sensible = _interval_field_ending(sample, "surface_sensible_heat_flux_upward_w_m2")
+    latent = _interval_field_ending(sample, "surface_latent_heat_flux_upward_w_m2")
+    if (
+        surface_pressure is None
+        or surface_temperature is None
+        or surface_humidity is None
+        or provider_pbl is None
+        or sensible is None
+        or latent is None
+    ):
+        return ThermalFeatureResult(None, "thermal_strength_input_missing")
+    if (
+        sensible.interval_start_utc != latent.interval_start_utc
+        or sensible.interval_end_utc != latent.interval_end_utc
+    ):
+        return ThermalFeatureResult(None, "thermal_flux_interval_mismatch")
+    profile: list[HeightProfilePoint] = []
+    for level in sample.profile_levels:
+        temperature = _profile_field(level.fields, "air_temperature_k")
+        humidity = _profile_field(level.fields, "specific_humidity_kg_per_kg")
+        if temperature is None or humidity is None:
+            return ThermalFeatureResult(None, "thermal_profile_input_missing")
+        profile.append(
+            HeightProfilePoint(level.level_height_agl_m, level.pressure_pa, temperature, humidity)
+        )
+    try:
+        thermal = thermal_strength_from_surface_fluxes(
+            surface_pressure_pa=surface_pressure,
+            surface_temperature_k=surface_temperature,
+            surface_specific_humidity_kg_per_kg=surface_humidity,
+            sensible_heat_flux_upward_w_m2=sensible.canonical_value,
+            latent_heat_flux_upward_w_m2=latent.canonical_value,
+            provider_boundary_layer_height_agl_m=provider_pbl,
+            profile=tuple(profile),
+        )
+    except ThermodynamicError as error:
+        return ThermalFeatureResult(None, str(error))
+    return ThermalFeatureResult(
+        (
+            thermal.surface_buoyancy_flux_kinematic_m2_s3,
+            thermal.convective_velocity_scale_m_s,
+        )
+    )
+
+
+def _interval_field_ending(sample: SiteAlignedSample, field_code: str) -> SampledField | None:
+    matches = [
+        field
+        for field in sample.fields
+        if field.grain == "interval"
+        and field.field_code == field_code
+        and field.interval_end_utc == sample.valid_at_utc
+        and _available_value(field) is not None
+    ]
+    if len(matches) != 1:
+        return None
+    field = matches[0]
+    if field.interval_start_utc is None:
+        return None
+    try:
+        start = datetime.strptime(field.interval_start_utc, "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=UTC
+        )
+        end = datetime.strptime(field.interval_end_utc, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+    except ValueError:
+        return None
+    return field if (end - start).total_seconds() == 3600 else None
 
 
 def _entry_for(entries: tuple[FeaturePolicyEntry, ...], feature_key: str) -> FeaturePolicyEntry:
@@ -95,6 +260,7 @@ def build_daily_point_features(
     entries: tuple[FeaturePolicyEntry, ...],
     *,
     expected_instants_utc: tuple[str, ...],
+    source_id: str | None = None,
 ) -> tuple[FeatureValue, ...]:
     """Reduce strict instantaneous point/provider evidence; interval and neighbourhood facts stay separate."""
     deferred = {
@@ -104,16 +270,25 @@ def build_daily_point_features(
         "shortwave_radiation_max_w_m2",
         "surface_sensible_heat_flux_mean_w_m2",
         "surface_latent_heat_flux_mean_w_m2",
+        "surface_buoyancy_flux_kinematic_mean_m2_s3",
+        "surface_buoyancy_flux_kinematic_max_m2_s3",
+        "convective_velocity_scale_mean_m_s",
+        "convective_velocity_scale_max_m_s",
         "neighbourhood_pressure_gradient_mean_pa_per_km",
         "neighbourhood_pressure_gradient_max_pa_per_km",
         "neighbourhood_low_level_divergence_mean_s_inverse",
         "neighbourhood_low_level_divergence_min_s_inverse",
+        *_DAILY_DERIVED_POINT_KEYS,
     }
     computed: dict[str, FeatureValue] = {}
     for entry in entries:
         if (
             entry.feature_key in deferred
             or entry.feature_key == "wind_direction_10m_mean_degrees_from_north"
+            or (
+                entry.feature_key.startswith("provider_cloud_base_agl_")
+                and source_id == GFS_SOURCE_ID
+            )
         ):
             continue
         reduction = strict_hourly_reduction(
@@ -133,6 +308,9 @@ def build_daily_point_features(
     for entry in entries:
         if entry.feature_key in deferred:
             continue
+        if entry.feature_key.startswith("provider_cloud_base_agl_") and source_id == GFS_SOURCE_ID:
+            values.append(_unsupported_feature(entry, "source_field_unavailable"))
+            continue
         if entry.feature_key != "wind_direction_10m_mean_degrees_from_north":
             values.append(computed[entry.feature_key])
             continue
@@ -151,6 +329,51 @@ def build_daily_point_features(
             if direction is None
             else _derived_feature(entry, direction)
         )
+    values.extend(_build_daily_derived_point_features(samples, entries, expected_instants_utc))
+    return tuple(values)
+
+
+_DAILY_DERIVED_POINT_KEYS = frozenset(
+    {
+        "mixed_layer_lcl_agl_mean_m",
+        "mixed_layer_lcl_agl_min_m",
+        "mixed_layer_lcl_agl_max_m",
+        "pbl_minus_lcl_mean_m",
+        "pbl_minus_lcl_max_m",
+    }
+)
+
+
+def _build_daily_derived_point_features(
+    samples: tuple[SiteAlignedSample, ...],
+    entries: tuple[FeaturePolicyEntry, ...],
+    expected_instants_utc: tuple[str, ...],
+) -> tuple[FeatureValue, ...]:
+    hourly_key = {
+        "mixed_layer_lcl_agl_mean_m": "mixed_layer_lcl_agl_m",
+        "mixed_layer_lcl_agl_min_m": "mixed_layer_lcl_agl_m",
+        "mixed_layer_lcl_agl_max_m": "mixed_layer_lcl_agl_m",
+        "pbl_minus_lcl_mean_m": "pbl_minus_lcl_m",
+        "pbl_minus_lcl_max_m": "pbl_minus_lcl_m",
+    }
+    values: list[FeatureValue] = []
+    for entry in entries:
+        source_key = hourly_key.get(entry.feature_key)
+        if source_key is None:
+            continue
+        reduction = strict_hourly_reduction(
+            tuple(
+                TimedValue(sample.valid_at_utc, _derived_hour_value(sample, source_key).value)
+                for sample in samples
+            ),
+            _window(expected_instants_utc),
+            _reducer(entry),
+        )
+        values.append(
+            _missing_feature(entry, reduction.missing_reason or "derived_feature_missing")
+            if reduction.value is None
+            else _derived_feature(entry, reduction.value)
+        )
     return tuple(values)
 
 
@@ -164,37 +387,120 @@ def build_daily_interval_features(
 
     window = _window(expected_instants_utc)
     values: list[FeatureValue] = []
+    direct_mean_keys = {
+        "shortwave_radiation_mean_w_m2",
+        "surface_sensible_heat_flux_mean_w_m2",
+        "surface_latent_heat_flux_mean_w_m2",
+    }
+    thermal_mean_keys = {
+        "surface_buoyancy_flux_kinematic_mean_m2_s3",
+        "convective_velocity_scale_mean_m_s",
+    }
+    thermal_max_keys = {
+        "surface_buoyancy_flux_kinematic_max_m2_s3",
+        "convective_velocity_scale_max_m_s",
+    }
     for entry in entries:
-        intervals = tuple(
-            IntervalValue(
-                field.interval_start_utc or "",
-                field.interval_end_utc or "",
-                _available_value(field),
-            )
-            for sample in samples
-            for field in sample.fields
-            if field.grain == "interval" and field.field_code == entry.field_code
-        )
+        if entry.feature_key in {
+            "surface_buoyancy_flux_kinematic_mean_m2_s3",
+            "surface_buoyancy_flux_kinematic_max_m2_s3",
+        }:
+            intervals = _thermal_intervals(samples, component_index=0, window=window)
+        elif entry.feature_key in {
+            "convective_velocity_scale_mean_m_s",
+            "convective_velocity_scale_max_m_s",
+        }:
+            intervals = _thermal_intervals(samples, component_index=1, window=window)
+        elif entry.feature_key in {
+            "precipitation_total_mm",
+            "precipitation_max_hourly_mm",
+            "shortwave_radiation_mean_w_m2",
+            "shortwave_radiation_max_w_m2",
+            "surface_sensible_heat_flux_mean_w_m2",
+            "surface_latent_heat_flux_mean_w_m2",
+        }:
+            intervals = _field_intervals(samples, entry.field_code, window)
+        else:
+            continue
         if entry.feature_key == "precipitation_total_mm":
             result = interval_total(intervals, window)
         elif entry.feature_key == "precipitation_max_hourly_mm":
             result = hourly_amount_maximum(intervals, window)
-        elif entry.feature_key in {
-            "shortwave_radiation_mean_w_m2",
-            "surface_sensible_heat_flux_mean_w_m2",
-            "surface_latent_heat_flux_mean_w_m2",
-        }:
+        elif entry.feature_key in direct_mean_keys | thermal_mean_keys:
             result = interval_weighted_mean(intervals, window)
-        elif entry.feature_key == "shortwave_radiation_max_w_m2":
+        elif (
+            entry.feature_key == "shortwave_radiation_max_w_m2"
+            or entry.feature_key in thermal_max_keys
+        ):
             result = interval_maximum(intervals, window)
         else:
-            continue
+            raise FeatureBuildError(f"Unsupported interval policy key: {entry.feature_key}")
         values.append(
             _missing_feature(entry, result.missing_reason or "interval_feature_missing")
             if result.value is None
             else _derived_feature(entry, result.value)
         )
     return tuple(values)
+
+
+def _field_intervals(
+    samples: tuple[SiteAlignedSample, ...], field_code: str, window
+) -> tuple[IntervalValue, ...]:
+    return tuple(
+        IntervalValue(
+            field.interval_start_utc or "",
+            field.interval_end_utc or "",
+            _available_value(field),
+        )
+        for sample in samples
+        for field in sample.fields
+        if field.grain == "interval"
+        and field.field_code == field_code
+        and _intersects_flying_window(field.interval_start_utc, field.interval_end_utc, window)
+    )
+
+
+def _thermal_intervals(
+    samples: tuple[SiteAlignedSample, ...], *, component_index: int, window
+) -> tuple[IntervalValue, ...]:
+    intervals: list[IntervalValue] = []
+    for sample in samples:
+        sensible_fields = tuple(
+            field
+            for field in sample.fields
+            if field.grain == "interval"
+            and field.field_code == "surface_sensible_heat_flux_upward_w_m2"
+            and field.interval_end_utc == sample.valid_at_utc
+            and _intersects_flying_window(field.interval_start_utc, field.interval_end_utc, window)
+        )
+        thermal = _thermal_strength_result(sample)
+        value = None if thermal.values is None else thermal.values[component_index]
+        intervals.extend(
+            IntervalValue(field.interval_start_utc or "", field.interval_end_utc or "", value)
+            for field in sensible_fields
+        )
+    return tuple(intervals)
+
+
+def _intersects_flying_window(
+    interval_start_utc: str | None, interval_end_utc: str | None, window
+) -> bool:
+    """Exclude only a disjoint baseline; preserve malformed/overlapping evidence for validation."""
+
+    if interval_start_utc is None or interval_end_utc is None:
+        return True
+    try:
+        start = datetime.strptime(interval_start_utc, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+        end = datetime.strptime(interval_end_utc, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+        window_start = datetime.strptime(window.interval_start_utc, "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=UTC
+        )
+        window_end = datetime.strptime(window.interval_end_utc, "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=UTC
+        )
+    except ValueError:
+        return True
+    return start < window_end and end > window_start
 
 
 def build_daily_neighbourhood_features(
@@ -511,8 +817,14 @@ def _scalar_profile(
     return tuple(sorted(points, key=lambda point: point.height_agl_m))
 
 
-def _surface_field(sample: SiteAlignedSample, field_code: str) -> float | None:
-    matches = [field for field in sample.fields if field.field_code == field_code]
+def _surface_field(
+    sample: SiteAlignedSample, field_code: str, dimension: str | None = None
+) -> float | None:
+    matches = [
+        field
+        for field in sample.fields
+        if field.field_code == field_code and field.dimension == dimension
+    ]
     if len(matches) != 1:
         return None
     return _available_value(matches[0])
@@ -591,6 +903,24 @@ def _derived_feature(entry: FeaturePolicyEntry, value: float) -> FeatureValue:
         statistic=entry.statistic,
         canonical_value=value,
         quality_state="derived",
+        derivation_method=entry.derivation_method,
+        derivation_version=entry.derivation_method,
+        input_field_codes=(entry.field_code,),
+    )
+
+
+def _unsupported_feature(entry: FeaturePolicyEntry, reason: str) -> FeatureValue:
+    from ...atmosphere.catalogue import load_catalogue
+
+    return FeatureValue(
+        feature_key=entry.feature_key,
+        field_code=entry.field_code,
+        canonical_unit=load_catalogue().field_unit(entry.field_code),
+        variant=entry.variant,
+        statistic=entry.statistic,
+        canonical_value=None,
+        quality_state="unsupported",
+        missing_reason=reason,
         derivation_method=entry.derivation_method,
         derivation_version=entry.derivation_method,
         input_field_codes=(entry.field_code,),
