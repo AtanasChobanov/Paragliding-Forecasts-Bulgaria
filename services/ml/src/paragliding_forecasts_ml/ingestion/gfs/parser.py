@@ -27,11 +27,12 @@ from .profile import (
     GFS_GRIB_PROFILE_VERSION,
     GFS_LOCAL_TABLES_VERSION,
     GFS_TABLES_VERSION,
+    LEGACY_IGNORED_PROFILE_BY_SELECTOR,
     PROFILE_BY_SELECTOR,
     GfsMessageProfile,
 )
 
-GFS_PARSER_VERSION = "gfs-parser/4"
+GFS_PARSER_VERSION = "gfs-parser/5"
 
 
 class GfsParserError(RuntimeError):
@@ -65,6 +66,7 @@ class GfsNativeGridMessage(AtmosphericContract):
     step_start_hours: float = Field(ge=0)
     step_end_hours: float = Field(ge=0)
     statistic_type: str | None = None
+    quantization_step: float | None = Field(default=None, ge=0)
     grid_type: str
     ni: int = Field(gt=0)
     nj: int = Field(gt=0)
@@ -167,8 +169,11 @@ def parse(store: WeatherArtifactStore, *, occurred_at_utc: str) -> ArtifactRefer
                 lead_hours=lead_hours,
             )
         )
-    if len(messages) != len(expected):
-        raise GfsParserError("GFS parser message count differs from immutable collection evidence.")
+    active_expected = tuple(
+        item for item in expected if item[1] not in LEGACY_IGNORED_PROFILE_BY_SELECTOR
+    )
+    if len(messages) != len(active_expected):
+        raise GfsParserError("GFS parser message count differs from active collection evidence.")
     batch = GfsNativeGridBatch(
         run_key=manifest.run_key,
         raw_manifest=raw_reference,
@@ -298,19 +303,28 @@ def _parse_artifact(
             if handle_id is None:
                 raise GfsParserError(f"{artifact_key} is truncated before message {ordinal}.")
             try:
-                messages.append(
-                    _parse_message(
-                        store,
-                        directory,
+                if selector_key in LEGACY_IGNORED_PROFILE_BY_SELECTOR:
+                    _validate_legacy_ignored_message(
                         handle_id,
                         selector_key=selector_key,
-                        message_number=message_number,
-                        artifact_key=artifact_key,
                         reference_at_utc=reference_at_utc,
                         valid_at_utc=valid_at_utc,
                         lead_hours=lead_hours,
                     )
-                )
+                else:
+                    messages.append(
+                        _parse_message(
+                            store,
+                            directory,
+                            handle_id,
+                            selector_key=selector_key,
+                            message_number=message_number,
+                            artifact_key=artifact_key,
+                            reference_at_utc=reference_at_utc,
+                            valid_at_utc=valid_at_utc,
+                            lead_hours=lead_hours,
+                        )
+                    )
             finally:
                 eccodes.codes_release(handle_id)
         extra_handle = eccodes.codes_grib_new_from_file(handle)
@@ -318,6 +332,22 @@ def _parse_artifact(
             eccodes.codes_release(extra_handle)
             raise GfsParserError(f"{artifact_key} contains an unexpected extra GRIB message.")
     return tuple(messages)
+
+
+def _validate_legacy_ignored_message(
+    handle_id: int,
+    *,
+    selector_key: str,
+    reference_at_utc: str,
+    valid_at_utc: str,
+    lead_hours: int,
+) -> None:
+    """Verify a removed selector while intentionally emitting no new parser fact."""
+
+    profile = LEGACY_IGNORED_PROFILE_BY_SELECTOR[selector_key]
+    metadata = _metadata(handle_id)
+    _validate_identity(metadata, profile, selector_key, reference_at_utc, valid_at_utc, lead_hours)
+    _validate_regular_latlon(metadata, selector_key)
 
 
 def _parse_message(
@@ -378,6 +408,7 @@ def _parse_message(
         step_start_hours=float(metadata["startStep"]),
         step_end_hours=float(metadata["endStep"]),
         statistic_type=_statistic_type(metadata),
+        quantization_step=_quantization_step(metadata),
         grid_type=str(metadata["gridType"]),
         ni=int(metadata["Ni"]),
         nj=int(metadata["Nj"]),
@@ -450,6 +481,9 @@ def _metadata(handle_id: int) -> dict[str, object]:
         "jScansPositively",
         "jPointsAreConsecutive",
         "alternativeRowScanning",
+        "bitsPerValue",
+        "binaryScaleFactor",
+        "decimalScaleFactor",
         "dataDate",
         "dataTime",
         "validityDate",
@@ -545,6 +579,17 @@ def _validate_regular_latlon(metadata: dict[str, object], selector_key: str) -> 
 def _statistic_type(metadata: dict[str, object]) -> str | None:
     value = metadata["typeOfStatisticalProcessing"]
     return None if value is None else str(value)
+
+
+def _quantization_step(metadata: dict[str, object]) -> float:
+    """Return the decoded GRIB packing increment in native canonical units."""
+
+    bits = int(metadata["bitsPerValue"])
+    if bits == 0:
+        return 0.0
+    return float(
+        2.0 ** int(metadata["binaryScaleFactor"]) * 10.0 ** -int(metadata["decimalScaleFactor"])
+    )
 
 
 def _grib_utc(date_value: object, time_value: object) -> str:

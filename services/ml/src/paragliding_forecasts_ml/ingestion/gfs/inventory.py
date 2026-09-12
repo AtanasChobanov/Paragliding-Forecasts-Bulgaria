@@ -66,7 +66,6 @@ DEFAULT_SELECTORS: tuple[GfsSelector, ...] = (
     GfsSelector("spfh_2m", "SPFH", "2 m above ground"),
     GfsSelector("ugrd_10m", "UGRD", "10 m above ground"),
     GfsSelector("vgrd_10m", "VGRD", "10 m above ground"),
-    GfsSelector("gust_surface", "GUST", "surface"),
     GfsSelector("pres_surface", "PRES", "surface"),
     GfsSelector("prmsl", "PRMSL", "mean sea level"),
     GfsSelector("orog", "HGT", "surface"),
@@ -81,7 +80,6 @@ DEFAULT_SELECTORS: tuple[GfsSelector, ...] = (
         "surface",
         temporal_kind="accumulation",
         minimum_lead_hours=1,
-        allow_tied_matches=True,
     ),
     GfsSelector(
         "dswrf",

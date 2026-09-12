@@ -5,11 +5,13 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
+from ..atmosphere.contracts import RequestPlan
 from ..weather.artifacts import WeatherArtifactStore
 from ..weather.state import RunStateLedger, StateError
 from .collector import GfsCollector
@@ -60,6 +62,47 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def collect_gfs_run(
+    request: GfsRequest,
+    *,
+    project_root: Path,
+    duplicate_run_key: Callable[[RequestPlan], str | None] | None = None,
+    occurred_at_utc: str | None = None,
+) -> dict[str, Any]:
+    """Plan and collect once; optional duplicate gate runs after inventory, before payload GETs."""
+
+    transport = RetryingTransport(UrllibTransport())
+    started_at_utc = occurred_at_utc or _utc_now()
+    plan = GfsPlanner(transport).plan(request, created_at_utc=started_at_utc)
+    existing_run_key = duplicate_run_key(plan) if duplicate_run_key is not None else None
+    if existing_run_key is not None:
+        return {
+            "run_key": existing_run_key,
+            "status": "already_succeeded",
+            "manifest": None,
+            "sha256": None,
+        }
+    store = WeatherArtifactStore.create_fresh(request.run_key, project_root=project_root)
+    ledger = RunStateLedger(store)
+    ledger.initialize(occurred_at_utc=started_at_utc)
+    manifest_reference = GfsCollector(transport).fetch(plan, store)
+    manifest = store.verify_raw_manifest(manifest_reference)
+    ledger.append(
+        invocation_mode="resume",
+        stage="raw_complete",
+        disposition="complete" if manifest.status == "complete" else manifest.status,
+        occurred_at_utc=_utc_now(),
+        evidence=manifest_reference,
+        detail="bounded NOAA GFS collection",
+    )
+    return {
+        "run_key": request.run_key,
+        "status": manifest.status,
+        "manifest": manifest_reference.relative_path,
+        "sha256": manifest_reference.sha256,
+    }
+
+
 def main(arguments: Sequence[str] | None = None) -> int:
     namespace = build_parser().parse_args(arguments)
     if not namespace.allow_live_network:
@@ -85,39 +128,19 @@ def main(arguments: Sequence[str] | None = None) -> int:
                 SOFIA_FLYING_WINDOW_VERSION if namespace.local_date is not None else None
             ),
         )
-        transport = RetryingTransport(UrllibTransport())
-        occurred_at_utc = _utc_now()
-        plan = GfsPlanner(transport).plan(request, created_at_utc=occurred_at_utc)
-        store = WeatherArtifactStore.create_fresh(
-            request.run_key, project_root=namespace.project_root
-        )
-        ledger = RunStateLedger(store)
-        ledger.initialize(occurred_at_utc=occurred_at_utc)
-        manifest_reference = GfsCollector(transport).fetch(plan, store)
-        manifest = store.verify_raw_manifest(manifest_reference)
-        ledger.append(
-            invocation_mode="resume",
-            stage="raw_complete",
-            disposition="complete" if manifest.status == "complete" else manifest.status,
-            occurred_at_utc=_utc_now(),
-            evidence=manifest_reference,
-            detail="bounded NOAA GFS collection",
-        )
+        result = collect_gfs_run(request, project_root=namespace.project_root)
     except (GfsPlanningError, StateError, ValueError, OSError) as error:
         print(f"GFS collection failed: {error}", file=sys.stderr)
         return 1
     print(
         json.dumps(
             {
-                "run_key": request.run_key,
-                "status": manifest.status,
-                "manifest": manifest_reference.relative_path,
-                "sha256": manifest_reference.sha256,
+                **result,
             },
             indent=2,
         )
     )
-    return 0 if manifest.status == "complete" else 1
+    return 0 if result["status"] in {"complete", "already_succeeded"} else 1
 
 
 if __name__ == "__main__":

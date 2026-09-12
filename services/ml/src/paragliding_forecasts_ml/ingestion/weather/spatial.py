@@ -23,7 +23,7 @@ from .sampling_policy import SamplingPolicy, load_sampling_policy
 from .serialization import canonical_json_bytes, sha256_bytes
 from .sites import SiteSamplingConfig, load_site_sampling_configs
 
-WEATHER_SPATIAL_VERSION = "weather-spatial/3"
+WEATHER_SPATIAL_VERSION = "weather-spatial/5"
 
 
 class SpatialSamplingError(RuntimeError):
@@ -123,9 +123,10 @@ class SiteAlignedSample(AtmosphericContract):
 
 
 class CanonicalSiteSampleBatch(AtmosphericContract):
-    canonical_site_sample_batch_schema_version: Literal[2] = 2
+    canonical_site_sample_batch_schema_version: Literal[3] = 3
     run_key: str
     normalizer_stage_manifest: ArtifactReference
+    grid_key: Literal["gfs_0p25_global", "era5_0p25_global"]
     spatial_version: str = WEATHER_SPATIAL_VERSION
     policy_version: str
     policy_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -421,9 +422,15 @@ def _derived_wind_fields(
         if speed is None or speed == 0
         else (math.degrees(math.atan2(-u_value, -v_value)) + 360.0) % 360.0
     )
+    dimensions = {item.dimension for item in sources}
+    if len(dimensions) > 1:
+        raise SpatialSamplingError(
+            "Derived wind components have incompatible dimension identities."
+        )
     common = {
         "grain": grain,
         "pressure_pa": pressure_pa,
+        "dimension": next(iter(dimensions)) if dimensions else None,
         "source_selector_keys": selector_keys,
         "source_raw_artifact_keys": raw_keys,
         "source_native_message_references": references,
@@ -774,6 +781,7 @@ def sample_canonical_sites(
     sample_batch = CanonicalSiteSampleBatch(
         run_key=batch.run_key,
         normalizer_stage_manifest=normalizer_stage_manifest,
+        grid_key=batch.grid.grid_key,
         policy_version=policy.policy_version,
         policy_sha256=policy_sha256,
         site_config_sha256=site_config_sha256,

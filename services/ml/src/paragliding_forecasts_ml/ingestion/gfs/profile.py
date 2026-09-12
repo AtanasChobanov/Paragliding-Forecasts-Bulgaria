@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-GFS_GRIB_PROFILE_VERSION = "noaa-gfs-grib2-table-v3"
+GFS_GRIB_PROFILE_VERSION = "noaa-gfs-grib2-table-v4"
 GFS_CENTRE = "kwbc"
 GFS_TABLES_VERSION = 2
 GFS_LOCAL_TABLES_VERSION = 1
@@ -52,7 +52,6 @@ PROFILES: tuple[GfsMessageProfile, ...] = (
     GfsMessageProfile("spfh_2m", 0, 1, 0, "heightAboveGround", 2),
     GfsMessageProfile("ugrd_10m", 0, 2, 2, "heightAboveGround", 10),
     GfsMessageProfile("vgrd_10m", 0, 2, 3, "heightAboveGround", 10),
-    GfsMessageProfile("gust_surface", 0, 2, 22, "surface"),
     GfsMessageProfile("pres_surface", 0, 3, 0, "surface"),
     GfsMessageProfile("prmsl", 0, 3, 1, "meanSea"),
     GfsMessageProfile("orog", 0, 3, 5, "surface"),
@@ -86,3 +85,14 @@ PROFILES: tuple[GfsMessageProfile, ...] = (
 )
 
 PROFILE_BY_SELECTOR = {profile.selector_key: profile for profile in PROFILES}
+
+# GUST is no longer part of the active selector/profile contract. Some
+# pre-S08 immutable raw ranges nevertheless contain it. Keep the exact
+# identity only so the parser can walk those old range payloads offline while
+# omitting GUST from every new native/canonical boundary.
+LEGACY_IGNORED_PROFILES: tuple[GfsMessageProfile, ...] = (
+    GfsMessageProfile("gust_surface", 0, 2, 22, "surface"),
+)
+LEGACY_IGNORED_PROFILE_BY_SELECTOR = {
+    profile.selector_key: profile for profile in LEGACY_IGNORED_PROFILES
+}

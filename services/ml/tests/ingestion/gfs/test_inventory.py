@@ -132,23 +132,21 @@ def test_specific_humidity_and_turbulent_flux_selectors_pin_native_semantics() -
     assert (latent.parameter, latent.level, latent.minimum_lead_hours) == ("LHTFL", "surface", 1)
 
 
-def test_apcp_collects_indistinguishable_shortest_interval_ties() -> None:
+def test_apcp_rejects_indistinguishable_shortest_interval_ties() -> None:
     entries = parse_index(
         b"1:0:d=2026082100:APCP:surface:0-1 hour acc fcst:\n"
         b"2:10:d=2026082100:APCP:surface:0-1 hour acc fcst:\n"
         b"3:20:d=2026082100:APCP:surface:0-6 hour acc fcst:\n"
     )
 
-    ranges = select_ranges(
-        entries,
-        content_length=30,
-        lead_hours=1,
-        selectors=(_default_selector("apcp"),),
-        maximum_range_bytes=32,
-    )
-
-    assert len(ranges) == 1
-    assert ranges[0].message_numbers == (1, 2)
+    with pytest.raises(SelectorContractError, match="ambiguous"):
+        select_ranges(
+            entries,
+            content_length=30,
+            lead_hours=1,
+            selectors=(_default_selector("apcp"),),
+            maximum_range_bytes=32,
+        )
 
 
 def test_interval_fields_are_not_applicable_at_analysis_lead() -> None:

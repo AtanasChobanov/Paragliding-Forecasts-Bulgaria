@@ -150,9 +150,15 @@ def test_pressure_levels_below_either_terrain_are_excluded_without_clamping() ->
 def test_policy_contains_only_bilinear_and_physical_radius_sampling() -> None:
     policy, policy_sha256 = load_sampling_policy()
 
+    assert policy.policy_version == "canonical-site-sampling-policy-v2"
     assert policy.point_sampling.method == "bilinear"
     assert policy.neighbourhood_sampling.method == "physical_radius"
     assert policy.neighbourhood_sampling.radius_km == 50
+    assert [item.dimension for item in policy.neighbourhood_sampling.fields[:3]] == [
+        "mean_sea_level",
+        "10m_above_ground",
+        "10m_above_ground",
+    ]
     assert "nearest" not in policy.model_dump_json()
     assert len(policy_sha256) == 64 and not math.isnan(float(int(policy_sha256, 16)))
 

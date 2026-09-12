@@ -1,5 +1,5 @@
 {
-  "catalogueVersion": "t017-spike-v2",
+  "catalogueVersion": "t017-spike-v3",
   "generatedAt": "2026-08-16",
   "status": "verified_source_lock",
   "notForSafetyCriticalUse": true,
@@ -119,6 +119,30 @@
       "unit": "m",
       "kind": "direct",
       "notes": "Do not alias to an LCL without provider evidence."
+    },
+    {
+      "name": "mixed_layer_lcl_agl_m",
+      "unit": "m",
+      "kind": "derived",
+      "notes": "Lowest-100-hPa mixed-parcel liquid LCL; not a provider cloud-base observation."
+    },
+    {
+      "name": "pbl_minus_lcl_m",
+      "unit": "m",
+      "kind": "derived",
+      "notes": "Signed provider PBL minus project mixed-layer LCL reachability diagnostic."
+    },
+    {
+      "name": "surface_buoyancy_flux_kinematic_m2_s3",
+      "unit": "m2/s3",
+      "kind": "derived",
+      "notes": "Signed physical surface buoyancy flux; do not alias to omega or a climb rate."
+    },
+    {
+      "name": "convective_velocity_scale_m_s",
+      "unit": "m/s",
+      "kind": "derived",
+      "notes": "Positive-part Deardorff convective velocity scale, not a guaranteed paraglider climb rate."
     },
     {
       "name": "specific_humidity_kg_per_kg",

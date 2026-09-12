@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 
@@ -12,6 +13,7 @@ from pydantic import Field
 from ..atmosphere.contracts import ArtifactReference, AtmosphericContract, StageManifest
 from ..weather.artifacts import WeatherArtifactStore, stage_input_fingerprint
 from ..weather.serialization import canonical_json_bytes, sha256_bytes
+from .models import GFS_GRID_KEY
 from .parser import (
     GfsNativeGridMessage,
     load_array,
@@ -19,13 +21,14 @@ from .parser import (
 )
 from .profile import GFS_FEATURE_PROFILE_PRESSURES_HPA
 
-GFS_NORMALIZER_VERSION = "gfs-normalizer/4"
+GFS_NORMALIZER_VERSION = "gfs-normalizer/7"
 
 
 class GfsCanonicalGridDefinition(AtmosphericContract):
     """Explicit canonical row-major geometry plus static model terrain evidence."""
 
-    grid_definition_schema_version: Literal[1] = 1
+    grid_definition_schema_version: Literal[2] = 2
+    grid_key: Literal["gfs_0p25_global"] = GFS_GRID_KEY
     grid_type: Literal["regular_latlon"] = "regular_latlon"
     row_count: int = Field(gt=0)
     column_count: int = Field(gt=0)
@@ -73,23 +76,22 @@ class GfsCanonicalGridMessage(AtmosphericContract):
 class GfsCanonicalGridBatch(AtmosphericContract):
     """Separate canonical surface and pressure-level output grains for S05."""
 
-    gfs_canonical_grid_batch_schema_version: Literal[2] = 2
+    gfs_canonical_grid_batch_schema_version: Literal[4] = 4
     run_key: str
     parser_stage_manifest: ArtifactReference
     normalizer_version: str = GFS_NORMALIZER_VERSION
     grid: GfsCanonicalGridDefinition
     surface_grains: tuple[GfsCanonicalGridMessage, ...]
     pressure_level_grains: tuple[GfsCanonicalGridMessage, ...]
-    source_unsupported_selectors: tuple[str, ...]
 
 
 _DIRECT: dict[str, tuple[str, str, str | None]] = {
-    "tmp_2m": ("air_temperature_k", "surface", None),
-    "dpt_2m": ("dew_point_temperature_k", "surface", None),
-    "rh_2m": ("relative_humidity_percent", "surface", None),
+    "tmp_2m": ("air_temperature_k", "surface", "2m_above_ground"),
+    "dpt_2m": ("dew_point_temperature_k", "surface", "2m_above_ground"),
+    "rh_2m": ("relative_humidity_percent", "surface", "2m_above_ground"),
     "spfh_2m": ("specific_humidity_kg_per_kg", "surface", "2m_above_ground"),
-    "ugrd_10m": ("wind_u_m_s", "surface", None),
-    "vgrd_10m": ("wind_v_m_s", "surface", None),
+    "ugrd_10m": ("wind_u_m_s", "surface", "10m_above_ground"),
+    "vgrd_10m": ("wind_v_m_s", "surface", "10m_above_ground"),
     "pres_surface": ("air_pressure_pa", "surface", "surface"),
     "prmsl": ("air_pressure_pa", "surface", "mean_sea_level"),
     "hpbl": ("provider_boundary_layer_height_agl_m", "surface", None),
@@ -143,6 +145,7 @@ def _canonical_grid(
     }
     return GfsCanonicalGridDefinition(
         **geometry,
+        grid_key=GFS_GRID_KEY,
         geometry_sha256=sha256_bytes(canonical_json_bytes(geometry)),
         model_elevation_msl_m=_write_array(
             store,
@@ -184,7 +187,7 @@ def normalize(
         stage="normalizer",
         producer_version=GFS_NORMALIZER_VERSION,
         inputs=(parser_stage_manifest,),
-        configuration={"catalogue": "t017-spike-v2", "normalization": GFS_NORMALIZER_VERSION},
+        configuration={"catalogue": "t017-spike-v3", "normalization": GFS_NORMALIZER_VERSION},
     )
     existing = store.existing_stage_manifest("normalizer", GFS_NORMALIZER_VERSION, fingerprint)
     if existing is not None:
@@ -192,6 +195,7 @@ def normalize(
     directory = store.begin_stage("normalizer", GFS_NORMALIZER_VERSION, fingerprint)
     surface: list[GfsCanonicalGridMessage] = []
     pressure: list[GfsCanonicalGridMessage] = []
+    interval_messages: dict[str, list[GfsNativeGridMessage]] = defaultdict(list)
     ordered_messages = tuple(
         sorted(batch.messages, key=lambda item: (item.valid_at_utc, item.selector_key))
     )
@@ -208,49 +212,26 @@ def normalize(
             pressure.append(_pressure(store, directory, message))
         elif message.selector_key.startswith(("cape_", "cin_")):
             surface.append(_convection(store, directory, message))
-        elif message.selector_key == "apcp":
-            surface.append(
-                _interval(store, directory, message, "precipitation_amount_mm", "accumulation")
+        elif message.selector_key in _INTERVAL_SPECS:
+            interval_messages[message.selector_key].append(message)
+    for selector_key in sorted(interval_messages):
+        surface.extend(
+            _resolve_adjacent_intervals(
+                store,
+                directory,
+                tuple(interval_messages[selector_key]),
+                _INTERVAL_SPECS[selector_key],
             )
-        elif message.selector_key == "dswrf":
-            surface.append(
-                _interval(store, directory, message, "shortwave_radiation_w_m2", "interval_average")
-            )
-        elif message.selector_key in {"shtfl", "lhtfl"}:
-            field_code = (
-                "surface_sensible_heat_flux_upward_w_m2"
-                if message.selector_key == "shtfl"
-                else "surface_latent_heat_flux_upward_w_m2"
-            )
-            surface.append(
-                _interval(
-                    store,
-                    directory,
-                    message,
-                    field_code,
-                    "interval_average",
-                    native_sign_convention="upward_positive",
-                    normalization_method="gfs_upward_positive_interval_average_retained",
-                )
-            )
+        )
     surface.extend(_wind_derivations(store, directory, messages, pressure=False))
     pressure.extend(_wind_derivations(store, directory, messages, pressure=True))
-    unsupported = tuple(
-        sorted(
-            {
-                message.selector_key
-                for message in ordered_messages
-                if message.selector_key == "gust_surface"
-            }
-        )
-    )
+
     output = GfsCanonicalGridBatch(
         run_key=batch.run_key,
         parser_stage_manifest=parser_stage_manifest,
         grid=grid,
         surface_grains=tuple(surface),
         pressure_level_grains=tuple(pressure),
-        source_unsupported_selectors=unsupported,
     )
     output_reference = store.write_stage_model(
         directory,
@@ -273,7 +254,7 @@ def normalize(
             input_fingerprint_sha256=fingerprint,
             inputs=(parser_stage_manifest,),
             outputs=outputs,
-            configuration={"catalogue": "t017-spike-v2", "normalization": GFS_NORMALIZER_VERSION},
+            configuration={"catalogue": "t017-spike-v3", "normalization": GFS_NORMALIZER_VERSION},
             disposition="complete",
             started_at_utc=occurred_at_utc,
             completed_at_utc=occurred_at_utc,
@@ -363,34 +344,191 @@ def _convection(
     )
 
 
-def _interval(
+def _resolve_adjacent_intervals(
     store: WeatherArtifactStore,
     directory,
+    messages: tuple[GfsNativeGridMessage, ...],
+    spec: tuple[str, Literal["accumulation", "interval_average"], str | None],
+) -> list[GfsCanonicalGridMessage]:
+    """Resolve one GFS reset-block field into exact adjacent one-hour intervals.
+
+    The native ``startStep``/``endStep`` metadata defines each reset block. A
+    multi-hour accumulation is differenced; a multi-hour average is first
+    converted to its time integral and then differenced. Missing predecessors
+    become explicit one-hour missing evidence instead of contaminating another
+    field or being guessed as zero.
+    """
+
+    field_code, statistic_type, native_sign_convention = spec
+    by_window: dict[tuple[float, float], list[GfsNativeGridMessage]] = defaultdict(list)
+    for message in messages:
+        _require_native_interval(message, statistic_type)
+        by_window[(message.step_start_hours, message.step_end_hours)].append(message)
+    for window, candidates in by_window.items():
+        if len(candidates) != 1:
+            raise ValueError(
+                f"GFS {messages[0].selector_key} has ambiguous native interval {window}."
+            )
+
+    resolved: list[GfsCanonicalGridMessage] = []
+    for current in sorted(messages, key=lambda item: (item.step_end_hours, item.message_number)):
+        native_duration = current.step_end_hours - current.step_start_hours
+        canonical_end = current.step_end_hours
+        canonical_start = canonical_end - 1.0
+        if native_duration == 1.0:
+            values = _native_interval_values(store, current, field_code)
+            sources = (current,)
+            quality_state = _interval_quality(values, sources)
+            derivation_method = None
+            normalization_method = (
+                "gfs_kg_m2_to_mm_adjacent_hour"
+                if statistic_type == "accumulation"
+                else "gfs_native_adjacent_hour_interval_average"
+            )
+        else:
+            predecessors = by_window.get((current.step_start_hours, canonical_start), [])
+            if len(predecessors) > 1:
+                raise ValueError(
+                    f"GFS {current.selector_key} has ambiguous predecessor for f{current.lead_hours:03d}."
+                )
+            if not predecessors:
+                values = np.full_like(load_array(store, current.values), np.nan, dtype="<f8")
+                sources = (current,)
+                quality_state = "missing"
+                derivation_method = "gfs_adjacent_interval_predecessor_missing"
+                normalization_method = "gfs_adjacent_interval_unresolved"
+            else:
+                predecessor = predecessors[0]
+                values = _resolve_interval_values(store, predecessor, current, statistic_type)
+                sources = (predecessor, current)
+                quality_state = _interval_quality(values, sources)
+                derivation_method = (
+                    "gfs_accumulation_adjacent_difference"
+                    if statistic_type == "accumulation"
+                    else "gfs_interval_average_adjacent_deaverage"
+                )
+                normalization_method = (
+                    "gfs_kg_m2_to_mm_adjacent_difference"
+                    if statistic_type == "accumulation"
+                    else "gfs_interval_average_deaveraged_to_adjacent_hour"
+                )
+        if statistic_type == "accumulation":
+            values, clamped = _nonnegative_precipitation(values, sources)
+            if clamped:
+                derivation_method = "gfs_precipitation_quantization_clamp"
+                quality_state = _interval_quality(values, sources)
+        artifact_key = _artifact_key("resolved", current, "adjacent-interval")
+        resolved.append(
+            _message(
+                current,
+                field_code=field_code,
+                grain="interval",
+                values=_write_array(store, directory, artifact_key, values),
+                quality_state=quality_state,
+                interval_start_utc=_add_hours(current.reference_at_utc, canonical_start),
+                interval_end_utc=_add_hours(current.reference_at_utc, canonical_end),
+                statistic_type=statistic_type,
+                native_sign_convention=native_sign_convention,
+                normalization_method=normalization_method,
+                derivation_method=derivation_method,
+                source_messages=sources,
+            )
+        )
+    return resolved
+
+
+def _require_native_interval(
     message: GfsNativeGridMessage,
-    field_code: str,
     statistic_type: Literal["accumulation", "interval_average"],
-    native_sign_convention: str | None = None,
-    normalization_method: str | None = None,
-) -> GfsCanonicalGridMessage:
-    values = load_array(store, message.values)
-    start = _add_hours(message.reference_at_utc, message.step_start_hours)
-    end = _add_hours(message.reference_at_utc, message.step_end_hours)
-    method = normalization_method or (
-        "gfs_kg_m2_to_mm"
-        if field_code == "precipitation_amount_mm"
-        else "gfs_interval_average_retained"
-    )
-    return _message(
-        message,
-        field_code=field_code,
-        grain="interval",
-        values=_write_array(store, directory, _artifact_key("canonical", message), values),
-        interval_start_utc=start,
-        interval_end_utc=end,
-        statistic_type=statistic_type,
-        native_sign_convention=native_sign_convention,
-        normalization_method=method,
-    )
+) -> None:
+    expected_step_type = "accum" if statistic_type == "accumulation" else "avg"
+    expected_statistic_type = "1" if statistic_type == "accumulation" else "0"
+    if (
+        message.step_type != expected_step_type
+        or message.statistic_type != expected_statistic_type
+        or message.step_end_hours <= message.step_start_hours
+        or not float(message.step_end_hours).is_integer()
+        or not float(message.step_start_hours).is_integer()
+    ):
+        raise ValueError(
+            f"GFS {message.selector_key} lacks a valid native {expected_step_type} interval identity."
+        )
+
+
+def _native_interval_values(
+    store: WeatherArtifactStore, message: GfsNativeGridMessage, field_code: str
+) -> np.ndarray:
+    values = load_array(store, message.values).astype("<f8", copy=True)
+    if np.isinf(values).any():
+        raise ValueError(f"GFS {message.selector_key} has a non-finite native interval value.")
+    # GFS APCP is kg/m² of water, numerically equal to mm of liquid water.
+    if field_code == "precipitation_amount_mm":
+        return values
+    return values
+
+
+def _resolve_interval_values(
+    store: WeatherArtifactStore,
+    predecessor: GfsNativeGridMessage,
+    current: GfsNativeGridMessage,
+    statistic_type: Literal["accumulation", "interval_average"],
+) -> np.ndarray:
+    previous_values = load_array(store, predecessor.values).astype("<f8", copy=False)
+    current_values = load_array(store, current.values).astype("<f8", copy=False)
+    if np.isinf(previous_values).any() or np.isinf(current_values).any():
+        raise ValueError(f"GFS {current.selector_key} has a non-finite native interval value.")
+    if previous_values.shape != current_values.shape:
+        raise ValueError(f"GFS {current.selector_key} interval endpoints have incompatible grids.")
+    if statistic_type == "accumulation":
+        return current_values - previous_values
+    previous_seconds = (predecessor.step_end_hours - predecessor.step_start_hours) * 3600.0
+    current_seconds = (current.step_end_hours - current.step_start_hours) * 3600.0
+    adjacent_seconds = (current.step_end_hours - predecessor.step_end_hours) * 3600.0
+    if previous_seconds <= 0 or current_seconds <= 0 or adjacent_seconds != 3600.0:
+        raise ValueError(
+            f"GFS {current.selector_key} interval durations cannot form one adjacent hour."
+        )
+    return (
+        current_values * current_seconds - previous_values * previous_seconds
+    ) / adjacent_seconds
+
+
+def _nonnegative_precipitation(
+    values: np.ndarray, sources: tuple[GfsNativeGridMessage, ...]
+) -> tuple[np.ndarray, bool]:
+    """Reject real decreases; clamp only a packed-GRIB rounding-sized negative."""
+
+    if np.isinf(values).any():
+        raise ValueError("GFS precipitation resolution produced a non-finite value.")
+    finite = np.isfinite(values)
+    if not finite.any():
+        return values, False
+    tolerance = sum((item.quantization_step or 0.0) / 2.0 for item in sources)
+    tolerance = max(tolerance, np.finfo(np.float64).eps)
+    if np.any(values[finite] < -tolerance):
+        raise ValueError("GFS precipitation accumulation decreases beyond packing tolerance.")
+    clamped = finite & (values < 0.0)
+    if clamped.any():
+        values = values.copy()
+        values[clamped] = 0.0
+    return values, bool(clamped.any())
+
+
+def _interval_quality(
+    values: np.ndarray,
+    sources: tuple[GfsNativeGridMessage, ...],
+) -> Literal["real", "derived", "missing", "sentinel_missing"]:
+    if np.isnan(values).any() or any(source.quality_state != "real" for source in sources):
+        return "sentinel_missing"
+    return "real" if len(sources) == 1 else "derived"
+
+
+_INTERVAL_SPECS: dict[str, tuple[str, Literal["accumulation", "interval_average"], str | None]] = {
+    "apcp": ("precipitation_amount_mm", "accumulation", None),
+    "dswrf": ("shortwave_radiation_w_m2", "interval_average", None),
+    "shtfl": ("surface_sensible_heat_flux_upward_w_m2", "interval_average", "upward_positive"),
+    "lhtfl": ("surface_latent_heat_flux_upward_w_m2", "interval_average", "upward_positive"),
+}
 
 
 def _wind_derivations(
@@ -432,6 +570,7 @@ def _wind_derivations(
                     store, directory, _artifact_key("derived", u, "wind-speed"), speed
                 ),
                 pressure_pa=pressure_pa,
+                dimension=None if pressure else "10m_above_ground",
                 quality_state=quality,
                 derivation_method="wind_speed_from_u_v",
                 source_messages=(u, v),
@@ -446,6 +585,7 @@ def _wind_derivations(
                     store, directory, _artifact_key("derived", u, "wind-direction"), direction
                 ),
                 pressure_pa=pressure_pa,
+                dimension=None if pressure else "10m_above_ground",
                 quality_state=quality,
                 derivation_method="meteorological_wind_direction_from_u_v",
                 source_messages=(u, v),
@@ -494,9 +634,9 @@ def _message(
         statistic_type=statistic_type,
         native_sign_convention=native_sign_convention,
         normalization_method=normalization_method,
-        normalization_version="gfs-normalization/1" if normalization_method else None,
+        normalization_version="gfs-normalization/2" if normalization_method else None,
         derivation_method=derivation_method,
-        derivation_version="gfs-normalization/1" if derivation_method else None,
+        derivation_version="gfs-normalization/2" if derivation_method else None,
     )
 
 

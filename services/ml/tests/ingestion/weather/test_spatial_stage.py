@@ -160,6 +160,7 @@ def _fixture(root: Path) -> tuple[WeatherArtifactStore, ArtifactReference, GfsCa
                     valid_at_utc=valid_at_utc,
                     lead_hours=lead_hours,
                     grain="surface",
+                    dimension="10m_above_ground",
                 ),
                 _grain(
                     values("vgrd-10m", 0),
@@ -169,6 +170,7 @@ def _fixture(root: Path) -> tuple[WeatherArtifactStore, ArtifactReference, GfsCa
                     valid_at_utc=valid_at_utc,
                     lead_hours=lead_hours,
                     grain="surface",
+                    dimension="10m_above_ground",
                 ),
             )
         )
@@ -216,7 +218,6 @@ def _fixture(root: Path) -> tuple[WeatherArtifactStore, ArtifactReference, GfsCa
             grid=grid,
             surface_grains=tuple(surface),
             pressure_level_grains=tuple(pressure),
-            source_unsupported_selectors=(),
         ),
     )
 

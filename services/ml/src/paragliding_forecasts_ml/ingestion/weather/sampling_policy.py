@@ -51,7 +51,9 @@ class TerrainPolicy(BaseModel):
 class SamplingPolicy(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    policy_version: Literal["canonical-site-sampling-policy-v1"]
+    policy_version: Literal[
+        "canonical-site-sampling-policy-v1", "canonical-site-sampling-policy-v2"
+    ]
     point_sampling: PointSamplingPolicy
     neighbourhood_sampling: NeighbourhoodSamplingPolicy
     terrain: TerrainPolicy
@@ -59,7 +61,7 @@ class SamplingPolicy(BaseModel):
 
 def load_sampling_policy() -> tuple[SamplingPolicy, str]:
     resource = files("paragliding_forecasts_ml.ingestion.weather.resources").joinpath(
-        "canonical-site-sampling-policy-v1.json"
+        "canonical-site-sampling-policy-v2.json"
     )
     payload = json.loads(resource.read_text(encoding="utf-8"))
     policy = SamplingPolicy.model_validate(payload)

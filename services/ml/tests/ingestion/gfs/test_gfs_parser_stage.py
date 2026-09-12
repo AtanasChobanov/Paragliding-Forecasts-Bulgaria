@@ -38,7 +38,7 @@ def _metadata() -> dict[str, object]:
 
 
 def test_profile_pins_every_collected_selector_and_numeric_hpbl_identity() -> None:
-    assert len(PROFILE_BY_SELECTOR) == 115
+    assert len(PROFILE_BY_SELECTOR) == 114
     assert PROFILE_BY_SELECTOR["hpbl"].number == 196
     assert PROFILE_BY_SELECTOR["hpbl"].native_unit_override == "m"
 
@@ -156,7 +156,6 @@ def test_offline_f007_golden_contract_locks_parser_and_normalizer_outputs() -> N
     assert normalizer["canonical_grain_count"] == (
         normalizer["surface_grain_count"] + normalizer["pressure_level_grain_count"]
     )
-    assert normalizer["source_unsupported_selectors"] == ["gust_surface"]
     assert normalizer["model_elevation_selector"] == "orog"
     assert normalizer["quality_states"] == [
         "real",

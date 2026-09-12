@@ -1,0 +1,28 @@
+{
+  "policy_version": "canonical-site-sampling-policy-v2",
+  "point_sampling": {
+    "method": "bilinear",
+    "method_version": "regular-latlon-bilinear-v1",
+    "missing_node_policy": "strict_no_renormalization",
+    "wind_derivation": "interpolate_u_v_then_derive"
+  },
+  "neighbourhood_sampling": {
+    "method": "physical_radius",
+    "method_version": "haversine-radius-v1",
+    "radius_km": 50.0,
+    "boundary": "inclusive",
+    "earth_mean_radius_km": 6371.0088,
+    "fields": [
+      {"field_code": "air_pressure_pa", "grain": "surface", "dimension": "mean_sea_level", "pressure_pa": null},
+      {"field_code": "wind_u_m_s", "grain": "surface", "dimension": "10m_above_ground", "pressure_pa": null},
+      {"field_code": "wind_v_m_s", "grain": "surface", "dimension": "10m_above_ground", "pressure_pa": null},
+      {"field_code": "wind_u_m_s", "grain": "pressure_level", "dimension": null, "pressure_pa": 92500.0},
+      {"field_code": "wind_v_m_s", "grain": "pressure_level", "dimension": null, "pressure_pa": 92500.0}
+    ]
+  },
+  "terrain": {
+    "model_site_mismatch": "always_report_signed_and_absolute",
+    "pressure_level_agl_reference": "reviewed_site_elevation_msl",
+    "below_terrain_policy": "exclude_if_site_or_model_agl_is_negative"
+  }
+}

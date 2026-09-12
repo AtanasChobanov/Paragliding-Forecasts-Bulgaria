@@ -11,8 +11,9 @@ from pydantic import Field, field_validator, model_validator
 from ..atmosphere.contracts import ArtifactReference, AtmosphericContract, validate_utc_timestamp
 
 GFS_SOURCE_ID = "noaa_gfs_0p25_aws_grib2"
+GFS_GRID_KEY = "gfs_0p25_global"
 GFS_BUCKET_URL = "https://noaa-gfs-bdp-pds.s3.amazonaws.com"
-GFS_COLLECTOR_VERSION = "gfs-collector/5"
+GFS_COLLECTOR_VERSION = "gfs-collector/6"
 SOFIA_TIME_ZONE = "Europe/Sofia"
 SOFIA_FLYING_WINDOW_VERSION = "sofia-flying-window/1"
 
