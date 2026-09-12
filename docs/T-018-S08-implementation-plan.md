@@ -627,11 +627,12 @@ Product runs, valid times, grids, grid points, footprints, and footprint nodes
 may be inserted as run evidence or reused after strict equality checks,
 according to their schema ownership.
 
-S06 below-terrain excluded pressure levels remain hash-linked artifact evidence
-because the current missing-evidence contract does not identify every excluded
-pressure coordinate relationally. Persist accepted profile rows only; do not
-invent null profile-level rows. Record this limitation in the receipt and
-documentation.
+S06 below-terrain excluded pressure levels remain artifact-only at the
+relational persistence boundary: persist accepted profile rows only and do not
+invent null profile-level rows. The versioned missing-evidence contract records
+the excluded site, valid time, pressure, terrain diagnostics, and affected
+required profile fields, while the receipt continues to disclose that no
+one-row-per-excluded-level SQLite representation exists.
 
 ### Single transaction
 

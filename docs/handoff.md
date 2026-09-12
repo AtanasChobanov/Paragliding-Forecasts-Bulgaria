@@ -77,6 +77,9 @@ Implemented and focused-verified:
 - GFS profile v4 removes active GUST output, retains legacy raw verification,
   and normalizer v7 resolves reset-block GFS interval products into canonical
   one-hour intervals with packing-aware precipitation tolerance.
+- Validator v7 / missing-evidence schema v2 retains the site, valid UTC time,
+  pressure level, geopotential/AGL terrain diagnostics, and affected required
+  profile fields for each non-quarantining below-terrain profile exclusion.
 - Feature policy/artifacts v2 / feature contract v3 add distinct mixed-layer
   LCL, PBL-minus-LCL, signed surface buoyancy flux, and non-negative Deardorff
   convective velocity, while GFS provider cloud base is explicit

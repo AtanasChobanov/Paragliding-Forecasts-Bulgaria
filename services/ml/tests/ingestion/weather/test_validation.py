@@ -7,12 +7,14 @@ from pathlib import Path
 from paragliding_forecasts_ml.ingestion.gfs.profile import GFS_FEATURE_PROFILE_PRESSURES_HPA
 from paragliding_forecasts_ml.ingestion.weather.artifacts import WeatherArtifactStore
 from paragliding_forecasts_ml.ingestion.weather.spatial import (
+    PressureLevelExclusion,
     SampledField,
     SampledProfileLevel,
     SiteAlignedSample,
     TerrainDiagnostic,
 )
 from paragliding_forecasts_ml.ingestion.weather.validation import (
+    MissingWeatherEvidence,
     _check_sample,
     _load_samples,
     load_validation_policy,
@@ -219,8 +221,31 @@ def test_below_terrain_profile_exclusion_is_missing_not_quarantined() -> None:
     quarantined, missing = _check_sample(
         sample,
         policy.sources["noaa_gfs_0p25_aws_grib2"],
-        below_terrain_exclusions={(sample.site_id, sample.valid_at_utc, 92500.0)},
+        below_terrain_exclusions={
+            (sample.site_id, sample.valid_at_utc, 92500.0): PressureLevelExclusion(
+                site_id=sample.site_id,
+                valid_at_utc=sample.valid_at_utc,
+                pressure_pa=92500.0,
+                code="below_site_or_model_terrain",
+                geopotential_height_msl_m=1450.0,
+                site_level_height_agl_m=-10.0,
+                model_level_height_agl_m=20.0,
+            )
+        },
     )
 
     assert quarantined == []
     assert [reason.code for reason in missing] == ["profile_below_terrain"]
+    assert missing[0].site_id == sample.site_id
+    assert missing[0].valid_at_utc == sample.valid_at_utc
+    assert missing[0].pressure_pa == 92500.0
+    assert missing[0].site_level_height_agl_m == -10.0
+    assert (
+        missing[0].affected_field_codes
+        == policy.sources["noaa_gfs_0p25_aws_grib2"].required_profile_field_codes
+    )
+    evidence = MissingWeatherEvidence(
+        run_key="99999999-9999-4999-8999-999999999999", reasons=tuple(missing)
+    )
+    assert evidence.missing_weather_evidence_schema_version == 2
+    assert evidence.reasons[0].geopotential_height_msl_m == 1450.0

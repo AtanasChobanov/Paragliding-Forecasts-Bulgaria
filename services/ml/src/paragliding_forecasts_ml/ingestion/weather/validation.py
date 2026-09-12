@@ -23,9 +23,9 @@ from ..atmosphere.contracts import (
 )
 from .artifacts import WeatherArtifactStore, stage_input_fingerprint
 from .serialization import canonical_json_bytes, sha256_bytes
-from .spatial import CanonicalSiteSampleBatch, SiteAlignedSample
+from .spatial import CanonicalSiteSampleBatch, PressureLevelExclusion, SiteAlignedSample
 
-WEATHER_VALIDATOR_VERSION = "source-aware-weather-validator/6"
+WEATHER_VALIDATOR_VERSION = "source-aware-weather-validator/7"
 POLICY_RESOURCE = "weather-validation-policy.json"
 FIELD_RANGES: dict[str, tuple[float, float]] = {
     "air_temperature_k": (150.0, 350.0),
@@ -51,6 +51,13 @@ class WeatherValidationReason(AtmosphericContract):
     message: str
     sample_identity_key: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     field_code: str | None = None
+    site_id: int | None = Field(default=None, gt=0)
+    valid_at_utc: str | None = None
+    pressure_pa: float | None = Field(default=None, gt=0)
+    geopotential_height_msl_m: float | None = None
+    site_level_height_agl_m: float | None = None
+    model_level_height_agl_m: float | None = None
+    affected_field_codes: tuple[str, ...] = ()
     severity: Literal["missing", "quarantine"]
 
 
@@ -92,7 +99,7 @@ class QuarantinedWeatherSamples(AtmosphericContract):
 
 
 class MissingWeatherEvidence(AtmosphericContract):
-    missing_weather_evidence_schema_version: Literal[1] = 1
+    missing_weather_evidence_schema_version: Literal[2] = 2
     run_key: str
     reasons: tuple[WeatherValidationReason, ...]
 
@@ -396,7 +403,7 @@ def _verify_raw_payloads(
 
 def _below_terrain_exclusions(
     store: WeatherArtifactStore, reference: ArtifactReference
-) -> frozenset[tuple[int, str, float]]:
+) -> dict[tuple[int, str, float], PressureLevelExclusion]:
     """Return S05's explicit non-penalizing below-terrain level exclusions."""
 
     try:
@@ -410,11 +417,20 @@ def _below_terrain_exclusions(
         ) from error
     if not isinstance(exclusions, list):
         raise WeatherValidationError("Pressure-level exclusions have the wrong shape.")
-    return frozenset(
-        (int(item["site_id"]), str(item["valid_at_utc"]), float(item["pressure_pa"]))
-        for item in exclusions
-        if isinstance(item, dict) and item.get("code") == "below_site_or_model_terrain"
-    )
+    try:
+        parsed = tuple(
+            PressureLevelExclusion.model_validate(item, strict=True)
+            for item in exclusions
+            if isinstance(item, dict) and item.get("code") == "below_site_or_model_terrain"
+        )
+    except ValueError as error:
+        raise WeatherValidationError(
+            "Spatial below-terrain exclusion evidence has the wrong shape."
+        ) from error
+    result = {(item.site_id, item.valid_at_utc, item.pressure_pa): item for item in parsed}
+    if len(result) != len(parsed):
+        raise WeatherValidationError("Spatial below-terrain evidence has duplicate identities.")
+    return result
 
 
 def _reason(
@@ -433,8 +449,9 @@ def _check_sample(
     sample: SiteAlignedSample,
     policy: _SourcePolicy,
     *,
-    below_terrain_exclusions: frozenset[tuple[int, str, float]] = frozenset(),
+    below_terrain_exclusions: dict[tuple[int, str, float], PressureLevelExclusion] | None = None,
 ) -> tuple[list[WeatherValidationReason], list[WeatherValidationReason]]:
+    below_terrain_exclusions = below_terrain_exclusions or {}
     quarantine: list[WeatherValidationReason] = []
     missing: list[WeatherValidationReason] = []
     seen: set[tuple[str, str | None, float | None]] = set()
@@ -543,12 +560,22 @@ def _check_sample(
     for pressure in expected_pressures:
         profile = profiles.get(float(pressure))
         if profile is None:
-            if (sample.site_id, sample.valid_at_utc, float(pressure)) in below_terrain_exclusions:
+            exclusion = below_terrain_exclusions.get(
+                (sample.site_id, sample.valid_at_utc, float(pressure))
+            )
+            if exclusion is not None:
                 missing.append(
                     WeatherValidationReason(
                         code="profile_below_terrain",
                         message="Required profile is explicitly below reviewed site or model terrain.",
                         sample_identity_key=sample.sample_identity_key,
+                        site_id=sample.site_id,
+                        valid_at_utc=sample.valid_at_utc,
+                        pressure_pa=float(pressure),
+                        geopotential_height_msl_m=exclusion.geopotential_height_msl_m,
+                        site_level_height_agl_m=exclusion.site_level_height_agl_m,
+                        model_level_height_agl_m=exclusion.model_level_height_agl_m,
+                        affected_field_codes=policy.required_profile_field_codes,
                         severity="missing",
                     )
                 )
