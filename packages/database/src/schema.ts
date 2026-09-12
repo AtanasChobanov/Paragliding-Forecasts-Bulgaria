@@ -464,6 +464,9 @@ export const weatherIngestionRuns = sqliteTable(
     operationalUseAllowed: integer("operational_use_allowed").notNull().default(0),
     rawManifestPath: text("raw_manifest_path").notNull(),
     rawManifestSha256: text("raw_manifest_sha256").notNull(),
+    featureManifestPath: text("feature_manifest_path"),
+    featureManifestSha256: text("feature_manifest_sha256"),
+    persistenceInputSha256: text("persistence_input_sha256"),
     pipelineVersion: text("pipeline_version").notNull(),
     startedAtUtc: text("started_at_utc").notNull(),
     completedAtUtc: text("completed_at_utc"),
@@ -545,6 +548,45 @@ export const weatherIngestionRuns = sqliteTable(
       "weather_ingestion_runs_raw_manifest_sha256_check",
       sql`length(${table.rawManifestSha256}) = 64
         AND ${table.rawManifestSha256} NOT GLOB '*[^0-9a-f]*'`,
+    ),
+    check(
+      "weather_ingestion_runs_feature_manifest_path_check",
+      sql`${table.featureManifestPath} IS NULL
+        OR (
+          ${table.featureManifestPath} LIKE 'data/interim/%'
+          AND ${table.featureManifestPath} NOT LIKE '%..%'
+        )`,
+    ),
+    check(
+      "weather_ingestion_runs_feature_manifest_sha256_check",
+      sql`${table.featureManifestSha256} IS NULL
+        OR (
+          length(${table.featureManifestSha256}) = 64
+          AND ${table.featureManifestSha256} NOT GLOB '*[^0-9a-f]*'
+        )`,
+    ),
+    check(
+      "weather_ingestion_runs_persistence_input_sha256_check",
+      sql`${table.persistenceInputSha256} IS NULL
+        OR (
+          length(${table.persistenceInputSha256}) = 64
+          AND ${table.persistenceInputSha256} NOT GLOB '*[^0-9a-f]*'
+        )`,
+    ),
+    check(
+      "weather_ingestion_runs_feature_persistence_lifecycle_check",
+      sql`(
+          ${table.status} IN ('running', 'failed')
+          AND ${table.featureManifestPath} IS NULL
+          AND ${table.featureManifestSha256} IS NULL
+          AND ${table.persistenceInputSha256} IS NULL
+        )
+        OR (
+          ${table.status} = 'succeeded'
+          AND ${table.featureManifestPath} IS NOT NULL
+          AND ${table.featureManifestSha256} IS NOT NULL
+          AND ${table.persistenceInputSha256} IS NOT NULL
+        )`,
     ),
     check(
       "weather_ingestion_runs_pipeline_version_check",
@@ -708,6 +750,10 @@ export const weatherGrids = sqliteTable(
   (table) => [
     unique("weather_grids_source_key_unique").on(table.sourceId, table.gridKey),
     check("weather_grids_grid_key_non_empty_check", sql`length(trim(${table.gridKey})) > 0`),
+    check(
+      "weather_grids_grid_key_supported_check",
+      sql`${table.gridKey} IN ('gfs_0p25_global', 'era5_0p25_global')`,
+    ),
   ],
 );
 
@@ -852,6 +898,10 @@ export const weatherPointSamples = sqliteTable(
     providerBoundaryLayerMethod: text("provider_boundary_layer_method"),
     providerCloudBaseAglM: real("provider_cloud_base_agl_m"),
     providerCloudBaseMethod: text("provider_cloud_base_method"),
+    mixedLayerLclAglM: real("mixed_layer_lcl_agl_m"),
+    pblMinusLclM: real("pbl_minus_lcl_m"),
+    surfaceBuoyancyFluxKinematicM2S3: real("surface_buoyancy_flux_kinematic_m2_s3"),
+    convectiveVelocityScaleMS: real("convective_velocity_scale_m_s"),
     totalColumnWaterVapourKgM2: real("total_column_water_vapour_kg_m2"),
     totalCloudCoverPercent: real("total_cloud_cover_percent"),
     lowCloudCoverPercent: real("low_cloud_cover_percent"),
@@ -938,6 +988,11 @@ export const weatherPointSamples = sqliteTable(
             AND ${table.providerCloudBaseMethod} IS NULL)
           OR (${table.providerCloudBaseAglM} IS NOT NULL
             AND ${table.providerCloudBaseMethod} IS NOT NULL))`,
+    ),
+    check(
+      "weather_samples_s08_derived_non_negative_check",
+      sql`(${table.mixedLayerLclAglM} IS NULL OR ${table.mixedLayerLclAglM} >= 0)
+        AND (${table.convectiveVelocityScaleMS} IS NULL OR ${table.convectiveVelocityScaleMS} >= 0)`,
     ),
     check(
       "weather_samples_total_column_water_vapour_non_negative_check",
@@ -1266,6 +1321,15 @@ export const weatherDailyFeatureSnapshots = sqliteTable(
     providerCloudBaseAglMeanM: real("provider_cloud_base_agl_mean_m"),
     providerCloudBaseAglMinM: real("provider_cloud_base_agl_min_m"),
     providerCloudBaseAglMaxM: real("provider_cloud_base_agl_max_m"),
+    mixedLayerLclAglMeanM: real("mixed_layer_lcl_agl_mean_m"),
+    mixedLayerLclAglMinM: real("mixed_layer_lcl_agl_min_m"),
+    mixedLayerLclAglMaxM: real("mixed_layer_lcl_agl_max_m"),
+    pblMinusLclMeanM: real("pbl_minus_lcl_mean_m"),
+    pblMinusLclMaxM: real("pbl_minus_lcl_max_m"),
+    surfaceBuoyancyFluxKinematicMeanM2S3: real("surface_buoyancy_flux_kinematic_mean_m2_s3"),
+    surfaceBuoyancyFluxKinematicMaxM2S3: real("surface_buoyancy_flux_kinematic_max_m2_s3"),
+    convectiveVelocityScaleMeanMS: real("convective_velocity_scale_mean_m_s"),
+    convectiveVelocityScaleMaxMS: real("convective_velocity_scale_max_m_s"),
     totalColumnWaterVapourMeanKgM2: real("total_column_water_vapour_mean_kg_m2"),
     totalCloudCoverMeanPercent: real("total_cloud_cover_mean_percent"),
     totalCloudCoverMaxPercent: real("total_cloud_cover_max_percent"),
@@ -1315,6 +1379,20 @@ export const weatherDailyFeatureSnapshots = sqliteTable(
       "weather_daily_feature_snapshots_temperature_order_check",
       sql`${table.airTemperature2mMinK} IS NULL OR ${table.airTemperature2mMaxK} IS NULL
         OR ${table.airTemperature2mMaxK} >= ${table.airTemperature2mMinK}`,
+    ),
+    check(
+      "weather_daily_feature_snapshots_s08_derived_shape_check",
+      sql`(${table.mixedLayerLclAglMeanM} IS NULL OR ${table.mixedLayerLclAglMeanM} >= 0)
+        AND (${table.mixedLayerLclAglMinM} IS NULL OR ${table.mixedLayerLclAglMinM} >= 0)
+        AND (${table.mixedLayerLclAglMaxM} IS NULL OR ${table.mixedLayerLclAglMaxM} >= 0)
+        AND (${table.mixedLayerLclAglMinM} IS NULL OR ${table.mixedLayerLclAglMeanM} IS NULL
+          OR ${table.mixedLayerLclAglMinM} <= ${table.mixedLayerLclAglMeanM})
+        AND (${table.mixedLayerLclAglMeanM} IS NULL OR ${table.mixedLayerLclAglMaxM} IS NULL
+          OR ${table.mixedLayerLclAglMeanM} <= ${table.mixedLayerLclAglMaxM})
+        AND (${table.convectiveVelocityScaleMeanMS} IS NULL OR ${table.convectiveVelocityScaleMeanMS} >= 0)
+        AND (${table.convectiveVelocityScaleMaxMS} IS NULL OR ${table.convectiveVelocityScaleMaxMS} >= 0)
+        AND (${table.convectiveVelocityScaleMeanMS} IS NULL OR ${table.convectiveVelocityScaleMaxMS} IS NULL
+          OR ${table.convectiveVelocityScaleMeanMS} <= ${table.convectiveVelocityScaleMaxMS})`,
     ),
     check(
       "weather_daily_feature_snapshots_percent_range_check",
@@ -1456,6 +1534,7 @@ export const weatherFieldProvenance = sqliteTable(
     fieldCode: text("field_code").notNull(),
     fieldVariant: text("field_variant").notNull().default("canonical"),
     qualityState: text("quality_state").notNull(),
+    missingReasonCode: text("missing_reason_code"),
     sourceReferenceAtUtc: text("source_reference_at_utc"),
     nativeFieldName: text("native_field_name"),
     nativeUnit: text("native_unit"),
@@ -1486,10 +1565,15 @@ export const weatherFieldProvenance = sqliteTable(
       .on(table.pointProfileLevelId, table.fieldCode, table.fieldVariant)
       .where(sql`${table.pointProfileLevelId} IS NOT NULL`),
     uniqueIndex("weather_field_provenance_feature_field_unique")
-      .on(table.dailyFeatureSnapshotId, table.fieldCode, table.fieldVariant)
+      .on(table.dailyFeatureSnapshotId, table.fieldCode, table.fieldVariant, table.statisticType)
       .where(sql`${table.dailyFeatureSnapshotId} IS NOT NULL`),
     uniqueIndex("weather_field_provenance_feature_layer_field_unique")
-      .on(table.dailyFeatureProfileLayerId, table.fieldCode, table.fieldVariant)
+      .on(
+        table.dailyFeatureProfileLayerId,
+        table.fieldCode,
+        table.fieldVariant,
+        table.statisticType,
+      )
       .where(sql`${table.dailyFeatureProfileLayerId} IS NOT NULL`),
     index("weather_field_provenance_field_quality_index").on(table.fieldCode, table.qualityState),
     index("weather_field_provenance_source_reference_index").on(table.sourceReferenceAtUtc),
@@ -1522,6 +1606,30 @@ export const weatherFieldProvenance = sqliteTable(
         'invalid_payload',
         'unsupported'
       )`,
+    ),
+    check(
+      "weather_field_provenance_missing_reason_shape_check",
+      sql`(
+          ${table.qualityState} IN ('missing', 'sentinel_missing', 'invalid_payload', 'unsupported')
+          AND ${table.missingReasonCode} IS NOT NULL
+          AND ${table.missingReasonCode} GLOB '[a-z]*'
+          AND ${table.missingReasonCode} NOT GLOB '*[^a-z0-9_]*'
+        )
+        OR (
+          ${table.qualityState} IN ('real', 'derived')
+          AND ${table.missingReasonCode} IS NULL
+        )`,
+    ),
+    check(
+      "weather_field_provenance_daily_statistic_required_check",
+      sql`(
+          ${table.dailyFeatureSnapshotId} IS NULL
+          AND ${table.dailyFeatureProfileLayerId} IS NULL
+        )
+        OR (
+          ${table.statisticType} IS NOT NULL
+          AND length(trim(${table.statisticType})) > 0
+        )`,
     ),
     check(
       "weather_field_provenance_source_reference_at_utc_shape_check",
@@ -1581,7 +1689,7 @@ export const weatherFieldProvenance = sqliteTable(
     ),
     check(
       "weather_field_provenance_missing_native_value_check",
-      sql`${table.qualityState} NOT IN ('missing', 'sentinel_missing', 'unsupported')
+      sql`${table.qualityState} NOT IN ('missing', 'sentinel_missing', 'invalid_payload', 'unsupported')
         OR ${table.nativeValue} IS NULL`,
     ),
   ],

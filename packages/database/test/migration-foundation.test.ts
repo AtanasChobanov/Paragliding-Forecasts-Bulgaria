@@ -127,7 +127,8 @@ const insertWeatherGraph = (targetConnection = activeConnection()): void => {
       id, run_key, product_run_id, target_local_date, ingestion_method,
       request_purpose, status, source_url, permission_basis, permission_reference,
       model_training_allowed, operational_use_allowed, raw_manifest_path,
-      raw_manifest_sha256, pipeline_version, started_at_utc, completed_at_utc,
+      raw_manifest_sha256, feature_manifest_path, feature_manifest_sha256,
+      persistence_input_sha256, pipeline_version, started_at_utc, completed_at_utc,
       samples_seen, samples_accepted
     ) VALUES (
       10, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 10, '2026-08-20',
@@ -136,6 +137,9 @@ const insertWeatherGraph = (targetConnection = activeConnection()): void => {
       'https://www.noaa.gov/disclaimer', 1, 1,
       'data/raw/weather/noaa-gfs/test/manifest.json',
       'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      'data/interim/weather/noaa-gfs/test/features/feature-builder-stage-manifest.json',
+      'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
       'gfs-collector/1|gfs-decoder/1|weather-validation/1|weather-persistence/1',
       '2026-08-20T00:00:00Z', '2026-08-20T00:05:00Z', 1, 1
     );
@@ -211,10 +215,10 @@ const insertWeatherGraph = (targetConnection = activeConnection()): void => {
     );
 
     INSERT INTO weather_field_provenance (
-      point_convection_measurement_id, field_code, quality_state
+      point_convection_measurement_id, field_code, quality_state, missing_reason_code
     ) VALUES
-      (10, 'cape_j_per_kg', 'missing'),
-      (10, 'cin_magnitude_j_per_kg', 'missing');
+      (10, 'cape_j_per_kg', 'missing', 'source_field_unavailable'),
+      (10, 'cin_magnitude_j_per_kg', 'missing', 'source_field_unavailable');
 
     INSERT INTO weather_field_provenance (
       point_interval_measurement_id, field_code, quality_state, source_reference_at_utc,
@@ -233,17 +237,17 @@ const insertWeatherGraph = (targetConnection = activeConnection()): void => {
     );
 
     INSERT INTO weather_field_provenance (
-      daily_feature_snapshot_id, field_code, quality_state, derivation_method,
+      daily_feature_snapshot_id, field_code, quality_state, statistic_type, derivation_method,
       derivation_version
     ) VALUES (
-      10, 'air_temperature_2m_mean_k', 'derived', 'arithmetic_mean', '1'
+      10, 'air_temperature_2m_mean_k', 'derived', 'mean', 'arithmetic_mean', '1'
     );
 
     INSERT INTO weather_field_provenance (
-      daily_feature_profile_layer_id, field_code, quality_state,
+      daily_feature_profile_layer_id, field_code, quality_state, statistic_type,
       derivation_method, derivation_version
     ) VALUES (
-      10, 'temperature_lapse_rate_mean_k_per_km', 'derived', 'endpoint_difference', '1'
+      10, 'temperature_lapse_rate_mean_k_per_km', 'derived', 'mean', 'endpoint_difference', '1'
     );
   `);
 };
@@ -254,7 +258,7 @@ describe("database foundation migrations", () => {
 
     expect(sqlite.prepare("PRAGMA foreign_keys").get()).toEqual({ foreign_keys: 1 });
     expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({
-      count: 14,
+      count: 15,
     });
 
     if (databaseUrl === undefined) {
@@ -264,7 +268,7 @@ describe("database foundation migrations", () => {
     runMigrations(databaseUrl);
 
     expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({
-      count: 14,
+      count: 15,
     });
     expect(
       sqlite
@@ -569,7 +573,9 @@ describe("database foundation migrations", () => {
 
   it("removes rejected inversion metrics from daily profile layers", () => {
     const columns = activeConnection()
-      .sqlite.prepare("SELECT name FROM pragma_table_info('weather_daily_feature_profile_layers') ORDER BY cid")
+      .sqlite.prepare(
+        "SELECT name FROM pragma_table_info('weather_daily_feature_profile_layers') ORDER BY cid",
+      )
       .all()
       .map((row) => (row as { name: string }).name);
     const createSql = activeConnection()
@@ -578,7 +584,9 @@ describe("database foundation migrations", () => {
 
     expect(columns).not.toContain("inversion_strength_max_k");
     expect(columns).not.toContain("inversion_depth_at_max_m");
-    expect(createSql.sql).not.toContain("weather_daily_feature_profile_layers_inversion_pair_check");
+    expect(createSql.sql).not.toContain(
+      "weather_daily_feature_profile_layers_inversion_pair_check",
+    );
   });
   it("creates all accepted weather tables as STRICT tables", () => {
     const rows = activeConnection()

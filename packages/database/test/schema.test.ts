@@ -157,6 +157,10 @@ describe("weather persistence schema", () => {
         "point_footprint_id",
         "provider_boundary_layer_height_agl_m",
         "specific_humidity_2m_kg_per_kg",
+        "mixed_layer_lcl_agl_m",
+        "pbl_minus_lcl_m",
+        "surface_buoyancy_flux_kinematic_m2_s3",
+        "convective_velocity_scale_m_s",
       ]),
     );
     expect(sampleColumns).not.toContain("product_run_id");
@@ -211,11 +215,15 @@ describe("weather persistence schema", () => {
     expect(footprintColumns).not.toContain("definition_sha256");
     expect(snapshotColumns).not.toContain("weather_sample_id");
     expect(snapshotColumns).not.toContain("input_fingerprint_sha256");
-    expect(snapshotColumns).not.toEqual(
+    expect(snapshotColumns).toEqual(
       expect.arrayContaining([
         "mixed_layer_lcl_agl_mean_m",
+        "mixed_layer_lcl_agl_min_m",
         "mixed_layer_lcl_agl_max_m",
-        "surface_buoyancy_flux_kinematic_mean_k_m_s",
+        "pbl_minus_lcl_mean_m",
+        "pbl_minus_lcl_max_m",
+        "surface_buoyancy_flux_kinematic_mean_m2_s3",
+        "surface_buoyancy_flux_kinematic_max_m2_s3",
         "convective_velocity_scale_mean_m_s",
         "convective_velocity_scale_max_m_s",
       ]),
