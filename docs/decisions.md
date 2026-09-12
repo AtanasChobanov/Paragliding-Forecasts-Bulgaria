@@ -59,6 +59,7 @@ consequences. Temporary progress and Git state belong in
 | DEC-044     | Bind daily GFS collection to the Sofia flying-window policy                     | Accepted   | 2026-09-10 |
 | DEC-045     | Normalize GFS interval products to exact adjacent UTC windows                   | Accepted   | 2026-09-10 |
 | DEC-046     | Make weather persistence immutable, atomic, and artifact-replayable             | Accepted   | 2026-09-10 |
+| DEC-047     | Supply weather usage authority through an explicit local policy file            | Accepted   | 2026-09-11 |
 
 ## Individual decisions
 
@@ -2008,6 +2009,48 @@ and [`README.md`](../services/ml/README.md).
     distinction between provider observations, physical estimates, and missing
     information.
 
+### DEC-047 - Supply weather usage authority through an explicit local policy file
+
+**Status:** Accepted
+
+**Date:** 2026-09-11
+
+**Context:** `weather_ingestion_runs` requires explicit, non-null
+`model_training_allowed` and `operational_use_allowed` values. Existing GFS
+raw/request artifacts preserve the source permission basis and reference but
+do not carry those owner-authorized usage flags. Inferring or hard-coding either
+boolean would make an immutable replay appear authorized without evidence.
+
+**Decision:** Follow the established XCContest persistence boundary, scoped by
+weather source. By default `weather-persist` resolves local
+`data/local/gfs-usage-policy.json` for a GFS run and
+`data/local/era5-usage-policy.json` for an ERA5 run. An optional
+`--policy-file` override is permitted only when its strict source-specific
+schema matches the run: `gfs_usage_policy_schema_version` for GFS or
+`era5_usage_policy_schema_version` for ERA5, plus `permission_basis`,
+`permission_reference`, `model_training_allowed`, and
+`operational_use_allowed`. The adapter hashes the exact selected file bytes
+into the persistence input fingerprint and writes its asserted values to the
+terminal weather ingestion run. The policy file is local operator authority,
+not a replacement for the source raw manifest; the raw source basis/reference
+and attribution stay preserved from immutable collection evidence.
+
+The command does not download, alter, or recreate raw artifacts. Replaying a
+run with changed policy bytes is an immutable-input conflict, even if the
+booleans happen to be the same. Future fresh and resume orchestration must
+forward this explicit policy path; no default policy or inferred source-wide
+permission flags are allowed.
+
+**Consequences:** Existing retained raw runs can be persisted offline once an
+owner supplies the reviewed local policy file. Final production attribution,
+retention, and source terms remain an open release decision; this boundary
+records the local usage authority actually used for one immutable persistence
+run.
+
+**Related files:** [`persistence_models.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/persistence_models.py),
+[`persistence.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/persistence.py),
+[`persistence_cli.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/persistence_cli.py),
+and [`handoff.md`](handoff.md).
 ## Open decisions
 
 | Question                                                                                                                  | Options / constraints                                                                                                                                                                                                             | Resolve by                                                               |

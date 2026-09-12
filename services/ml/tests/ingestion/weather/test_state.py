@@ -58,6 +58,68 @@ def test_failed_stage_can_resume_from_last_verified_success(tmp_path) -> None:
     ]
 
 
+def test_failed_persistence_can_retry_from_features_boundary(tmp_path, monkeypatch) -> None:
+    ledger = initialized_ledger(tmp_path)
+    monkeypatch.setattr(ledger.store, "verify_boundary", lambda _reference: tmp_path)
+    for stage in (
+        "raw_complete",
+        "parsed",
+        "normalized",
+        "spatially_aligned",
+        "validated",
+        "features_built",
+    ):
+        ledger.append(
+            invocation_mode="resume",
+            stage=stage,
+            disposition="complete",
+            occurred_at_utc=UTC,
+        )
+    ledger.append(
+        invocation_mode="resume",
+        stage="persisted",
+        disposition="failed",
+        occurred_at_utc=UTC,
+        evidence=reference("failure"),
+        detail="synthetic transaction fault",
+    )
+    retried = ledger.append(
+        invocation_mode="resume",
+        stage="persisted",
+        disposition="persisted",
+        occurred_at_utc=UTC,
+    )
+
+    assert retried.sequence == 9
+    assert [event.disposition for event in ledger.load_events()][-2:] == ["failed", "persisted"]
+
+
+def test_failed_persistence_requires_immutable_evidence(tmp_path) -> None:
+    ledger = initialized_ledger(tmp_path)
+    for stage in (
+        "raw_complete",
+        "parsed",
+        "normalized",
+        "spatially_aligned",
+        "validated",
+        "features_built",
+    ):
+        ledger.append(
+            invocation_mode="resume",
+            stage=stage,
+            disposition="complete",
+            occurred_at_utc=UTC,
+        )
+
+    with pytest.raises(StateError, match="requires immutable evidence"):
+        ledger.append(
+            invocation_mode="resume",
+            stage="persisted",
+            disposition="failed",
+            occurred_at_utc=UTC,
+        )
+
+
 def test_partial_and_persisted_runs_are_terminal(tmp_path) -> None:
     partial = initialized_ledger(tmp_path)
     partial.append(

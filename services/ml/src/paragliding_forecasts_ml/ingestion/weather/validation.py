@@ -25,7 +25,7 @@ from .artifacts import WeatherArtifactStore, stage_input_fingerprint
 from .serialization import canonical_json_bytes, sha256_bytes
 from .spatial import CanonicalSiteSampleBatch, SiteAlignedSample
 
-WEATHER_VALIDATOR_VERSION = "source-aware-weather-validator/4"
+WEATHER_VALIDATOR_VERSION = "source-aware-weather-validator/6"
 POLICY_RESOURCE = "weather-validation-policy.json"
 FIELD_RANGES: dict[str, tuple[float, float]] = {
     "air_temperature_k": (150.0, 350.0),
@@ -234,9 +234,17 @@ def _load_samples(
     try:
         payload = json.loads(path.read_bytes())
         version = payload.get("canonical_site_sample_batch_schema_version")
-        if version == 2:
+        if version == 3:
             batch = CanonicalSiteSampleBatch.model_validate_json(path.read_bytes(), strict=True)
             samples = batch.samples
+        elif version == 2:
+            raw_samples = payload["samples"]
+            if not isinstance(raw_samples, list):
+                raise ValueError("v2 samples must be an array")
+            samples = tuple(
+                SiteAlignedSample.model_validate_json(json.dumps(item), strict=True)
+                for item in raw_samples
+            )
         elif version == 1:
             raw_samples = payload["samples"]
             if not isinstance(raw_samples, list):

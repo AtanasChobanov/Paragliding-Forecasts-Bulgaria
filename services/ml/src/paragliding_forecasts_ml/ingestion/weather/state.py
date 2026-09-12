@@ -51,8 +51,8 @@ class RunStateEvent(AtmosphericContract):
 
     # Version 1 events remain readable. Version 2 adds an explicit link when
     # an immutable derived boundary replaces an earlier boundary for the same
-    # run/stage.
-    state_event_schema_version: Literal[1, 2] = 2
+    # run/stage. Version 3 permits a retryable persistence failure event.
+    state_event_schema_version: Literal[1, 2, 3] = 3
     run_key: str
     sequence: int = Field(ge=1)
     invocation_mode: RunMode
@@ -87,8 +87,8 @@ class RunStateEvent(AtmosphericContract):
     def terminal_and_evidence_shape_must_match(self) -> RunStateEvent:
         if self.stage == "planned" and self.disposition != "ready":
             raise ValueError("The planned state must use the ready disposition.")
-        if self.stage == "persisted" and self.disposition != "persisted":
-            raise ValueError("The persisted stage must use the persisted disposition.")
+        if self.stage == "persisted" and self.disposition not in {"persisted", "failed"}:
+            raise ValueError("The persisted stage must use persisted or failed disposition.")
         if self.disposition == "quarantined" and self.stage != "validated":
             raise ValueError("Only validation can produce a quarantined run state.")
         if self.disposition == "partial" and self.stage != "raw_complete":
@@ -283,8 +283,10 @@ class RunStateLedger:
             raise StateError("Only the initial planned state may use ready disposition.")
         if disposition == "persisted" and stage != "persisted":
             raise StateError("Persisted disposition requires the persisted stage.")
-        if stage == "persisted" and disposition != "persisted":
-            raise StateError("The persisted stage requires persisted disposition.")
+        if stage == "persisted" and disposition not in {"persisted", "failed"}:
+            raise StateError("The persisted stage requires persisted or failed disposition.")
+        if stage == "persisted" and disposition == "failed" and evidence is None:
+            raise StateError("A retryable persistence failure requires immutable evidence.")
         if disposition == "quarantined" and stage != "validated":
             raise StateError("Only validation can quarantine a weather run.")
         if disposition == "partial" and stage != "raw_complete":
