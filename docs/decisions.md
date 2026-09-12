@@ -2051,6 +2051,32 @@ run.
 [`persistence.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/persistence.py),
 [`persistence_cli.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/persistence_cli.py),
 and [`handoff.md`](handoff.md).
+### DEC-048 - Resolve feature inputs by exact centralized canonical selectors
+
+**Status:** Accepted
+
+**Date:** 2026-09-12
+
+**Decision:** Weather feature construction resolves every source-backed point,
+profile-surface-anchor, thermodynamic, and neighbourhood input through one
+central selector registry. A selector matches exactly on canonical `field_code`,
+`grain`, and `dimension`; zero matches remain feature-local missing evidence,
+while duplicate exact matches or an unmapped source-backed policy identity are
+build errors. It never falls back to dimensionless or source-specific inputs.
+
+The schema-v2 `weather-feature-policy-v3` keeps feature contract `/3` and
+snapshot/report schemas unchanged, but declares `weather-feature-builder/3`.
+The policy supplies the stage producer version, so the feature stage directory,
+fingerprint, manifest, and configuration cannot drift from the loaded policy.
+Prior v1/v2 policies and their immutable artifacts remain parseable and
+untouched. This correction does not alter the accepted GFS terrain policy or
+any SQLite persistence mapping.
+
+**Consequences:** Canonical `2m_above_ground`, `10m_above_ground`, surface,
+mean-sea-level, cloud, and surface-parcel convection identities are selected
+without ambiguity. The v3 build creates a new immutable boundary and supersedes
+the v2 ledger event; it does not rewrite prior artifacts. GFS provider cloud
+base remains `unsupported/source_field_unavailable`.
 ## Open decisions
 
 | Question                                                                                                                  | Options / constraints                                                                                                                                                                                                             | Resolve by                                                               |

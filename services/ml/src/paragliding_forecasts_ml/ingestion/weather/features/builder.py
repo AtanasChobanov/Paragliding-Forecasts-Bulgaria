@@ -31,6 +31,20 @@ from .neighbourhood import (
     fit_neighbourhood_metrics,
 )
 from .policy import FeatureLayerPolicy, FeaturePolicyEntry
+from .selectors import (
+    MEAN_SEA_LEVEL_PRESSURE,
+    PROVIDER_BOUNDARY_LAYER_HEIGHT,
+    SURFACE_PRESSURE,
+    TEN_METRE_WIND_U,
+    TEN_METRE_WIND_V,
+    TWO_METRE_RELATIVE_HUMIDITY,
+    TWO_METRE_SPECIFIC_HUMIDITY,
+    TWO_METRE_TEMPERATURE,
+    CanonicalFieldSelector,
+    CanonicalSelectorError,
+    resolve_canonical_field,
+    selector_for_point_feature,
+)
 from .thermodynamics import (
     HeightProfilePoint,
     PressureProfilePoint,
@@ -68,6 +82,10 @@ class ThermalFeatureResult:
 
 class FeatureBuildError(ValueError):
     """Validated evidence cannot be reduced under the S07 feature policy."""
+
+
+class CanonicalFeatureSelectionError(FeatureBuildError):
+    """A canonical selector was ambiguous or does not map an input identity."""
 
 
 def build_hourly_point_features(
@@ -131,7 +149,7 @@ def _derived_hour_value(sample: SiteAlignedSample, feature_key: str) -> FeatureR
         lcl = _mixed_layer_lcl_result(sample)
         if lcl.value is None:
             return lcl
-        provider_pbl = _surface_field(sample, "provider_boundary_layer_height_agl_m")
+        provider_pbl = _surface_field(sample, PROVIDER_BOUNDARY_LAYER_HEIGHT)
         if provider_pbl is None:
             return FeatureResult(None, "provider_boundary_layer_height_missing")
         return FeatureResult(provider_pbl - lcl.value)
@@ -145,11 +163,9 @@ def _derived_hour_value(sample: SiteAlignedSample, feature_key: str) -> FeatureR
 
 
 def _mixed_layer_lcl_result(sample: SiteAlignedSample) -> FeatureResult:
-    surface_pressure = _surface_field(sample, "air_pressure_pa", dimension="surface")
-    surface_temperature = _surface_field(sample, "air_temperature_k")
-    surface_humidity = _surface_field(
-        sample, "specific_humidity_kg_per_kg", dimension="2m_above_ground"
-    )
+    surface_pressure = _surface_field(sample, SURFACE_PRESSURE)
+    surface_temperature = _surface_field(sample, TWO_METRE_TEMPERATURE)
+    surface_humidity = _surface_field(sample, TWO_METRE_SPECIFIC_HUMIDITY)
     if surface_pressure is None or surface_temperature is None or surface_humidity is None:
         return FeatureResult(None, "mixed_layer_surface_input_missing")
     profile: list[PressureProfilePoint] = []
@@ -173,12 +189,10 @@ def _mixed_layer_lcl_result(sample: SiteAlignedSample) -> FeatureResult:
 
 
 def _thermal_strength_result(sample: SiteAlignedSample) -> ThermalFeatureResult:
-    surface_pressure = _surface_field(sample, "air_pressure_pa", dimension="surface")
-    surface_temperature = _surface_field(sample, "air_temperature_k")
-    surface_humidity = _surface_field(
-        sample, "specific_humidity_kg_per_kg", dimension="2m_above_ground"
-    )
-    provider_pbl = _surface_field(sample, "provider_boundary_layer_height_agl_m")
+    surface_pressure = _surface_field(sample, SURFACE_PRESSURE)
+    surface_temperature = _surface_field(sample, TWO_METRE_TEMPERATURE)
+    surface_humidity = _surface_field(sample, TWO_METRE_SPECIFIC_HUMIDITY)
+    provider_pbl = _surface_field(sample, PROVIDER_BOUNDARY_LAYER_HEIGHT)
     sensible = _interval_field_ending(sample, "surface_sensible_heat_flux_upward_w_m2")
     latent = _interval_field_ending(sample, "surface_latent_heat_flux_upward_w_m2")
     if (
@@ -342,6 +356,28 @@ _DAILY_DERIVED_POINT_KEYS = frozenset(
         "pbl_minus_lcl_max_m",
     }
 )
+
+_SOURCE_BACKED_POINT_METHODS = frozenset(
+    {
+        "identity/1",
+        "hourly-arithmetic-mean/1",
+        "hourly-maximum/1",
+        "hourly-minimum/1",
+        "surface-parcel-day-reduction/1",
+    }
+)
+
+
+def validate_point_policy_selectors(entries: tuple[FeaturePolicyEntry, ...]) -> None:
+    """Fail closed when a source-backed point policy lacks an exact selector."""
+
+    for entry in entries:
+        if (
+            entry.feature_key in _DAILY_DERIVED_POINT_KEYS
+            or entry.derivation_method not in _SOURCE_BACKED_POINT_METHODS
+        ):
+            continue
+        selector_for_point_feature(entry.field_code, entry.variant)
 
 
 def _build_daily_derived_point_features(
@@ -568,9 +604,9 @@ def _neighbourhood_metric_value(
     if len(matching_records) != 1 or len(matching_footprints) != 1 or len(matching_sites) != 1:
         return None
     record, footprint, site = matching_records[0], matching_footprints[0], matching_sites[0]
-    pressure = _neighbourhood_field(record, "air_pressure_pa", "mean_sea_level")
-    wind_u = _neighbourhood_field(record, "wind_u_m_s", None)
-    wind_v = _neighbourhood_field(record, "wind_v_m_s", None)
+    pressure = _neighbourhood_field(record, MEAN_SEA_LEVEL_PRESSURE)
+    wind_u = _neighbourhood_field(record, TEN_METRE_WIND_U)
+    wind_v = _neighbourhood_field(record, TEN_METRE_WIND_V)
     if pressure is None or wind_u is None or wind_v is None:
         return None
     if not (len(pressure) == len(wind_u) == len(wind_v) == len(footprint.nodes)):
@@ -601,50 +637,31 @@ def _neighbourhood_metric_value(
 
 
 def _neighbourhood_field(
-    record: NeighbourhoodNodeRecord, field_code: str, dimension: str | None
+    record: NeighbourhoodNodeRecord, selector: CanonicalFieldSelector
 ) -> tuple[float, ...] | None:
-    matches = [
-        field
-        for field in record.fields
-        if field.field_code == field_code
-        and field.dimension == dimension
-        and field.grain == "surface"
-    ]
-    if len(matches) != 1 or any(
-        value is None or not isfinite(value) for value in matches[0].values
-    ):
+    try:
+        field = resolve_canonical_field(record.fields, selector)
+    except CanonicalSelectorError as error:
+        raise CanonicalFeatureSelectionError(str(error)) from error
+    if field is None or any(value is None or not isfinite(value) for value in field.values):
         return None
-    return tuple(float(value) for value in matches[0].values if value is not None)
+    return tuple(float(value) for value in field.values if value is not None)
 
 
 def _point_hour_value(sample: SiteAlignedSample, entry: FeaturePolicyEntry) -> float | None:
     if entry.field_code == "wind_speed_m_s":
         u_value, v_value = (
-            _surface_field(sample, "wind_u_m_s"),
-            _surface_field(sample, "wind_v_m_s"),
+            _surface_field(sample, TEN_METRE_WIND_U),
+            _surface_field(sample, TEN_METRE_WIND_V),
         )
         return None if u_value is None or v_value is None else (u_value**2 + v_value**2) ** 0.5
-    dimension = {
-        "2m": None,
-        "10m": None,
-        "surface": "surface",
-        "mean_sea_level": "mean_sea_level",
-        "surface_parcel": "surface",
-        "total": "total",
-        "low": "low",
-        "mid": "mid",
-        "high": "high",
-    }.get(entry.variant)
-    if entry.field_code == "specific_humidity_kg_per_kg" and entry.variant == "2m":
-        dimension = "2m_above_ground"
-    matches = [
-        field
-        for field in sample.fields
-        if field.field_code == entry.field_code
-        and field.dimension == dimension
-        and (entry.variant != "surface_parcel" or field.grain == "convection")
-    ]
-    return _available_value(matches[0]) if len(matches) == 1 else None
+    try:
+        field = resolve_canonical_field(
+            sample.fields, selector_for_point_feature(entry.field_code, entry.variant)
+        )
+    except CanonicalSelectorError as error:
+        raise CanonicalFeatureSelectionError(str(error)) from error
+    return _available_value(field) if field is not None else None
 
 
 def build_profile_layer(
@@ -722,7 +739,9 @@ def _profile_hour_value(
         if feature_key == "relative_humidity_mean_percent":
             return FeatureResult(
                 trapezoidal_mean(
-                    _scalar_profile(sample, "relative_humidity_percent", layer, 2.0),
+                    _scalar_profile(
+                        sample, "relative_humidity_percent", layer, TWO_METRE_RELATIVE_HUMIDITY, 2.0
+                    ),
                     _effective_lower(layer, "humidity"),
                     layer.layer_top_agl_m,
                 )
@@ -730,24 +749,31 @@ def _profile_hour_value(
         if feature_key == "specific_humidity_mean_kg_per_kg":
             return FeatureResult(
                 trapezoidal_mean(
-                    _scalar_profile(sample, "specific_humidity_kg_per_kg", layer, 2.0),
+                    _scalar_profile(
+                        sample,
+                        "specific_humidity_kg_per_kg",
+                        layer,
+                        TWO_METRE_SPECIFIC_HUMIDITY,
+                        2.0,
+                    ),
                     _effective_lower(layer, "humidity"),
                     layer.layer_top_agl_m,
                 )
             )
         if feature_key in {"wind_u_mean_m_s", "wind_v_mean_m_s"}:
             field = "wind_u_m_s" if feature_key == "wind_u_mean_m_s" else "wind_v_m_s"
+            selector = TEN_METRE_WIND_U if field == "wind_u_m_s" else TEN_METRE_WIND_V
             return FeatureResult(
                 trapezoidal_mean(
-                    _scalar_profile(sample, field, layer, 10.0),
+                    _scalar_profile(sample, field, layer, selector, 10.0),
                     _effective_lower(layer, "wind"),
                     layer.layer_top_agl_m,
                 )
             )
         if feature_key in {"wind_speed_mean_m_s", "wind_speed_max_m_s"}:
             speed = scalar_speed_profile(
-                _scalar_profile(sample, "wind_u_m_s", layer, 10.0),
-                _scalar_profile(sample, "wind_v_m_s", layer, 10.0),
+                _scalar_profile(sample, "wind_u_m_s", layer, TEN_METRE_WIND_U, 10.0),
+                _scalar_profile(sample, "wind_v_m_s", layer, TEN_METRE_WIND_V, 10.0),
             )
             lower = _effective_lower(layer, "wind")
             if feature_key == "wind_speed_mean_m_s":
@@ -758,14 +784,14 @@ def _profile_hour_value(
         if feature_key.startswith("wind_shear_"):
             return FeatureResult(
                 bulk_vector_shear_m_s_per_km(
-                    _scalar_profile(sample, "wind_u_m_s", layer, 10.0),
-                    _scalar_profile(sample, "wind_v_m_s", layer, 10.0),
+                    _scalar_profile(sample, "wind_u_m_s", layer, TEN_METRE_WIND_U, 10.0),
+                    _scalar_profile(sample, "wind_v_m_s", layer, TEN_METRE_WIND_V, 10.0),
                     _effective_lower(layer, "wind"),
                     layer.layer_top_agl_m,
                 )
             )
         if feature_key.startswith("vertical_velocity_"):
-            omega = _scalar_profile(sample, "vertical_velocity_pa_s", layer, None)
+            omega = _scalar_profile(sample, "vertical_velocity_pa_s", layer, None, None)
             if feature_key == "vertical_velocity_mean_pa_s":
                 return FeatureResult(
                     trapezoidal_mean(omega, layer.layer_base_agl_m, layer.layer_top_agl_m)
@@ -778,6 +804,8 @@ def _profile_hour_value(
                     )
                 )
             )
+    except CanonicalFeatureSelectionError:
+        raise
     except FeatureBuildError as error:
         return FeatureResult(None, str(error))
     except VerticalCoverageError:
@@ -788,19 +816,25 @@ def _profile_hour_value(
 def _temperature_profile(
     sample: SiteAlignedSample, layer: FeatureLayerPolicy
 ) -> tuple[VerticalPoint, ...]:
-    return _scalar_profile(sample, "air_temperature_k", layer, 2.0)
+    return _scalar_profile(sample, "air_temperature_k", layer, TWO_METRE_TEMPERATURE, 2.0)
 
 
 def _scalar_profile(
     sample: SiteAlignedSample,
     field_code: str,
     layer: FeatureLayerPolicy,
+    surface_selector: CanonicalFieldSelector | None,
     surface_anchor_agl_m: float | None,
 ) -> tuple[VerticalPoint, ...]:
+    if (surface_selector is None) != (surface_anchor_agl_m is None):
+        raise FeatureBuildError(
+            "Profile surface selector and anchor height must be supplied together."
+        )
     points: list[VerticalPoint] = []
     lower = _effective_lower(layer, "wind" if surface_anchor_agl_m == 10.0 else "humidity")
     if surface_anchor_agl_m is not None and layer.layer_base_agl_m == 0.0:
-        surface = _surface_field(sample, field_code)
+        assert surface_selector is not None
+        surface = _surface_field(sample, surface_selector)
         if surface is None:
             raise FeatureBuildError("surface_anchor_missing")
         points.append(VerticalPoint(surface_anchor_agl_m, surface))
@@ -817,17 +851,12 @@ def _scalar_profile(
     return tuple(sorted(points, key=lambda point: point.height_agl_m))
 
 
-def _surface_field(
-    sample: SiteAlignedSample, field_code: str, dimension: str | None = None
-) -> float | None:
-    matches = [
-        field
-        for field in sample.fields
-        if field.field_code == field_code and field.dimension == dimension
-    ]
-    if len(matches) != 1:
-        return None
-    return _available_value(matches[0])
+def _surface_field(sample: SiteAlignedSample, selector: CanonicalFieldSelector) -> float | None:
+    try:
+        field = resolve_canonical_field(sample.fields, selector)
+    except CanonicalSelectorError as error:
+        raise CanonicalFeatureSelectionError(str(error)) from error
+    return _available_value(field) if field is not None else None
 
 
 def _profile_field(fields: tuple[SampledField, ...], field_code: str) -> float | None:

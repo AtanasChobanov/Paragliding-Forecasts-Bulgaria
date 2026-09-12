@@ -138,6 +138,28 @@ complete the retained run manually through spatial/validation/feature/persistenc
 invoke `weather-persist` there until the owner chooses that review/test step. A
 test policy must be explicit and local; it must not silently enable training or
 operational use.
+## S08 canonical-selector correction (2026-09-12)
+
+The feature builder now has an exact centralized selector registry and default
+`weather-feature-policy-v3` / `weather-feature-builder/3` boundary. It matches
+`field_code`, grain, and canonical dimension for direct hourly/daily features,
+LCL/thermal inputs, profile surface anchors, and neighbourhood pressure/U/V.
+No dimensionless or source-specific fallback exists; duplicate exact inputs and
+unmapped source-backed policy entries fail the feature build. The old
+`feature_builder-v2` artifacts remain immutable; the next feature invocation
+will produce `feature_builder-v3/<fingerprint>/` and supersede the v2 ledger
+event. SQLite schema, persistence mappings, usage policies, and the accepted
+GFS terrain policy are unchanged.
+
+Automated code-only verification passed for this correction: 51 focused weather-feature tests, 19 feature-CLI/pipeline/persistence-model tests, complete ML suite 227 passed in `--import-mode=importlib`, Ruff check, Ruff format check, `npm.cmd run repo:check`, and `git diff --check`. Plain `pytest` has an existing collection collision from two `test_pipeline.py` modules; importlib mode is required for the full suite. No `weather-build-features`, collector, normalizer, sampler, validator, or `weather-persist` command has been run by the agent, and no runtime artifact or configured database has been modified. After the code commit, the owner alone
+should run:
+
+```powershell
+uv run --project services/ml weather-build-features --run-key 403c5135-8ced-4b54-a999-1c27e7ec78a3
+```
+
+Do not run persistence until the resulting v3 quality report is reviewed. Add
+the retained-run quality counts here only after that manual v3 run.
 ## Prior T-018 slice handoff
 
 ### S01 — schema and migration boundary

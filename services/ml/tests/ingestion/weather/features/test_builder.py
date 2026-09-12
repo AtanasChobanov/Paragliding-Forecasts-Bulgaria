@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from paragliding_forecasts_ml.ingestion.weather.features.builder import (
+    FeatureBuildError,
     build_daily_interval_features,
     build_daily_neighbourhood_features,
     build_daily_point_features,
@@ -99,11 +100,11 @@ def _sample(hour: int) -> SiteAlignedSample:
             absolute_mismatch_m=50.0,
         ),
         fields=(
-            _field("air_temperature_k", 290.0),
-            _field("relative_humidity_percent", 60.0),
+            _field("air_temperature_k", 290.0, dimension="2m_above_ground"),
+            _field("relative_humidity_percent", 60.0, dimension="2m_above_ground"),
             _field("specific_humidity_kg_per_kg", 0.006, dimension="2m_above_ground"),
-            _field("wind_u_m_s", 1.0),
-            _field("wind_v_m_s", 2.0),
+            _field("wind_u_m_s", 1.0, dimension="10m_above_ground"),
+            _field("wind_v_m_s", 2.0, dimension="10m_above_ground"),
         ),
         profile_levels=profiles,
     )
@@ -171,6 +172,18 @@ def test_hourly_builder_selects_the_normalized_2m_specific_humidity_dimension() 
     by_key = {value.feature_key: value for value in values}
 
     assert by_key["specific_humidity_2m_kg_per_kg"].canonical_value == 0.006
+
+
+def test_duplicate_exact_canonical_input_aborts_feature_build() -> None:
+    policy, _ = load_feature_policy()
+    sample = _sample(10)
+    duplicate = _field("air_temperature_k", 291.0, dimension="2m_above_ground")
+
+    with pytest.raises(FeatureBuildError, match="two_metre_temperature"):
+        build_hourly_point_features(
+            sample.model_copy(update={"fields": (*sample.fields, duplicate)}),
+            policy.hourly_fields,
+        )
 
 
 def _interval(field_code: str, value: float, start_hour: int) -> SampledField:
@@ -385,6 +398,7 @@ def _neighbourhood_inputs(hours: range):
                     field_code="wind_u_m_s",
                     grain="surface",
                     canonical_unit="m/s",
+                    dimension="10m_above_ground",
                     values=(1.0, 2.0, 1.0),
                     source_selector_keys=("u",),
                 ),
@@ -392,6 +406,7 @@ def _neighbourhood_inputs(hours: range):
                     field_code="wind_v_m_s",
                     grain="surface",
                     canonical_unit="m/s",
+                    dimension="10m_above_ground",
                     values=(1.0, 1.0, 2.0),
                     source_selector_keys=("v",),
                 ),

@@ -13,7 +13,7 @@ from ..serialization import sha256_bytes
 from .aggregation import SOFIA_TIME_ZONE, SOFIA_WINDOW_VERSION
 from .contracts import FEATURE_KEY_PATTERN
 
-POLICY_RESOURCE = "weather-feature-policy-v2.json"
+POLICY_RESOURCE = "weather-feature-policy-v3.json"
 
 
 class FeaturePolicyError(ValueError):
@@ -71,9 +71,13 @@ class FeaturePolicy(AtmosphericContract):
     """All deterministic output order and formula identities for v1/v2 artifacts."""
 
     feature_policy_schema_version: Literal[1, 2] = 2
-    policy_version: Literal["weather-feature-policy-v1", "weather-feature-policy-v2"]
+    policy_version: Literal[
+        "weather-feature-policy-v1", "weather-feature-policy-v2", "weather-feature-policy-v3"
+    ]
     feature_contract_version: Literal["weather-feature-contract/2", "weather-feature-contract/3"]
-    feature_builder_version: Literal["weather-feature-builder/1", "weather-feature-builder/2"]
+    feature_builder_version: Literal[
+        "weather-feature-builder/1", "weather-feature-builder/2", "weather-feature-builder/3"
+    ]
     time_zone: Literal["Europe/Sofia"]
     flying_window_version: Literal["sofia-flying-window/1"]
     hourly_fields: tuple[FeaturePolicyEntry, ...] = Field(min_length=1)
@@ -96,22 +100,31 @@ class FeaturePolicy(AtmosphericContract):
         if self.time_zone != SOFIA_TIME_ZONE or self.flying_window_version != SOFIA_WINDOW_VERSION:
             raise ValueError("Feature policy must use the fixed Sofia flying-window contract.")
         expected_versions = {
-            1: (
-                "weather-feature-policy-v1",
-                "weather-feature-contract/2",
-                "weather-feature-builder/1",
-            ),
-            2: (
-                "weather-feature-policy-v2",
-                "weather-feature-contract/3",
-                "weather-feature-builder/2",
-            ),
+            1: {
+                (
+                    "weather-feature-policy-v1",
+                    "weather-feature-contract/2",
+                    "weather-feature-builder/1",
+                )
+            },
+            2: {
+                (
+                    "weather-feature-policy-v2",
+                    "weather-feature-contract/3",
+                    "weather-feature-builder/2",
+                ),
+                (
+                    "weather-feature-policy-v3",
+                    "weather-feature-contract/3",
+                    "weather-feature-builder/3",
+                ),
+            },
         }[self.feature_policy_schema_version]
         if (
             self.policy_version,
             self.feature_contract_version,
             self.feature_builder_version,
-        ) != expected_versions:
+        ) not in expected_versions:
             raise ValueError("Feature policy/version tuple is inconsistent.")
         if self.feature_policy_schema_version == 1:
             if not self.profile_layer_fields or any(layer.fields for layer in self.profile_layers):

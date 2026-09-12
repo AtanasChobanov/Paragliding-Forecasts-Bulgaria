@@ -14,6 +14,7 @@ from .features.builder import (
     build_daily_point_features,
     build_hourly_point_features,
     build_profile_layer,
+    validate_point_policy_selectors,
 )
 from .features.contracts import (
     DailyFeatureSnapshot,
@@ -34,8 +35,6 @@ from .validation import (
     ValidationSnapshot,
     validation_upstream_boundary,
 )
-
-FEATURE_BUILDER_VERSION = "weather-feature-builder/2"
 
 
 class WeatherFeatureBuildError(RuntimeError):
@@ -76,6 +75,8 @@ def build_weather_features(
         raise WeatherFeatureBuildError("S05 neighbourhood input belongs to another weather run.")
     raw_manifest = store.verify_raw_manifest(validation_snapshot.raw_manifest)
     policy, policy_sha256 = load_feature_policy()
+    validate_point_policy_selectors(policy.hourly_fields)
+    validate_point_policy_selectors(policy.daily_fields)
     configuration = {
         "feature_contract_version": policy.feature_contract_version,
         "feature_builder_version": policy.feature_builder_version,
@@ -91,12 +92,12 @@ def build_weather_features(
     )
     fingerprint = stage_input_fingerprint(
         stage="feature_builder",
-        producer_version=FEATURE_BUILDER_VERSION,
+        producer_version=policy.feature_builder_version,
         inputs=inputs,
         configuration=configuration,
     )
     if existing := store.existing_stage_manifest(
-        "feature_builder", FEATURE_BUILDER_VERSION, fingerprint
+        "feature_builder", policy.feature_builder_version, fingerprint
     ):
         return existing
     hourly = _build_hourly_snapshots(
@@ -113,7 +114,7 @@ def build_weather_features(
         raw_manifest.source_id,
     )
     report = _quality_report(store.run_key, policy, policy_sha256, hourly, daily)
-    directory = store.begin_stage("feature_builder", FEATURE_BUILDER_VERSION, fingerprint)
+    directory = store.begin_stage("feature_builder", policy.feature_builder_version, fingerprint)
     hourly_reference = store.write_stage_model(
         directory,
         "feature-snapshots.json",
@@ -139,7 +140,7 @@ def build_weather_features(
         StageManifest(
             run_key=store.run_key,
             stage="feature_builder",
-            producer_version=FEATURE_BUILDER_VERSION,
+            producer_version=policy.feature_builder_version,
             input_fingerprint_sha256=fingerprint,
             inputs=inputs,
             outputs=(hourly_reference, daily_reference, report_reference),

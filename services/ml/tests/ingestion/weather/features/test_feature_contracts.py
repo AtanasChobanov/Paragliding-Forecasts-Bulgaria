@@ -11,7 +11,10 @@ from paragliding_forecasts_ml.ingestion.weather.features.contracts import (
     FeatureValue,
     MissingFeatureLocator,
 )
-from paragliding_forecasts_ml.ingestion.weather.features.policy import load_feature_policy
+from paragliding_forecasts_ml.ingestion.weather.features.policy import (
+    FeaturePolicy,
+    load_feature_policy,
+)
 
 _RUN_KEY = "11111111-1111-4111-8111-111111111111"
 _HASH = "a" * 64
@@ -45,6 +48,8 @@ def test_feature_policy_uses_database_aligned_keys_and_layer_specific_omega() ->
     assert len(policy_sha256) == 64
     assert policy.feature_policy_schema_version == 2
     assert policy.feature_contract_version == "weather-feature-contract/3"
+    assert policy.policy_version == "weather-feature-policy-v3"
+    assert policy.feature_builder_version == "weather-feature-builder/3"
     assert [(layer.layer_base_agl_m, layer.layer_top_agl_m) for layer in policy.profile_layers] == [
         (0.0, 1500.0),
         (1500.0, 3000.0),
@@ -73,6 +78,17 @@ def test_feature_policy_uses_database_aligned_keys_and_layer_specific_omega() ->
     assert not {"vertical_velocity_mean_pa_s", "vertical_velocity_min_pa_s"} & lower
     assert {"vertical_velocity_mean_pa_s", "vertical_velocity_min_pa_s"} <= upper
     assert not any("inversion" in key for key in (*hourly, *daily, *lower, *upper))
+
+
+def test_v2_policy_remains_parseable_and_invalid_version_tuple_is_rejected() -> None:
+    policy, _ = load_feature_policy("weather-feature-policy-v2.json")
+
+    assert policy.policy_version == "weather-feature-policy-v2"
+    assert policy.feature_builder_version == "weather-feature-builder/2"
+    invalid = policy.model_dump()
+    invalid["feature_builder_version"] = "weather-feature-builder/3"
+    with pytest.raises(ValidationError, match="version tuple"):
+        FeaturePolicy.model_validate(invalid)
 
 
 def test_v2_daily_contract_keeps_layer_identity_outside_feature_key() -> None:

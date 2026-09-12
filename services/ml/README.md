@@ -269,11 +269,13 @@ mapping approval file for weather validation.
 
 `weather-build-features` is offline-only. It requires the current S06
 `validated/complete` state, verifies the complete S05/S06/raw hash chain, and
-writes one immutable `feature-builder/<fingerprint>/` boundary:
+writes one immutable policy-owned `feature_builder-v3/<fingerprint>/` boundary. The default schema-v2 policy is `weather-feature-policy-v3`, with feature contract `/3` and builder `/3`; v2 artifacts remain immutable and parseable:
 
 ```powershell
 uv run --project services/ml weather-build-features --run-key <uuid>
 ```
+
+Canonical inputs are selected exactly by field code, grain, and dimension through a central registry: 2 m fields use `2m_above_ground`, wind components use `10m_above_ground`, pressure distinguishes `surface` from `mean_sea_level`, cloud dimensions stay explicit, and CAPE/CIN use surface-parcel convection. There is no dimensionless or source-specific fallback; duplicate exact inputs and unmapped source-backed policy identities fail the build before an artifact is published.
 
 The stage never calls a provider and never writes SQLite. It emits ordered v2
 hourly feature snapshots, one daily site/local-date snapshot with the two
