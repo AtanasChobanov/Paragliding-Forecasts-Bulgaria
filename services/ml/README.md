@@ -290,6 +290,61 @@ U/V nodes. It does not substitute the retained 925 hPa node values. A quarantine
 validator boundary returns exit `2` and creates no S07 artifact or state event;
 operational/hash-chain failures return exit `1`; a complete or reused boundary
 returns exit `0`.
+
+### Atomic offline weather persistence (T-018/S08)
+
+`weather-persist` consumes only the latest effective `validated/complete` and
+`features_built/complete` artifacts. It never creates or migrates SQLite schema
+and never starts a network request. Like `xccontest-persist`, it requires explicit local source usage authority;
+it has no implicit permission defaults. The default policy paths are
+`data/local/gfs-usage-policy.json` for GFS and
+`data/local/era5-usage-policy.json` for ERA5. The source-specific version key
+prevents passing a policy for one source to the other.
+
+```json
+{
+  "gfs_usage_policy_schema_version": 1,
+  "permission_basis": "source_terms",
+  "permission_reference": "Owner-reviewed GFS usage terms",
+  "model_training_allowed": false,
+  "operational_use_allowed": false
+}
+```
+
+```powershell
+# Resolves data/local/gfs-usage-policy.json for this GFS run.
+uv run --project services/ml weather-persist --run-key <uuid>
+
+# An explicit path is allowed only when its source-specific schema matches the run.
+uv run --project services/ml weather-persist --run-key <uuid> --policy-file <path-to-gfs-policy.json>
+```
+
+The policy bytes hash is part of the immutable persistence input. The adapter
+uses one `BEGIN IMMEDIATE` transaction, records field-level missing/unsupported
+provenance, and returns a no-op only when an existing terminal run has the same
+immutable inputs and complete expected graph counts. Do not commit policy files
+containing owner-specific terms or enable either usage flag without an explicit
+owner review.
+
+`weather-ingest` provides the matching orchestration boundary. `fresh` validates
+that the explicit policy and migrated SQLite schema exist before it reaches GFS
+and requires a reviewed byte cap plus `--allow-live-network`. `resume` exposes
+no transport or network flags and calls only the retained-artifact stage
+boundaries before `weather-persist`:
+
+```powershell
+uv run --project services/ml weather-ingest resume `
+  --run-key <uuid>
+
+# Optional override; it must use the GFS policy schema for this GFS command.
+uv run --project services/ml weather-ingest resume `
+  --run-key <uuid> `
+  --policy-file <path-to-gfs-policy.json>
+```
+
+A `partial` raw run stops as `incomplete_coverage`; a validation quarantine
+stops before features or persistence. A successful persisted run returns
+`inserted`, `revalidated_no_op`, or `recovered_committed_write`.
 The real command chain is:
 
 ```powershell

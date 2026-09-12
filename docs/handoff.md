@@ -10,7 +10,7 @@ slice, not a project history. Read, in order:
 3. This handoff for the implemented T-018 slice boundaries.
 4. The relevant sections of `docs/project-brief.md` and `docs/architecture.md`
    for product and system constraints.
-5. DEC-031 through DEC-046 in `docs/decisions.md` for accepted weather-source,
+5. DEC-031 through DEC-047 in `docs/decisions.md` for accepted weather-source,
    schema, protocol, parser, and spatial-sampling decisions.
 6. Git history and the owning code/tests for detailed prior implementation and
    validation evidence.
@@ -18,15 +18,15 @@ slice, not a project history. Read, in order:
 Record durable design choices in `docs/decisions.md`, task status in
 `docs/tasks.md`, and only the current operational state here.
 
-## Current state (2026-09-10)
+## Current state (2026-09-12)
 
 | Field         | Value                                                                                                                                                                                                                                       |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Branch        | `feature/T-018-weather-ingestion`                                                                                                                                                                                                           |
 | Task status   | `T-018` is In Progress; S01–S07 are complete, S08–S10 remain.                                                                                                                                                                               |
-| Next focus    | Execute `docs/T-018-S08-implementation-plan.md`: first correct interval/cloudbase/thermal/layer contracts, then implement atomic persistence and GFS fresh/offline-resume orchestration. No SQLite writes occur in S07.                     |
+| Next focus    | Finish S08 generic persistence integration and fresh/offline-resume orchestration. DEC-047 resolves permission authority with an explicit local policy file. Corrective GFS/feature/schema work, the initial persistence adapter, and the duplicate-acquisition gate are implemented; the owner will resume the retained GFS run manually from sampling. |
 | Local storage | SQLite selected by `DATABASE_URL`; local databases, raw source data, and interim artifacts are ignored.                                                                                                                                     |
-| Migrations    | Earlier weather/configuration migrations, `20260909123754_correct_s07_feature_inputs`, and `20260909165706_remove_s07_inversion_metrics` are applied locally; normal `db:migrate` runs completed idempotently on 2026-09-09 and 2026-09-10. |
+| Migrations    | Earlier weather/configuration migrations through `20260909165706_remove_s07_inversion_metrics` are applied locally. New un-applied T-018 migration `20260911202938_t018_persistence_contract` is generated and tested only on temporary DBs. |
 
 ## T-018 scope and non-negotiable boundaries
 
@@ -70,6 +70,71 @@ placeholder collectors.
 - `S10` — GFS+ERA5 orchestration hardening, offline replay, bounded live
   verification, documentation, and final T-018 validation.
 
+## S08 corrective checkpoint and active implementation status (2026-09-12)
+
+Implemented and focused-verified:
+
+- GFS profile v4 removes active GUST output, retains legacy raw verification,
+  and normalizer v7 resolves reset-block GFS interval products into canonical
+  one-hour intervals with packing-aware precipitation tolerance.
+- Feature policy/artifacts v2 / feature contract v3 add distinct mixed-layer
+  LCL, PBL-minus-LCL, signed surface buoyancy flux, and non-negative Deardorff
+  convective velocity, while GFS provider cloud base is explicit
+  `unsupported/source_field_unavailable` and lower-layer omega is omitted.
+- The un-applied forward-only migration
+  `20260911202938_t018_persistence_contract` adds S08 run linkage, typed
+  feature destinations, provenance missing reasons, corrected daily uniqueness,
+  `STRICT` rebuilt weather tables, and `weather_grids.grid_key` CHECK limited
+  to the owner-approved `gfs_0p25_global` and `era5_0p25_global` values.
+  Canonical GFS and spatial artifacts now carry `grid_key` (schemas v2/v4/v3).
+  The normalizer records direct temperature/dew-point/relative-humidity as
+  `2m_above_ground`, wind U/V and derived wind as `10m_above_ground`, and
+  spatial sampling v5 preserves those dimensions.
+- DEC-047 accepts source-specific explicit local weather usage-policy JSON.
+  `weather-persist` resolves `data/local/gfs-usage-policy.json` or
+  `data/local/era5-usage-policy.json` from the immutable run source (unless a
+  matching explicit override is supplied), validates and hashes its exact
+  bytes, writes the policy's permission fields and usage flags, and includes
+  the hash in the immutable persistence input. There is deliberately no
+  implicit licensing default.
+- The source-neutral `weather-persist` adapter, mapping registry, receipt
+  contract, CLI, retryable `persisted/failed` state, and one-transaction
+  insert/no-op recovery path are implemented. Exact replay now captures the
+  expected graph through a read-only facade and compares every run-owned
+  sample/profile/convection/interval/daily/input/layer/provenance value after
+  surrogate-ID normalization. Preparation, schema/preflight, transaction,
+  conflict, and receipt/state-publication failures have distinct immutable
+  failure evidence when the valid state ledger permits it. The adapter verifies
+  an existing migrated schema and never runs DDL. It has not been invoked
+  against the configured local database.
+
+Focused checks passed on 2026-09-12: database tests (30), `db:check`, database
+TypeScript typecheck, the complete ML suite (189), and ML Ruff check/format.
+After the latest S08 orchestration/replay changes, 33 targeted pure/unit
+regression tests plus Ruff lint/format and `git diff --check` pass; no GFS
+stage, persistence command, network request, or configured SQLite write was
+run for those checks. The configured local SQLite database was verified to have
+zero runtime weather rows before the migration work, but the new migration has
+not been applied locally.
+
+The retained run has been rebuilt offline through `gfs-parser/5` and
+`gfs-normalizer/7`. The first `weather-spatial/5` invocation correctly rejected
+an obsolete v1 neighbourhood request for dimensionless surface U/V; the
+versioned `canonical-site-sampling-policy-v2` now asks for
+`10m_above_ground` U/V and has focused regression coverage. No spatial
+boundary was published by that rejected attempt, and no validation, feature
+build, or persistence command was run afterwards; the owner will perform the
+remaining command-chain test manually.
+
+Outstanding S08 gates: complete the temporary-real-migration graph integration
+suite (atomic rollback, graph-level replay conflict, crash recovery and fresh
+database restoration), extend integration coverage for the implemented
+duplicate-acquisition gate and `weather-ingest fresh`/offline `resume`, and
+complete the retained run manually through spatial/validation/feature/persistence. Do not apply
+`20260911202938_t018_persistence_contract` to the configured local database or
+invoke `weather-persist` there until the owner chooses that review/test step. A
+test policy must be explicit and local; it must not silently enable training or
+operational use.
 ## Prior T-018 slice handoff
 
 ### S01 — schema and migration boundary
