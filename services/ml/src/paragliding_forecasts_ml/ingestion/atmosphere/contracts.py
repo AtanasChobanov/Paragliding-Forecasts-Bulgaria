@@ -81,7 +81,7 @@ class RequestPlan(AtmosphericContract):
 
     request_plan_schema_version: Literal[1] = 1
     run_key: str
-    source_id: str = Field(min_length=1)
+    source_id: str
     source_kind: SourceKind
     ingestion_method: Literal["public_object_archive", "official_api", "offline_replay"]
     request_purpose: Literal[
@@ -100,6 +100,14 @@ class RequestPlan(AtmosphericContract):
         if UUID_V4_PATTERN.fullmatch(value) is None:
             raise ValueError("run_key must be a lowercase UUID v4.")
         return value
+
+    @field_validator("source_id")
+    @classmethod
+    def source_must_exist_in_catalogue(cls, value: str) -> str:
+        try:
+            return load_catalogue().validate_source_id(value)
+        except CatalogueError as error:
+            raise ValueError(str(error)) from error
 
     @field_validator("catalogue_sha256")
     @classmethod
@@ -121,29 +129,12 @@ class RequestPlan(AtmosphericContract):
         return values
 
     @model_validator(mode="after")
-    def adapter_request_must_be_json_compatible(self) -> RequestPlan:
-        """Validate durable request-plan bytes without requiring today's catalogue.
-
-        A request plan is immutable raw evidence. Current-catalogue validation is
-        deliberately performed only at fresh-plan creation, so an older retained
-        run remains replayable after an additive catalogue revision.
-        """
-
+    def catalogue_identity_must_match_runtime(self) -> RequestPlan:
+        catalogue = load_catalogue()
+        if self.catalogue_version != catalogue.version or self.catalogue_sha256 != catalogue.sha256:
+            raise ValueError("Request plan must identify the exact packaged T-017 catalogue.")
         ensure_json_compatible(self.adapter_request)
         return self
-
-
-def validate_request_plan_for_current_catalogue(plan: RequestPlan) -> RequestPlan:
-    """Require a newly written plan to identify the currently packaged catalogue."""
-
-    catalogue = load_catalogue()
-    try:
-        catalogue.validate_source_id(plan.source_id)
-    except CatalogueError as error:
-        raise ValueError(str(error)) from error
-    if plan.catalogue_version != catalogue.version or plan.catalogue_sha256 != catalogue.sha256:
-        raise ValueError("Request plan must identify the exact packaged T-017 catalogue.")
-    return plan
 
 
 class RawManifest(AtmosphericContract):

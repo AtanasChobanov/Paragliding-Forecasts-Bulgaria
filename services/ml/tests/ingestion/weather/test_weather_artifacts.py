@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
+from paragliding_forecasts_ml.ingestion.atmosphere import contracts as atmosphere_contracts
 from paragliding_forecasts_ml.ingestion.atmosphere.catalogue import load_catalogue
 from paragliding_forecasts_ml.ingestion.atmosphere.contracts import (
     RawManifest,
@@ -81,6 +84,16 @@ def test_raw_artifacts_are_immutable_and_hash_verified(tmp_path) -> None:
     payload_path = tmp_path / "data/raw/weather" / RUN_KEY / "payloads/gfs-surface.grib2"
     payload_path.write_bytes(b"tampered")
     with pytest.raises(ArtifactError, match="byte count|SHA-256"):
+        store.verify_raw_manifest(raw_manifest)
+
+
+def test_raw_manifest_rejects_a_request_plan_from_another_catalogue(tmp_path, monkeypatch) -> None:
+    store = WeatherArtifactStore.create_fresh(RUN_KEY, project_root=tmp_path)
+    raw_manifest = complete_raw(store)
+    stale_catalogue = replace(load_catalogue(), sha256="0" * 64)
+    monkeypatch.setattr(atmosphere_contracts, "load_catalogue", lambda: stale_catalogue)
+
+    with pytest.raises(ArtifactError, match="Request plan does not satisfy"):
         store.verify_raw_manifest(raw_manifest)
 
 

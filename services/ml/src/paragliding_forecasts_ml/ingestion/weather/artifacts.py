@@ -7,13 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from ..atmosphere.contracts import (
-    ArtifactReference,
-    RawManifest,
-    RequestPlan,
-    StageManifest,
-    validate_request_plan_for_current_catalogue,
-)
+from ..atmosphere.contracts import ArtifactReference, RawManifest, RequestPlan, StageManifest
 from .serialization import canonical_json_bytes, pretty_json_bytes, sha256_bytes, sha256_file
 from .versions import output_directory_name
 
@@ -68,10 +62,6 @@ class WeatherArtifactStore:
 
         if plan.run_key != self.run_key:
             raise ArtifactError("Request plan run_key does not match the artifact store.")
-        try:
-            validate_request_plan_for_current_catalogue(plan)
-        except ValueError as error:
-            raise ArtifactError("New request plan does not match the current catalogue.") from error
         return self._write_model(self.raw_dir / "request-plan.json", "request_plan", plan)
 
     def write_raw_bytes(
@@ -143,7 +133,11 @@ class WeatherArtifactStore:
         """Load a raw manifest and verify its request plan and every raw payload hash."""
 
         manifest = self.read_raw_manifest(reference)
-        self.verify_reference(manifest.request_plan, expected_root=self.raw_dir)
+        request_plan_path = self.verify_reference(manifest.request_plan, expected_root=self.raw_dir)
+        try:
+            RequestPlan.model_validate_json(request_plan_path.read_bytes(), strict=True)
+        except Exception as error:
+            raise ArtifactError("Request plan does not satisfy its versioned contract.") from error
         for artifact in manifest.artifacts:
             self.verify_reference(artifact, expected_root=self.raw_dir)
         return manifest

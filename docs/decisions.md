@@ -61,9 +61,10 @@ consequences. Temporary progress and Git state belong in
 | DEC-046     | Make weather persistence immutable, atomic, and artifact-replayable             | Accepted   | 2026-09-10 |
 | DEC-047     | Supply weather usage authority through an explicit local policy file            | Accepted   | 2026-09-11 |
 | DEC-048     | Resolve feature inputs by exact centralized canonical selectors                  | Accepted   | 2026-09-12 |
-| DEC-049     | Preserve immutable weather replay across catalogue revisions                     | Accepted   | 2026-09-12 |
+| DEC-049     | Preserve immutable weather replay across catalogue revisions                     | Superseded | 2026-09-12 |
 | DEC-050     | Canonicalize component wind speed with math.hypot                               | Accepted   | 2026-09-13 |
 | DEC-051     | Repair expected-graph capture SQL recognition and version persistence /3        | Accepted   | 2026-09-13 |
+| DEC-052     | Require exact catalogue identity at every weather stage boundary                 | Accepted   | 2026-09-13 |
 
 ## Individual decisions
 
@@ -2084,7 +2085,7 @@ base remains `unsupported/source_field_unavailable`.
 
 ### DEC-049 - Preserve immutable weather replay across catalogue revisions
 
-**Status:** Accepted
+**Status:** Superseded by DEC-052
 
 **Date:** 2026-09-12
 
@@ -2116,6 +2117,38 @@ still performs a complete local raw hash verification before any database write.
 **Related files:** [`contracts.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/atmosphere/contracts.py),
 [`persistence.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/persistence.py),
 and [`persistence_models.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/persistence_models.py).
+
+### DEC-052 - Require exact catalogue identity at every weather stage boundary
+
+**Status:** Accepted
+
+**Date:** 2026-09-13
+
+**Context:** DEC-049 allowed a retained request plan to remain replayable after
+an additive catalogue revision. That made recovery convenient, but allowed a
+later stage to accept evidence produced against a different catalogue contract.
+Even additive changes can alter source or field semantics that a later stage
+expects. The normal supported operational path is now the fresh weather command,
+which creates every stage under one packaged catalogue identity.
+
+**Decision:** `RequestPlan` loading always validates that its canonical source
+ID exists in the currently packaged catalogue and that both its
+`catalogue_version` and `catalogue_sha256` exactly match that catalogue. This is
+an unconditional stage-boundary gate; there is no compatibility classifier or
+exception for additive changes. A mismatch stops processing before feature or
+SQLite persistence work. The canonical-source-ID to policy-family registry,
+raw-manifest cross-checks, full raw-payload verification, wind calculation, and
+expected-graph capture corrections remain independent safeguards.
+
+**Consequences:** A retained run created with an older catalogue is intentionally
+not eligible for later-stage continuation. It must be replaced through the
+fresh end-to-end weather flow. Each accepted run therefore has one catalogue
+contract across collection, parsing, normalization, spatial derivation, feature
+construction, and persistence. No database migration is required.
+
+**Related files:** [`contracts.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/atmosphere/contracts.py),
+[`artifacts.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/artifacts.py),
+and [`persistence.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/persistence.py).
 
 ### DEC-050 - Canonicalize component wind speed with math.hypot
 

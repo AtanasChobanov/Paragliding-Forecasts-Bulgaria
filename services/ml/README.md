@@ -327,13 +327,13 @@ uv run --project services/ml weather-persist --run-key <uuid>
 uv run --project services/ml weather-persist --run-key <uuid> --policy-file <path-to-gfs-policy.json>
 ```
 
-For an immutable replay, the adapter maps the canonical raw source ID to its
-policy family (`noaa_gfs_0p25_aws_grib2` to `gfs`; `copernicus_era5` to
-`era5`). A retained request plan keeps its recorded catalogue version/hash and
-is checked against its raw manifest; only a newly created request plan must
-match the current packaged catalogue. Persistence still verifies every retained
-raw payload locally before writing SQLite, but validates compact plan/policy
-metadata first.
+The adapter maps the canonical raw source ID to its policy family
+(`noaa_gfs_0p25_aws_grib2` to `gfs`; `copernicus_era5` to `era5`). Every
+request plan, including a retained plan loaded for persistence, must match the
+current packaged catalogue version and hash exactly. A catalogue update makes
+an older run ineligible for continuation: use the fresh end-to-end weather flow
+instead. Persistence still verifies every retained raw payload locally before
+writing SQLite, but validates compact plan/policy metadata first.
 
 The policy bytes hash is part of the immutable persistence input.
 `weather-persistence/3` retains the same strict graph comparison and corrects

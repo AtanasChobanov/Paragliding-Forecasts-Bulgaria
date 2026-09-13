@@ -170,15 +170,14 @@ request plan correctly retained catalogue `t017-spike-v2`, but the previous
 runtime validator required current v3; persistence also incorrectly passed the
 canonical GFS source ID where the usage-policy loader expected the `gfs` family.
 
-The correction is implemented as `weather-persistence/2`. New request-plan
-creation still requires the current packaged catalogue; replay preserves and
-strictly cross-checks its recorded identity against immutable raw evidence.
-Canonical source IDs map explicitly to GFS/ERA5 policy families. Compact
-metadata and policy validation precede the required one-time full raw hash;
-the pipeline-version traversal reuses that verified raw manifest. Failure
-records now use a valid `persistence/failed` stage manifest and a retryable
-`persisted/failed` ledger event when a feature boundary exists. Existing orphan
-v1 evidence is intentionally unchanged and unreferenced.
+The correction was implemented as `weather-persistence/2`. Its former
+permissive catalogue-replay rule is superseded by DEC-052; it is no longer
+active. The independent corrections remain: canonical source IDs map explicitly
+to GFS/ERA5 policy families, compact metadata and policy validation precede the
+required one-time full raw hash, and the pipeline-version traversal reuses that
+verified raw manifest. Failure records use a valid `persistence/failed` stage
+manifest and a retryable `persisted/failed` ledger event when a feature boundary
+exists. Existing orphan v1 evidence is intentionally unchanged and unreferenced.
 
 Automated verification for this correction: 37 focused atmosphere/weather
 regression tests and the complete ML suite (`232 passed` in
@@ -186,7 +185,7 @@ regression tests and the complete ML suite (`232 passed` in
 feature builder, persistence CLI, configured SQLite database, or retained raw
 artifact was run or modified by the agent. Before the owner reruns persistence,
 apply/review the existing forward migration on the chosen database and use the
-reviewed local GFS policy. The retained run does not require a new collection.
+reviewed local GFS policy. Under DEC-052, the retained v2 run now requires replacement through the fresh end-to-end flow.
 
 ## S08 canonical component-wind correction (2026-09-13)
 
@@ -248,6 +247,30 @@ code review and the complete validation below, the owner should run only:
 ~~~powershell
 uv run --project services/ml weather-persist --run-key 403c5135-8ced-4b54-a999-1c27e7ec78a3
 ~~~
+
+## S08 strict catalogue identity restoration (2026-09-13)
+
+DEC-049's permissive retained-replay rule is superseded by DEC-052. Every
+`RequestPlan` now validates its canonical source ID and requires an exact match
+of both `catalogue_version` and `catalogue_sha256` to the packaged catalogue at
+load time. This is deliberately an unconditional stage-boundary gate: a run
+started under an earlier catalogue version stops before feature/persistence work
+rather than attempting compatibility inference.
+
+Accordingly, retained run `403c5135-8ced-4b54-a999-1c27e7ec78a3`, whose plan
+uses `t017-spike-v2`, is intentionally ineligible for a further
+`weather-persist` retry under the current catalogue. Use the established fresh
+end-to-end weather command for a new run. This restoration does not revert the
+independent canonical-source-ID policy-family mapping, raw-evidence checks,
+component-wind `math.hypot` correction, feature policy/builder v4, or
+`weather-persistence/3` expected-graph-capture correction.
+
+The restored strict behaviour is covered by request-plan and downstream
+raw-manifest unit tests. Automated verification passed: 30 focused atmosphere/
+weather unit tests, the complete ML suite (242 passed with `--import-mode=
+importlib`), Ruff check, Ruff format check, `npm.cmd run repo:check`, and
+`git diff --check`. The agent has not run any collector, feature, persistence,
+or configured database command for this change.
 
 ## Prior T-018 slice handoff
 

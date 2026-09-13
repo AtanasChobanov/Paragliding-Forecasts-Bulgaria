@@ -8,7 +8,6 @@ from paragliding_forecasts_ml.ingestion.atmosphere.contracts import (
     CanonicalFieldValue,
     FieldProvenance,
     RequestPlan,
-    validate_request_plan_for_current_catalogue,
 )
 
 RUN_KEY = "123e4567-e89b-42d3-a456-426614174000"
@@ -40,24 +39,12 @@ def test_request_plan_round_trips_strict_json() -> None:
     assert restored == plan
 
 
-def test_retained_request_plan_accepts_a_recorded_catalogue_identity() -> None:
-    payload = request_plan().model_dump()
-    payload["catalogue_version"] = "t017-spike-v2"
-    payload["catalogue_sha256"] = "0" * 64
-
-    restored = RequestPlan.model_validate(payload, strict=True)
-
-    assert restored.catalogue_version == "t017-spike-v2"
-
-
-def test_new_request_plan_rejects_stale_catalogue_identity() -> None:
+def test_request_plan_rejects_stale_catalogue_identity() -> None:
     payload = request_plan().model_dump()
     payload["catalogue_sha256"] = "0" * 64
 
-    with pytest.raises(ValueError, match="exact packaged T-017 catalogue"):
-        validate_request_plan_for_current_catalogue(
-            RequestPlan.model_validate(payload, strict=True)
-        )
+    with pytest.raises(ValidationError, match="exact packaged T-017 catalogue"):
+        RequestPlan.model_validate(payload, strict=True)
 
 
 def test_canonical_field_uses_catalogue_unit_and_explicit_missingness() -> None:
