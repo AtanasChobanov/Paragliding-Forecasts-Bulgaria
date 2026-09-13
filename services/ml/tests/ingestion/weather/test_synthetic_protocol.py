@@ -92,11 +92,11 @@ def test_synthetic_stage_protocol_proves_the_entire_hash_chain(tmp_path) -> None
         spatial="weather-spatial/1",
         validator="weather-validator/1",
         feature_builder="weather-feature-builder/1",
-        persistence="weather-persistence/1",
+        persistence="weather-persistence/3",
     )
     assert versions.pipe_delimited == (
         "gfs-collector/1|gfs-parser/1|weather-normalizer/1|weather-spatial/1|"
-        "weather-validator/1|weather-feature-builder/1|weather-persistence/1"
+        "weather-validator/1|weather-feature-builder/1|weather-persistence/3"
     )
 
     store = WeatherArtifactStore.create_fresh(RUN_KEY, project_root=tmp_path)

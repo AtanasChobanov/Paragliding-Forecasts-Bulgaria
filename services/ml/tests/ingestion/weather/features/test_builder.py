@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from math import hypot
+
 import pytest
 
 from paragliding_forecasts_ml.ingestion.weather.features.builder import (
@@ -172,6 +174,33 @@ def test_hourly_builder_selects_the_normalized_2m_specific_humidity_dimension() 
     by_key = {value.feature_key: value for value in values}
 
     assert by_key["specific_humidity_2m_kg_per_kg"].canonical_value == 0.006
+
+
+def test_hourly_builder_uses_the_canonical_component_wind_speed() -> None:
+    u_value = -0.9561042182562771
+    v_value = 1.3604827612750012
+    components = {"wind_u_m_s": u_value, "wind_v_m_s": v_value}
+    original = _sample(10)
+    sample = original.model_copy(
+        update={
+            "fields": tuple(
+                field.model_copy(update={"canonical_value": components[field.field_code]})
+                if field.field_code in components
+                else field
+                for field in original.fields
+            )
+        }
+    )
+    policy, _ = load_feature_policy()
+
+    values = {
+        value.feature_key: value
+        for value in build_hourly_point_features(sample, policy.hourly_fields)
+    }
+
+    speed = values["wind_speed_10m_m_s"].canonical_value
+    assert speed == hypot(u_value, v_value)
+    assert speed != (u_value**2 + v_value**2) ** 0.5
 
 
 def test_duplicate_exact_canonical_input_aborts_feature_build() -> None:

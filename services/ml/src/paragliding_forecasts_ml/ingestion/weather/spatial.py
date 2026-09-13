@@ -22,6 +22,7 @@ from .artifacts import WeatherArtifactStore, stage_input_fingerprint
 from .sampling_policy import SamplingPolicy, load_sampling_policy
 from .serialization import canonical_json_bytes, sha256_bytes
 from .sites import SiteSamplingConfig, load_site_sampling_configs
+from .wind import component_wind_speed
 
 WEATHER_SPATIAL_VERSION = "weather-spatial/5"
 
@@ -416,7 +417,7 @@ def _derived_wind_fields(
     ) or ("missing",)
     u_value = None if u_field is None else u_field.canonical_value
     v_value = None if v_field is None else v_field.canonical_value
-    speed = None if u_value is None or v_value is None else math.hypot(u_value, v_value)
+    speed = None if u_value is None or v_value is None else component_wind_speed(u_value, v_value)
     direction = (
         None
         if speed is None or speed == 0

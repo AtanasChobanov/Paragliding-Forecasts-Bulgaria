@@ -18,10 +18,17 @@ from ..atmosphere.contracts import (
 )
 from .serialization import sha256_bytes
 
-WEATHER_PERSISTENCE_VERSION = "weather-persistence/1"
+WEATHER_PERSISTENCE_VERSION = "weather-persistence/3"
 
 
-WeatherSourceId = Literal["gfs", "era5"]
+WeatherUsagePolicyFamily = Literal["gfs", "era5"]
+
+# Canonical source IDs are persisted in immutable weather evidence, whereas
+# usage-policy files are intentionally scoped to a source family.
+WEATHER_USAGE_POLICY_FAMILY_BY_SOURCE_ID: dict[str, WeatherUsagePolicyFamily] = {
+    "noaa_gfs_0p25_aws_grib2": "gfs",
+    "copernicus_era5": "era5",
+}
 
 
 class _WeatherUsagePolicyBase(AtmosphericContract):
@@ -136,38 +143,49 @@ class WeatherPersistenceReceipt(AtmosphericContract):
         return value
 
 
-def default_weather_usage_policy_path(source_id: WeatherSourceId, project_root: Path) -> Path:
+def weather_usage_policy_family(source_id: str) -> WeatherUsagePolicyFamily:
+    """Map one canonical weather source ID to its explicit policy family."""
+
+    try:
+        return WEATHER_USAGE_POLICY_FAMILY_BY_SOURCE_ID[source_id]
+    except KeyError as error:
+        raise ValueError(
+            f"No weather usage-policy family exists for source {source_id!r}."
+        ) from error
+
+
+def default_weather_usage_policy_path(
+    source_family: WeatherUsagePolicyFamily, project_root: Path
+) -> Path:
     """Return the local source-bound policy path; policy contents remain operator-owned."""
 
-    return project_root / "data" / "local" / f"{source_id}-usage-policy.json"
+    return project_root / "data" / "local" / f"{source_family}-usage-policy.json"
 
 
 def load_weather_usage_policy(
     path: Path | None,
     *,
-    expected_source_id: WeatherSourceId,
+    source_family: WeatherUsagePolicyFamily,
     project_root: Path | None = None,
 ) -> tuple[WeatherUsagePolicy, str]:
-    """Load a strict source-specific local policy and return its immutable bytes hash."""
+    """Load a strict source-family policy and return its immutable bytes hash."""
 
-    model_type = {"gfs": GfsUsagePolicy, "era5": Era5UsagePolicy}.get(expected_source_id)
+    model_type = {"gfs": GfsUsagePolicy, "era5": Era5UsagePolicy}.get(source_family)
     if model_type is None:
-        raise ValueError(
-            f"No weather usage-policy contract exists for source {expected_source_id!r}."
-        )
+        raise ValueError(f"No weather usage-policy contract exists for family {source_family!r}.")
     resolved_path = path or default_weather_usage_policy_path(
-        expected_source_id, (project_root or Path.cwd()).resolve()
+        source_family, (project_root or Path.cwd()).resolve()
     )
     try:
         payload = resolved_path.read_bytes()
     except OSError as error:
         raise ValueError(
-            f"{expected_source_id} usage policy file cannot be read: {resolved_path.name}."
+            f"{source_family} usage policy file cannot be read: {resolved_path.name}."
         ) from error
     try:
         policy = model_type.model_validate_json(payload, strict=True)
     except (TypeError, ValueError) as error:
         raise ValueError(
-            f"{expected_source_id} usage policy file is invalid or belongs to another source."
+            f"{source_family} usage policy file is invalid or belongs to another source family."
         ) from error
     return policy, sha256_bytes(payload)

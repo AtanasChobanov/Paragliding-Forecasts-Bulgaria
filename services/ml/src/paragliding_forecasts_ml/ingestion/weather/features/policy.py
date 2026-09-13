@@ -13,7 +13,7 @@ from ..serialization import sha256_bytes
 from .aggregation import SOFIA_TIME_ZONE, SOFIA_WINDOW_VERSION
 from .contracts import FEATURE_KEY_PATTERN
 
-POLICY_RESOURCE = "weather-feature-policy-v3.json"
+POLICY_RESOURCE = "weather-feature-policy-v4.json"
 
 
 class FeaturePolicyError(ValueError):
@@ -72,11 +72,17 @@ class FeaturePolicy(AtmosphericContract):
 
     feature_policy_schema_version: Literal[1, 2] = 2
     policy_version: Literal[
-        "weather-feature-policy-v1", "weather-feature-policy-v2", "weather-feature-policy-v3"
+        "weather-feature-policy-v1",
+        "weather-feature-policy-v2",
+        "weather-feature-policy-v3",
+        "weather-feature-policy-v4",
     ]
     feature_contract_version: Literal["weather-feature-contract/2", "weather-feature-contract/3"]
     feature_builder_version: Literal[
-        "weather-feature-builder/1", "weather-feature-builder/2", "weather-feature-builder/3"
+        "weather-feature-builder/1",
+        "weather-feature-builder/2",
+        "weather-feature-builder/3",
+        "weather-feature-builder/4",
     ]
     time_zone: Literal["Europe/Sofia"]
     flying_window_version: Literal["sofia-flying-window/1"]
@@ -117,6 +123,11 @@ class FeaturePolicy(AtmosphericContract):
                     "weather-feature-policy-v3",
                     "weather-feature-contract/3",
                     "weather-feature-builder/3",
+                ),
+                (
+                    "weather-feature-policy-v4",
+                    "weather-feature-contract/3",
+                    "weather-feature-builder/4",
                 ),
             },
         }[self.feature_policy_schema_version]

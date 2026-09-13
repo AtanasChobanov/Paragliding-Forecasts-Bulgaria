@@ -217,6 +217,12 @@ missing and weights are not renormalized. U/V components are interpolated
 before wind speed and meteorological direction are derived, avoiding circular
 angle interpolation.
 
+Scalar component wind speed uses the shared `component_wind_speed` helper, which
+returns `math.hypot(u, v)` without rounding or tolerance. Spatial sampling and
+the feature builder use that same implementation so their immutable evidence
+remains bit-identical; persistence retains strict equality rather than accepting
+numerical-nearness.
+
 The radius artifact retains node values for MSL pressure, surface U/V and 925
 hPa U/V. S05 does not calculate pressure gradients, convergence or divergence;
 the versioned S07 feature builder owns those formulas and their scientific
@@ -321,7 +327,21 @@ uv run --project services/ml weather-persist --run-key <uuid>
 uv run --project services/ml weather-persist --run-key <uuid> --policy-file <path-to-gfs-policy.json>
 ```
 
-The policy bytes hash is part of the immutable persistence input. The adapter
+For an immutable replay, the adapter maps the canonical raw source ID to its
+policy family (`noaa_gfs_0p25_aws_grib2` to `gfs`; `copernicus_era5` to
+`era5`). A retained request plan keeps its recorded catalogue version/hash and
+is checked against its raw manifest; only a newly created request plan must
+match the current packaged catalogue. Persistence still verifies every retained
+raw payload locally before writing SQLite, but validates compact plan/policy
+metadata first.
+
+The policy bytes hash is part of the immutable persistence input.
+`weather-persistence/3` retains the same strict graph comparison and corrects
+the read-through expected-graph capture so it recognizes the internally
+produced `INSERT` shape. It creates a distinct retry fingerprint; no weather
+collection, feature rebuild, or SQLite migration is required for that repair.
+
+The adapter
 uses one `BEGIN IMMEDIATE` transaction, records field-level missing/unsupported
 provenance, and returns a no-op only when an existing terminal run has the same
 immutable inputs and complete expected graph counts. Do not commit policy files

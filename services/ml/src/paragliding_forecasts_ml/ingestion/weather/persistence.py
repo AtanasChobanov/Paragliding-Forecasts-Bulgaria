@@ -33,6 +33,7 @@ from .persistence_models import (
     WeatherPersistenceReceipt,
     WeatherUsagePolicy,
     load_weather_usage_policy,
+    weather_usage_policy_family,
 )
 from .serialization import canonical_json_bytes, sha256_bytes
 from .spatial import CanonicalSiteSampleBatch, SamplingFootprint, SiteAlignedSample
@@ -276,8 +277,14 @@ def _effective_stage(ledger: RunStateLedger, stage: str):
 
 
 def _collect_pipeline_versions(
-    store: WeatherArtifactStore, root: ArtifactReference
+    store: WeatherArtifactStore,
+    root: ArtifactReference,
+    *,
+    verified_raw_manifest_reference: ArtifactReference,
+    verified_raw_manifest: RawManifest,
 ) -> tuple[str, ...]:
+    """Collect pipeline versions without re-hashing an already verified raw run."""
+
     versions: set[str] = set()
     visited: set[str] = set()
 
@@ -286,7 +293,11 @@ def _collect_pipeline_versions(
             return
         visited.add(reference.sha256)
         if reference.artifact_key == "raw_manifest":
-            manifest = store.verify_raw_manifest(reference)
+            manifest = (
+                verified_raw_manifest
+                if reference == verified_raw_manifest_reference
+                else store.verify_raw_manifest(reference)
+            )
             versions.add(manifest.collector_version)
             return
         if reference.artifact_key != "stage_manifest":
@@ -393,21 +404,35 @@ def prepare_weather_persistence(
         CanonicalSiteSampleBatch,
     )
     try:
-        raw_manifest = store.verify_raw_manifest(validation_snapshot.raw_manifest)
+        # Check compact replay metadata and operator policy before locally hashing
+        # every retained payload. The complete raw verification remains mandatory.
+        raw_manifest = store.read_raw_manifest(validation_snapshot.raw_manifest)
         request_path = store.verify_reference(
             raw_manifest.request_plan, expected_root=store.raw_dir
         )
         request_plan = RequestPlan.model_validate_json(request_path.read_bytes(), strict=True)
+        if request_plan.run_key != raw_manifest.run_key or (
+            request_plan.source_id != raw_manifest.source_id
+            or request_plan.source_kind != raw_manifest.source_kind
+        ):
+            raise WeatherPersistenceError("Raw manifest and request plan identities do not match.")
+        manifest_artifact_keys = {artifact.artifact_key for artifact in raw_manifest.artifacts}
+        if not set(request_plan.expected_artifact_keys) <= manifest_artifact_keys:
+            raise WeatherPersistenceError(
+                "Raw manifest does not contain every planned artifact key."
+            )
         usage_policy, usage_policy_sha256 = load_weather_usage_policy(
             usage_policy_path,
-            expected_source_id=raw_manifest.source_id,
+            source_family=weather_usage_policy_family(raw_manifest.source_id),
             project_root=root,
         )
+        raw_manifest = store.verify_raw_manifest(validation_snapshot.raw_manifest)
+    except WeatherPersistenceError:
+        raise
     except (ArtifactError, OSError, TypeError, ValueError) as error:
         raise WeatherPersistenceError(
             "Raw manifest, request plan, or weather usage policy is invalid."
         ) from error
-
     all_run_keys = {
         raw_manifest.run_key,
         request_plan.run_key,
@@ -456,7 +481,12 @@ def prepare_weather_persistence(
         )
     _validate_mapping_parity(hourly, daily)
 
-    versions = _collect_pipeline_versions(store, feature_event.evidence)
+    versions = _collect_pipeline_versions(
+        store,
+        feature_event.evidence,
+        verified_raw_manifest_reference=validation_snapshot.raw_manifest,
+        verified_raw_manifest=raw_manifest,
+    )
     pipeline_version = "|".join((*versions, WEATHER_PERSISTENCE_VERSION))
     fingerprint = sha256_bytes(
         canonical_json_bytes(
@@ -570,9 +600,7 @@ class _ExpectedGraphCapture:
             "weather_sampling_footprint_nodes",
         }
     )
-    _INSERT = re.compile(
-        r"^\\s*INSERT INTO ([a-z_]+) \\(([^)]+)\\) VALUES", re.IGNORECASE | re.DOTALL
-    )
+    _INSERT = re.compile(r"^\s*INSERT INTO ([a-z_]+) \(([^)]+)\) VALUES", re.IGNORECASE | re.DOTALL)
 
     def __init__(self, source: sqlite3.Connection) -> None:
         self._source = source
@@ -1287,6 +1315,17 @@ def _hourly_by_key(snapshot: HourlyFeatureSnapshot) -> dict[str, FeatureValue]:
     return values
 
 
+def _require_matching_hourly_values(
+    feature_key: str, source_value: Any, feature_value: Any
+) -> None:
+    """Reject any non-identical duplicate scalar evidence at the persistence boundary."""
+
+    if source_value != feature_value:
+        raise WeatherPersistenceError(
+            f"Source and feature artifacts disagree for hourly {feature_key}."
+        )
+
+
 def _insert_point_sample(
     connection: sqlite3.Connection,
     run_id: int,
@@ -1318,10 +1357,8 @@ def _insert_point_sample(
         value = feature_values[key]
         identity = (value.field_code, _field_variant(value))
         existing = point_values.get(column)
-        if column in point_values and existing != value.canonical_value:
-            raise WeatherPersistenceError(
-                f"Source and feature artifacts disagree for hourly {key}."
-            )
+        if column in point_values:
+            _require_matching_hourly_values(key, existing, value.canonical_value)
         point_values[column] = value.canonical_value
         if identity not in source_identities:
             # The feature value will receive a derived/unsupported provenance row below.
@@ -1943,8 +1980,13 @@ def _publish_receipt(
 
 
 def _safe_failure_detail(error: Exception) -> str:
-    message = " ".join(str(error).splitlines()).strip()
-    return f"{type(error).__name__}: {message[:400]}" if message else type(error).__name__
+    """Retain the most specific chained failure without adding secret-bearing context."""
+
+    cause = error
+    while cause.__cause__ is not None:
+        cause = cause.__cause__
+    message = " ".join(str(cause).splitlines()).strip()
+    return f"{type(cause).__name__}: {message[:400]}" if message else type(cause).__name__
 
 
 def _failure_kind(error: Exception) -> str:
@@ -1975,14 +2017,12 @@ def _publish_failure_evidence(
         "attempt": attempt,
     }
     fingerprint = stage_input_fingerprint(
-        stage="persistence_failure",
+        stage="persistence",
         producer_version=WEATHER_PERSISTENCE_VERSION,
         inputs=(prepared.feature_manifest_reference,),
         configuration=configuration,
     )
-    directory = prepared.store.begin_stage(
-        "persistence_failure", WEATHER_PERSISTENCE_VERSION, fingerprint
-    )
+    directory = prepared.store.begin_stage("persistence", WEATHER_PERSISTENCE_VERSION, fingerprint)
     failure_reference = prepared.store.write_stage_model(
         directory,
         "persistence-failure.json",
@@ -2000,13 +2040,13 @@ def _publish_failure_evidence(
         directory,
         StageManifest(
             run_key=prepared.store.run_key,
-            stage="persistence_failure",
+            stage="persistence",
             producer_version=WEATHER_PERSISTENCE_VERSION,
             input_fingerprint_sha256=fingerprint,
             inputs=(prepared.feature_manifest_reference,),
             outputs=(failure_reference,),
             configuration=configuration,
-            disposition="complete",
+            disposition="failed",
             started_at_utc=occurred_at_utc,
             completed_at_utc=occurred_at_utc,
         ),
@@ -2043,7 +2083,7 @@ def _record_prepared_failure(
 
 
 def _record_preparation_failure(run_key: str, root: Path, error: Exception) -> None:
-    """Record a policy/artifact preparation failure when a valid ledger permits it."""
+    """Record a retryable prepare failure only after a valid feature boundary exists."""
 
     try:
         store = WeatherArtifactStore(run_key, project_root=root)
@@ -2053,6 +2093,10 @@ def _record_preparation_failure(run_key: str, root: Path, error: Exception) -> N
             events[-1].stage == "persisted" and events[-1].disposition == "persisted"
         ):
             return
+        feature_event = ledger.latest_stage_event(events, "features_built")
+        if feature_event is None or feature_event.evidence is None:
+            return
+        store.read_stage_manifest(feature_event.evidence)
         occurred_at_utc = _now_utc()
         summary = _safe_failure_detail(error)
         configuration = {
@@ -2061,14 +2105,12 @@ def _record_preparation_failure(run_key: str, root: Path, error: Exception) -> N
             "attempt": len(events) + 1,
         }
         fingerprint = stage_input_fingerprint(
-            stage="persistence_failure",
+            stage="persistence",
             producer_version=WEATHER_PERSISTENCE_VERSION,
-            inputs=(),
+            inputs=(feature_event.evidence,),
             configuration=configuration,
         )
-        directory = store.begin_stage(
-            "persistence_failure", WEATHER_PERSISTENCE_VERSION, fingerprint
-        )
+        directory = store.begin_stage("persistence", WEATHER_PERSISTENCE_VERSION, fingerprint)
         failure_reference = store.write_stage_model(
             directory,
             "persistence-failure.json",
@@ -2077,6 +2119,7 @@ def _record_preparation_failure(run_key: str, root: Path, error: Exception) -> N
                 run_key=run_key,
                 failure_kind="prepare",
                 error_summary=summary,
+                feature_manifest=feature_event.evidence,
                 occurred_at_utc=occurred_at_utc,
             ),
         )
@@ -2084,13 +2127,13 @@ def _record_preparation_failure(run_key: str, root: Path, error: Exception) -> N
             directory,
             StageManifest(
                 run_key=run_key,
-                stage="persistence_failure",
+                stage="persistence",
                 producer_version=WEATHER_PERSISTENCE_VERSION,
                 input_fingerprint_sha256=fingerprint,
-                inputs=(),
+                inputs=(feature_event.evidence,),
                 outputs=(failure_reference,),
                 configuration=configuration,
-                disposition="complete",
+                disposition="failed",
                 started_at_utc=occurred_at_utc,
                 completed_at_utc=occurred_at_utc,
             ),

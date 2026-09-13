@@ -18,7 +18,7 @@ def _reference(key: str) -> ArtifactReference:
     )
 
 
-def test_feature_cli_supersedes_changed_feature_evidence(tmp_path, monkeypatch) -> None:
+def test_feature_cli_supersedes_a_new_feature_builder_version(tmp_path, monkeypatch) -> None:
     validation = _reference("a")
     feature_v1 = _reference("b")
     feature_v2 = _reference("c")

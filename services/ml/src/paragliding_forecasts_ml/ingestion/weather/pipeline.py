@@ -65,7 +65,7 @@ def _preflight(policy_path: Path | None, database_url: str | None, root: Path) -
     """Verify the explicit policy and existing migrated SQLite before fresh network use."""
 
     try:
-        load_weather_usage_policy(policy_path, expected_source_id="gfs", project_root=root)
+        load_weather_usage_policy(policy_path, source_family="gfs", project_root=root)
         resolved_url = configured_database_url(database_url)
         connection = open_read_only_database(resolved_url, root)
     except (DatabaseConfigurationError, ValueError) as error:

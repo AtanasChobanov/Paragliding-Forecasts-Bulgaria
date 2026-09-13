@@ -12,12 +12,16 @@ from paragliding_forecasts_ml.ingestion.weather.persistence import (
     DAILY_COLUMNS,
     HOURLY_POINT_COLUMNS,
     LAYER_COLUMNS,
+    WeatherPersistenceError,
     _point_column_for_source_field,
+    _publish_failure_evidence,
+    _require_matching_hourly_values,
 )
 from paragliding_forecasts_ml.ingestion.weather.persistence_models import (
     WeatherPersistenceFailure,
     WeatherPersistenceReceipt,
     load_weather_usage_policy,
+    weather_usage_policy_family,
 )
 
 RUN_KEY = "123e4567-e89b-42d3-a456-426614174000"
@@ -38,7 +42,7 @@ def test_gfs_usage_policy_is_source_specific_and_hashes_exact_bytes(tmp_path) ->
         encoding="utf-8",
     )
 
-    policy, digest = load_weather_usage_policy(policy_path, expected_source_id="gfs")
+    policy, digest = load_weather_usage_policy(policy_path, source_family="gfs")
 
     assert policy.permission_basis == "source_terms"
     assert policy.model_training_allowed is True
@@ -61,7 +65,7 @@ def test_weather_usage_policy_rejects_missing_or_untyped_usage_flags(tmp_path) -
     )
 
     with pytest.raises(ValueError, match="usage policy file is invalid"):
-        load_weather_usage_policy(policy_path, expected_source_id="gfs")
+        load_weather_usage_policy(policy_path, source_family="gfs")
 
 
 def test_era5_policy_is_rejected_for_gfs_and_default_paths_are_source_bound(tmp_path) -> None:
@@ -85,17 +89,33 @@ def test_era5_policy_is_rejected_for_gfs_and_default_paths_are_source_bound(tmp_
     )
 
     with pytest.raises(ValueError, match="gfs usage policy file is invalid"):
-        load_weather_usage_policy(policy_path, expected_source_id="gfs")
+        load_weather_usage_policy(policy_path, source_family="gfs")
 
     policy, _ = load_weather_usage_policy(
         None,
-        expected_source_id="era5",
+        source_family="era5",
         project_root=tmp_path,
     )
     assert policy.permission_reference == "Reviewed ERA5 usage terms"
     assert default_weather_usage_policy_path("gfs", tmp_path) == (
         tmp_path / "data" / "local" / "gfs-usage-policy.json"
     )
+
+
+@pytest.mark.parametrize(
+    ("source_id", "family"),
+    [
+        ("noaa_gfs_0p25_aws_grib2", "gfs"),
+        ("copernicus_era5", "era5"),
+    ],
+)
+def test_canonical_source_id_resolves_to_a_policy_family(source_id: str, family: str) -> None:
+    assert weather_usage_policy_family(source_id) == family
+
+
+def test_unknown_canonical_source_has_no_policy_family() -> None:
+    with pytest.raises(ValueError, match="No weather usage-policy family"):
+        weather_usage_policy_family("unknown_source")
 
 
 def test_source_neutral_point_mapping_uses_explicit_canonical_vertical_identity() -> None:
@@ -131,6 +151,47 @@ def test_active_policy_keys_have_exactly_one_persistence_destination() -> None:
         for layer in policy.profile_layers
         for entry in policy.entries_for_layer(layer)
     } == set(LAYER_COLUMNS)
+
+
+def test_hourly_source_feature_parity_remains_bit_exact() -> None:
+    _require_matching_hourly_values("wind_speed_10m_m_s", 4.25, 4.25)
+
+    with pytest.raises(WeatherPersistenceError, match="wind_speed_10m_m_s"):
+        _require_matching_hourly_values("wind_speed_10m_m_s", 4.25, 4.250000000000001)
+
+
+def test_failure_evidence_uses_a_valid_failed_persistence_stage(tmp_path, monkeypatch) -> None:
+    from paragliding_forecasts_ml.ingestion.weather.artifacts import WeatherArtifactStore
+
+    store = WeatherArtifactStore.create_fresh(RUN_KEY, project_root=tmp_path)
+    feature_manifest = ArtifactReference(
+        artifact_key="stage_manifest",
+        relative_path=f"data/interim/weather/{RUN_KEY}/feature/stage-manifest.json",
+        sha256="a" * 64,
+        byte_count=1,
+        media_type="application/json",
+    )
+    monkeypatch.setattr(store, "verify_reference", lambda _reference, **_kwargs: tmp_path)
+    prepared = SimpleNamespace(
+        ledger=SimpleNamespace(load_events=lambda: ()),
+        store=store,
+        feature_manifest_reference=feature_manifest,
+        persistence_input_sha256="b" * 64,
+    )
+    # The writer validates StageManifest itself before any state append. Its input
+    # is only structurally referenced here; boundary verification is covered by
+    # the state/integration suites.
+    evidence = _publish_failure_evidence(
+        prepared,
+        RuntimeError("synthetic transaction failure"),
+        occurred_at_utc="2026-08-21T12:00:00Z",
+    )
+
+    manifest_path = tmp_path / evidence.relative_path
+    manifest = manifest_path.read_text(encoding="utf-8")
+    assert '"stage": "persistence"' in manifest
+    assert '"disposition": "failed"' in manifest
+    assert evidence.relative_path.startswith(f"data/interim/weather/{RUN_KEY}/persistence-v3/")
 
 
 def test_failure_evidence_exposes_only_safe_retry_metadata() -> None:
@@ -173,7 +234,7 @@ def test_receipt_accepts_a_pipe_delimited_version_tuple() -> None:
         ),
         usage_policy_sha256="b" * 64,
         persistence_input_sha256="c" * 64,
-        pipeline_version="gfs-collector/6|weather-spatial/4|weather-persistence/1",
+        pipeline_version="gfs-collector/6|weather-spatial/4|weather-persistence/3",
         disposition="inserted",
         table_counts={"weather_point_samples": 11},
         persisted_graph_sha256="d" * 64,
@@ -183,4 +244,5 @@ def test_receipt_accepts_a_pipe_delimited_version_tuple() -> None:
         completed_at_utc="2026-08-21T12:00:00Z",
     )
 
-    assert receipt.pipeline_version.endswith("weather-persistence/1")
+    assert receipt.pipeline_version.endswith("weather-persistence/3")
+    assert receipt.persistence_version == "weather-persistence/3"

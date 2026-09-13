@@ -160,6 +160,95 @@ uv run --project services/ml weather-build-features --run-key 403c5135-8ced-4b54
 
 Do not run persistence until the resulting v3 quality report is reviewed. Add
 the retained-run quality counts here only after that manual v3 run.
+
+## S08 persistence replay correction (2026-09-12)
+
+A manual `weather-persist` attempt for retained run
+`403c5135-8ced-4b54-a999-1c27e7ec78a3` reached preparation and created an
+orphan v1 failure JSON. No SQLite connection or transaction was opened. The
+request plan correctly retained catalogue `t017-spike-v2`, but the previous
+runtime validator required current v3; persistence also incorrectly passed the
+canonical GFS source ID where the usage-policy loader expected the `gfs` family.
+
+The correction is implemented as `weather-persistence/2`. New request-plan
+creation still requires the current packaged catalogue; replay preserves and
+strictly cross-checks its recorded identity against immutable raw evidence.
+Canonical source IDs map explicitly to GFS/ERA5 policy families. Compact
+metadata and policy validation precede the required one-time full raw hash;
+the pipeline-version traversal reuses that verified raw manifest. Failure
+records now use a valid `persistence/failed` stage manifest and a retryable
+`persisted/failed` ledger event when a feature boundary exists. Existing orphan
+v1 evidence is intentionally unchanged and unreferenced.
+
+Automated verification for this correction: 37 focused atmosphere/weather
+regression tests and the complete ML suite (`232 passed` in
+`--import-mode=importlib`) passed, as did Ruff check/format. No collector,
+feature builder, persistence CLI, configured SQLite database, or retained raw
+artifact was run or modified by the agent. Before the owner reruns persistence,
+apply/review the existing forward migration on the chosen database and use the
+reviewed local GFS policy. The retained run does not require a new collection.
+
+## S08 canonical component-wind correction (2026-09-13)
+
+The owner ran retained-run feature builder v3 successfully (77 hourly and seven
+daily snapshots) and then attempted `weather-persist`. The v2 persistence
+preparation checks passed, the SQLite transaction began, and strict source/
+feature parity correctly stopped the write at hourly `wind_speed_10m_m_s`.
+There were nine values with a one-ULP difference: spatial used `math.hypot`
+while feature v3 used `(u**2 + v**2) ** 0.5`. The transaction rolled back and
+a valid retryable `persisted/failed` event (0015) records the failure; no partial
+weather graph is committed.
+
+The implementation now centralizes scalar component wind speed in
+`component_wind_speed`, backed by `math.hypot`, and updates the default feature
+boundary to `weather-feature-policy-v4` / `weather-feature-builder/4` while
+retaining feature contract /3. Spatial v5 is byte-identical and is deliberately
+not rerun. Persistence remains exact; there is no numerical-tolerance
+comparator. Existing v3 and failed-persistence artifacts remain immutable.
+
+Automated code-only verification for this correction is recorded with the
+current implementation. The agent did not run collector, parser, normalizer,
+spatial, validation, feature CLI, persistence CLI, or a configured database.
+After reviewing this change, the owner should run only:
+
+```powershell
+uv run --project services/ml weather-build-features --run-key 403c5135-8ced-4b54-a999-1c27e7ec78a3
+uv run --project services/ml weather-persist --run-key 403c5135-8ced-4b54-a999-1c27e7ec78a3
+```
+
+The first command creates a feature-builder-v4 boundary that supersedes event
+0014. The second command still requires the reviewed local GFS usage policy and
+the existing reviewed forward SQLite migration; it should then append a new
+persistence outcome. No new collection is required.
+## S08 expected-graph capture correction (2026-09-13)
+
+The owner rebuilt the retained feature boundary as `weather-feature-policy-v4` /
+`weather-feature-builder/4` (event 0016) and retried persistence. Wind parity
+passed, the `/2` transaction inserted its candidate graph, and the post-insert
+expected-graph verifier then failed before commit. Its capture facade had a
+raw regex with double-escaped `\s`, `\(`, and `\)`, so it rejected the normal
+`INSERT INTO weather_ingestion_runs (...) VALUES (...)` SQL emitted by the
+shared `_insert` helper. The transaction rolled back; a read-only database
+check confirms that this run has no committed `weather_ingestion_runs` row.
+
+The correction is `weather-persistence/3`: the capture expression now matches
+the shared insert shape, and a focused unit test calls `_insert` through the
+facade, asserts the captured row, and proves that no source SQLite row is
+written. `/3` deliberately produces a distinct persistence fingerprint while
+retaining strict full-graph comparison. Existing `/2` failure evidence stays
+immutable. No migration, collector, parser, normalizer, spatial, validation,
+or feature rebuild is required.
+
+Automated verification: 17 targeted persistence/capture/protocol unit tests
+passed, including the new capture regression. Per the requested scope, no
+persistence integration test was added and the agent did not invoke the
+configured persistence command or write the configured database. After the
+code review and the complete validation below, the owner should run only:
+
+~~~powershell
+uv run --project services/ml weather-persist --run-key 403c5135-8ced-4b54-a999-1c27e7ec78a3
+~~~
+
 ## Prior T-018 slice handoff
 
 ### S01 — schema and migration boundary

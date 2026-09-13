@@ -48,8 +48,8 @@ def test_feature_policy_uses_database_aligned_keys_and_layer_specific_omega() ->
     assert len(policy_sha256) == 64
     assert policy.feature_policy_schema_version == 2
     assert policy.feature_contract_version == "weather-feature-contract/3"
-    assert policy.policy_version == "weather-feature-policy-v3"
-    assert policy.feature_builder_version == "weather-feature-builder/3"
+    assert policy.policy_version == "weather-feature-policy-v4"
+    assert policy.feature_builder_version == "weather-feature-builder/4"
     assert [(layer.layer_base_agl_m, layer.layer_top_agl_m) for layer in policy.profile_layers] == [
         (0.0, 1500.0),
         (1500.0, 3000.0),
@@ -80,13 +80,39 @@ def test_feature_policy_uses_database_aligned_keys_and_layer_specific_omega() ->
     assert not any("inversion" in key for key in (*hourly, *daily, *lower, *upper))
 
 
-def test_v2_policy_remains_parseable_and_invalid_version_tuple_is_rejected() -> None:
-    policy, _ = load_feature_policy("weather-feature-policy-v2.json")
+@pytest.mark.parametrize(
+    ("resource", "policy_version", "builder_version"),
+    [
+        (
+            "weather-feature-policy-v1.json",
+            "weather-feature-policy-v1",
+            "weather-feature-builder/1",
+        ),
+        (
+            "weather-feature-policy-v2.json",
+            "weather-feature-policy-v2",
+            "weather-feature-builder/2",
+        ),
+        (
+            "weather-feature-policy-v3.json",
+            "weather-feature-policy-v3",
+            "weather-feature-builder/3",
+        ),
+    ],
+)
+def test_legacy_policies_remain_parseable(
+    resource: str, policy_version: str, builder_version: str
+) -> None:
+    policy, _ = load_feature_policy(resource)
 
-    assert policy.policy_version == "weather-feature-policy-v2"
-    assert policy.feature_builder_version == "weather-feature-builder/2"
+    assert policy.policy_version == policy_version
+    assert policy.feature_builder_version == builder_version
+
+
+def test_invalid_feature_policy_version_tuple_is_rejected() -> None:
+    policy, _ = load_feature_policy("weather-feature-policy-v2.json")
     invalid = policy.model_dump()
-    invalid["feature_builder_version"] = "weather-feature-builder/3"
+    invalid["feature_builder_version"] = "weather-feature-builder/4"
     with pytest.raises(ValidationError, match="version tuple"):
         FeaturePolicy.model_validate(invalid)
 

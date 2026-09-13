@@ -15,6 +15,7 @@ from ..spatial import (
     SiteAlignedSample,
     SiteConfigSnapshot,
 )
+from ..wind import component_wind_speed
 from .aggregation import (
     IntervalValue,
     TimedValue,
@@ -654,7 +655,9 @@ def _point_hour_value(sample: SiteAlignedSample, entry: FeaturePolicyEntry) -> f
             _surface_field(sample, TEN_METRE_WIND_U),
             _surface_field(sample, TEN_METRE_WIND_V),
         )
-        return None if u_value is None or v_value is None else (u_value**2 + v_value**2) ** 0.5
+        return (
+            None if u_value is None or v_value is None else component_wind_speed(u_value, v_value)
+        )
     try:
         field = resolve_canonical_field(
             sample.fields, selector_for_point_feature(entry.field_code, entry.variant)

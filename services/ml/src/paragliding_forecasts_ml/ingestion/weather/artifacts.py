@@ -7,7 +7,13 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from ..atmosphere.contracts import ArtifactReference, RawManifest, RequestPlan, StageManifest
+from ..atmosphere.contracts import (
+    ArtifactReference,
+    RawManifest,
+    RequestPlan,
+    StageManifest,
+    validate_request_plan_for_current_catalogue,
+)
 from .serialization import canonical_json_bytes, pretty_json_bytes, sha256_bytes, sha256_file
 from .versions import output_directory_name
 
@@ -62,6 +68,10 @@ class WeatherArtifactStore:
 
         if plan.run_key != self.run_key:
             raise ArtifactError("Request plan run_key does not match the artifact store.")
+        try:
+            validate_request_plan_for_current_catalogue(plan)
+        except ValueError as error:
+            raise ArtifactError("New request plan does not match the current catalogue.") from error
         return self._write_model(self.raw_dir / "request-plan.json", "request_plan", plan)
 
     def write_raw_bytes(
@@ -132,6 +142,15 @@ class WeatherArtifactStore:
     def verify_raw_manifest(self, reference: ArtifactReference) -> RawManifest:
         """Load a raw manifest and verify its request plan and every raw payload hash."""
 
+        manifest = self.read_raw_manifest(reference)
+        self.verify_reference(manifest.request_plan, expected_root=self.raw_dir)
+        for artifact in manifest.artifacts:
+            self.verify_reference(artifact, expected_root=self.raw_dir)
+        return manifest
+
+    def read_raw_manifest(self, reference: ArtifactReference) -> RawManifest:
+        """Load only compact raw-manifest metadata before expensive payload hashing."""
+
         path = self.verify_reference(reference, expected_root=self.raw_dir)
         try:
             manifest = RawManifest.model_validate_json(path.read_bytes(), strict=True)
@@ -139,9 +158,6 @@ class WeatherArtifactStore:
             raise ArtifactError("Raw manifest does not satisfy its versioned contract.") from error
         if manifest.run_key != self.run_key:
             raise ArtifactError("Raw manifest belongs to another weather run.")
-        self.verify_reference(manifest.request_plan, expected_root=self.raw_dir)
-        for artifact in manifest.artifacts:
-            self.verify_reference(artifact, expected_root=self.raw_dir)
         return manifest
 
     def _stage_directory(

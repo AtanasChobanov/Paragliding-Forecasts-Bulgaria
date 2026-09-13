@@ -60,6 +60,10 @@ consequences. Temporary progress and Git state belong in
 | DEC-045     | Normalize GFS interval products to exact adjacent UTC windows                   | Accepted   | 2026-09-10 |
 | DEC-046     | Make weather persistence immutable, atomic, and artifact-replayable             | Accepted   | 2026-09-10 |
 | DEC-047     | Supply weather usage authority through an explicit local policy file            | Accepted   | 2026-09-11 |
+| DEC-048     | Resolve feature inputs by exact centralized canonical selectors                  | Accepted   | 2026-09-12 |
+| DEC-049     | Preserve immutable weather replay across catalogue revisions                     | Accepted   | 2026-09-12 |
+| DEC-050     | Canonicalize component wind speed with math.hypot                               | Accepted   | 2026-09-13 |
+| DEC-051     | Repair expected-graph capture SQL recognition and version persistence /3        | Accepted   | 2026-09-13 |
 
 ## Individual decisions
 
@@ -2077,6 +2081,103 @@ mean-sea-level, cloud, and surface-parcel convection identities are selected
 without ambiguity. The v3 build creates a new immutable boundary and supersedes
 the v2 ledger event; it does not rewrite prior artifacts. GFS provider cloud
 base remains `unsupported/source_field_unavailable`.
+
+### DEC-049 - Preserve immutable weather replay across catalogue revisions
+
+**Status:** Accepted
+
+**Date:** 2026-09-12
+
+**Context:** A retained GFS run recorded the valid `t017-spike-v2` catalogue
+identity. Later additive catalogue changes moved the current package to v3.
+Requiring every persisted historical request plan to equal the current package
+made the offline persistence path reject immutable evidence before SQLite was
+opened, contrary to DEC-046.
+
+**Decision:** Treat `RequestPlan` as a strict durable contract at replay time:
+verify its artifact hash, schema, run/source/source-kind identity, and planned
+artifact-key coverage against the raw manifest, but preserve its recorded
+catalogue version/hash without comparing them to the current package. New
+planning and request-plan publication remain guarded by an explicit current
+catalogue version/hash and source-ID check. The persistence adapter resolves
+usage policy through an explicit registry from canonical source ID to policy
+family (`noaa_gfs_0p25_aws_grib2` to `gfs`, `copernicus_era5` to `era5`).
+
+Persistence failures publish a valid `persistence/failed` stage manifest and a
+retryable `persisted/failed` ledger event only when a complete feature boundary
+exists. Failure metadata remains secret-free. Compact manifest/plan/policy
+checks run before the one required full raw-payload hash verification.
+
+**Consequences:** Existing hash-valid retained runs survive additive catalogue
+updates and require no new collector run. A new acquisition cannot be created
+with stale catalogue identity. Raw artifacts remain immutable, and persistence
+still performs a complete local raw hash verification before any database write.
+
+**Related files:** [`contracts.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/atmosphere/contracts.py),
+[`persistence.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/persistence.py),
+and [`persistence_models.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/persistence_models.py).
+
+### DEC-050 - Canonicalize component wind speed with math.hypot
+
+**Status:** Accepted
+
+**Date:** 2026-09-13
+
+**Context:** Spatial sampling calculated scalar 10 m wind speed with
+`math.hypot(u, v)`, while the feature builder independently calculated the same
+physical formula as `(u**2 + v**2) ** 0.5`. Nine retained hourly values differed
+by exactly one IEEE-754 ULP, so the strict persistence parity guard correctly
+rejected them even though their meteorological meaning was identical.
+
+**Decision:** `component_wind_speed(u_m_s, v_m_s)` is the sole source-neutral
+implementation of scalar component wind speed. It requires finite components
+and returns `math.hypot(u_m_s, v_m_s)` with no rounding, tolerance, or unit
+conversion. Spatial v5 delegates to it without a version increase because the
+generated values are byte-identical to v5 evidence. The feature builder moves
+to `weather-feature-policy-v4` / `weather-feature-builder/4`, retaining feature
+contract /3 and creating a new immutable feature boundary. Persistence keeps
+its exact source/feature equality rule; no representation-tolerance comparator
+is permitted. Wind direction and its calm-wind semantics are unchanged.
+
+**Consequences:** Existing v3 feature evidence remains immutable but is not the
+effective feature boundary after a v4 rebuild. Retained spatial, validation,
+raw, parser, and normalizer evidence require no rerun. The owner rebuilds only
+features before retrying persistence. A material source/feature value mismatch
+continues to abort the SQLite transaction.
+
+**Related files:** [`wind.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/wind.py),
+[`spatial.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/spatial.py),
+and [`builder.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/features/builder.py).
+### DEC-051 - Repair expected-graph capture SQL recognition and version persistence /3
+
+**Status:** Accepted
+
+**Date:** 2026-09-13
+
+**Context:** The immutable v4 feature boundary passed strict source/feature
+parity and persistence inserted its candidate graph inside one SQLite
+transaction. Post-insert expected-graph capture then rejected the first normal
+`INSERT INTO weather_ingestion_runs (...) VALUES (...)` statement. Its raw
+regular expression double-escaped `\s`, `\(`, and `\)`, so it matched literal
+backslashes rather than the SQL emitted by the shared `_insert` helper. The
+transaction rolled back without a committed run graph.
+
+**Decision:** Keep the read-through expected-graph capture and strict complete
+immutable graph comparison. Correct its insert-expression escaping to match the
+SQL shape generated by `_insert`, add a focused unit test that runs that shared
+insert shape through the capture facade without writing its source SQLite
+connection, and move the executable boundary to `weather-persistence/3`.
+There is no schema migration or upstream artifact rebuild.
+
+**Consequences:** Failed `/2` persistence evidence remains immutable. The new
+version produces a distinct persistence input fingerprint and retry boundary;
+the owner retries only persistence against the valid feature-builder-v4
+artifact. The unit test protects the capture/parser contract, while broader
+persistence integration remains separately tracked in S08.
+
+**Related files:** [`persistence.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/persistence.py),
+[`persistence_models.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/persistence_models.py),
+and [`test_expected_graph_capture.py`](../services/ml/tests/ingestion/weather/test_expected_graph_capture.py).
 ## Open decisions
 
 | Question                                                                                                                  | Options / constraints                                                                                                                                                                                                             | Resolve by                                                               |
