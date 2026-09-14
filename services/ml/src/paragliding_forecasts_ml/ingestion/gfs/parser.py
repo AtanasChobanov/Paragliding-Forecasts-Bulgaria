@@ -20,7 +20,6 @@ from ..atmosphere.contracts import (
     validate_utc_timestamp,
 )
 from ..weather.artifacts import WeatherArtifactStore, stage_input_fingerprint
-from ..weather.serialization import sha256_file
 from .models import GFS_SOURCE_ID, GfsCollectionRecord
 from .profile import (
     GFS_CENTRE,
@@ -114,11 +113,10 @@ def raw_manifest_reference(store: WeatherArtifactStore) -> ArtifactReference:
     path = store.raw_dir / "manifest.json"
     if not path.is_file():
         raise GfsParserError("GFS raw manifest does not exist.")
-    return ArtifactReference(
+    return store.verification.reference_for_existing(
+        path,
         artifact_key="raw_manifest",
         relative_path=path.relative_to(store.project_root).as_posix(),
-        sha256=sha256_file(path),
-        byte_count=path.stat().st_size,
         media_type="application/json",
     )
 

@@ -8,6 +8,7 @@ from pathlib import Path
 from time import perf_counter_ns
 from typing import Any
 
+import numpy as np
 from pydantic import BaseModel
 
 from ..atmosphere.contracts import ArtifactReference
@@ -45,6 +46,7 @@ class ArtifactVerificationSession:
         self.run_key = run_key
         self._files: dict[ArtifactIdentity, _VerifiedFile] = {}
         self._models: dict[ArtifactIdentity, BaseModel] = {}
+        self._matrices: dict[ArtifactIdentity, np.ndarray] = {}
         self._boundaries: dict[ArtifactIdentity, _VerifiedBoundary] = {}
         self.files_hashed = 0
         self.bytes_hashed = 0
@@ -52,6 +54,7 @@ class ArtifactVerificationSession:
         self.manifests_parsed = 0
         self.boundaries_verified = 0
         self.files_registered = 0
+        self.matrices_loaded = 0
         self.hash_elapsed_ns = 0
 
     def assert_compatible(self, *, project_root: Path, run_key: str) -> None:
@@ -189,6 +192,17 @@ class ArtifactVerificationSession:
         if manifest:
             self.manifests_parsed += 1
 
+    def cached_matrix(self, reference: ArtifactReference, path: Path) -> np.ndarray | None:
+        matrix = self._matrices.get(self.identity(reference, path))
+        if matrix is not None:
+            self.cache_hits += 1
+        return matrix
+
+    def register_matrix(self, reference: ArtifactReference, path: Path, matrix: np.ndarray) -> None:
+        matrix.setflags(write=False)
+        self._matrices[self.identity(reference, path)] = matrix
+        self.matrices_loaded += 1
+
     def cached_boundary(
         self, reference: ArtifactReference, path: Path
     ) -> tuple[Path, tuple[tuple[ArtifactReference, Path], ...]] | None:
@@ -241,12 +255,14 @@ class ArtifactVerificationSession:
             "manifests_parsed": self.manifests_parsed,
             "boundaries_verified": self.boundaries_verified,
             "files_registered": self.files_registered,
+            "matrices_loaded": self.matrices_loaded,
             "hash_elapsed_ms": round(self.hash_elapsed_ns / 1_000_000, 3),
         }
 
     def _invalidate(self, identity: ArtifactIdentity) -> None:
         self._files.pop(identity, None)
         self._models.pop(identity, None)
+        self._matrices.pop(identity, None)
         for boundary_identity, boundary in tuple(self._boundaries.items()):
             if any(
                 self.identity(reference, path) == identity
