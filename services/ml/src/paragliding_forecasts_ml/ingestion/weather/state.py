@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from dataclasses import dataclass
+from pathlib import Path, PurePosixPath
 from typing import Literal
 
 from pydantic import Field, field_validator, model_validator
@@ -15,7 +16,7 @@ from ..atmosphere.contracts import (
     validate_utc_timestamp,
 )
 from .artifacts import ArtifactError, WeatherArtifactStore
-from .serialization import sha256_file
+from .serialization import sha256_bytes
 
 RunMode = Literal["fresh", "resume"]
 RunStage = Literal[
@@ -40,6 +41,8 @@ STAGE_ORDER: tuple[RunStage, ...] = (
     "features_built",
     "persisted",
 )
+
+_EFFECTIVE_DISPOSITIONS = frozenset({"ready", "complete", "partial", "quarantined", "persisted"})
 
 
 class StateError(RuntimeError):
@@ -98,8 +101,62 @@ class RunStateEvent(AtmosphericContract):
         return self
 
 
+@dataclass(frozen=True, slots=True)
+class RunStateSnapshot:
+    """One metadata-only, hash-chain-validated view of a weather run ledger."""
+
+    events: tuple[RunStateEvent, ...]
+    event_sha256s: tuple[str, ...]
+    effective_stage_events: tuple[tuple[RunStage, RunStateEvent], ...]
+
+    @classmethod
+    def build(
+        cls,
+        events: tuple[RunStateEvent, ...],
+        event_sha256s: tuple[str, ...],
+    ) -> RunStateSnapshot:
+        if len(events) != len(event_sha256s):
+            raise StateError("State snapshot event and digest counts do not match.")
+        effective: dict[RunStage, RunStateEvent] = {}
+        for event in events:
+            if event.disposition in _EFFECTIVE_DISPOSITIONS:
+                effective[event.stage] = event
+        return cls(
+            events=events,
+            event_sha256s=event_sha256s,
+            effective_stage_events=tuple(
+                (stage, effective[stage]) for stage in STAGE_ORDER if stage in effective
+            ),
+        )
+
+    @property
+    def final_sequence(self) -> int:
+        return len(self.events)
+
+    @property
+    def final_event_sha256(self) -> str | None:
+        return self.event_sha256s[-1] if self.event_sha256s else None
+
+    def effective_event(self, stage: RunStage) -> RunStateEvent | None:
+        for candidate_stage, event in self.effective_stage_events:
+            if candidate_stage == stage:
+                return event
+        return None
+
+    def evidence_events(self, *, scope: Literal["effective", "all"]) -> tuple[RunStateEvent, ...]:
+        """Return evidence-bearing events selected for an explicit audit scope."""
+
+        if scope == "all":
+            candidates = self.events
+        elif scope == "effective":
+            candidates = tuple(event for _, event in self.effective_stage_events)
+        else:
+            raise ValueError(f"Unsupported weather artifact audit scope: {scope}")
+        return tuple(event for event in candidates if event.evidence is not None)
+
+
 class RunStateLedger:
-    """Reads/verifies events and appends only legal transitions for one run."""
+    """Validates ledger metadata and appends only legal transitions for one run."""
 
     def __init__(self, store: WeatherArtifactStore) -> None:
         self.store = store
@@ -135,60 +192,103 @@ class RunStateLedger:
         supersedes_sequence: int | None = None,
         detail: str | None = None,
     ) -> RunStateEvent:
-        """Append a verified legal transition; resume never recreates old evidence."""
+        """Compatibility wrapper around metadata-only snapshot-aware append."""
 
-        events = self.load_events()
-        if not events:
-            raise StateError("A weather run must be initialized before appending transitions.")
-        self._validate_next(
-            events,
-            invocation_mode=invocation_mode,
-            stage=stage,
-            disposition=disposition,
-            evidence=evidence,
-            supersedes_sequence=supersedes_sequence,
-        )
-        previous_path = self._event_path(events[-1])
-        event = RunStateEvent(
-            run_key=self.store.run_key,
-            sequence=len(events) + 1,
+        event, _ = self.append_to(
+            self.load_state(),
             invocation_mode=invocation_mode,
             stage=stage,
             disposition=disposition,
             occurred_at_utc=occurred_at_utc,
-            previous_event_sha256=sha256_file(previous_path),
             evidence=evidence,
             supersedes_sequence=supersedes_sequence,
             detail=detail,
         )
-        self._write(event)
         return event
 
-    def load_events(self) -> tuple[RunStateEvent, ...]:
-        """Load events in sequence order and verify their hash chain and transitions."""
+    def append_to(
+        self,
+        snapshot: RunStateSnapshot,
+        *,
+        invocation_mode: RunMode,
+        stage: RunStage,
+        disposition: RunDisposition,
+        occurred_at_utc: str,
+        evidence: ArtifactReference | None = None,
+        supersedes_sequence: int | None = None,
+        detail: str | None = None,
+    ) -> tuple[RunStateEvent, RunStateSnapshot]:
+        """Append against one current snapshot and return the updated in-memory state."""
+
+        events = snapshot.events
+        if not events:
+            raise StateError("A weather run must be initialized before appending transitions.")
+        next_sequence = snapshot.final_sequence + 1
+        lock_path = self.events_directory / f".{next_sequence:04d}.append.lock"
+        try:
+            with lock_path.open("xb"):
+                pass
+        except FileExistsError as error:
+            raise StateError("Another writer is appending this state ledger sequence.") from error
+        try:
+            self._assert_snapshot_is_current(snapshot)
+            self._validate_next(
+                events,
+                invocation_mode=invocation_mode,
+                stage=stage,
+                disposition=disposition,
+                evidence=evidence,
+                supersedes_sequence=supersedes_sequence,
+            )
+            if evidence is not None:
+                self._validate_evidence_reference(evidence, stage=stage)
+            event = RunStateEvent(
+                run_key=self.store.run_key,
+                sequence=next_sequence,
+                invocation_mode=invocation_mode,
+                stage=stage,
+                disposition=disposition,
+                occurred_at_utc=occurred_at_utc,
+                previous_event_sha256=snapshot.final_event_sha256,
+                evidence=evidence,
+                supersedes_sequence=supersedes_sequence,
+                detail=detail,
+            )
+            reference = self._write(event)
+        finally:
+            lock_path.unlink(missing_ok=True)
+        updated = RunStateSnapshot.build(
+            (*events, event),
+            (*snapshot.event_sha256s, reference.sha256),
+        )
+        return event, updated
+
+    def load_state(self) -> RunStateSnapshot:
+        """Load ledger metadata once without opening referenced artifact evidence."""
 
         if not self.events_directory.is_dir():
-            return ()
+            return RunStateSnapshot.build((), ())
         paths = sorted(self.events_directory.glob("*.json"))
         events: list[RunStateEvent] = []
-        previous_path: Path | None = None
+        digests: list[str] = []
         for expected_sequence, path in enumerate(paths, start=1):
             try:
-                event = RunStateEvent.model_validate_json(path.read_bytes(), strict=True)
+                content = path.read_bytes()
+                event = RunStateEvent.model_validate_json(content, strict=True)
             except Exception as error:
                 raise StateError(f"State event is invalid JSON contract: {path}") from error
             if event.run_key != self.store.run_key or event.sequence != expected_sequence:
                 raise StateError("State event sequence or run key is inconsistent.")
-            if previous_path is None:
+            if path.name != self._event_filename(event):
+                raise StateError("State event filename does not match its sequence and transition.")
+            digest = sha256_bytes(content)
+            if not digests:
                 if event.previous_event_sha256 is not None:
                     raise StateError("First state event cannot have a predecessor hash.")
-            elif event.previous_event_sha256 != sha256_file(previous_path):
+            elif event.previous_event_sha256 != digests[-1]:
                 raise StateError("State event predecessor hash does not match prior evidence.")
             if event.evidence is not None:
-                try:
-                    self.store.verify_boundary(event.evidence)
-                except ArtifactError as error:
-                    raise StateError("State event evidence cannot be verified.") from error
+                self._validate_evidence_reference(event.evidence, stage=event.stage)
             if events:
                 self._validate_next(
                     tuple(events),
@@ -205,8 +305,13 @@ class RunStateLedger:
             ):
                 raise StateError("The first state event must be fresh/planned/ready.")
             events.append(event)
-            previous_path = path
-        return tuple(events)
+            digests.append(digest)
+        return RunStateSnapshot.build(tuple(events), tuple(digests))
+
+    def load_events(self) -> tuple[RunStateEvent, ...]:
+        """Compatibility wrapper; validates ledger metadata but not artifact contents."""
+
+        return self.load_state().events
 
     def _write(self, event: RunStateEvent) -> ArtifactReference:
         try:
@@ -219,11 +324,41 @@ class RunStateLedger:
             raise StateError(str(error)) from error
 
     def _event_path(self, event: RunStateEvent) -> Path:
-        prefix = f"{event.sequence:04d}-{event.stage.replace('_', '-')}-{event.disposition}.json"
-        path = self.events_directory / prefix
+        path = self.events_directory / self._event_filename(event)
         if not path.is_file():
             raise StateError("Expected state event file does not exist.")
         return path
+
+    @staticmethod
+    def _event_filename(event: RunStateEvent) -> str:
+        return f"{event.sequence:04d}-{event.stage.replace('_', '-')}-{event.disposition}.json"
+
+    def _assert_snapshot_is_current(self, snapshot: RunStateSnapshot) -> None:
+        if any(event.run_key != self.store.run_key for event in snapshot.events):
+            raise StateError("State snapshot belongs to another weather run.")
+        expected_names = tuple(self._event_filename(event) for event in snapshot.events)
+        actual_names = tuple(path.name for path in sorted(self.events_directory.glob("*.json")))
+        if actual_names != expected_names:
+            raise StateError("State ledger changed after the supplied snapshot was loaded.")
+
+    def _validate_evidence_reference(
+        self, reference: ArtifactReference, *, stage: RunStage
+    ) -> None:
+        parts = PurePosixPath(reference.relative_path).parts
+        raw_manifest = ("data", "raw", "weather", self.store.run_key, "manifest.json")
+        interim_prefix = ("data", "interim", "weather", self.store.run_key)
+        if stage == "raw_complete" and reference.artifact_key == "raw_manifest":
+            valid = parts == raw_manifest
+        elif stage != "raw_complete" and reference.artifact_key == "stage_manifest":
+            valid = (
+                len(parts) > len(interim_prefix)
+                and parts[: len(interim_prefix)] == interim_prefix
+                and parts[-1] == "stage-manifest.json"
+            )
+        else:
+            valid = False
+        if not valid:
+            raise StateError("State event evidence is not a structural run boundary reference.")
 
     @staticmethod
     def _last_successful_stage(events: tuple[RunStateEvent, ...]) -> RunStage:

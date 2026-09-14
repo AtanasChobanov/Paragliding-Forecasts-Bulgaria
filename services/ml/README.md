@@ -388,6 +388,22 @@ uv run --project services/ml weather-build-features --run-key <uuid>
 Only collection can access NOAA. Parse/normalize and sampling are offline
 resume stages; sampling never writes SQLite.
 
+### Explicit weather artifact audits
+
+`weather-artifacts audit` validates the small append-only ledger first, then
+hash-verifies either the current effective boundaries or every historical and
+superseded boundary. Normal stage commands never run the expensive all-history
+scope implicitly:
+
+```powershell
+uv run --project services/ml weather-artifacts audit --run-key <uuid> --scope effective
+uv run --project services/ml weather-artifacts audit --run-key <uuid> --scope all
+```
+
+Use `effective` for the operational lineage. Use `all` only for deliberate
+maintenance of retained history; missing or corrupt evidence referenced solely
+by an unused superseded event does not block the effective audit.
+
 ### Reviewed Copernicus site elevation command
 
 `copernicus-elevations` repeatably samples Copernicus DEM GLO-30 for every

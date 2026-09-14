@@ -4,7 +4,11 @@ import pytest
 
 from paragliding_forecasts_ml.ingestion.atmosphere.contracts import ArtifactReference
 from paragliding_forecasts_ml.ingestion.weather.artifacts import WeatherArtifactStore
-from paragliding_forecasts_ml.ingestion.weather.state import RunStateLedger, StateError
+from paragliding_forecasts_ml.ingestion.weather.state import (
+    RunStateLedger,
+    RunStateSnapshot,
+    StateError,
+)
 
 RUN_KEY = "123e4567-e89b-42d3-a456-426614174000"
 UTC = "2026-08-21T12:00:00Z"
@@ -207,6 +211,135 @@ def test_state_ledger_rejects_a_tampered_predecessor(tmp_path) -> None:
 
     with pytest.raises(StateError, match="predecessor hash"):
         ledger.load_events()
+
+
+def test_load_state_validates_metadata_without_opening_event_evidence(
+    tmp_path, monkeypatch
+) -> None:
+    ledger = initialized_ledger(tmp_path)
+    evidence = reference("a")
+    ledger.append(
+        invocation_mode="resume",
+        stage="raw_complete",
+        disposition="complete",
+        occurred_at_utc=UTC,
+    )
+    ledger.append(
+        invocation_mode="resume",
+        stage="parsed",
+        disposition="complete",
+        occurred_at_utc=UTC,
+        evidence=evidence,
+    )
+
+    monkeypatch.setattr(
+        ledger.store,
+        "verify_boundary",
+        lambda _reference: pytest.fail("ledger metadata loading opened artifact evidence"),
+    )
+    snapshot = ledger.load_state()
+
+    assert isinstance(snapshot, RunStateSnapshot)
+    assert snapshot.final_sequence == 3
+    assert len(snapshot.event_sha256s) == 3
+    assert snapshot.effective_event("parsed").evidence == evidence  # type: ignore[union-attr]
+    assert ledger.load_events() == snapshot.events
+
+
+def test_state_snapshot_append_rejects_concurrent_ledger_change(tmp_path) -> None:
+    ledger = initialized_ledger(tmp_path)
+    stale = ledger.load_state()
+    ledger.append(
+        invocation_mode="resume",
+        stage="raw_complete",
+        disposition="complete",
+        occurred_at_utc=UTC,
+    )
+
+    with pytest.raises(StateError, match="changed after"):
+        ledger.append_to(
+            stale,
+            invocation_mode="resume",
+            stage="raw_complete",
+            disposition="complete",
+            occurred_at_utc=UTC,
+        )
+
+
+def test_state_snapshot_append_rejects_an_active_sequence_writer(tmp_path) -> None:
+    ledger = initialized_ledger(tmp_path)
+    snapshot = ledger.load_state()
+    lock = ledger.events_directory / ".0002.append.lock"
+    lock.touch()
+
+    with pytest.raises(StateError, match="Another writer"):
+        ledger.append_to(
+            snapshot,
+            invocation_mode="resume",
+            stage="raw_complete",
+            disposition="complete",
+            occurred_at_utc=UTC,
+        )
+
+
+def test_state_snapshot_append_returns_updated_state_without_reloading(
+    tmp_path, monkeypatch
+) -> None:
+    ledger = initialized_ledger(tmp_path)
+    snapshot = ledger.load_state()
+    monkeypatch.setattr(
+        ledger,
+        "load_state",
+        lambda: pytest.fail("snapshot-aware append reloaded the ledger"),
+    )
+
+    event, updated = ledger.append_to(
+        snapshot,
+        invocation_mode="resume",
+        stage="raw_complete",
+        disposition="complete",
+        occurred_at_utc=UTC,
+    )
+
+    assert event.sequence == 2
+    assert updated.final_sequence == 2
+    assert updated.final_event_sha256 is not None
+    assert updated.events[-1] == event
+
+
+def test_state_event_evidence_must_reference_the_same_run_boundary(tmp_path) -> None:
+    ledger = initialized_ledger(tmp_path)
+    other_run = ArtifactReference(
+        artifact_key="stage_manifest",
+        relative_path=(
+            "data/interim/weather/123e4567-e89b-42d3-a456-426614174001/parser/stage-manifest.json"
+        ),
+        sha256="a" * 64,
+        byte_count=1,
+        media_type="application/json",
+    )
+
+    with pytest.raises(StateError, match="structural run boundary"):
+        ledger.append(
+            invocation_mode="resume",
+            stage="raw_complete",
+            disposition="complete",
+            occurred_at_utc=UTC,
+            evidence=other_run,
+        )
+
+
+def test_raw_state_evidence_must_be_a_raw_manifest_boundary(tmp_path) -> None:
+    ledger = initialized_ledger(tmp_path)
+
+    with pytest.raises(StateError, match="structural run boundary"):
+        ledger.append(
+            invocation_mode="resume",
+            stage="raw_complete",
+            disposition="complete",
+            occurred_at_utc=UTC,
+            evidence=reference("a"),
+        )
 
 
 def test_new_spatial_version_supersedes_the_prior_boundary_without_rewriting_it(

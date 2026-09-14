@@ -28,6 +28,7 @@ weather-validate = "paragliding_forecasts_ml.ingestion.weather.validation_cli:ma
 weather-build-features = "paragliding_forecasts_ml.ingestion.weather.feature_cli:main"
 weather-persist = "paragliding_forecasts_ml.ingestion.weather.persistence_cli:main"
 weather-ingest = "paragliding_forecasts_ml.ingestion.weather.pipeline_cli:main"
+weather-artifacts = "paragliding_forecasts_ml.ingestion.weather.artifact_audit_cli:main"
 copernicus-elevations = "paragliding_forecasts_ml.ingestion.copernicus.elevation_cli:main"
 xccontest-ingest = "paragliding_forecasts_ml.ingestion.xccontest.pipeline_cli:main"
 
