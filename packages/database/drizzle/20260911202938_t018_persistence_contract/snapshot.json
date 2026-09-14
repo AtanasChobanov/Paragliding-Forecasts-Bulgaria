@@ -2,9 +2,7 @@
   "version": "7",
   "dialect": "sqlite",
   "id": "ff9502af-d3cb-49bf-a81c-3c5dbb500cb2",
-  "prevIds": [
-    "c4906fe2-d6d1-49b1-a224-2b0aa1e60494"
-  ],
+  "prevIds": ["c4906fe2-d6d1-49b1-a224-2b0aa1e60494"],
   "ddl": [
     {
       "name": "flight_ingestion_runs",
@@ -2995,13 +2993,9 @@
       "table": "weather_sources"
     },
     {
-      "columns": [
-        "source_id"
-      ],
+      "columns": ["source_id"],
       "tableTo": "flight_sources",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3010,13 +3004,9 @@
       "table": "flight_ingestion_runs"
     },
     {
-      "columns": [
-        "source_id"
-      ],
+      "columns": ["source_id"],
       "tableTo": "flight_sources",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3025,15 +3015,9 @@
       "table": "flight_records"
     },
     {
-      "columns": [
-        "source_site_mapping_id",
-        "source_id"
-      ],
+      "columns": ["source_site_mapping_id", "source_id"],
       "tableTo": "source_site_mappings",
-      "columnsTo": [
-        "id",
-        "source_id"
-      ],
+      "columnsTo": ["id", "source_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": true,
@@ -3042,15 +3026,9 @@
       "table": "flight_records"
     },
     {
-      "columns": [
-        "created_by_ingestion_run_id",
-        "source_id"
-      ],
+      "columns": ["created_by_ingestion_run_id", "source_id"],
       "tableTo": "flight_ingestion_runs",
-      "columnsTo": [
-        "id",
-        "source_id"
-      ],
+      "columnsTo": ["id", "source_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": true,
@@ -3059,15 +3037,9 @@
       "table": "flight_records"
     },
     {
-      "columns": [
-        "last_validated_by_ingestion_run_id",
-        "source_id"
-      ],
+      "columns": ["last_validated_by_ingestion_run_id", "source_id"],
       "tableTo": "flight_ingestion_runs",
-      "columnsTo": [
-        "id",
-        "source_id"
-      ],
+      "columnsTo": ["id", "source_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": true,
@@ -3076,13 +3048,9 @@
       "table": "flight_records"
     },
     {
-      "columns": [
-        "source_id"
-      ],
+      "columns": ["source_id"],
       "tableTo": "flight_sources",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3091,13 +3059,9 @@
       "table": "source_site_mappings"
     },
     {
-      "columns": [
-        "site_id"
-      ],
+      "columns": ["site_id"],
       "tableTo": "sites",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3106,13 +3070,9 @@
       "table": "source_site_mappings"
     },
     {
-      "columns": [
-        "daily_feature_snapshot_id"
-      ],
+      "columns": ["daily_feature_snapshot_id"],
       "tableTo": "weather_daily_feature_snapshots",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3121,13 +3081,9 @@
       "table": "weather_daily_feature_profile_layers"
     },
     {
-      "columns": [
-        "daily_feature_snapshot_id"
-      ],
+      "columns": ["daily_feature_snapshot_id"],
       "tableTo": "weather_daily_feature_snapshots",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3136,13 +3092,9 @@
       "table": "weather_daily_feature_snapshot_inputs"
     },
     {
-      "columns": [
-        "weather_point_sample_id"
-      ],
+      "columns": ["weather_point_sample_id"],
       "tableTo": "weather_point_samples",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3151,13 +3103,9 @@
       "table": "weather_daily_feature_snapshot_inputs"
     },
     {
-      "columns": [
-        "ingestion_run_id"
-      ],
+      "columns": ["ingestion_run_id"],
       "tableTo": "weather_ingestion_runs",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3166,13 +3114,9 @@
       "table": "weather_daily_feature_snapshots"
     },
     {
-      "columns": [
-        "point_footprint_id"
-      ],
+      "columns": ["point_footprint_id"],
       "tableTo": "weather_sampling_footprints",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3181,13 +3125,9 @@
       "table": "weather_daily_feature_snapshots"
     },
     {
-      "columns": [
-        "neighbourhood_footprint_id"
-      ],
+      "columns": ["neighbourhood_footprint_id"],
       "tableTo": "weather_sampling_footprints",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3196,13 +3136,9 @@
       "table": "weather_daily_feature_snapshots"
     },
     {
-      "columns": [
-        "weather_point_sample_id"
-      ],
+      "columns": ["weather_point_sample_id"],
       "tableTo": "weather_point_samples",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3211,13 +3147,9 @@
       "table": "weather_field_provenance"
     },
     {
-      "columns": [
-        "point_convection_measurement_id"
-      ],
+      "columns": ["point_convection_measurement_id"],
       "tableTo": "weather_point_convection_measurements",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3226,13 +3158,9 @@
       "table": "weather_field_provenance"
     },
     {
-      "columns": [
-        "point_interval_measurement_id"
-      ],
+      "columns": ["point_interval_measurement_id"],
       "tableTo": "weather_point_interval_measurements",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3241,13 +3169,9 @@
       "table": "weather_field_provenance"
     },
     {
-      "columns": [
-        "point_profile_level_id"
-      ],
+      "columns": ["point_profile_level_id"],
       "tableTo": "weather_point_profile_levels",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3256,13 +3180,9 @@
       "table": "weather_field_provenance"
     },
     {
-      "columns": [
-        "daily_feature_snapshot_id"
-      ],
+      "columns": ["daily_feature_snapshot_id"],
       "tableTo": "weather_daily_feature_snapshots",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3271,13 +3191,9 @@
       "table": "weather_field_provenance"
     },
     {
-      "columns": [
-        "daily_feature_profile_layer_id"
-      ],
+      "columns": ["daily_feature_profile_layer_id"],
       "tableTo": "weather_daily_feature_profile_layers",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3286,13 +3202,9 @@
       "table": "weather_field_provenance"
     },
     {
-      "columns": [
-        "grid_id"
-      ],
+      "columns": ["grid_id"],
       "tableTo": "weather_grids",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3301,13 +3213,9 @@
       "table": "weather_grid_points"
     },
     {
-      "columns": [
-        "source_id"
-      ],
+      "columns": ["source_id"],
       "tableTo": "weather_sources",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3316,13 +3224,9 @@
       "table": "weather_grids"
     },
     {
-      "columns": [
-        "product_run_id"
-      ],
+      "columns": ["product_run_id"],
       "tableTo": "weather_product_runs",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3331,13 +3235,9 @@
       "table": "weather_ingestion_runs"
     },
     {
-      "columns": [
-        "weather_point_sample_id"
-      ],
+      "columns": ["weather_point_sample_id"],
       "tableTo": "weather_point_samples",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3346,13 +3246,9 @@
       "table": "weather_point_convection_measurements"
     },
     {
-      "columns": [
-        "weather_point_sample_id"
-      ],
+      "columns": ["weather_point_sample_id"],
       "tableTo": "weather_point_samples",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3361,13 +3257,9 @@
       "table": "weather_point_interval_measurements"
     },
     {
-      "columns": [
-        "weather_point_sample_id"
-      ],
+      "columns": ["weather_point_sample_id"],
       "tableTo": "weather_point_samples",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3376,13 +3268,9 @@
       "table": "weather_point_profile_levels"
     },
     {
-      "columns": [
-        "ingestion_run_id"
-      ],
+      "columns": ["ingestion_run_id"],
       "tableTo": "weather_ingestion_runs",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3391,13 +3279,9 @@
       "table": "weather_point_samples"
     },
     {
-      "columns": [
-        "product_valid_time_id"
-      ],
+      "columns": ["product_valid_time_id"],
       "tableTo": "weather_product_valid_times",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3406,13 +3290,9 @@
       "table": "weather_point_samples"
     },
     {
-      "columns": [
-        "point_footprint_id"
-      ],
+      "columns": ["point_footprint_id"],
       "tableTo": "weather_sampling_footprints",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3421,13 +3301,9 @@
       "table": "weather_point_samples"
     },
     {
-      "columns": [
-        "source_id"
-      ],
+      "columns": ["source_id"],
       "tableTo": "weather_sources",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3436,13 +3312,9 @@
       "table": "weather_product_runs"
     },
     {
-      "columns": [
-        "product_run_id"
-      ],
+      "columns": ["product_run_id"],
       "tableTo": "weather_product_runs",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3451,13 +3323,9 @@
       "table": "weather_product_valid_times"
     },
     {
-      "columns": [
-        "footprint_id"
-      ],
+      "columns": ["footprint_id"],
       "tableTo": "weather_sampling_footprints",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3466,13 +3334,9 @@
       "table": "weather_sampling_footprint_nodes"
     },
     {
-      "columns": [
-        "grid_point_id"
-      ],
+      "columns": ["grid_point_id"],
       "tableTo": "weather_grid_points",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3481,13 +3345,9 @@
       "table": "weather_sampling_footprint_nodes"
     },
     {
-      "columns": [
-        "site_id"
-      ],
+      "columns": ["site_id"],
       "tableTo": "weather_site_sampling_configs",
-      "columnsTo": [
-        "site_id"
-      ],
+      "columnsTo": ["site_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3496,13 +3356,9 @@
       "table": "weather_sampling_footprints"
     },
     {
-      "columns": [
-        "grid_id"
-      ],
+      "columns": ["grid_id"],
       "tableTo": "weather_grids",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3511,13 +3367,9 @@
       "table": "weather_sampling_footprints"
     },
     {
-      "columns": [
-        "site_id"
-      ],
+      "columns": ["site_id"],
       "tableTo": "sites",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3526,200 +3378,154 @@
       "table": "weather_site_sampling_configs"
     },
     {
-      "columns": [
-        "daily_feature_snapshot_id",
-        "weather_point_sample_id"
-      ],
+      "columns": ["daily_feature_snapshot_id", "weather_point_sample_id"],
       "nameExplicit": true,
       "name": "weather_daily_feature_snapshot_inputs_pk",
       "entityType": "pks",
       "table": "weather_daily_feature_snapshot_inputs"
     },
     {
-      "columns": [
-        "footprint_id",
-        "grid_point_id"
-      ],
+      "columns": ["footprint_id", "grid_point_id"],
       "nameExplicit": true,
       "name": "weather_sampling_footprint_nodes_pk",
       "entityType": "pks",
       "table": "weather_sampling_footprint_nodes"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "ingestion_runs_pk",
       "table": "flight_ingestion_runs",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "flight_records_pk",
       "table": "flight_records",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "flight_sources_pk",
       "table": "flight_sources",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "sites_pk",
       "table": "sites",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "source_site_mappings_pk",
       "table": "source_site_mappings",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "weather_daily_feature_profile_layers_pk",
       "table": "weather_daily_feature_profile_layers",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "weather_feature_snapshots_pk",
       "table": "weather_daily_feature_snapshots",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "weather_field_provenance_pk",
       "table": "weather_field_provenance",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "weather_grid_points_pk",
       "table": "weather_grid_points",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "weather_grids_pk",
       "table": "weather_grids",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "weather_ingestion_runs_pk",
       "table": "weather_ingestion_runs",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "weather_convection_measurements_pk",
       "table": "weather_point_convection_measurements",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "weather_interval_measurements_pk",
       "table": "weather_point_interval_measurements",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "weather_profile_levels_pk",
       "table": "weather_point_profile_levels",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "weather_samples_pk",
       "table": "weather_point_samples",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "weather_product_runs_pk",
       "table": "weather_product_runs",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "weather_product_valid_times_pk",
       "table": "weather_product_valid_times",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "weather_sampling_footprints_pk",
       "table": "weather_sampling_footprints",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "site_id"
-      ],
+      "columns": ["site_id"],
       "nameExplicit": false,
       "name": "weather_site_sampling_configs_pk",
       "table": "weather_site_sampling_configs",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "weather_sources_pk",
       "table": "weather_sources",
@@ -4514,109 +4320,77 @@
       "table": "weather_site_sampling_configs"
     },
     {
-      "columns": [
-        "run_key"
-      ],
+      "columns": ["run_key"],
       "nameExplicit": true,
       "name": "ingestion_runs_run_key_unique",
       "entityType": "uniques",
       "table": "flight_ingestion_runs"
     },
     {
-      "columns": [
-        "id",
-        "source_id"
-      ],
+      "columns": ["id", "source_id"],
       "nameExplicit": true,
       "name": "ingestion_runs_id_source_id_parent_key_unique",
       "entityType": "uniques",
       "table": "flight_ingestion_runs"
     },
     {
-      "columns": [
-        "source_id",
-        "source_flight_id"
-      ],
+      "columns": ["source_id", "source_flight_id"],
       "nameExplicit": true,
       "name": "flight_records_source_flight_unique",
       "entityType": "uniques",
       "table": "flight_records"
     },
     {
-      "columns": [
-        "code"
-      ],
+      "columns": ["code"],
       "nameExplicit": true,
       "name": "flight_sources_code_unique",
       "entityType": "uniques",
       "table": "flight_sources"
     },
     {
-      "columns": [
-        "slug"
-      ],
+      "columns": ["slug"],
       "nameExplicit": true,
       "name": "sites_slug_unique",
       "entityType": "uniques",
       "table": "sites"
     },
     {
-      "columns": [
-        "id",
-        "source_id"
-      ],
+      "columns": ["id", "source_id"],
       "nameExplicit": true,
       "name": "source_site_mappings_id_source_id_parent_key_unique",
       "entityType": "uniques",
       "table": "source_site_mappings"
     },
     {
-      "columns": [
-        "daily_feature_snapshot_id",
-        "layer_base_agl_m",
-        "layer_top_agl_m"
-      ],
+      "columns": ["daily_feature_snapshot_id", "layer_base_agl_m", "layer_top_agl_m"],
       "nameExplicit": true,
       "name": "weather_daily_feature_profile_layers_identity_unique",
       "entityType": "uniques",
       "table": "weather_daily_feature_profile_layers"
     },
     {
-      "columns": [
-        "ingestion_run_id",
-        "point_footprint_id",
-        "feature_contract_version"
-      ],
+      "columns": ["ingestion_run_id", "point_footprint_id", "feature_contract_version"],
       "nameExplicit": true,
       "name": "weather_daily_feature_snapshots_identity_unique",
       "entityType": "uniques",
       "table": "weather_daily_feature_snapshots"
     },
     {
-      "columns": [
-        "grid_id",
-        "latitude_deg",
-        "longitude_deg"
-      ],
+      "columns": ["grid_id", "latitude_deg", "longitude_deg"],
       "nameExplicit": true,
       "name": "weather_grid_points_grid_coordinate_unique",
       "entityType": "uniques",
       "table": "weather_grid_points"
     },
     {
-      "columns": [
-        "source_id",
-        "grid_key"
-      ],
+      "columns": ["source_id", "grid_key"],
       "nameExplicit": true,
       "name": "weather_grids_source_key_unique",
       "entityType": "uniques",
       "table": "weather_grids"
     },
     {
-      "columns": [
-        "run_key"
-      ],
+      "columns": ["run_key"],
       "nameExplicit": true,
       "name": "weather_ingestion_runs_run_key_unique",
       "entityType": "uniques",
@@ -4637,50 +4411,35 @@
       "table": "weather_point_interval_measurements"
     },
     {
-      "columns": [
-        "weather_point_sample_id",
-        "pressure_pa"
-      ],
+      "columns": ["weather_point_sample_id", "pressure_pa"],
       "nameExplicit": true,
       "name": "weather_profile_levels_sample_pressure_unique",
       "entityType": "uniques",
       "table": "weather_point_profile_levels"
     },
     {
-      "columns": [
-        "ingestion_run_id",
-        "point_footprint_id",
-        "product_valid_time_id"
-      ],
+      "columns": ["ingestion_run_id", "point_footprint_id", "product_valid_time_id"],
       "nameExplicit": true,
       "name": "weather_point_samples_run_footprint_valid_time_unique",
       "entityType": "uniques",
       "table": "weather_point_samples"
     },
     {
-      "columns": [
-        "source_id",
-        "source_product_key"
-      ],
+      "columns": ["source_id", "source_product_key"],
       "nameExplicit": true,
       "name": "weather_product_runs_source_product_unique",
       "entityType": "uniques",
       "table": "weather_product_runs"
     },
     {
-      "columns": [
-        "product_run_id",
-        "valid_at_utc"
-      ],
+      "columns": ["product_run_id", "valid_at_utc"],
       "nameExplicit": true,
       "name": "weather_product_valid_times_product_valid_unique",
       "entityType": "uniques",
       "table": "weather_product_valid_times"
     },
     {
-      "columns": [
-        "code"
-      ],
+      "columns": ["code"],
       "nameExplicit": true,
       "name": "weather_sources_code_unique",
       "entityType": "uniques",
