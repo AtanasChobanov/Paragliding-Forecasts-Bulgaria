@@ -172,14 +172,18 @@ def _manifest_matches(
     stage: str,
     producer_version: str,
     upstream: ArtifactReference,
+    allow_additional_inputs: bool = False,
 ) -> bool:
     if reference is None:
         return False
     manifest = context.store.read_stage_manifest(reference)
+    inputs_match = (
+        manifest.inputs[:1] == (upstream,)
+        if allow_additional_inputs
+        else manifest.inputs == (upstream,)
+    )
     return (
-        manifest.stage == stage
-        and manifest.producer_version == producer_version
-        and manifest.inputs == (upstream,)
+        manifest.stage == stage and manifest.producer_version == producer_version and inputs_match
     )
 
 
@@ -261,6 +265,7 @@ def parse_and_normalize(
         stage="normalizer",
         producer_version=GFS_NORMALIZER_VERSION,
         upstream=parser_reference,
+        allow_additional_inputs=True,
     ):
         normalizer_disposition = "reused"
         assert normalizer_reference is not None

@@ -113,6 +113,13 @@ def test_parse_and_normalize_carries_each_appended_snapshot(monkeypatch, tmp_pat
 def test_parse_and_normalize_reuses_effective_current_boundaries(monkeypatch, tmp_path) -> None:
     raw = _reference("raw")
     parsed = _reference("parsed")
+    parser_matrix = ArtifactReference(
+        artifact_key="compact-native-values",
+        relative_path=(f"data/interim/weather/{RUN_KEY}/parser/compact-native-values.npy"),
+        sha256="d" * 64,
+        byte_count=1,
+        media_type="application/x-npy",
+    )
     normalized = _reference("normalized")
     snapshot = _Snapshot(
         {
@@ -130,7 +137,7 @@ def test_parse_and_normalize_reuses_effective_current_boundaries(monkeypatch, tm
         return SimpleNamespace(
             stage="normalizer",
             producer_version=services.GFS_NORMALIZER_VERSION,
-            inputs=(parsed,),
+            inputs=(parsed, parser_matrix),
         )
 
     context = SimpleNamespace(
