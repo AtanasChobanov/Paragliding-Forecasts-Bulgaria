@@ -434,6 +434,36 @@ report includes command-local files/bytes hashed, cache hits, manifests parsed,
 boundaries verified, just-written registrations, and hashing time; these
 diagnostics are not persisted in SQLite.
 
+### Verified T-018 bounded GFS acceptance
+
+On 2026-09-14, the owner-authorized bounded GFS run for local date
+`2026-09-14`, cycle `2026-09-14T00:00:00Z`, and
+`operational_forecast` completed under `--maximum-total-mib 1109`:
+
+- run key: `0200117a-2638-4e98-ac42-534db32315dd`;
+- raw boundary: `275fda76fb498ed3758c017fd337cb488876abb337a19c9617a709841b6c9047`;
+- 1,163,650,418 retained raw bytes and 25.32 MiB of interim artifacts;
+- parser v6, normalizer v8, spatial v6, validator v7, feature builder v4,
+  and persistence v3 completed successfully;
+- the compact artifacts contain an 8 x 24 crop for 77 required nodes; no
+  parser or normalizer global numeric array was retained;
+- the primary SQLite result contains 1 ingestion run, 77 point samples, 308
+  interval measurements, 759 profile levels, 154 convection measurements, 7
+  daily snapshots, 14 profile layers, 77 snapshot inputs, and 9,554 field
+  provenance rows.
+
+Collection completed in 15 minutes 8 seconds and the complete fresh flow in
+15 minutes 45 seconds. Its command-scoped verifier processed 597 files and
+1,163,650,418 bytes in 1.225 seconds, with 11,916 cache hits.
+
+The same-database `weather-ingest resume` returned `revalidated_no_op` with
+unchanged counts. A separately migrated seeded SQLite database restored the
+same graph through offline `resume`, returning `inserted` with the same counts
+and no network access. Finally, `weather-artifacts audit --scope effective`
+verified all seven effective boundaries from the eight-event ledger (619 files,
+1,190,198,723 bytes, and seven parsed manifests). The retained raw data is not
+committed; this evidence is an operational record, not a bundled fixture.
+
 ### Reviewed Copernicus site elevation command
 
 `copernicus-elevations` repeatably samples Copernicus DEM GLO-30 for every

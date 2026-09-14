@@ -18,10 +18,10 @@ Keep durable decisions in `docs/decisions.md`, ticket lifecycle in
 | Field          | Value                                                                                                                                                                                                                 |
 | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Branch         | `feature/T-018-weather-ingestion`                                                                                                                                                                                     |
-| Ticket         | `T-018` remains **In Progress**. S01–S08 are implemented; S09 is deferred, not complete; S10 is planned and unimplemented.                                                                                            |
-| Next work      | Execute S10 in order: documentation reconciliation, artifact-verification hardening, compact GFS derived artifacts, shared fresh/offline-resume orchestration, then one owner-authorized bounded live GFS acceptance. |
-| Fresh evidence | No successful fresh current-catalogue ingestion exists. The retained run is stale under DEC-052 and cannot close T-018.                                                                                               |
-| Local DB       | SQLite is selected by `DATABASE_URL`. The migration `20260911202938_t018_persistence_contract` is un-applied on the configured local database; do not apply it or run persistence there without owner review.         |
+| Ticket         | `T-018` is **Done**. S01–S08 and S10 are complete; S09/ERA5 remains separately deferred to T-038.                                                                                                                  |
+| Next work      | Do not extend weather ingestion implicitly. Future ERA5 work starts only under T-038 when the recorded decision gate is met.                                                                                         |
+| Fresh evidence | Bounded current-catalogue GFS fresh, same-DB offline no-op, second-DB offline restoration, and effective artifact audit all passed on 2026-09-14.                                                                    |
+| Local DB       | The primary and temporary restoration SQLite databases were migrated by the owner for acceptance. They are local ignored artifacts and must not be committed.                                                         |
 | User work      | The deletions of the old S07/S08 plan files are user-owned. Do not restore, stage, or commit them without explicit instruction.                                                                                       |
 
 ## Active T-018 boundary
@@ -56,25 +56,33 @@ same-example forecast substitute. Keep its future-compatible source registry,
 schema capacity, policy family, provenance rules, and nullable CIN/cloud-base
 destinations; do not implement a placeholder collector or CDS credential path.
 
-## S10 locked implementation direction
+## Completed S10 operational evidence
 
-The full executable plan is
-`docs/T-018-S10-implementation-plan.md`. Its required order is:
+The executable plan is retained at `docs/T-018-S10-implementation-plan.md`.
+Its required GFS-only implementation, compact artifact migration, and shared
+fresh/offline-resume orchestration are complete.
 
-1. Reconcile `decisions.md`, `tasks.md`, this handoff, architecture, and README
-   claims to reflect the ERA5 deferral recorded by DEC-053.
-2. Replace deep evidence verification during ledger reads with metadata-only
-   `RunStateSnapshot` loading plus explicit effective-lineage verification.
-3. Add one command-scoped verification session with conservative identity/stat
-   invalidation; retain complete SHA-256 for every trusted effective file and
-   explicit all-history audit capability.
-4. Replace persisted global parser/normalizer arrays with lossless compact GFS
-   crops, then update sampling/orchestration to use them.
-5. Run one separately authorized bounded GFS fresh operation, offline replay,
-   and restoration into a newly migrated database; report real evidence only.
+The owner-authorized live acceptance used run
+`0200117a-2638-4e98-ac42-534db32315dd` for local date `2026-09-14`, GFS cycle
+`2026-09-14T00:00:00Z`, purpose `operational_forecast`, and reviewed cap
+`1109 MiB`. The fresh result inserted the graph into the primary SQLite
+database. It retained 1,163,650,418 raw bytes, 25.32 MiB of interim artifacts,
+an 8 x 24 compact crop covering 77 required nodes, and no global parser or
+normalizer arrays. Collection took 15 minutes 8 seconds; fresh end-to-end took
+15 minutes 45 seconds. Its verifier processed 597 files / 1,163,650,418 bytes
+in 1.225 seconds with 11,916 cache hits.
 
-Integration-test work is intentionally absent from the S10 plan and must not
-be added or implied until the owner explicitly requests it.
+The same-database resume returned `revalidated_no_op` with unchanged counts.
+Offline resume into a separately migrated seeded SQLite database returned
+`inserted` with the same 1 run, 77 samples, 308 intervals, 759 profile levels,
+154 convection measurements, 7 daily snapshots, 14 profile layers, 77 snapshot
+inputs, and 9,554 provenance rows. Both resumes reported no network access and
+reused all derived boundaries.
+
+`weather-artifacts audit --scope effective` passed: it verified the eight-event
+ledger's seven effective boundaries, hashing 619 files / 1,190,198,723 bytes
+and parsing seven manifests. Full-history audit remains optional maintenance.
+The raw and SQLite acceptance artifacts are local-only and must not be committed.
 
 ## Why S10 is necessary
 
