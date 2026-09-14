@@ -95,7 +95,7 @@ def test_acquisition_identity_changes_with_compact_configuration() -> None:
         "catalogue_version": "catalogue/1",
         "catalogue_sha256": "d" * 64,
         "adapter_request_schema_version": 2,
-        "expected_artifact_keys": ["raw"],
+        "expected_artifact_keys": ("raw",),
     }
     first = SimpleNamespace(
         **common,

@@ -192,7 +192,7 @@ def _acquisition_identity(plan: RequestPlan) -> str:
                 "catalogue_sha256": plan.catalogue_sha256,
                 "adapter_request_schema_version": plan.adapter_request_schema_version,
                 "adapter_request": plan.adapter_request,
-                "expected_artifact_keys": plan.expected_artifact_keys,
+                "expected_artifact_keys": list(plan.expected_artifact_keys),
             }
         )
     )
