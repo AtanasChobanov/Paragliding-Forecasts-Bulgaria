@@ -128,6 +128,14 @@ The source-neutral weather schema is a hybrid relational design:
   quality state for each stored field, including `real`, `derived`, `missing`,
   `sentinel_missing`, and `invalid_payload`.
 
+The executable T-018 path currently collects GFS only. The schema, catalogue,
+source registry, validation-policy family, and provenance contracts retain
+future ERA5 compatibility, but no ERA5 CDS collector or end-to-end command is
+implemented. DEC-053 defers that adapter to T-038 until joined-data or model
+evaluation demonstrates a concrete need. A future ERA5 path remains a separate
+`reanalysis` cohort and can never be a GFS fallback row or same-example
+forecast substitute.
+
 Raw and interim weather artifacts remain filesystem evidence. The database
 stores the ingestion manifest path and SHA-256 rather than duplicating every
 artifact in a `weather_artifacts` table. Sounding storage and collection remain

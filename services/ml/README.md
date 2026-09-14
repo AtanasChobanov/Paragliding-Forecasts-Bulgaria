@@ -255,7 +255,9 @@ hash.
 uv run --project services/ml weather-validate --run-key <uuid>
 ```
 
-It validates GFS and ERA5 only. GFS requires forecast lead time and the
+The implemented command validates GFS evidence. Its source-neutral contracts
+also retain the future ERA5 policy branch, but no ERA5 collector or end-to-end
+command exists. GFS requires forecast lead time and the
 1000/975/950/925/900/850/800/750/700/650/600/550/500 hPa profile band; ERA5 requires no
 forecast lead and the same policy profile set. The 875 hPa level is deliberately excluded. It checks
 source/kind, raw payload role/media type and GFS magic,
@@ -340,6 +342,12 @@ The policy bytes hash is part of the immutable persistence input.
 the read-through expected-graph capture so it recognizes the internally
 produced `INSERT` shape. It creates a distinct retry fingerprint; no weather
 collection, feature rebuild, or SQLite migration is required for that repair.
+
+Only GFS currently has a producer and runnable end-to-end ingestion command.
+The ERA5 registry, policy-family mapping, validation branch, and persistence
+capacity are future-compatible contracts, not an implemented CDS collection
+path. DEC-053 defers that adapter to T-038 until model or evaluation evidence
+demonstrates a concrete need.
 
 The adapter
 uses one `BEGIN IMMEDIATE` transaction, records field-level missing/unsupported

@@ -44,7 +44,7 @@ consequences. Temporary progress and Git state belong in
 | DEC-029     | Gate one-command XCContest persistence on mapping review                        | Accepted   | 2026-08-11 |
 | DEC-030     | Reconcile repeated XCContest source flights without silent overwrite            | Accepted   | 2026-08-12 |
 | DEC-031     | Lock weather-source roles and canonical feature semantics                       | Accepted   | 2026-08-16 |
-| DEC-032     | Implement GFS and ERA5 weather ingestion in T-018                               | Accepted   | 2026-08-17 |
+| DEC-032     | Implement GFS and ERA5 weather ingestion in T-018                               | Superseded | 2026-08-17 |
 | DEC-033     | Finalize the normalized T-018 weather persistence schema                        | Accepted   | 2026-08-20 |
 | DEC-034     | Use one packaged atmospheric catalogue and durable stage protocol               | Accepted   | 2026-08-21 |
 | DEC-035     | Pin GFS GRIB parser identity and preserve only canonical weather quality states | Accepted   | 2026-08-21 |
@@ -60,11 +60,12 @@ consequences. Temporary progress and Git state belong in
 | DEC-045     | Normalize GFS interval products to exact adjacent UTC windows                   | Accepted   | 2026-09-10 |
 | DEC-046     | Make weather persistence immutable, atomic, and artifact-replayable             | Accepted   | 2026-09-10 |
 | DEC-047     | Supply weather usage authority through an explicit local policy file            | Accepted   | 2026-09-11 |
-| DEC-048     | Resolve feature inputs by exact centralized canonical selectors                  | Accepted   | 2026-09-12 |
-| DEC-049     | Preserve immutable weather replay across catalogue revisions                     | Superseded | 2026-09-12 |
+| DEC-048     | Resolve feature inputs by exact centralized canonical selectors                 | Accepted   | 2026-09-12 |
+| DEC-049     | Preserve immutable weather replay across catalogue revisions                    | Superseded | 2026-09-12 |
 | DEC-050     | Canonicalize component wind speed with math.hypot                               | Accepted   | 2026-09-13 |
 | DEC-051     | Repair expected-graph capture SQL recognition and version persistence /3        | Accepted   | 2026-09-13 |
-| DEC-052     | Require exact catalogue identity at every weather stage boundary                 | Accepted   | 2026-09-13 |
+| DEC-052     | Require exact catalogue identity at every weather stage boundary                | Accepted   | 2026-09-13 |
+| DEC-053     | Defer ERA5 collection until model evaluation demonstrates a need                | Accepted   | 2026-09-14 |
 
 ## Individual decisions
 
@@ -1250,7 +1251,7 @@ provider licences, attribution, retention, and direct-source/archive operations.
 
 ### DEC-032 - Implement GFS and ERA5 weather ingestion in T-018
 
-**Status:** Accepted
+**Status:** Superseded by DEC-053 for T-018 timing and delivery ownership
 
 **Date:** 2026-08-17
 
@@ -1834,8 +1835,9 @@ Normalize both as direct `specific_humidity_kg_per_kg` evidence, retaining the
 2 m `dimension` as `2m_above_ground` and profile `pressure_pa`; neither form is
 derived from temperature, relative humidity, or pressure. Require the direct 2
 m field and the profile field in the source-aware policy for both source
-contracts. The S09 ERA5 adapter remains responsible for providing the same
-canonical inputs through its separately specified source-normalization method.
+contracts. A future T-038 ERA5 adapter remains responsible for providing the
+same canonical inputs through its separately specified source-normalization
+method if the DEC-053 evidence gate is met.
 
 Collect GFS `SHTFL` and `LHTFL` at surface only for lead hours at least one.
 Their GRIB statistic must be an interval average; retain their verified
@@ -2056,6 +2058,7 @@ run.
 [`persistence.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/persistence.py),
 [`persistence_cli.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/persistence_cli.py),
 and [`handoff.md`](handoff.md).
+
 ### DEC-048 - Resolve feature inputs by exact centralized canonical selectors
 
 **Status:** Accepted
@@ -2181,6 +2184,7 @@ continues to abort the SQLite transaction.
 **Related files:** [`wind.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/wind.py),
 [`spatial.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/spatial.py),
 and [`builder.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/features/builder.py).
+
 ### DEC-051 - Repair expected-graph capture SQL recognition and version persistence /3
 
 **Status:** Accepted
@@ -2211,14 +2215,68 @@ persistence integration remains separately tracked in S08.
 **Related files:** [`persistence.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/persistence.py),
 [`persistence_models.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/persistence_models.py),
 and [`test_expected_graph_capture.py`](../services/ml/tests/ingestion/weather/test_expected_graph_capture.py).
+
+### DEC-053 - Defer ERA5 collection until model evaluation demonstrates a need
+
+**Status:** Accepted
+
+**Date:** 2026-09-14
+
+**Supersedes:** DEC-032 only for the timing and delivery ownership of ERA5
+collection. DEC-031's source roles and the source-neutral contracts accepted by
+DEC-032 remain in force.
+
+**Context:** T-018 has implemented a source-neutral SQLite schema and a complete
+GFS fresh/offline-resume path through immutable artifacts, normalization,
+sampling, validation, features, and persistence. The Project Brief requires a
+working historical forecast or reanalysis pipeline and treats reanalysis as a
+practical fallback when exact historical forecasts are unavailable; it does not
+require both after a usable exact GFS archive is established. Implementing a CDS
+collector now would add credentials, transport, storage, and operational scope
+without evidence that the initial joined dataset or model needs paired
+forecast/reanalysis examples.
+
+**Decision:** T-018 finishes with the source-neutral weather schema and the GFS
+fresh/offline-resume pipeline through SQLite. Defer the ERA5 CDS collector and
+reanalysis adapter to T-038. Start T-038 only when joined GFS data, a baseline
+model, calibration, or backtesting demonstrates a concrete need for
+forecast-to-reanalysis bias pairs, climatology, weak cloud-base labels,
+confidence calibration, or fine tuning.
+
+ERA5 remains the accepted long-history reanalysis baseline from DEC-031. It is
+a separate `reanalysis` cohort and may never be relabelled as a GFS row, used as
+a live fallback, or substituted into the same forecast example. Preserve the
+existing provider-neutral catalogue and artifact contracts, registered
+`copernicus_era5` source, usage-policy family, provenance rules, nullable
+CIN/cloud-base destinations, and `era5_0p25_global` schema allowance as
+future-compatible capacity. Those contracts are not evidence that collection
+has been exercised.
+
+S10 adds no inert ERA5 collector, fake success path, placeholder row, CDS
+credential requirement, or ERA5 command. Any later adapter must retain its own
+reference/step/statistic provenance and applicable Copernicus/ECMWF permission
+and attribution evidence.
+
+**Consequences:** The former T-018/S09 is deferred rather than completed. T-018
+may complete after its remaining GFS hardening and bounded live acceptance gates
+pass. ERA5 remains visible as T-038, with a model/evaluation evidence gate,
+instead of being hidden unfinished T-018 work. Forecast and reanalysis storage
+remain distinct and no schema contraction or source-registry removal is
+authorized.
+
+**Related files:** [`T-018-S10-implementation-plan.md`](T-018-S10-implementation-plan.md),
+[`tasks.md`](tasks.md), [`architecture.md`](architecture.md),
+[`../services/ml/README.md`](../services/ml/README.md), and
+[`handoff.md`](handoff.md).
+
 ## Open decisions
 
-| Question                                                                                                                  | Options / constraints                                                                                                                                                                                                             | Resolve by                                                               |
-| ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| Which task owns the persisted prediction schema and SQLite forecast adapter?                                              | The backlog has flight and weather schema tasks but no explicit owner for storing T-022-T-024 outputs and replacing the T-002 mock adapter. Public units/status/provenance must be mapped deliberately.                           | Backlog planning before real predictions are connected to the API.       |
-| What are the final coordinates, aliases, and catchment radii for each site?                                               | Current map points are provisional; Pastrina and the Dobrich regional model need particular confirmation.                                                                                                                         | T-009.                                                                   |
-| What retention, attribution, licensing, and rate limits apply beyond the current XCContest browser workflow?              | T-013 has a project-owner-confirmed ordinary low-volume UI workflow; do not extend it to bulk/commercial use or SkyNomad without explicit terms.                                                                                  | Before broader collection or product use.                                |
-| What final production attribution, retention, and archive-operation wording is required for the selected weather sources? | T-018 uses direct NOAA GFS and CDS ERA5. Preserve source/permission evidence for both and the applicable Copernicus/ECMWF attribution for ERA5; confirm final product wording and retention operations before commercial release. | Before a commercial release.                                             |
-| Which first alert channel should be implemented?                                                                          | Dashboard watchlist, email, Telegram, or another agreed channel; alerts require at least one-day lead time and deduplication.                                                                                                     | T-027/T-028.                                                             |
-| What deployment/distribution model is required beyond local development?                                                  | The MVP is local-first; cloud/distributed infrastructure needs a demonstrated requirement.                                                                                                                                        | No task assigned; decide when deployment becomes an accepted scope item. |
-| What license should the repository use?                                                                                   | No open-source license is currently selected.                                                                                                                                                                                     | Repository owner decision; no task assigned.                             |
+| Question                                                                                                                  | Options / constraints                                                                                                                                                                                                                                              | Resolve by                                                               |
+| ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| Which task owns the persisted prediction schema and SQLite forecast adapter?                                              | The backlog has flight and weather schema tasks but no explicit owner for storing T-022-T-024 outputs and replacing the T-002 mock adapter. Public units/status/provenance must be mapped deliberately.                                                            | Backlog planning before real predictions are connected to the API.       |
+| What are the final coordinates, aliases, and catchment radii for each site?                                               | Current map points are provisional; Pastrina and the Dobrich regional model need particular confirmation.                                                                                                                                                          | T-009.                                                                   |
+| What retention, attribution, licensing, and rate limits apply beyond the current XCContest browser workflow?              | T-013 has a project-owner-confirmed ordinary low-volume UI workflow; do not extend it to bulk/commercial use or SkyNomad without explicit terms.                                                                                                                   | Before broader collection or product use.                                |
+| What final production attribution, retention, and archive-operation wording is required for the selected weather sources? | T-018 uses direct NOAA GFS. T-038 may add CDS ERA5 only after its evidence gate; preserve source/permission evidence and the applicable Copernicus/ECMWF attribution if it does. Confirm final product wording and retention operations before commercial release. | Before a commercial release.                                             |
+| Which first alert channel should be implemented?                                                                          | Dashboard watchlist, email, Telegram, or another agreed channel; alerts require at least one-day lead time and deduplication.                                                                                                                                      | T-027/T-028.                                                             |
+| What deployment/distribution model is required beyond local development?                                                  | The MVP is local-first; cloud/distributed infrastructure needs a demonstrated requirement.                                                                                                                                                                         | No task assigned; decide when deployment becomes an accepted scope item. |
+| What license should the repository use?                                                                                   | No open-source license is currently selected.                                                                                                                                                                                                                      | Repository owner decision; no task assigned.                             |
