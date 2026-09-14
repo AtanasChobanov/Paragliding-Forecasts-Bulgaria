@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
+from ...storage.environment import file_environment
+from ...storage.sqlite import configured_database_url
 from ..atmosphere.contracts import ArtifactReference
-from ..weather.artifacts import WeatherArtifactStore
+from ..weather.artifacts import ArtifactError, WeatherArtifactStore
+from ..weather.sites import SiteSamplingConfigError
 from ..weather.state import RunStateLedger, StateError
 from .normalizer import GFS_NORMALIZER_VERSION, normalize
 from .parser import GFS_PARSER_VERSION, GfsParserError, parse, raw_manifest_reference
@@ -23,6 +27,7 @@ def _utc_now() -> str:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="gfs-parse")
     parser.add_argument("--run-key", required=True, help="Existing S03 GFS run UUID.")
+    parser.add_argument("--database-url", metavar="DATABASE_URL")
     parser.add_argument("--project-root", type=Path, default=Path.cwd())
     return parser
 
@@ -56,8 +61,13 @@ def _superseded_sequence(ledger: RunStateLedger, stage: str) -> int | None:
 
 def main(arguments: Sequence[str] | None = None) -> int:
     namespace = build_parser().parse_args(arguments)
+    project_root = namespace.project_root.resolve()
+    file_values = file_environment(project_root / ".env", {"DATABASE_URL"})
+    database_url = (
+        namespace.database_url or os.environ.get("DATABASE_URL") or file_values.get("DATABASE_URL")
+    )
     try:
-        store = WeatherArtifactStore(namespace.run_key, project_root=namespace.project_root)
+        store = WeatherArtifactStore(namespace.run_key, project_root=project_root)
         ledger = RunStateLedger(store)
         raw_evidence = _complete_evidence(ledger, "raw_complete")
         if raw_evidence is None or raw_evidence != raw_manifest_reference(store):
@@ -70,7 +80,12 @@ def main(arguments: Sequence[str] | None = None) -> int:
             upstream=raw_evidence,
         ):
             occurred_at_utc = _utc_now()
-            parser_manifest = parse(store, occurred_at_utc=occurred_at_utc)
+            parser_manifest = parse(
+                store,
+                database_url=configured_database_url(database_url),
+                occurred_at_utc=occurred_at_utc,
+                project_root=project_root,
+            )
             ledger.append(
                 invocation_mode="resume",
                 stage="parsed",
@@ -98,7 +113,14 @@ def main(arguments: Sequence[str] | None = None) -> int:
                 supersedes_sequence=_superseded_sequence(ledger, "normalized"),
                 detail="canonical GFS grid normalization",
             )
-    except (GfsParserError, StateError, OSError, ValueError) as error:
+    except (
+        ArtifactError,
+        GfsParserError,
+        OSError,
+        SiteSamplingConfigError,
+        StateError,
+        ValueError,
+    ) as error:
         print(f"GFS parser failed: {error}", file=sys.stderr)
         return 1
     print(
@@ -108,6 +130,7 @@ def main(arguments: Sequence[str] | None = None) -> int:
                 "parser_manifest": parser_manifest.relative_path,
                 "normalizer_manifest": normalizer_manifest.relative_path,
                 "network_access": False,
+                "database_access": "read_only",
             },
             indent=2,
         )

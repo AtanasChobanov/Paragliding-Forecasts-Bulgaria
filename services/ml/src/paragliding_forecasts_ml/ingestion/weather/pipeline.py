@@ -125,7 +125,14 @@ def resume_run(
 
     parser = _run_cli_stage(
         gfs_parse_cli,
-        ["--run-key", run_key, "--project-root", str(root)],
+        [
+            "--run-key",
+            run_key,
+            "--database-url",
+            resolved_url,
+            "--project-root",
+            str(root),
+        ],
         "Offline GFS parse/normalize",
     )
     sampling = _run_cli_stage(

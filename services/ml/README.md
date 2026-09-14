@@ -167,7 +167,7 @@ complete, hash-verified S03 run and never contacts NOAA or recalculates selector
 provenance:
 
 ```powershell
-uv run --project services/ml gfs-parse --run-key <uuid>
+uv run --project services/ml gfs-parse --run-key <uuid> --database-url file:./data/local/paragliding.db
 ```
 
 The parser pins ecCodes `2.47.0` and the observed NOAA `kwbc` GRIB2 table profile
@@ -176,8 +176,18 @@ parameter identity, level, run/valid time, step range, statistic and grid
 metadata before values can cross the raw boundary. `HPBL` is identified through
 its numeric GRIB identity, not its ecCodes `shortName`.
 
-Parser output retains immutable native value arrays and missing masks. The
-normalizer writes separate canonical surface/convection/interval grains and
+Parser v6 reads the migrated site rows from SQLite in read-only mode and combines
+them with the packaged sampling policy. It still validates every complete global
+message in transient memory, but persists only one deterministic compact
+little-endian float64 matrix, one little-bit-order packed compact missing mask,
+and `compact-native-grid-batch.json`. The descriptor records the verified native
+geometry, global crop bounds, all required global nodes, point/radius footprints,
+site and policy hashes, and the resulting selection fingerprint. For the current
+reviewed configuration this is a 77-node union inside an `8 x 24` crop; those
+dimensions are regression evidence rather than production constants. Legacy v5
+full-grid contracts remain readable and immutable.
+
+The normalizer writes separate canonical surface/convection/interval grains and
 pressure-level grains for S05. It exposes explicit regular-latlon geometry,
 verified scan order and static GFS orography, and keeps artifacts unique across
 multiple valid times. It retains native `u`/`v`, derives wind speed and
