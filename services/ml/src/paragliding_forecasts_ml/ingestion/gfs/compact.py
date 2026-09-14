@@ -203,6 +203,47 @@ def local_to_global(
     )
 
 
+def compact_node_value(
+    values: np.ndarray,
+    descriptor: CompactGridDescriptor,
+    node: GridNodeIndex,
+) -> float:
+    expected_shape = (descriptor.compact_row_count, descriptor.compact_column_count)
+    if values.shape != expected_shape:
+        raise CompactGridError("Compact value slice does not match the descriptor shape.")
+    if node not in descriptor.required_nodes:
+        raise CompactGridError("Requested global node is absent from the selected footprint.")
+    local = global_to_local(
+        node,
+        crop_min_row=descriptor.crop_min_row,
+        crop_min_column=descriptor.crop_min_column,
+        crop_row_count=descriptor.compact_row_count,
+        crop_column_count=descriptor.compact_column_count,
+    )
+    return float(values[local.row_index, local.column_index])
+
+
+def strict_compact_bilinear_value(
+    values: np.ndarray,
+    descriptor: CompactGridDescriptor,
+    footprint: SamplingFootprint,
+) -> float | None:
+    weighted = 0.0
+    for node in footprint.nodes:
+        weight = node.interpolation_weight
+        if weight is None:
+            raise CompactGridError("Point footprint node omits interpolation weight.")
+        value = compact_node_value(
+            values,
+            descriptor,
+            GridNodeIndex(row_index=node.row_index, column_index=node.column_index),
+        )
+        if not math.isfinite(value):
+            return None
+        weighted += weight * value
+    return weighted
+
+
 def _descriptor_payload(descriptor: CompactGridDescriptor) -> dict[str, object]:
     payload = descriptor.model_dump(mode="json")
     payload.pop("selection_sha256", None)

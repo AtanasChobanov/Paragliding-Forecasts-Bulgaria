@@ -12,8 +12,16 @@ import numpy as np
 from pydantic import Field
 
 from ..atmosphere.contracts import ArtifactReference, AtmosphericContract, StageManifest
+from ..gfs.compact import (
+    GridNodeIndex,
+    MatrixSliceReference,
+    compact_node_value,
+    load_matrix_slice,
+    strict_compact_bilinear_value,
+)
 from ..gfs.normalizer import (
     GfsCanonicalGridMessage,
+    GfsCompactCanonicalGridBatch,
     load_canonical_batch,
 )
 from ..gfs.parser import load_array
@@ -37,7 +45,7 @@ from .serialization import canonical_json_bytes, sha256_bytes
 from .sites import load_site_sampling_configs
 from .wind import component_wind_speed
 
-WEATHER_SPATIAL_VERSION = "weather-spatial/5"
+WEATHER_SPATIAL_VERSION = "weather-spatial/6"
 
 
 class SampledField(AtmosphericContract):
@@ -319,13 +327,59 @@ def sample_canonical_sites(
     policy, policy_sha256 = load_sampling_policy()
     snapshots = snapshot_site_configs(sites)
     site_config_sha256 = site_config_fingerprint(snapshots)
+    compact_descriptor = (
+        batch.grid.descriptor if isinstance(batch, GfsCompactCanonicalGridBatch) else None
+    )
+    if compact_descriptor is not None:
+        if (
+            compact_descriptor.site_configs != snapshots
+            or compact_descriptor.site_config_sha256 != site_config_sha256
+            or compact_descriptor.sampling_policy_version != policy.policy_version
+            or compact_descriptor.sampling_policy_sha256 != policy_sha256
+        ):
+            raise SpatialSamplingError(
+                "Compact descriptor site/policy identities differ from spatial inputs."
+            )
+        point_footprints = compact_descriptor.point_footprints
+        radius_footprints = compact_descriptor.neighbourhood_footprints
+        grid_geometry_sha256 = compact_descriptor.native_geometry.geometry_sha256
+        grid_key = compact_descriptor.native_geometry.grid_key
+        model_elevation_reference = batch.grid.model_elevation_msl_m
+        model_elevation_artifact = model_elevation_reference.artifact
+        compact_selection_sha256: str | None = compact_descriptor.selection_sha256
+    else:
+        point_footprints = tuple(
+            bilinear_footprint(
+                batch.grid,
+                site,
+                method_version=policy.point_sampling.method_version,
+                earth_radius_km=policy.neighbourhood_sampling.earth_mean_radius_km,
+            )
+            for site in sites
+        )
+        radius_footprints = tuple(
+            radius_footprint(
+                batch.grid,
+                site,
+                radius_km=policy.neighbourhood_sampling.radius_km,
+                method_version=policy.neighbourhood_sampling.method_version,
+                earth_radius_km=policy.neighbourhood_sampling.earth_mean_radius_km,
+            )
+            for site in sites
+        )
+        grid_geometry_sha256 = batch.grid.geometry_sha256
+        grid_key = batch.grid.grid_key
+        model_elevation_reference = batch.grid.model_elevation_msl_m
+        model_elevation_artifact = model_elevation_reference
+        compact_selection_sha256 = None
     configuration = {
         "spatial_version": WEATHER_SPATIAL_VERSION,
         "policy_version": policy.policy_version,
         "policy_sha256": policy_sha256,
         "site_config_sha256": site_config_sha256,
-        "grid_geometry_sha256": batch.grid.geometry_sha256,
-        "model_elevation_sha256": batch.grid.model_elevation_msl_m.sha256,
+        "grid_geometry_sha256": grid_geometry_sha256,
+        "model_elevation_sha256": model_elevation_artifact.sha256,
+        "compact_selection_sha256": compact_selection_sha256,
     }
     fingerprint = stage_input_fingerprint(
         stage="spatial",
@@ -337,35 +391,43 @@ def sample_canonical_sites(
     if existing is not None:
         return existing
     directory = store.begin_stage("spatial", WEATHER_SPATIAL_VERSION, fingerprint)
-    point_footprints = tuple(
-        bilinear_footprint(
-            batch.grid,
-            site,
-            method_version=policy.point_sampling.method_version,
-            earth_radius_km=policy.neighbourhood_sampling.earth_mean_radius_km,
-        )
-        for site in sites
-    )
-    radius_footprints = tuple(
-        radius_footprint(
-            batch.grid,
-            site,
-            radius_km=policy.neighbourhood_sampling.radius_km,
-            method_version=policy.neighbourhood_sampling.method_version,
-            earth_radius_km=policy.neighbourhood_sampling.earth_mean_radius_km,
-        )
-        for site in sites
-    )
     point_by_site = {item.site_id: item for item in point_footprints}
     radius_by_site = {item.site_id: item for item in radius_footprints}
-    array_cache: dict[str, np.ndarray] = {}
+    array_cache: dict[tuple[str, int], np.ndarray] = {}
 
     def array(grain: GfsCanonicalGridMessage) -> np.ndarray:
-        if grain.values.sha256 not in array_cache:
-            array_cache[grain.values.sha256] = load_array(store, grain.values)
-        return array_cache[grain.values.sha256]
+        reference = grain.values
+        if isinstance(reference, MatrixSliceReference):
+            if compact_descriptor is None:
+                raise SpatialSamplingError("Legacy grid cannot use a compact matrix slice.")
+            key = (reference.artifact.sha256, reference.matrix_row)
+            if key not in array_cache:
+                array_cache[key] = load_matrix_slice(
+                    store,
+                    reference,
+                    expected_selection_sha256=compact_descriptor.selection_sha256,
+                )
+            return array_cache[key]
+        key = (reference.sha256, -1)
+        if key not in array_cache:
+            array_cache[key] = load_array(store, reference)
+        return array_cache[key]
 
-    model_elevation_values = load_array(store, batch.grid.model_elevation_msl_m)
+    def point_value(values: np.ndarray, footprint: SamplingFootprint) -> float | None:
+        if compact_descriptor is not None:
+            return strict_compact_bilinear_value(values, compact_descriptor, footprint)
+        return strict_bilinear_value(values, batch.grid, footprint)
+
+    if isinstance(model_elevation_reference, MatrixSliceReference):
+        if compact_descriptor is None:
+            raise SpatialSamplingError("Legacy grid cannot use compact model elevation.")
+        model_elevation_values = load_matrix_slice(
+            store,
+            model_elevation_reference,
+            expected_selection_sha256=compact_descriptor.selection_sha256,
+        )
+    else:
+        model_elevation_values = load_array(store, model_elevation_reference)
     samples: list[SiteAlignedSample] = []
     exclusions: list[PressureLevelExclusion] = []
     neighbourhood_records: list[NeighbourhoodNodeRecord] = []
@@ -374,7 +436,7 @@ def sample_canonical_sites(
     for site in sites:
         point = point_by_site[site.site_id]
         radius = radius_by_site[site.site_id]
-        model_elevation = strict_bilinear_value(model_elevation_values, batch.grid, point)
+        model_elevation = point_value(model_elevation_values, point)
         if model_elevation is None or site.reference_elevation_msl_m is None:
             raise SpatialSamplingError(f"Terrain sampling failed for site {site.site_slug}.")
         terrain = TerrainDiagnostic(
@@ -398,7 +460,7 @@ def sample_canonical_sites(
                 raise SpatialSamplingError("One valid time mixes reference times or leads.")
 
             surface_fields = [
-                _sampled_field(grain, strict_bilinear_value(array(grain), batch.grid, point))
+                _sampled_field(grain, point_value(array(grain), point))
                 for grain in valid_grains
                 if grain.grain != "pressure_level" and not _is_grid_wind_derivation(grain)
             ]
@@ -430,7 +492,7 @@ def sample_canonical_sites(
                     and not _is_grid_wind_derivation(grain)
                 )
                 fields = [
-                    _sampled_field(grain, strict_bilinear_value(array(grain), batch.grid, point))
+                    _sampled_field(grain, point_value(array(grain), point))
                     for grain in pressure_grains
                 ]
                 height_field = next(
@@ -518,12 +580,24 @@ def sample_canonical_sites(
 
             neighbourhood_fields: list[NeighbourhoodFieldValues] = []
             for grain in _neighbourhood_grains(valid_grains, policy):
-                values = np.asarray(array(grain)).reshape(-1)
+                values = np.asarray(array(grain))
                 node_values: list[float | None] = []
                 for node in radius.nodes:
-                    value = float(
-                        values[node.row_index * batch.grid.column_count + node.column_index]
-                    )
+                    if compact_descriptor is not None:
+                        value = compact_node_value(
+                            values,
+                            compact_descriptor,
+                            GridNodeIndex(
+                                row_index=node.row_index,
+                                column_index=node.column_index,
+                            ),
+                        )
+                    else:
+                        value = float(
+                            values.reshape(-1)[
+                                node.row_index * batch.grid.column_count + node.column_index
+                            ]
+                        )
                     node_values.append(value if math.isfinite(value) else None)
                 neighbourhood_fields.append(
                     NeighbourhoodFieldValues(
@@ -548,12 +622,12 @@ def sample_canonical_sites(
     sample_batch = CanonicalSiteSampleBatch(
         run_key=batch.run_key,
         normalizer_stage_manifest=normalizer_stage_manifest,
-        grid_key=batch.grid.grid_key,
+        grid_key=grid_key,
         policy_version=policy.policy_version,
         policy_sha256=policy_sha256,
         site_config_sha256=site_config_sha256,
         sampling_fingerprint_sha256=fingerprint,
-        grid_geometry_sha256=batch.grid.geometry_sha256,
+        grid_geometry_sha256=grid_geometry_sha256,
         site_configs=snapshots,
         point_footprints=point_footprints,
         neighbourhood_footprints=radius_footprints,

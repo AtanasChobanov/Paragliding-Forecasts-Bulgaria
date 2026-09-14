@@ -7,19 +7,83 @@ import numpy as np
 import pytest
 
 from paragliding_forecasts_ml.ingestion.atmosphere.contracts import ArtifactReference, StageManifest
+from paragliding_forecasts_ml.ingestion.gfs.compact import (
+    MatrixSliceReference,
+    load_matrix_slice,
+    plan_compact_grid,
+    regular_latlon_geometry,
+    write_float64_matrix,
+    write_packed_missing_mask,
+)
 from paragliding_forecasts_ml.ingestion.gfs.normalizer import (
     GfsCanonicalGridBatch,
+    GfsCompactCanonicalGridBatch,
     _resolve_adjacent_intervals,
     normalize,
 )
 from paragliding_forecasts_ml.ingestion.gfs.parser import (
+    GfsCompactNativeGridBatch,
+    GfsCompactNativeGridMessage,
     GfsNativeGridBatch,
     GfsNativeGridMessage,
     load_array,
 )
 from paragliding_forecasts_ml.ingestion.weather.artifacts import WeatherArtifactStore
+from paragliding_forecasts_ml.ingestion.weather.sampling_policy import load_sampling_policy
+from paragliding_forecasts_ml.ingestion.weather.sites import SiteSamplingConfig
 
 RUN_KEY = "88888888-8888-4888-8888-888888888888"
+
+
+def _compact_native_message(
+    matrix,
+    descriptor,
+    *,
+    row: int,
+    selector: str,
+    valid_at_utc: str,
+    lead_hours: int,
+    level: float = 0,
+    step_start_hours: float | None = None,
+    missing_count: int = 0,
+) -> GfsCompactNativeGridMessage:
+    interval = selector == "apcp"
+    return GfsCompactNativeGridMessage(
+        selector_key=selector,
+        message_number=row + 1,
+        raw_artifact_key=f"raw-{row}",
+        native_message_reference=f"raw-{row}:message-{row + 1}",
+        reference_at_utc="2026-08-24T00:00:00Z",
+        valid_at_utc=valid_at_utc,
+        lead_hours=lead_hours,
+        discipline=0,
+        parameter_category=0,
+        parameter_number=0,
+        centre="kwbc",
+        sub_centre=0,
+        tables_version=2,
+        local_tables_version=1,
+        type_of_level="surface"
+        if selector in {"orog", "apcp", "cin_surface"}
+        else "heightAboveGround",
+        level=level,
+        native_field_name=selector,
+        native_unit="m" if selector == "orog" else "m s**-1",
+        step_type="accum" if interval else "instant",
+        step_start_hours=(step_start_hours if step_start_hours is not None else float(lead_hours)),
+        step_end_hours=float(lead_hours),
+        statistic_type="1" if interval else None,
+        quantization_step=0.0625 if interval else None,
+        native_missing_count=missing_count,
+        compact_missing_count=missing_count,
+        values=MatrixSliceReference(
+            artifact=matrix,
+            matrix_row=row,
+            expected_shape=(descriptor.compact_row_count, descriptor.compact_column_count),
+            selection_sha256=descriptor.selection_sha256,
+        ),
+        quality_state="sentinel_missing" if missing_count else "real",
+    )
 
 
 def _array(
@@ -105,6 +169,156 @@ def _message(
         missing_mask=missing,
         quality_state="real",
     )
+
+
+def test_compact_normalizer_reuses_identity_rows_and_consolidates_derived_rows(
+    tmp_path, monkeypatch
+) -> None:
+    store = WeatherArtifactStore.create_fresh(RUN_KEY, project_root=tmp_path)
+    directory = store.begin_stage("parser", "gfs-parser/6", "9" * 64)
+    parser_manifest = store.write_stage_bytes(
+        directory,
+        "parser-stage-manifest.json",
+        "stage_manifest",
+        b"{}\n",
+        media_type="application/json",
+    )
+    geometry = regular_latlon_geometry(
+        row_count=5,
+        column_count=360,
+        first_latitude_deg=2.0,
+        first_longitude_deg=0.0,
+        last_latitude_deg=-2.0,
+        last_longitude_deg=359.0,
+        latitude_step_deg=-1.0,
+        longitude_step_deg=1.0,
+    )
+    site = SiteSamplingConfig(
+        site_id=1,
+        site_slug="compact-test",
+        site_name="Compact test",
+        site_time_zone="Europe/Sofia",
+        latitude_deg=0.2,
+        longitude_deg=0.2,
+        coordinate_reference="test-v1",
+        reference_elevation_msl_m=100.0,
+        elevation_reference="test-dem-v1",
+    )
+    policy, policy_sha256 = load_sampling_policy()
+    descriptor = plan_compact_grid(geometry, (site,), policy, policy_sha256)
+    shape = (descriptor.compact_row_count, descriptor.compact_column_count)
+    definitions = (
+        ("orog", "2026-08-24T01:00:00Z", 1, 150.0, None),
+        ("tmp_2m", "2026-08-24T01:00:00Z", 1, 280.0, None),
+        ("cin_surface", "2026-08-24T01:00:00Z", 1, -25.0, None),
+        ("ugrd_10m", "2026-08-24T01:00:00Z", 1, 3.0, None),
+        ("vgrd_10m", "2026-08-24T01:00:00Z", 1, 4.0, None),
+        ("apcp", "2026-08-24T01:00:00Z", 1, 1.0, 0.0),
+        ("apcp", "2026-08-24T02:00:00Z", 2, 3.0, 0.0),
+    )
+    values = np.stack(
+        [
+            np.full(shape, value, dtype="<f8")
+            for _selector, _valid, _lead, value, _start in definitions
+        ]
+    )
+    values[1, 0, 0] = np.nan
+    matrix = write_float64_matrix(
+        store,
+        directory,
+        "compact-native-values.npy",
+        "gfs_compact_native_values",
+        values,
+    )
+    mask = write_packed_missing_mask(
+        store,
+        directory,
+        "compact-native-missing-mask.npy",
+        "gfs_compact_native_missing_mask",
+        np.isnan(values),
+        selection_sha256=descriptor.selection_sha256,
+    )
+    messages = tuple(
+        _compact_native_message(
+            matrix,
+            descriptor,
+            row=row,
+            selector=selector,
+            valid_at_utc=valid_at_utc,
+            lead_hours=lead_hours,
+            step_start_hours=step_start,
+            missing_count=1 if selector == "tmp_2m" else 0,
+        )
+        for row, (selector, valid_at_utc, lead_hours, _value, step_start) in enumerate(definitions)
+    )
+    native = GfsCompactNativeGridBatch(
+        run_key=RUN_KEY,
+        raw_manifest=parser_manifest,
+        eccodes_version="2.47.0",
+        descriptor=descriptor,
+        values_matrix=matrix,
+        missing_mask=mask,
+        messages=messages,
+    )
+    monkeypatch.setattr(
+        "paragliding_forecasts_ml.ingestion.gfs.normalizer.load_batch",
+        lambda _store, _reference: native,
+    )
+    monkeypatch.setattr(
+        store, "verify_boundary", lambda reference: store.verify_reference(reference)
+    )
+
+    normalizer_manifest = normalize(store, parser_manifest, occurred_at_utc="2026-08-24T12:00:00Z")
+
+    stage = StageManifest.model_validate_json(
+        store.verify_reference(normalizer_manifest).read_bytes(), strict=True
+    )
+    assert stage.inputs == (parser_manifest, matrix)
+    assert [item.artifact_key for item in stage.outputs] == [
+        "gfs_compact_canonical_derived_values",
+        "gfs_compact_canonical_grid_batch",
+    ]
+    batch_reference = stage.outputs[-1]
+    canonical = GfsCompactCanonicalGridBatch.model_validate_json(
+        store.verify_reference(batch_reference).read_bytes(), strict=True
+    )
+    by_field = {(grain.field_code, grain.valid_at_utc): grain for grain in canonical.surface_grains}
+    assert canonical.grid.model_elevation_msl_m.artifact == matrix
+    assert by_field[("air_temperature_k", "2026-08-24T01:00:00Z")].values.artifact == matrix
+    assert by_field[("air_temperature_k", "2026-08-24T01:00:00Z")].quality_state == (
+        "sentinel_missing"
+    )
+    assert np.isnan(
+        load_matrix_slice(
+            store,
+            by_field[("air_temperature_k", "2026-08-24T01:00:00Z")].values,
+            expected_selection_sha256=descriptor.selection_sha256,
+        )[0, 0]
+    )
+    assert by_field[("precipitation_amount_mm", "2026-08-24T01:00:00Z")].values.artifact == matrix
+    assert (
+        by_field[
+            ("convective_inhibition_magnitude_j_per_kg", "2026-08-24T01:00:00Z")
+        ].values.artifact
+        == canonical.derived_values_matrix
+    )
+    assert np.allclose(
+        load_matrix_slice(
+            store,
+            by_field[("wind_speed_m_s", "2026-08-24T01:00:00Z")].values,
+            expected_selection_sha256=descriptor.selection_sha256,
+        ),
+        5.0,
+    )
+    assert np.allclose(
+        load_matrix_slice(
+            store,
+            by_field[("precipitation_amount_mm", "2026-08-24T02:00:00Z")].values,
+            expected_selection_sha256=descriptor.selection_sha256,
+        ),
+        2.0,
+    )
+    assert store.verification.matrices_loaded == 3
 
 
 def test_normalizer_keeps_multi_valid_time_arrays_unique_and_promotes_orography(

@@ -185,6 +185,11 @@ class GfsCompactNativeGridBatch(AtmosphericContract):
     @model_validator(mode="after")
     def consolidated_storage_must_be_consistent(self) -> GfsCompactNativeGridBatch:
         shape = (self.descriptor.compact_row_count, self.descriptor.compact_column_count)
+        expected_cell_count = len(self.messages) * shape[0] * shape[1]
+        if self.values_matrix.record_count != expected_cell_count or (
+            self.missing_mask.artifact.record_count != expected_cell_count
+        ):
+            raise ValueError("Compact parser artifacts do not contain one crop per message.")
         if any(
             item.values.artifact != self.values_matrix
             or item.values.matrix_row != matrix_row

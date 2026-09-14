@@ -13,6 +13,7 @@ from paragliding_forecasts_ml.ingestion.gfs.compact import (
     GridNodeIndex,
     MatrixSliceReference,
     PackedMaskReference,
+    compact_node_value,
     global_to_local,
     load_matrix_slice,
     load_packed_missing_mask,
@@ -154,6 +155,21 @@ def test_geometry_and_index_translation_fail_closed_without_clamping() -> None:
             longitude_step_deg=0.25,
             j_scans_positively=True,
         )
+
+
+def test_compact_lookup_rejects_unselected_cells_without_nearest_fallback() -> None:
+    descriptor = _descriptor()
+    required = set(descriptor.required_nodes)
+    absent = next(
+        GridNodeIndex(row_index=row, column_index=column)
+        for row in range(descriptor.crop_min_row, descriptor.crop_max_row + 1)
+        for column in range(descriptor.crop_min_column, descriptor.crop_max_column + 1)
+        if GridNodeIndex(row_index=row, column_index=column) not in required
+    )
+    values = np.zeros((descriptor.compact_row_count, descriptor.compact_column_count), dtype="<f8")
+
+    with pytest.raises(CompactGridError, match="absent"):
+        compact_node_value(values, descriptor, absent)
 
 
 def test_descriptor_rejects_tampered_geometry_sites_nodes_and_selection() -> None:

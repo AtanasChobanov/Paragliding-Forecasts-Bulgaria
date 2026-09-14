@@ -11,12 +11,23 @@ from paragliding_forecasts_ml.ingestion.atmosphere.contracts import (
     ArtifactReference,
     StageManifest,
 )
+from paragliding_forecasts_ml.ingestion.gfs.compact import (
+    MatrixSliceReference,
+    plan_compact_grid,
+    regular_latlon_geometry,
+    write_float64_matrix,
+)
 from paragliding_forecasts_ml.ingestion.gfs.normalizer import (
     GfsCanonicalGridBatch,
     GfsCanonicalGridDefinition,
     GfsCanonicalGridMessage,
+    GfsCompactCanonicalGridBatch,
+    GfsCompactCanonicalGridDefinition,
 )
+from paragliding_forecasts_ml.ingestion.gfs.parser import load_array
 from paragliding_forecasts_ml.ingestion.weather.artifacts import WeatherArtifactStore
+from paragliding_forecasts_ml.ingestion.weather.sampling_policy import load_sampling_policy
+from paragliding_forecasts_ml.ingestion.weather.sites import SiteSamplingConfig
 from paragliding_forecasts_ml.ingestion.weather.spatial import (
     CanonicalSiteSampleBatch,
     NeighbourhoodNodeBatch,
@@ -258,6 +269,103 @@ def _run(root: Path, monkeypatch):
     return sample_reference, neighbourhood_reference, samples, neighbourhoods
 
 
+def _compact_run(root: Path, monkeypatch):
+    store, input_manifest, legacy = _fixture(root)
+    geometry = regular_latlon_geometry(
+        row_count=3,
+        column_count=4,
+        first_latitude_deg=1.0,
+        first_longitude_deg=0.0,
+        last_latitude_deg=-1.0,
+        last_longitude_deg=270.0,
+        latitude_step_deg=-1.0,
+        longitude_step_deg=90.0,
+    )
+    site = SiteSamplingConfig(
+        site_id=1,
+        site_slug="test-site",
+        site_name="Test site",
+        site_time_zone="Europe/Sofia",
+        latitude_deg=0.0,
+        longitude_deg=0.0,
+        coordinate_reference="test-coordinate-v1",
+        reference_elevation_msl_m=100.0,
+        elevation_reference="test-elevation-v1",
+    )
+    policy, policy_sha256 = load_sampling_policy()
+    descriptor = plan_compact_grid(geometry, (site,), policy, policy_sha256)
+    legacy_grains = (*legacy.surface_grains, *legacy.pressure_level_grains)
+    full_references = (legacy.grid.model_elevation_msl_m,) + tuple(
+        item.values for item in legacy_grains
+    )
+    compact_values = np.stack(
+        [load_array(store, reference).reshape(3, 4)[1:2, 0:1] for reference in full_references]
+    ).astype("<f8", copy=False)
+    directory = store.verify_reference(input_manifest).parent
+    matrix = write_float64_matrix(
+        store,
+        directory,
+        "compact-canonical-fixture.npy",
+        "gfs_compact_parser_values_fixture",
+        compact_values,
+    )
+
+    def matrix_slice(row: int) -> MatrixSliceReference:
+        return MatrixSliceReference(
+            artifact=matrix,
+            matrix_row=row,
+            expected_shape=(1, 1),
+            selection_sha256=descriptor.selection_sha256,
+        )
+
+    compact_grains = tuple(
+        grain.model_copy(update={"values": matrix_slice(row)})
+        for row, grain in enumerate(legacy_grains, start=1)
+    )
+    compact = GfsCompactCanonicalGridBatch(
+        run_key=RUN_KEY,
+        parser_stage_manifest=input_manifest,
+        grid=GfsCompactCanonicalGridDefinition(
+            descriptor=descriptor,
+            model_elevation_msl_m=matrix_slice(0),
+            model_elevation_source_selector_keys=("orog",),
+        ),
+        reused_parser_values_matrix=matrix,
+        surface_grains=compact_grains[: len(legacy.surface_grains)],
+        pressure_level_grains=compact_grains[len(legacy.surface_grains) :],
+    )
+    monkeypatch.setattr(
+        store, "verify_boundary", lambda reference: store.verify_reference(reference)
+    )
+    monkeypatch.setattr(
+        "paragliding_forecasts_ml.ingestion.weather.spatial.load_canonical_batch",
+        lambda _store, _reference: compact,
+    )
+    stage_reference = sample_canonical_sites(
+        store,
+        input_manifest,
+        database_url="file:./data/local/weather.db",
+        occurred_at_utc="2026-08-24T12:00:00Z",
+        project_root=root,
+    )
+    stage = StageManifest.model_validate_json(
+        store.verify_reference(stage_reference).read_bytes(), strict=True
+    )
+    sample_reference = next(
+        item for item in stage.outputs if item.artifact_key == "canonical_site_sample_batch"
+    )
+    neighbourhood_reference = next(
+        item for item in stage.outputs if item.artifact_key == "neighbourhood_node_batch"
+    )
+    samples = CanonicalSiteSampleBatch.model_validate_json(
+        store.verify_reference(sample_reference).read_bytes(), strict=True
+    )
+    neighbourhoods = NeighbourhoodNodeBatch.model_validate_json(
+        store.verify_reference(neighbourhood_reference).read_bytes(), strict=True
+    )
+    return samples, neighbourhoods, store
+
+
 def test_spatial_sampler_preserves_unsupported_as_null_evidence(tmp_path) -> None:
     _store, _input_manifest, batch = _fixture(tmp_path)
     unsupported_grain = batch.surface_grains[0].model_copy(update={"quality_state": "unsupported"})
@@ -308,3 +416,32 @@ def test_spatial_stage_handles_multi_time_terrain_agl_exclusions_and_fingerprint
     assert first[0].sha256 == second[0].sha256
     assert first[1].sha256 == second[1].sha256
     assert first_samples.sampling_fingerprint_sha256 == second[2].sampling_fingerprint_sha256
+
+
+def test_compact_spatial_sampling_matches_full_grid_domain_outputs(tmp_path, monkeypatch) -> None:
+    legacy_samples, legacy_neighbourhoods = _run(tmp_path / "legacy", monkeypatch)[2:]
+    compact_samples, compact_neighbourhoods, compact_store = _compact_run(
+        tmp_path / "compact", monkeypatch
+    )
+
+    assert len(compact_samples.samples) == len(legacy_samples.samples)
+    for compact, legacy in zip(compact_samples.samples, legacy_samples.samples, strict=True):
+        assert compact.valid_at_utc == legacy.valid_at_utc
+        assert compact.lead_hours == legacy.lead_hours
+        assert compact.terrain == legacy.terrain
+        assert compact.fields == legacy.fields
+        assert compact.profile_levels == legacy.profile_levels
+    assert compact_samples.pressure_level_exclusions == legacy_samples.pressure_level_exclusions
+    assert len(compact_neighbourhoods.records) == len(legacy_neighbourhoods.records)
+    for compact, legacy in zip(
+        compact_neighbourhoods.records, legacy_neighbourhoods.records, strict=True
+    ):
+        assert compact.site_id == legacy.site_id
+        assert compact.valid_at_utc == legacy.valid_at_utc
+        assert compact.fields == legacy.fields
+    assert compact_samples.point_footprints[0].nodes == legacy_samples.point_footprints[0].nodes
+    assert (
+        compact_samples.neighbourhood_footprints[0].nodes
+        == legacy_samples.neighbourhood_footprints[0].nodes
+    )
+    assert compact_store.verification.matrices_loaded == 1

@@ -187,11 +187,14 @@ reviewed configuration this is a 77-node union inside an `8 x 24` crop; those
 dimensions are regression evidence rather than production constants. Legacy v5
 full-grid contracts remain readable and immutable.
 
-The normalizer writes separate canonical surface/convection/interval grains and
-pressure-level grains for S05. It exposes explicit regular-latlon geometry,
-verified scan order and static GFS orography, and keeps artifacts unique across
-multiple valid times. It retains native `u`/`v`, derives wind speed and
-meteorological direction, converts signed GFS CIN to positive magnitude while
+Normalizer v8 writes separate canonical surface/convection/interval grains and
+pressure-level grains for S05 without reconstructing the crop. Identity
+normalizations and static GFS orography reference their immutable parser matrix
+rows directly; transformed CIN, adjacent intervals and grid wind derivations are
+stored together in one `compact-canonical-derived-values.npy` matrix. Its stage
+inputs explicitly include the reused parser matrix. It retains native `u`/`v`,
+derives wind speed and meteorological direction, converts signed GFS CIN to
+positive magnitude while
 retaining the native convention, and records interval boundaries without
 inventing a rate. Precipitation is only de-accumulated when a proven reset and
 adjacent interval are available; the S03 shortest explicit accumulation interval
@@ -215,6 +218,13 @@ read-only mode, writes immutable site/neighbourhood artifacts, and appends a
 ```powershell
 uv run --project services/ml gfs-sample --run-key <uuid>
 ```
+
+Spatial v6 verifies that the normalizer descriptor's site snapshot, policy,
+native geometry and selection hashes match its own read-only inputs. It keeps
+global node identities in footprints and provenance, but translates every
+lookup to compact coordinates and fails closed if a requested node is absent.
+The command-scoped verification session loads each referenced compact matrix at
+most once.
 
 The packaged `canonical-site-sampling-policy-v1` implements only:
 
