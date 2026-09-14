@@ -175,6 +175,7 @@ def test_failure_evidence_uses_a_valid_failed_persistence_stage(tmp_path, monkey
     monkeypatch.setattr(store, "verify_boundary", lambda _reference: tmp_path)
     prepared = SimpleNamespace(
         ledger=SimpleNamespace(load_events=lambda: ()),
+        snapshot=SimpleNamespace(final_sequence=0),
         store=store,
         feature_manifest_reference=feature_manifest,
         persistence_input_sha256="b" * 64,

@@ -7,21 +7,15 @@ import json
 import os
 import sys
 from collections.abc import Sequence
-from datetime import UTC, datetime
 from pathlib import Path
 
 from ...storage.environment import file_environment
 from ...storage.sqlite import configured_database_url
-from ..atmosphere.contracts import ArtifactReference
-from ..weather.artifacts import ArtifactError, WeatherArtifactStore
+from ..weather.artifacts import ArtifactError
+from ..weather.services import WeatherRunContext, parse_and_normalize
 from ..weather.sites import SiteSamplingConfigError
-from ..weather.state import RunStateLedger, StateError
-from .normalizer import GFS_NORMALIZER_VERSION, normalize
-from .parser import GFS_PARSER_VERSION, GfsParserError, parse, raw_manifest_reference
-
-
-def _utc_now() -> str:
-    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+from ..weather.state import StateError
+from .parser import GfsParserError
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -32,33 +26,6 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _complete_evidence(ledger: RunStateLedger, stage: str) -> ArtifactReference | None:
-    matches = [
-        event.evidence
-        for event in ledger.load_events()
-        if event.stage == stage and event.disposition == "complete" and event.evidence is not None
-    ]
-    return matches[-1] if matches else None
-
-
-def _matches_current_boundary(
-    store: WeatherArtifactStore,
-    reference: ArtifactReference | None,
-    *,
-    producer_version: str,
-    upstream: ArtifactReference,
-) -> bool:
-    if reference is None:
-        return False
-    manifest = store.read_stage_manifest(reference)
-    return manifest.producer_version == producer_version and manifest.inputs == (upstream,)
-
-
-def _superseded_sequence(ledger: RunStateLedger, stage: str) -> int | None:
-    previous = ledger.latest_stage_event(ledger.load_events(), stage)
-    return previous.sequence if previous is not None else None
-
-
 def main(arguments: Sequence[str] | None = None) -> int:
     namespace = build_parser().parse_args(arguments)
     project_root = namespace.project_root.resolve()
@@ -67,52 +34,12 @@ def main(arguments: Sequence[str] | None = None) -> int:
         namespace.database_url or os.environ.get("DATABASE_URL") or file_values.get("DATABASE_URL")
     )
     try:
-        store = WeatherArtifactStore(namespace.run_key, project_root=project_root)
-        ledger = RunStateLedger(store)
-        raw_evidence = _complete_evidence(ledger, "raw_complete")
-        if raw_evidence is None or raw_evidence != raw_manifest_reference(store):
-            raise StateError("gfs-parse requires the current complete raw manifest state event.")
-        parser_manifest = _complete_evidence(ledger, "parsed")
-        if not _matches_current_boundary(
-            store,
-            parser_manifest,
-            producer_version=GFS_PARSER_VERSION,
-            upstream=raw_evidence,
-        ):
-            occurred_at_utc = _utc_now()
-            parser_manifest = parse(
-                store,
-                database_url=configured_database_url(database_url),
-                occurred_at_utc=occurred_at_utc,
-                project_root=project_root,
-            )
-            ledger.append(
-                invocation_mode="resume",
-                stage="parsed",
-                disposition="complete",
-                occurred_at_utc=occurred_at_utc,
-                evidence=parser_manifest,
-                supersedes_sequence=_superseded_sequence(ledger, "parsed"),
-                detail="offline ecCodes native-grid parse",
-            )
-        normalizer_manifest = _complete_evidence(ledger, "normalized")
-        if not _matches_current_boundary(
-            store,
-            normalizer_manifest,
-            producer_version=GFS_NORMALIZER_VERSION,
-            upstream=parser_manifest,
-        ):
-            occurred_at_utc = _utc_now()
-            normalizer_manifest = normalize(store, parser_manifest, occurred_at_utc=occurred_at_utc)
-            ledger.append(
-                invocation_mode="resume",
-                stage="normalized",
-                disposition="complete",
-                occurred_at_utc=occurred_at_utc,
-                evidence=normalizer_manifest,
-                supersedes_sequence=_superseded_sequence(ledger, "normalized"),
-                detail="canonical GFS grid normalization",
-            )
+        context = WeatherRunContext.open(
+            namespace.run_key,
+            project_root=project_root,
+            database_url=configured_database_url(database_url),
+        )
+        result, context.snapshot = parse_and_normalize(context)
     except (
         ArtifactError,
         GfsParserError,
@@ -127,10 +54,8 @@ def main(arguments: Sequence[str] | None = None) -> int:
         json.dumps(
             {
                 "run_key": namespace.run_key,
-                "parser_manifest": parser_manifest.relative_path,
-                "normalizer_manifest": normalizer_manifest.relative_path,
-                "network_access": False,
-                "database_access": "read_only",
+                **result.as_dict(),
+                "verification_summary": context.verification_summary(),
             },
             indent=2,
         )

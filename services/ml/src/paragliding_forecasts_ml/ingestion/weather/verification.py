@@ -122,6 +122,25 @@ class ArtifactVerificationSession:
         """Hash an unreferenced existing file once and register its exact identity."""
 
         current = self._stat(path)
+        resolved_path = path.resolve()
+        for identity, verified in self._files.items():
+            if (
+                identity[0] == str(resolved_path)
+                and identity[1] == artifact_key
+                and identity[4] == media_type
+                and identity[5] == record_count
+                and verified.stat == current
+                and verified.digest_source == "disk"
+            ):
+                self.cache_hits += 1
+                return ArtifactReference(
+                    artifact_key=artifact_key,
+                    relative_path=relative_path,
+                    sha256=identity[2],
+                    byte_count=identity[3],
+                    media_type=media_type,
+                    record_count=record_count,
+                )
         started = perf_counter_ns()
         digest = self._sha256_file(path)
         self.hash_elapsed_ns += perf_counter_ns() - started

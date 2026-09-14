@@ -380,7 +380,7 @@ owner review.
 that the explicit policy and migrated SQLite schema exist before it reaches GFS
 and requires a reviewed byte cap plus `--allow-live-network`. `resume` exposes
 no transport or network flags and calls only the retained-artifact stage
-boundaries before `weather-persist`:
+services before persistence:
 
 ```powershell
 uv run --project services/ml weather-ingest resume `
@@ -395,6 +395,13 @@ uv run --project services/ml weather-ingest resume `
 A `partial` raw run stops as `incomplete_coverage`; a validation quarantine
 stops before features or persistence. A successful persisted run returns
 `inserted`, `revalidated_no_op`, or `recovered_committed_write`.
+Both modes execute the same typed offline services in-process with one run
+context, one metadata-only ledger snapshot, and one command-scoped artifact
+verification session. Their structured result includes stage create/reuse
+dispositions and a secret-free `verification_summary`. Fresh duplicate
+acquisition identity additionally binds the reviewed site-config hash, packaged
+sampling-policy hash, and compact-selection version; changing any of those
+requires a new run rather than silently reusing an older compact graph.
 The real command chain is:
 
 ```powershell

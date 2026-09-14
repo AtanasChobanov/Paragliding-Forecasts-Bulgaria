@@ -37,7 +37,7 @@ from .persistence_models import (
 )
 from .serialization import canonical_json_bytes, sha256_bytes
 from .spatial import CanonicalSiteSampleBatch, SamplingFootprint, SiteAlignedSample
-from .state import RunStateLedger, StateError
+from .state import RunStateLedger, RunStateSnapshot, StateError
 from .validation import (
     AcceptedWeatherSamples,
     ValidationSnapshot,
@@ -230,6 +230,7 @@ _REQUIRED_TABLE_COLUMNS = {
 class PreparedWeatherPersistence:
     store: WeatherArtifactStore
     ledger: RunStateLedger
+    snapshot: RunStateSnapshot
     raw_manifest_reference: ArtifactReference
     raw_manifest: RawManifest
     request_plan: RequestPlan
@@ -269,8 +270,8 @@ def _now_utc() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _effective_stage(ledger: RunStateLedger, stage: str):
-    event = ledger.latest_stage_event(ledger.load_events(), stage)  # type: ignore[arg-type]
+def _effective_stage(snapshot: RunStateSnapshot, stage: str):
+    event = snapshot.effective_event(stage)  # type: ignore[arg-type]
     if event is None or event.evidence is None:
         raise WeatherPersistenceError(f"Persistence requires a complete {stage} state boundary.")
     return event
@@ -345,20 +346,26 @@ def prepare_weather_persistence(
     usage_policy_path: Path | None,
     *,
     project_root: Path | None = None,
+    store: WeatherArtifactStore | None = None,
+    ledger: RunStateLedger | None = None,
+    snapshot: RunStateSnapshot | None = None,
 ) -> PreparedWeatherPersistence:
     """Verify all immutable offline inputs before any SQLite write lock is acquired."""
 
     root = (project_root or Path.cwd()).resolve()
     try:
-        store = WeatherArtifactStore(run_key, project_root=root)
-        ledger = RunStateLedger(store)
-        events = ledger.load_events()
+        store = store or WeatherArtifactStore(run_key, project_root=root)
+        if store.run_key != run_key or store.project_root != root:
+            raise WeatherPersistenceError("Shared persistence store belongs to another run/root.")
+        ledger = ledger or RunStateLedger(store)
+        snapshot = snapshot or ledger.load_state()
+        events = snapshot.events
     except (ArtifactError, StateError, OSError) as error:
         raise WeatherPersistenceError("Weather state ledger cannot be verified.") from error
     if not events:
         raise WeatherPersistenceError("Weather run has no state ledger.")
-    validation_event = _effective_stage(ledger, "validated")
-    feature_event = _effective_stage(ledger, "features_built")
+    validation_event = _effective_stage(snapshot, "validated")
+    feature_event = _effective_stage(snapshot, "features_built")
     try:
         validation_manifest = store.read_stage_manifest(validation_event.evidence)
         feature_manifest = store.read_stage_manifest(feature_event.evidence)
@@ -506,6 +513,7 @@ def prepare_weather_persistence(
     return PreparedWeatherPersistence(
         store=store,
         ledger=ledger,
+        snapshot=snapshot,
         raw_manifest_reference=validation_snapshot.raw_manifest,
         raw_manifest=raw_manifest,
         request_plan=request_plan,
@@ -2009,7 +2017,7 @@ def _publish_failure_evidence(
 
     failure_kind = failure_kind or _failure_kind(error)
     summary = _safe_failure_detail(error)
-    attempt = len(prepared.ledger.load_events()) + 1
+    attempt = prepared.snapshot.final_sequence + 1
     configuration = {
         "failure_kind": failure_kind,
         "failure_summary_sha256": sha256_bytes(summary.encode("utf-8")),
@@ -2059,7 +2067,7 @@ def _record_prepared_failure(
     """Best-effort state evidence; never conceal the triggering persistence failure."""
 
     try:
-        events = prepared.ledger.load_events()
+        events = prepared.snapshot.events
         if events and events[-1].stage == "persisted" and events[-1].disposition == "persisted":
             return
         occurred_at_utc = _now_utc()
@@ -2070,7 +2078,8 @@ def _record_prepared_failure(
             occurred_at_utc=occurred_at_utc,
             failure_kind=kind,
         )
-        prepared.ledger.append(
+        prepared.ledger.append_to(
+            prepared.snapshot,
             invocation_mode="resume",
             stage="persisted",
             disposition="failed",
@@ -2082,13 +2091,22 @@ def _record_prepared_failure(
         return
 
 
-def _record_preparation_failure(run_key: str, root: Path, error: Exception) -> None:
+def _record_preparation_failure(
+    run_key: str,
+    root: Path,
+    error: Exception,
+    *,
+    store: WeatherArtifactStore | None = None,
+    ledger: RunStateLedger | None = None,
+    snapshot: RunStateSnapshot | None = None,
+) -> None:
     """Record a retryable prepare failure only after a valid feature boundary exists."""
 
     try:
-        store = WeatherArtifactStore(run_key, project_root=root)
-        ledger = RunStateLedger(store)
-        events = ledger.load_events()
+        store = store or WeatherArtifactStore(run_key, project_root=root)
+        ledger = ledger or RunStateLedger(store)
+        snapshot = snapshot or ledger.load_state()
+        events = snapshot.events
         if not events or (
             events[-1].stage == "persisted" and events[-1].disposition == "persisted"
         ):
@@ -2138,7 +2156,8 @@ def _record_preparation_failure(run_key: str, root: Path, error: Exception) -> N
                 completed_at_utc=occurred_at_utc,
             ),
         )
-        ledger.append(
+        ledger.append_to(
+            snapshot,
             invocation_mode="resume",
             stage="persisted",
             disposition="failed",
@@ -2150,20 +2169,37 @@ def _record_preparation_failure(run_key: str, root: Path, error: Exception) -> N
         return
 
 
-def persist_weather_run(
+def persist_weather_run_with_state(
     run_key: str,
     usage_policy_path: Path | None,
     *,
     database_url: str | None = None,
     project_root: Path | None = None,
-) -> dict[str, Any]:
+    store: WeatherArtifactStore | None = None,
+    ledger: RunStateLedger | None = None,
+    snapshot: RunStateSnapshot | None = None,
+) -> tuple[dict[str, Any], RunStateSnapshot]:
     """Persist a fully verified weather run in one transaction, or revalidate an exact replay."""
 
     root = (project_root or Path.cwd()).resolve()
     try:
-        prepared = prepare_weather_persistence(run_key, usage_policy_path, project_root=root)
+        prepared = prepare_weather_persistence(
+            run_key,
+            usage_policy_path,
+            project_root=root,
+            store=store,
+            ledger=ledger,
+            snapshot=snapshot,
+        )
     except WeatherPersistenceError as error:
-        _record_preparation_failure(run_key, root, error)
+        _record_preparation_failure(
+            run_key,
+            root,
+            error,
+            store=store,
+            ledger=ledger,
+            snapshot=snapshot,
+        )
         raise
     resolved_url = configured_database_url(database_url)
     try:
@@ -2181,7 +2217,7 @@ def persist_weather_run(
             _verify_source(connection, prepared)
             counts, persisted_graph_sha256 = _verify_existing_run(connection, prepared, existing)
             connection.rollback()
-            events = prepared.ledger.load_events()
+            events = prepared.snapshot.events
             terminal = events[-1].stage == "persisted" and events[-1].disposition == "persisted"
             disposition = "revalidated_no_op" if terminal else "recovered_committed_write"
         else:
@@ -2218,9 +2254,11 @@ def persist_weather_run(
             persisted_graph_sha256=persisted_graph_sha256,
             completed_at_utc=completed_at_utc,
         )
-        events = prepared.ledger.load_events()
+        events = prepared.snapshot.events
+        updated_snapshot = prepared.snapshot
         if not (events[-1].stage == "persisted" and events[-1].disposition == "persisted"):
-            prepared.ledger.append(
+            _, updated_snapshot = prepared.ledger.append_to(
+                prepared.snapshot,
                 invocation_mode="resume",
                 stage="persisted",
                 disposition="persisted",
@@ -2234,10 +2272,31 @@ def persist_weather_run(
         raise WeatherPersistenceError(
             "Weather database commit succeeded but receipt/state publication did not complete."
         ) from error
-    return {
-        "status": disposition,
-        "run_key": run_key,
-        "persistence_input_sha256": prepared.persistence_input_sha256,
-        "receipt": receipt.relative_path,
-        "table_counts": counts,
-    }
+    return (
+        {
+            "status": disposition,
+            "run_key": run_key,
+            "persistence_input_sha256": prepared.persistence_input_sha256,
+            "receipt": receipt.relative_path,
+            "table_counts": counts,
+        },
+        updated_snapshot,
+    )
+
+
+def persist_weather_run(
+    run_key: str,
+    usage_policy_path: Path | None,
+    *,
+    database_url: str | None = None,
+    project_root: Path | None = None,
+) -> dict[str, Any]:
+    """Standalone compatibility boundary around snapshot-aware persistence."""
+
+    report, _ = persist_weather_run_with_state(
+        run_key,
+        usage_policy_path,
+        database_url=database_url,
+        project_root=project_root,
+    )
+    return report

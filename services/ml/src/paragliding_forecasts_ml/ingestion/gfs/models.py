@@ -8,7 +8,12 @@ from zoneinfo import ZoneInfo
 
 from pydantic import Field, field_validator, model_validator
 
-from ..atmosphere.contracts import ArtifactReference, AtmosphericContract, validate_utc_timestamp
+from ..atmosphere.contracts import (
+    SHA256_PATTERN,
+    ArtifactReference,
+    AtmosphericContract,
+    validate_utc_timestamp,
+)
 
 GFS_SOURCE_ID = "noaa_gfs_0p25_aws_grib2"
 GFS_GRID_KEY = "gfs_0p25_global"
@@ -46,6 +51,9 @@ class GfsRequest(AtmosphericContract):
     maximum_total_bytes: int = Field(default=128 * 1024 * 1024, ge=1024)
     target_local_date: str | None = None
     flying_window_version: str | None = None
+    site_config_sha256: str | None = None
+    sampling_policy_sha256: str | None = None
+    compact_selection_version: str | None = None
 
     @field_validator("valid_at_utc", "explicit_run_at_utc", "newest_complete_before_utc")
     @classmethod
@@ -65,6 +73,13 @@ class GfsRequest(AtmosphericContract):
             raise ValueError("GFS run key is required.")
         return value
 
+    @field_validator("site_config_sha256", "sampling_policy_sha256")
+    @classmethod
+    def acquisition_hashes_must_be_sha256(cls, value: str | None) -> str | None:
+        if value is not None and SHA256_PATTERN.fullmatch(value) is None:
+            raise ValueError("GFS acquisition identity hashes must be SHA-256 values.")
+        return value
+
     @model_validator(mode="after")
     def local_date_metadata_must_be_complete(self) -> GfsRequest:
         if (self.target_local_date is None) != (self.flying_window_version is None):
@@ -80,6 +95,17 @@ class GfsRequest(AtmosphericContract):
                 raise ValueError(
                     "GFS local-date request valid times must equal its Sofia flying window."
                 )
+        identities = (
+            self.site_config_sha256,
+            self.sampling_policy_sha256,
+            self.compact_selection_version,
+        )
+        if any(value is not None for value in identities) and not all(
+            value is not None for value in identities
+        ):
+            raise ValueError("GFS compact acquisition identity fields must be supplied together.")
+        if all(value is not None for value in identities) and self.target_local_date is None:
+            raise ValueError("GFS compact acquisition identity requires a local-date request.")
         return self
 
     def selection_mode(self) -> Literal["explicit", "newest_complete_before"]:
@@ -115,7 +141,7 @@ class GfsPlannedRange(AtmosphericContract):
 class GfsResolvedPlan(AtmosphericContract):
     """Source-owned resolved GFS plan embedded in S02 RequestPlan.adapter_request."""
 
-    gfs_request_schema_version: Literal[1, 2] = 1
+    gfs_request_schema_version: Literal[1, 2, 3] = 1
     selection_mode: Literal["explicit", "newest_complete_before"]
     resolved_run_at_utc: str
     available_at_utc: str
@@ -125,6 +151,9 @@ class GfsResolvedPlan(AtmosphericContract):
     ranges: tuple[GfsPlannedRange, ...] = Field(min_length=1)
     target_local_date: str | None = None
     flying_window_version: str | None = None
+    site_config_sha256: str | None = None
+    sampling_policy_sha256: str | None = None
+    compact_selection_version: str | None = None
     licence_reference: str = "https://registry.opendata.aws/noaa-gfs-bdp-pds/"
     attribution_text: str = (
         "NOAA Global Forecast System (GFS), accessed from NOAA Open Data on AWS."
@@ -132,14 +161,26 @@ class GfsResolvedPlan(AtmosphericContract):
 
     @model_validator(mode="after")
     def resolved_local_date_metadata_must_match_schema(self) -> GfsResolvedPlan:
+        identities = (
+            self.site_config_sha256,
+            self.sampling_policy_sha256,
+            self.compact_selection_version,
+        )
+        if any(value is not None for value in identities) and not all(
+            value is not None for value in identities
+        ):
+            raise ValueError("Resolved GFS compact acquisition identities must be complete.")
         if (self.target_local_date is None) != (self.flying_window_version is None):
             raise ValueError("Resolved GFS local-date metadata must be supplied together.")
         if self.target_local_date is None:
             if self.gfs_request_schema_version != 1:
-                raise ValueError("GFS request schema v2 requires local-date metadata.")
+                raise ValueError("Extended GFS request schemas require local-date metadata.")
             return self
-        if self.gfs_request_schema_version != 2:
-            raise ValueError("GFS local-date metadata requires request schema v2.")
+        expected_schema = 3 if all(value is not None for value in identities) else 2
+        if self.gfs_request_schema_version != expected_schema:
+            raise ValueError(
+                "GFS local-date schema version must match its compact acquisition identity."
+            )
         if self.flying_window_version != SOFIA_FLYING_WINDOW_VERSION:
             raise ValueError(
                 "Resolved GFS local-date request uses an unknown flying-window version."
@@ -148,6 +189,13 @@ class GfsResolvedPlan(AtmosphericContract):
         if tuple(sorted({item.valid_at_utc for item in self.ranges})) != expected:
             raise ValueError("Resolved GFS local-date ranges must equal its Sofia flying window.")
         return self
+
+    @field_validator("site_config_sha256", "sampling_policy_sha256")
+    @classmethod
+    def resolved_acquisition_hashes_must_be_sha256(cls, value: str | None) -> str | None:
+        if value is not None and SHA256_PATTERN.fullmatch(value) is None:
+            raise ValueError("Resolved GFS acquisition identity hashes must be SHA-256 values.")
+        return value
 
     @field_validator("resolved_run_at_utc", "available_at_utc")
     @classmethod

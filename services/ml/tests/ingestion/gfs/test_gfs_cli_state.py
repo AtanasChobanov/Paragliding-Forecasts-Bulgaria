@@ -72,100 +72,66 @@ def test_collect_initializes_ledger_and_records_verified_raw_boundary(
 
 
 def test_parse_records_parsed_and_normalized_boundaries(tmp_path, monkeypatch) -> None:
-    raw = _reference("raw")
     parsed = _reference("parsed")
     normalized = _reference("normalized")
-    events = [SimpleNamespace(stage="raw_complete", disposition="complete", evidence=raw)]
-    appended: list[dict[str, object]] = []
-    store = object()
-
-    class FakeLedger:
-        def __init__(self, actual_store) -> None:
-            assert actual_store is store
-
-        def load_events(self):
-            return tuple(events)
-
-        def append(self, **values) -> None:
-            appended.append(values)
-            events.append(
-                SimpleNamespace(
-                    stage=values["stage"],
-                    disposition=values["disposition"],
-                    evidence=values["evidence"],
-                )
-            )
-
-        @staticmethod
-        def latest_stage_event(_events, _stage):
-            return None
-
-    monkeypatch.setattr(parser_cli, "WeatherArtifactStore", lambda *_a, **_k: store)
-    monkeypatch.setattr(parser_cli, "RunStateLedger", FakeLedger)
-    monkeypatch.setattr(parser_cli, "raw_manifest_reference", lambda _store: raw)
+    context = SimpleNamespace(
+        snapshot="before",
+        verification_summary=lambda: {"files_hashed": 2},
+    )
+    result = SimpleNamespace(
+        as_dict=lambda: {
+            "parser_manifest": parsed.relative_path,
+            "normalizer_manifest": normalized.relative_path,
+        }
+    )
+    monkeypatch.setattr(parser_cli.WeatherRunContext, "open", lambda *_a, **_k: context)
     monkeypatch.setattr(
         parser_cli,
-        "_matches_current_boundary",
-        lambda _store, reference, **_kwargs: reference == parsed,
+        "parse_and_normalize",
+        lambda actual: (result, "after") if actual is context else None,
     )
-    monkeypatch.setattr(parser_cli, "parse", lambda *_a, **_k: parsed)
-    monkeypatch.setattr(parser_cli, "normalize", lambda *_a, **_k: normalized)
 
-    result = parser_cli.main(["--run-key", RUN_KEY, "--project-root", str(tmp_path)])
+    exit_code = parser_cli.main(
+        [
+            "--run-key",
+            RUN_KEY,
+            "--database-url",
+            "file:./data/local/test.db",
+            "--project-root",
+            str(tmp_path),
+        ]
+    )
 
-    assert result == 0
-    assert [item["stage"] for item in appended] == ["parsed", "normalized"]
-    assert appended[0]["evidence"] == parsed
-    assert appended[1]["evidence"] == normalized
+    assert exit_code == 0
+    assert context.snapshot == "after"
 
 
 def test_parse_resume_reuses_existing_parsed_evidence(tmp_path, monkeypatch) -> None:
-    raw = _reference("raw")
-    parsed = _reference("parsed")
-    normalized = _reference("normalized")
-    events = (
-        SimpleNamespace(stage="raw_complete", disposition="complete", evidence=raw),
-        SimpleNamespace(stage="parsed", disposition="complete", evidence=parsed),
+    context = SimpleNamespace(snapshot="same", verification_summary=dict)
+    service_result = SimpleNamespace(
+        as_dict=lambda: {
+            "parser_disposition": "reused",
+            "normalizer_disposition": "reused",
+        }
     )
-    appended: list[dict[str, object]] = []
-
-    class FakeLedger:
-        def __init__(self, _store) -> None:
-            pass
-
-        def load_events(self):
-            return events
-
-        def append(self, **values) -> None:
-            appended.append(values)
-
-        @staticmethod
-        def latest_stage_event(_events, _stage):
-            return None
-
-    monkeypatch.setattr(parser_cli, "WeatherArtifactStore", lambda *_a, **_k: object())
-    monkeypatch.setattr(parser_cli, "RunStateLedger", FakeLedger)
-    monkeypatch.setattr(parser_cli, "raw_manifest_reference", lambda _store: raw)
+    monkeypatch.setattr(parser_cli.WeatherRunContext, "open", lambda *_a, **_k: context)
     monkeypatch.setattr(
-        parser_cli,
-        "_matches_current_boundary",
-        lambda _store, reference, **_kwargs: reference == parsed,
-    )
-    monkeypatch.setattr(
-        parser_cli,
-        "parse",
-        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("parse must not rerun")),
-    )
-    monkeypatch.setattr(
-        parser_cli,
-        "normalize",
-        lambda _store, evidence, **_k: normalized if evidence == parsed else None,
+        parser_cli, "parse_and_normalize", lambda _context: (service_result, "same")
     )
 
-    result = parser_cli.main(["--run-key", RUN_KEY, "--project-root", str(tmp_path)])
-
-    assert result == 0
-    assert [item["stage"] for item in appended] == ["normalized"]
+    assert (
+        parser_cli.main(
+            [
+                "--run-key",
+                RUN_KEY,
+                "--database-url",
+                "file:./data/local/test.db",
+                "--project-root",
+                str(tmp_path),
+            ]
+        )
+        == 0
+    )
 
 
 def test_local_date_window_is_dst_aware_and_includes_eleven_instants() -> None:

@@ -80,7 +80,7 @@ class GfsPlanner:
                 request_purpose=request.request_purpose,
                 catalogue_version=catalogue.version,
                 catalogue_sha256=catalogue.sha256,
-                adapter_request_schema_version=1,
+                adapter_request_schema_version=2 if resolved.gfs_request_schema_version == 3 else 1,
                 adapter_request=resolved.model_dump(mode="json"),
                 expected_artifact_keys=keys,
                 created_at_utc=created_at_utc,
@@ -190,7 +190,13 @@ class GfsPlanner:
             )
         key, _url, _idx = _object_urls(run_at_utc, 0)
         return GfsResolvedPlan(
-            gfs_request_schema_version=2 if request.target_local_date is not None else 1,
+            gfs_request_schema_version=(
+                3
+                if request.compact_selection_version is not None
+                else 2
+                if request.target_local_date is not None
+                else 1
+            ),
             selection_mode=mode,
             resolved_run_at_utc=run_at_utc,
             available_at_utc=available_at,
@@ -198,4 +204,7 @@ class GfsPlanner:
             ranges=tuple(planned),
             target_local_date=request.target_local_date,
             flying_window_version=request.flying_window_version,
+            site_config_sha256=request.site_config_sha256,
+            sampling_policy_sha256=request.sampling_policy_sha256,
+            compact_selection_version=request.compact_selection_version,
         )

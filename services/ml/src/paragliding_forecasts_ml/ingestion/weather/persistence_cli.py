@@ -4,11 +4,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from .persistence import WeatherPersistenceError, persist_weather_run
+from ...storage.environment import file_environment
+from ...storage.sqlite import DatabaseConfigurationError, configured_database_url
+from .artifacts import ArtifactError
+from .persistence import WeatherPersistenceError
+from .services import WeatherRunContext, persist_run
+from .state import StateError
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -31,16 +37,37 @@ def build_parser() -> argparse.ArgumentParser:
 def main(arguments: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(arguments)
     try:
-        report = persist_weather_run(
-            args.run_key,
-            args.policy_file,
-            database_url=args.database_url,
-            project_root=args.project_root,
+        root = args.project_root.resolve()
+        file_values = file_environment(root / ".env", {"DATABASE_URL"})
+        database_url = (
+            args.database_url or os.environ.get("DATABASE_URL") or file_values.get("DATABASE_URL")
         )
-    except WeatherPersistenceError as error:
+        context = WeatherRunContext.open(
+            args.run_key,
+            project_root=root,
+            database_url=configured_database_url(database_url),
+        )
+        result, context.snapshot = persist_run(context, args.policy_file)
+    except (
+        ArtifactError,
+        DatabaseConfigurationError,
+        OSError,
+        StateError,
+        ValueError,
+        WeatherPersistenceError,
+    ) as error:
         print(f"Weather persistence did not complete: {error}", file=sys.stderr)
         return 1
-    print(json.dumps(report, indent=2, sort_keys=True))
+    print(
+        json.dumps(
+            {
+                **result.as_dict(),
+                "verification_summary": context.verification_summary(),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
     return 0
 
 
