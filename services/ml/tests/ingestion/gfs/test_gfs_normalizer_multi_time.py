@@ -144,6 +144,9 @@ def test_normalizer_keeps_multi_valid_time_arrays_unique_and_promotes_orography(
         "paragliding_forecasts_ml.ingestion.gfs.normalizer.load_batch",
         lambda _store, _reference: native,
     )
+    monkeypatch.setattr(
+        store, "verify_boundary", lambda reference: store.verify_reference(reference)
+    )
 
     normalizer_manifest = normalize(store, parser_manifest, occurred_at_utc="2026-08-24T12:00:00Z")
 
@@ -217,6 +220,9 @@ def test_normalizer_retains_specific_humidity_and_upward_interval_fluxes(
     monkeypatch.setattr(
         "paragliding_forecasts_ml.ingestion.gfs.normalizer.load_batch",
         lambda _store, _reference: native,
+    )
+    monkeypatch.setattr(
+        store, "verify_boundary", lambda reference: store.verify_reference(reference)
     )
 
     normalizer_manifest = normalize(store, parser_manifest, occurred_at_utc="2026-08-24T12:00:00Z")

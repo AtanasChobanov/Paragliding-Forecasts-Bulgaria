@@ -172,6 +172,7 @@ def test_failure_evidence_uses_a_valid_failed_persistence_stage(tmp_path, monkey
         media_type="application/json",
     )
     monkeypatch.setattr(store, "verify_reference", lambda _reference, **_kwargs: tmp_path)
+    monkeypatch.setattr(store, "verify_boundary", lambda _reference: tmp_path)
     prepared = SimpleNamespace(
         ledger=SimpleNamespace(load_events=lambda: ()),
         store=store,

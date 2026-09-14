@@ -82,6 +82,7 @@ def test_effective_audit_ignores_unused_superseded_evidence(tmp_path, monkeypatc
     assert verified == [current]
     assert report["verified_boundary_count"] == 1
     assert report["verified_boundaries"][0]["sequence"] == 5
+    assert "verification_summary" in report
 
 
 def test_all_history_audit_reports_corrupt_superseded_evidence(tmp_path, monkeypatch) -> None:

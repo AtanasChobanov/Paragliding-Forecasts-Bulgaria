@@ -402,7 +402,10 @@ uv run --project services/ml weather-artifacts audit --run-key <uuid> --scope al
 
 Use `effective` for the operational lineage. Use `all` only for deliberate
 maintenance of retained history; missing or corrupt evidence referenced solely
-by an unused superseded event does not block the effective audit.
+by an unused superseded event does not block the effective audit. The JSON
+report includes command-local files/bytes hashed, cache hits, manifests parsed,
+boundaries verified, just-written registrations, and hashing time; these
+diagnostics are not persisted in SQLite.
 
 ### Reviewed Copernicus site elevation command
 

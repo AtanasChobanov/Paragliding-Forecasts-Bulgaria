@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from pydantic import BaseModel
 
 from ..atmosphere.contracts import ArtifactReference, RawManifest, RequestPlan, StageManifest
-from .serialization import canonical_json_bytes, pretty_json_bytes, sha256_bytes, sha256_file
+from .serialization import canonical_json_bytes, pretty_json_bytes, sha256_bytes
+from .verification import ArtifactVerificationSession
 from .versions import output_directory_name
 
 
@@ -26,10 +29,23 @@ class WeatherArtifactStore:
     """Owns a single weather run's immutable raw and interim filesystem evidence."""
 
     def __init__(
-        self, run_key: str, *, project_root: Path | None = None, create: bool = False
+        self,
+        run_key: str,
+        *,
+        project_root: Path | None = None,
+        create: bool = False,
+        verification_session: ArtifactVerificationSession | None = None,
     ) -> None:
         self.project_root = (project_root or repository_root()).resolve()
         self.run_key = run_key
+        self.verification = verification_session or ArtifactVerificationSession(
+            project_root=self.project_root,
+            run_key=run_key,
+        )
+        self.verification.assert_compatible(
+            project_root=self.project_root,
+            run_key=run_key,
+        )
         self.raw_dir = self.project_root / "data" / "raw" / "weather" / run_key
         self.interim_dir = self.project_root / "data" / "interim" / "weather" / run_key
         if create:
@@ -39,11 +55,20 @@ class WeatherArtifactStore:
 
     @classmethod
     def create_fresh(
-        cls, run_key: str, *, project_root: Path | None = None
+        cls,
+        run_key: str,
+        *,
+        project_root: Path | None = None,
+        verification_session: ArtifactVerificationSession | None = None,
     ) -> WeatherArtifactStore:
         """Create both run roots exactly once for a fresh UUID."""
 
-        return cls(run_key, project_root=project_root, create=True)
+        return cls(
+            run_key,
+            project_root=project_root,
+            create=True,
+            verification_session=verification_session,
+        )
 
     def _create_run_directories(self) -> None:
         if self.raw_dir.exists() or self.interim_dir.exists():
@@ -139,19 +164,32 @@ class WeatherArtifactStore:
         except Exception as error:
             raise ArtifactError("Request plan does not satisfy its versioned contract.") from error
         for artifact in manifest.artifacts:
-            self.verify_reference(artifact, expected_root=self.raw_dir)
+            self.verify_reference(
+                artifact,
+                expected_root=self.raw_dir,
+                require_disk_hash=True,
+            )
         return manifest
 
     def read_raw_manifest(self, reference: ArtifactReference) -> RawManifest:
         """Load only compact raw-manifest metadata before expensive payload hashing."""
 
         path = self.verify_reference(reference, expected_root=self.raw_dir)
+        cached = self.verification.cached_model(reference, path, RawManifest)
+        if cached is not None:
+            return cached  # type: ignore[return-value]
         try:
             manifest = RawManifest.model_validate_json(path.read_bytes(), strict=True)
         except Exception as error:
             raise ArtifactError("Raw manifest does not satisfy its versioned contract.") from error
         if manifest.run_key != self.run_key:
             raise ArtifactError("Raw manifest belongs to another weather run.")
+        self.verification.register_parsed_model(
+            reference,
+            path,
+            manifest,
+            manifest=True,
+        )
         return manifest
 
     def _stage_directory(
@@ -174,11 +212,10 @@ class WeatherArtifactStore:
         )
         if not manifest_path.is_file():
             return None
-        reference = ArtifactReference(
+        reference = self.verification.reference_for_existing(
+            manifest_path,
             artifact_key="stage_manifest",
             relative_path=manifest_path.relative_to(self.project_root).as_posix(),
-            sha256=sha256_file(manifest_path),
-            byte_count=manifest_path.stat().st_size,
             media_type="application/json",
         )
         manifest = self.read_stage_manifest(reference)
@@ -253,7 +290,12 @@ class WeatherArtifactStore:
         self._assert_stage_directory(stage_directory)
         if manifest.run_key != self.run_key:
             raise ArtifactError("Stage manifest run_key does not match the artifact store.")
-        for reference in (*manifest.inputs, *manifest.outputs):
+        for reference in manifest.inputs:
+            if reference.artifact_key in {"raw_manifest", "stage_manifest"}:
+                self.verify_boundary(reference)
+            else:
+                self.verify_reference(reference)
+        for reference in manifest.outputs:
             self.verify_reference(reference)
         return self._write_model(
             stage_directory / "stage-manifest.json", "stage_manifest", manifest
@@ -262,7 +304,8 @@ class WeatherArtifactStore:
     def verify_boundary(self, reference: ArtifactReference) -> Path:
         """Recursively verify a raw or stage manifest boundary and all of its inputs."""
 
-        return self._verify_boundary(reference, visited=set())
+        path, _ = self._verify_boundary(reference, visiting=set())
+        return path
 
     def read_stage_manifest(self, reference: ArtifactReference) -> StageManifest:
         """Return one hash-verified non-raw stage manifest."""
@@ -270,46 +313,103 @@ class WeatherArtifactStore:
         if reference.artifact_key != "stage_manifest":
             raise ArtifactError("Expected a stage-manifest boundary reference.")
         path = self.verify_boundary(reference)
-        try:
-            return StageManifest.model_validate_json(path.read_bytes(), strict=True)
-        except Exception as error:
-            raise ArtifactError(
-                "Stage manifest does not satisfy its versioned contract."
-            ) from error
+        cached = self.verification.cached_model(reference, path, StageManifest)
+        if cached is not None:
+            return cached  # type: ignore[return-value]
+        return self._read_stage_manifest_contract(reference, path)
 
-    def _verify_boundary(self, reference: ArtifactReference, *, visited: set[str]) -> Path:
-        if reference.sha256 in visited:
-            return self.verify_reference(reference)
-        visited.add(reference.sha256)
-        if reference.artifact_key == "raw_manifest":
-            return self.verify_raw_manifest(reference)
-        if reference.artifact_key != "stage_manifest":
-            return self.verify_reference(reference)
-        path = self.verify_reference(reference, expected_root=self.interim_dir)
+    def _read_stage_manifest_contract(
+        self,
+        reference: ArtifactReference,
+        path: Path,
+    ) -> StageManifest:
         try:
             manifest = StageManifest.model_validate_json(path.read_bytes(), strict=True)
         except Exception as error:
             raise ArtifactError(
                 "Stage manifest does not satisfy its versioned contract."
             ) from error
-        if manifest.run_key != self.run_key:
-            raise ArtifactError("Stage manifest belongs to another weather run.")
-        expected_fingerprint = stage_input_fingerprint(
-            stage=manifest.stage,
-            producer_version=manifest.producer_version,
-            inputs=manifest.inputs,
-            configuration=manifest.configuration,
+        self.verification.register_parsed_model(
+            reference,
+            path,
+            manifest,
+            manifest=True,
         )
-        if expected_fingerprint != manifest.input_fingerprint_sha256:
-            raise ArtifactError(
-                "Stage manifest input fingerprint does not match its declared inputs."
+        return manifest
+
+    def _verify_boundary(
+        self,
+        reference: ArtifactReference,
+        *,
+        visiting: set[tuple[str, str, str, int, str, int | None]],
+    ) -> tuple[Path, tuple[tuple[ArtifactReference, Path], ...]]:
+        resolved = self._resolve_relative(reference.relative_path)
+        cached = self.verification.cached_boundary(reference, resolved)
+        if cached is not None:
+            return cached
+        identity = self.verification.identity(reference, resolved)
+        if identity in visiting:
+            path = self.verify_reference(reference)
+            return path, ((reference, path),)
+        visiting.add(identity)
+        if reference.artifact_key == "raw_manifest":
+            manifest = self.verify_raw_manifest(reference)
+            path = self.verify_reference(reference, expected_root=self.raw_dir)
+            dependencies: list[tuple[ArtifactReference, Path]] = [(reference, path)]
+            request_path = self.verify_reference(
+                manifest.request_plan,
+                expected_root=self.raw_dir,
             )
-        for item in (*manifest.inputs, *manifest.outputs):
-            self._verify_boundary(item, visited=visited)
-        return path
+            dependencies.append((manifest.request_plan, request_path))
+            dependencies.extend(
+                (
+                    artifact,
+                    self.verify_reference(
+                        artifact,
+                        expected_root=self.raw_dir,
+                        require_disk_hash=True,
+                    ),
+                )
+                for artifact in manifest.artifacts
+            )
+        elif reference.artifact_key != "stage_manifest":
+            path = self.verify_reference(reference)
+            dependencies = [(reference, path)]
+        else:
+            path = self.verify_reference(reference, expected_root=self.interim_dir)
+            cached_manifest = self.verification.cached_model(reference, path, StageManifest)
+            manifest = (
+                cached_manifest
+                if isinstance(cached_manifest, StageManifest)
+                else self._read_stage_manifest_contract(reference, path)
+            )
+            if manifest.run_key != self.run_key:
+                raise ArtifactError("Stage manifest belongs to another weather run.")
+            expected_fingerprint = stage_input_fingerprint(
+                stage=manifest.stage,
+                producer_version=manifest.producer_version,
+                inputs=manifest.inputs,
+                configuration=manifest.configuration,
+            )
+            if expected_fingerprint != manifest.input_fingerprint_sha256:
+                raise ArtifactError(
+                    "Stage manifest input fingerprint does not match its declared inputs."
+                )
+            dependencies = [(reference, path)]
+            for item in (*manifest.inputs, *manifest.outputs):
+                _, item_dependencies = self._verify_boundary(item, visiting=visiting)
+                dependencies.extend(item_dependencies)
+        visiting.remove(identity)
+        result = tuple(dependencies)
+        self.verification.register_boundary(reference, path, result)
+        return path, result
 
     def verify_reference(
-        self, reference: ArtifactReference, *, expected_root: Path | None = None
+        self,
+        reference: ArtifactReference,
+        *,
+        expected_root: Path | None = None,
+        require_disk_hash: bool = False,
     ) -> Path:
         """Verify path containment, byte length, and SHA-256 for a referenced artifact."""
 
@@ -323,11 +423,14 @@ class WeatherArtifactStore:
                 ) from error
         if not path.is_file():
             raise ArtifactError(f"Referenced artifact does not exist: {reference.relative_path}")
-        if path.stat().st_size != reference.byte_count:
-            raise ArtifactError(f"Artifact byte count does not match: {reference.relative_path}")
-        if sha256_file(path) != reference.sha256:
-            raise ArtifactError(f"Artifact SHA-256 does not match: {reference.relative_path}")
-        return path
+        try:
+            return self.verification.verify_file(
+                reference,
+                path,
+                require_disk_hash=require_disk_hash,
+            )
+        except ValueError as error:
+            raise ArtifactError(str(error)) from error
 
     def _write_model(
         self,
@@ -343,6 +446,7 @@ class WeatherArtifactStore:
             pretty_json_bytes(model),
             media_type="application/json",
             record_count=record_count,
+            model=model,
         )
 
     def _write_bytes(
@@ -353,15 +457,11 @@ class WeatherArtifactStore:
         *,
         media_type: str,
         record_count: int | None = None,
+        model: BaseModel | None = None,
     ) -> ArtifactReference:
         self._assert_under_run(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            with path.open("xb") as handle:
-                handle.write(content)
-        except FileExistsError as error:
-            raise FileExistsError(f"Refusing to overwrite immutable artifact: {path}") from error
-        return ArtifactReference(
+        reference = ArtifactReference(
             artifact_key=artifact_key,
             relative_path=path.relative_to(self.project_root).as_posix(),
             sha256=sha256_bytes(content),
@@ -369,6 +469,26 @@ class WeatherArtifactStore:
             media_type=media_type,
             record_count=record_count,
         )
+        temporary_path = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+        try:
+            with temporary_path.open("xb") as handle:
+                handle.write(content)
+                handle.flush()
+                os.fsync(handle.fileno())
+            if temporary_path.stat().st_size != len(content):
+                raise ArtifactError(
+                    "Temporary artifact byte count does not match serialized bytes."
+                )
+            os.link(temporary_path, path)
+        except FileExistsError as error:
+            raise FileExistsError(f"Refusing to overwrite immutable artifact: {path}") from error
+        finally:
+            temporary_path.unlink(missing_ok=True)
+        try:
+            self.verification.register_written(reference, path, model=model)
+        except ValueError as error:
+            raise ArtifactError(str(error)) from error
+        return reference
 
     def _resolve_relative(self, relative_path: str) -> Path:
         candidate = (self.project_root / relative_path).resolve()

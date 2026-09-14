@@ -225,6 +225,9 @@ def _fixture(root: Path) -> tuple[WeatherArtifactStore, ArtifactReference, GfsCa
 def _run(root: Path, monkeypatch):
     store, input_manifest, batch = _fixture(root)
     monkeypatch.setattr(
+        store, "verify_boundary", lambda reference: store.verify_reference(reference)
+    )
+    monkeypatch.setattr(
         "paragliding_forecasts_ml.ingestion.weather.spatial.load_canonical_batch",
         lambda _store, _reference: batch,
     )

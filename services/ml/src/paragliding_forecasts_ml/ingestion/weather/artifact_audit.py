@@ -43,4 +43,5 @@ def audit_weather_artifacts(
         "ledger_event_count": snapshot.final_sequence,
         "verified_boundary_count": len(verified),
         "verified_boundaries": verified,
+        "verification_summary": store.verification.verification_summary(),
     }
