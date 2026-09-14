@@ -72,7 +72,7 @@ def _preflight(policy_path: Path, database_url: str | None) -> tuple[str, tuple[
             "flight_sources",
             "sites",
             "source_site_mappings",
-            "ingestion_runs",
+            "flight_ingestion_runs",
             "flight_records",
         }
         rows = connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()

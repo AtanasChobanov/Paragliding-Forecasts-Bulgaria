@@ -651,7 +651,7 @@ def test_conflict_blocks_writes_until_a_reviewed_decision(migrated_database) -> 
     assert pending["status"] == "awaiting_reconciliation_review"
     connection = _database(root, database_url)
     try:
-        assert connection.execute("SELECT count(*) FROM ingestion_runs").fetchone()[0] == 1
+        assert connection.execute("SELECT count(*) FROM flight_ingestion_runs").fetchone()[0] == 1
         row = connection.execute(
             "SELECT source_flight_url FROM flight_records WHERE source_flight_id = '100'"
         ).fetchone()
@@ -697,7 +697,7 @@ def test_conflict_blocks_writes_until_a_reviewed_decision(migrated_database) -> 
     assert resolved["reconciliation"]["counts"]["reviewed_keep_existing"] == 1
     connection = _database(root, database_url)
     try:
-        assert connection.execute("SELECT count(*) FROM ingestion_runs").fetchone()[0] == 2
+        assert connection.execute("SELECT count(*) FROM flight_ingestion_runs").fetchone()[0] == 2
         assert connection.execute("SELECT count(*) FROM flight_records").fetchone()[0] == 2
         distance = connection.execute(
             "SELECT scored_distance_km FROM flight_records WHERE source_flight_id = '100'"
@@ -997,7 +997,10 @@ def test_invalid_decision_and_mid_transaction_error_rollback_every_write(migrate
     after_connection = _database(root, database_url)
     try:
         assert [tuple(row) for row in _canonical_columns(after_connection)] == before_rows
-        assert after_connection.execute("SELECT count(*) FROM ingestion_runs").fetchone()[0] == 1
+        assert (
+            after_connection.execute("SELECT count(*) FROM flight_ingestion_runs").fetchone()[0]
+            == 1
+        )
     finally:
         after_connection.close()
 
@@ -1063,7 +1066,7 @@ def test_component_partial_mapping_review_resume_and_no_op(migrated_database, mo
     assert replay["persistence"]["reconciliation"]["status"] == "no_op"
     connection = _database(root, database_url)
     try:
-        assert connection.execute("SELECT count(*) FROM ingestion_runs").fetchone()[0] == 1
+        assert connection.execute("SELECT count(*) FROM flight_ingestion_runs").fetchone()[0] == 1
         assert connection.execute("SELECT count(*) FROM flight_records").fetchone()[0] == 182
     finally:
         connection.close()

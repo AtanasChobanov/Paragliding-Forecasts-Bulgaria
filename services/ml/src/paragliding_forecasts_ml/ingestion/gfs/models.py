@@ -1,0 +1,247 @@
+"""Strict GFS request and immutable collection-evidence contracts."""
+
+from __future__ import annotations
+
+from datetime import UTC, date, datetime, time
+from typing import Literal
+from zoneinfo import ZoneInfo
+
+from pydantic import Field, field_validator, model_validator
+
+from ..atmosphere.contracts import (
+    SHA256_PATTERN,
+    ArtifactReference,
+    AtmosphericContract,
+    validate_utc_timestamp,
+)
+
+GFS_SOURCE_ID = "noaa_gfs_0p25_aws_grib2"
+GFS_GRID_KEY = "gfs_0p25_global"
+GFS_BUCKET_URL = "https://noaa-gfs-bdp-pds.s3.amazonaws.com"
+GFS_COLLECTOR_VERSION = "gfs-collector/6"
+SOFIA_TIME_ZONE = "Europe/Sofia"
+SOFIA_FLYING_WINDOW_VERSION = "sofia-flying-window/1"
+
+
+def sofia_window_instants(local_date: str) -> tuple[str, ...]:
+    """Return the fixed DST-aware local 10:00--20:00 collection instants."""
+
+    day = date.fromisoformat(local_date)
+    if local_date != day.isoformat():
+        raise ValueError("local_date must be YYYY-MM-DD.")
+    zone = ZoneInfo(SOFIA_TIME_ZONE)
+    return tuple(
+        datetime.combine(day, time(hour), tzinfo=zone)
+        .astimezone(UTC)
+        .strftime("%Y-%m-%dT%H:%M:%SZ")
+        for hour in range(10, 21)
+    )
+
+
+class GfsRequest(AtmosphericContract):
+    """Validated operator intent before a run is resolved."""
+
+    run_key: str
+    request_purpose: Literal["historical_forecast", "operational_forecast"]
+    valid_at_utc: tuple[str, ...] = Field(min_length=1)
+    explicit_run_at_utc: str | None = None
+    newest_complete_before_utc: str | None = None
+    maximum_cycles_back: int = Field(default=8, ge=1, le=16)
+    maximum_range_bytes: int = Field(default=8 * 1024 * 1024, ge=1024)
+    maximum_total_bytes: int = Field(default=128 * 1024 * 1024, ge=1024)
+    target_local_date: str | None = None
+    flying_window_version: str | None = None
+    site_config_sha256: str | None = None
+    sampling_policy_sha256: str | None = None
+    compact_selection_version: str | None = None
+
+    @field_validator("valid_at_utc", "explicit_run_at_utc", "newest_complete_before_utc")
+    @classmethod
+    def utc_times_must_be_valid(cls, value: tuple[str, ...] | str | None):
+        if value is None:
+            return value
+        if isinstance(value, tuple):
+            if len(value) != len(set(value)):
+                raise ValueError("GFS valid times must be unique.")
+            return tuple(validate_utc_timestamp(item) for item in value)
+        return validate_utc_timestamp(value)
+
+    @field_validator("run_key")
+    @classmethod
+    def run_key_must_be_present(cls, value: str) -> str:
+        if not value:
+            raise ValueError("GFS run key is required.")
+        return value
+
+    @field_validator("site_config_sha256", "sampling_policy_sha256")
+    @classmethod
+    def acquisition_hashes_must_be_sha256(cls, value: str | None) -> str | None:
+        if value is not None and SHA256_PATTERN.fullmatch(value) is None:
+            raise ValueError("GFS acquisition identity hashes must be SHA-256 values.")
+        return value
+
+    @model_validator(mode="after")
+    def local_date_metadata_must_be_complete(self) -> GfsRequest:
+        if (self.target_local_date is None) != (self.flying_window_version is None):
+            raise ValueError("GFS local-date requests require both date and flying-window version.")
+        if self.target_local_date is not None:
+            if self.flying_window_version != SOFIA_FLYING_WINDOW_VERSION:
+                raise ValueError("GFS local-date requests require sofia-flying-window/1.")
+            try:
+                expected = sofia_window_instants(self.target_local_date)
+            except ValueError as error:
+                raise ValueError("target_local_date must be YYYY-MM-DD.") from error
+            if self.valid_at_utc != expected:
+                raise ValueError(
+                    "GFS local-date request valid times must equal its Sofia flying window."
+                )
+        identities = (
+            self.site_config_sha256,
+            self.sampling_policy_sha256,
+            self.compact_selection_version,
+        )
+        if any(value is not None for value in identities) and not all(
+            value is not None for value in identities
+        ):
+            raise ValueError("GFS compact acquisition identity fields must be supplied together.")
+        if all(value is not None for value in identities) and self.target_local_date is None:
+            raise ValueError("GFS compact acquisition identity requires a local-date request.")
+        return self
+
+    def selection_mode(self) -> Literal["explicit", "newest_complete_before"]:
+        if (self.explicit_run_at_utc is None) == (self.newest_complete_before_utc is None):
+            raise ValueError("Supply exactly one GFS run selection mode.")
+        return "explicit" if self.explicit_run_at_utc is not None else "newest_complete_before"
+
+
+class GfsPlannedRange(AtmosphericContract):
+    """One exact selected byte range and its native index identity."""
+
+    lead_hours: int = Field(ge=0, le=384)
+    valid_at_utc: str
+    grib_url: str
+    index_url: str
+    index_sha256: str
+    object_content_length: int = Field(gt=0)
+    object_etag: str | None = None
+    object_last_modified_utc: str
+    byte_start: int = Field(ge=0)
+    byte_end: int = Field(ge=0)
+    selector_keys: tuple[str, ...] = Field(min_length=1)
+    message_numbers: tuple[int, ...] = Field(min_length=1)
+
+    forecast_descriptors: tuple[str, ...] = Field(min_length=1)
+
+    @field_validator("valid_at_utc", "object_last_modified_utc")
+    @classmethod
+    def timestamps_must_be_utc(cls, value: str) -> str:
+        return validate_utc_timestamp(value)
+
+
+class GfsResolvedPlan(AtmosphericContract):
+    """Source-owned resolved GFS plan embedded in S02 RequestPlan.adapter_request."""
+
+    gfs_request_schema_version: Literal[1, 2, 3] = 1
+    selection_mode: Literal["explicit", "newest_complete_before"]
+    resolved_run_at_utc: str
+    available_at_utc: str
+    source_product_key: str
+    selector_set_version: Literal[2] = 2
+    spatial_footprint: Literal["global_regular_latlon_0p25"] = "global_regular_latlon_0p25"
+    ranges: tuple[GfsPlannedRange, ...] = Field(min_length=1)
+    target_local_date: str | None = None
+    flying_window_version: str | None = None
+    site_config_sha256: str | None = None
+    sampling_policy_sha256: str | None = None
+    compact_selection_version: str | None = None
+    licence_reference: str = "https://registry.opendata.aws/noaa-gfs-bdp-pds/"
+    attribution_text: str = (
+        "NOAA Global Forecast System (GFS), accessed from NOAA Open Data on AWS."
+    )
+
+    @model_validator(mode="after")
+    def resolved_local_date_metadata_must_match_schema(self) -> GfsResolvedPlan:
+        identities = (
+            self.site_config_sha256,
+            self.sampling_policy_sha256,
+            self.compact_selection_version,
+        )
+        if any(value is not None for value in identities) and not all(
+            value is not None for value in identities
+        ):
+            raise ValueError("Resolved GFS compact acquisition identities must be complete.")
+        if (self.target_local_date is None) != (self.flying_window_version is None):
+            raise ValueError("Resolved GFS local-date metadata must be supplied together.")
+        if self.target_local_date is None:
+            if self.gfs_request_schema_version != 1:
+                raise ValueError("Extended GFS request schemas require local-date metadata.")
+            return self
+        expected_schema = 3 if all(value is not None for value in identities) else 2
+        if self.gfs_request_schema_version != expected_schema:
+            raise ValueError(
+                "GFS local-date schema version must match its compact acquisition identity."
+            )
+        if self.flying_window_version != SOFIA_FLYING_WINDOW_VERSION:
+            raise ValueError(
+                "Resolved GFS local-date request uses an unknown flying-window version."
+            )
+        expected = sofia_window_instants(self.target_local_date)
+        if tuple(sorted({item.valid_at_utc for item in self.ranges})) != expected:
+            raise ValueError("Resolved GFS local-date ranges must equal its Sofia flying window.")
+        return self
+
+    @field_validator("site_config_sha256", "sampling_policy_sha256")
+    @classmethod
+    def resolved_acquisition_hashes_must_be_sha256(cls, value: str | None) -> str | None:
+        if value is not None and SHA256_PATTERN.fullmatch(value) is None:
+            raise ValueError("Resolved GFS acquisition identity hashes must be SHA-256 values.")
+        return value
+
+    @field_validator("resolved_run_at_utc", "available_at_utc")
+    @classmethod
+    def plan_timestamps_must_be_utc(cls, value: str) -> str:
+        return validate_utc_timestamp(value)
+
+
+class GfsArtifactEvidence(AtmosphericContract):
+    """Per-artifact source URL/range/provenance retained outside generic manifests."""
+
+    artifact: ArtifactReference
+    source_url: str = Field(min_length=1)
+    byte_start: int | None = Field(default=None, ge=0)
+    byte_end: int | None = Field(default=None, ge=0)
+    lead_hours: int | None = Field(default=None, ge=0, le=384)
+    valid_at_utc: str | None = None
+    message_numbers: tuple[int, ...] = ()
+    selector_keys: tuple[str, ...] = ()
+    etag: str | None = None
+    last_modified_utc: str | None = None
+    forecast_descriptors: tuple[str, ...] = ()
+
+    @field_validator("valid_at_utc", "last_modified_utc")
+    @classmethod
+    def evidence_timestamps_must_be_utc(cls, value: str | None) -> str | None:
+        return None if value is None else validate_utc_timestamp(value)
+
+
+class GfsCollectionRecord(AtmosphericContract):
+    """Immutable GFS-specific evidence required by S04 parsing and audit."""
+
+    gfs_collection_schema_version: Literal[1] = 1
+    run_key: str
+    collector_version: str = GFS_COLLECTOR_VERSION
+    source_id: Literal["noaa_gfs_0p25_aws_grib2"] = GFS_SOURCE_ID
+    source_product_key: str
+    run_at_utc: str
+    available_at_utc: str
+    retrieved_at_utc: str
+    licence_reference: str
+    attribution_text: str
+    outcome: Literal["complete", "partial", "failed"]
+    failure_kind: str | None = None
+    artifacts: tuple[GfsArtifactEvidence, ...] = Field(min_length=1)
+
+    @field_validator("run_at_utc", "available_at_utc", "retrieved_at_utc")
+    @classmethod
+    def collection_timestamps_must_be_utc(cls, value: str) -> str:
+        return validate_utc_timestamp(value)

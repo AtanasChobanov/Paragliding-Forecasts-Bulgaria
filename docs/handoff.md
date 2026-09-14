@@ -1,365 +1,146 @@
 # Project Handoff
 
-## Purpose and source of truth
+## Read first
 
-This is a concise operational snapshot for the next implementation task. It is
-not a project history. Use the following documents for the authoritative detail:
+1. `AGENTS.md` for repository rules.
+2. `docs/tasks.md` for ticket status and scope.
+3. This handoff for the active T-018 operational state.
+4. The relevant sections of `docs/project-brief.md` and
+   `docs/architecture.md` for product/system constraints.
+5. DEC-031 through DEC-053 in `docs/decisions.md` for accepted weather
+   decisions, including the ERA5 deferral boundary.
 
-1. `AGENTS.md` for repository rules and workflow.
-2. `docs/tasks.md` for backlog status and acceptance scope.
-3. `docs/project-brief.md` for product, safety, and data requirements.
-4. `docs/architecture.md` for system boundaries.
-5. `docs/decisions.md` for accepted durable decisions.
-6. Git history for prior implementation detail and validation evidence.
+Keep durable decisions in `docs/decisions.md`, ticket lifecycle in
+`docs/tasks.md`, and only current actionable state here.
 
-## Current state (2026-08-17)
+## Current state — 2026-09-14
 
-| Field | Value |
-| --- | --- |
-| Branch | `feature/T-016-T-017-forecast-research`. |
-| Working tree at handoff update | T-017 report/catalogue and this operational update are uncommitted; verified ERA5/CERRA GRIB and decoded outputs are ignored under `data/raw/weather-spike/`. |
-| Task status in `docs/tasks.md` | T-012 through T-017 `Review`. |
-| Next implementation focus | T-018 designs and implements only the source-neutral weather schema; plan explicit weather-ingestion tickets before T-020. |
-| Local storage | SQLite selected by `DATABASE_URL`; local databases, raw source data, and interim artifacts are ignored. |
+| Field          | Value                                                                                                                                                                                                                 |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Branch         | `feature/T-018-weather-ingestion`                                                                                                                                                                                     |
+| Ticket         | `T-018` is **Done**. S01–S08 and S10 are complete; S09/ERA5 remains separately deferred to T-038.                                                                                                                  |
+| Next work      | Do not extend weather ingestion implicitly. Future ERA5 work starts only under T-038 when the recorded decision gate is met.                                                                                         |
+| Fresh evidence | Bounded current-catalogue GFS fresh, same-DB offline no-op, second-DB offline restoration, and effective artifact audit all passed on 2026-09-14.                                                                    |
+| Local DB       | The primary and temporary restoration SQLite databases were migrated by the owner for acceptance. They are local ignored artifacts and must not be committed.                                                         |
+| User work      | The deletions of the old S07/S08 plan files are user-owned. Do not restore, stage, or commit them without explicit instruction.                                                                                       |
 
-T-013 now has two successful local XCContest ingestion runs. The complete
-`fresh`/human-review/`resume` workflow was manually exercised successfully for
-2024 on 2026-08-11. This is functional verification by the project owner, not a
-license, safety, or future source-access guarantee.
+## Active T-018 boundary
 
-## Architecture and implemented product baseline
+T-018 now owns the source-neutral SQLite schema and a complete **GFS** path:
+immutable raw artifacts/manifests, parsing, canonical normalization,
+site/grid sampling, validation/quarantine, feature building, and idempotent
+SQLite persistence.
 
-- `apps/web`: React/Vite local dashboard. It presents forecast evidence and
-  explicit data states; it must not read SQLite or calculate model probabilities.
-- `apps/api`: Express/TypeScript browser-facing API. It owns HTTP configuration
-  and browser/API boundary validation, not Python ingestion or React rendering.
-- `packages/contracts`: shared Zod/API contracts.
-- `packages/database`: Drizzle SQLite schema and reviewed migrations. Drizzle is
-  the only DDL/migration owner.
-- `services/ml`: Python 3.12/uv ingestion, data, feature, model, and batch work.
-  It produces language-neutral storage/file boundaries rather than a second HTTP
-  service.
+- GFS is the sole exact-forecast source in this implementation phase. Preserve
+  run/availability/retrieval/valid/lead/grid provenance and never substitute a
+  model for an unavailable run.
+- Preserve units, source/model/run/valid/lead provenance, confidence, and
+  explicit missing/quality states. Never turn a sentinel or missing field into
+  a physical value.
+- No Airflow/scheduler, raw-retention deletion, partial/sampled integrity hash,
+  unrelated feature/model work, or SQLite schema expansion belongs in S10.
 
-The dashboard/API baseline from T-001 through T-008 is implemented and tested.
-Its detailed visual and historical test checkpoints are intentionally not
-repeated here; consult Git and the owning README/tests when changing that area.
+## S09 / ERA5 decision
 
-## T-016 weather-data research handoff
+ERA5 ingestion is deferred from T-018. The implemented exact GFS source and
+feature/persistence path are sufficient for the initial model; the project
+brief does not require an ERA5 collector once usable exact forecasts exist.
 
-The detailed source comparison is in
-[`T-016-forecast-data-research-report.md`](T-016-forecast-data-research-report.md).
-T-016 is ready for review: exact historical forecasts exist, but no one free
-high-resolution archive covers the complete likely Bulgarian flight-history
-period.
+Create the durable decision and backlog adjustment as S10 Phase 0 (expected
+future task: T-038). Start ERA5 only when real joined GFS data, baseline model,
+backtests, or calibration show a need for forecast/reanalysis bias pairs,
+climatology, weak cloud-base labels, confidence calibration, or fine tuning.
 
-- Treat `forecast`, `reanalysis`, and `observation` as distinct source kinds.
-  An as-issued forecast is the information available before a flight day;
-  reanalysis is a retrospective physically consistent reconstruction; station
-  and radiosonde values are point observations. Do not train or backtest as if
-  they were interchangeable, and retain source/model/run/valid/lead provenance.
-- DEC-031 supersedes the earlier provisional source preference: GFS is the
-  coarse exact long-history forecast comparator; ICON-EU is the preferred recent
-  regional profile candidate; IFS HRES is only a conditional high-resolution
-  surface/PBL component; ERA5 is the long-history reanalysis baseline; CERRA is
-  an offline terrain comparison; and IGRA is observational validation. Do not
-  silently substitute these source kinds or models.
-- For current forecasts, select only a fully available named model run and
-  preserve `runAt`, `availableAt`, `retrievedAt`, `validAt`, and `leadHours`.
-  A `00 UTC` global run normally becomes available 4–6 hours later; schedule
-  ingestion from provider availability metadata rather than a fixed local time.
-  If a new run is unavailable, retain the last successful forecast and expose
-  its age. ERA5, which has about five days of latency, is not an operational
-  fallback.
-- Open-Meteo's free hosted service is non-commercial. A paid beta/subscription
-  product must use its appropriate commercial plan or a direct licensed source;
-  preserve required attribution and source licence metadata. The direct DWD
-  path avoids a hosted Open-Meteo commercial dependency but requires GRIB
-  decoding, subsetting, and operational archiving.
-- T-017 completed that bounded Bulgaria sample and locked the source/feature
-  contract for T-018. T-019 should parse raw NOAA IGRA Sofia profiles; image
-  scraping/OCR remains deferred.
+ERA5 must remain a separate `reanalysis` cohort, never a GFS fallback row or a
+same-example forecast substitute. Keep its future-compatible source registry,
+schema capacity, policy family, provenance rules, and nullable CIN/cloud-base
+destinations; do not implement a placeholder collector or CDS credential path.
 
-## T-017 weather-field spike handoff
+## Completed S10 operational evidence
 
-The detailed results and proposed canonical vocabulary are in
-[`T-017-weather-feature-spike-report.md`](T-017-weather-feature-spike-report.md)
-and the machine-readable
-[`T-017-weather-field-catalogue.json`](T-017-weather-field-catalogue.json).
+The executable plan is retained at `docs/T-018-S10-implementation-plan.md`.
+Its required GFS-only implementation, compact artifact migration, and shared
+fresh/offline-resume orchestration are complete.
 
-The no-credential phase is complete for five canonical sites, representative
-strong/marginal/precipitation cases, and 24/48/72/120-hour leads:
+The owner-authorized live acceptance used run
+`0200117a-2638-4e98-ac42-534db32315dd` for local date `2026-09-14`, GFS cycle
+`2026-09-14T00:00:00Z`, purpose `operational_forecast`, and reviewed cap
+`1109 MiB`. The fresh result inserted the graph into the primary SQLite
+database. It retained 1,163,650,418 raw bytes, 25.32 MiB of interim artifacts,
+an 8 x 24 compact crop covering 77 required nodes, and no global parser or
+normalizer arrays. Collection took 15 minutes 8 seconds; fresh end-to-end took
+15 minutes 45 seconds. Its verifier processed 597 files / 1,163,650,418 bytes
+in 1.225 seconds with 11,916 cache hits.
 
-- Open-Meteo IFS HRES provides useful high-resolution surface, CAPE/CIN, and
-  PBL fields, but all requested pressure-level profiles were null. One explicit
-  archived run also returned an HTTP-200 plain-text unavailable-run error. It
-  cannot remain the sole detailed source.
-- Open-Meteo ICON-EU returned complete 925/850/700 hPa temperature, humidity,
-  wind, and geopotential profiles in the sample, but no PBL height or pressure-
-  level vertical velocity. It is the preferred regional profile candidate.
-- NOAA GFS public AWS GRIB2 returned the required surface, profile, CAPE/CIN,
-  PBL, and vertical-velocity inventory without registration; it is accepted as
-  the coarse exact long-history comparator.
-- NOAA IGRA Sofia raw/derived archives contained 06 and 12 UTC profiles for all
-  three 2025 case dates and are accepted as observational validation evidence.
-- ERA5 authenticated CDS retrievals completed for all three case dates. The
-  surface and pressure-level inventories are accepted as the long-history
-  reanalysis baseline; direct CIN and cloud base are nullable, and bitmap/
-  missing-value metadata must turn sentinels into explicit nulls.
-- CERRA retrieval and decoding are verified: 13 analysis messages across two
-  successful jobs used the 1069 x 1069 full-domain grid with zero missing values.
-  It is accepted as an offline terrain comparator, not as primary direct PBL,
-  cloud-base, CAPE, or CIN evidence.
+The same-database resume returned `revalidated_no_op` with unchanged counts.
+Offline resume into a separately migrated seeded SQLite database returned
+`inserted` with the same 1 run, 77 samples, 308 intervals, 759 profile levels,
+154 convection measurements, 7 daily snapshots, 14 profile layers, 77 snapshot
+inputs, and 9,554 provenance rows. Both resumes reported no network access and
+reused all derived boundaries.
 
-CDS account setup and all required terms are complete. Four bounded ERA5
-requests downloaded 519,048 bytes and were decoded successfully: all 630
-pressure-level messages had no missing grid values, while direct ERA5 CIN was
-missing for 93.359% and cloud base for 21.839% of the sampled surface grid.
-Preserve run/base time, valid time, step/statistic, native units, and missing
-metadata; never persist the GRIB missing sentinel as a physical value.
+`weather-artifacts audit --scope effective` passed: it verified the eight-event
+ledger's seven effective boundaries, hashing 619 files / 1,190,198,723 bytes
+and parsing seven manifests. Full-history audit remains optional maintenance.
+The raw and SQLite acceptance artifacts are local-only and must not be committed.
 
-Both CERRA jobs completed successfully and were downloaded. The 12-field
-analysis payload is 27,438,924 bytes and the one-field diagnostic is 2,286,577
-bytes. Each spent about two hours queued, while provider processing took about
-10 seconds and local download under six seconds. The decoded native surface
-inventory is `2t` K, `2r` %, `10si` m/s, `10wdir` degrees true, `msl`/`sp` Pa,
-`tcc`/`lcc`/`mcc`/`hcc` %, `orog` m, and `tciwv` kg/m2. CERRA surface wind
-components are derived from native speed/direction. Raw GRIB, request/result
-metadata, and `cerra-decoded-summary.json` remain ignored under
-`data/raw/weather-spike/cds/`. T-017 is ready for review.
+## Why S10 is necessary
 
-## Post-spike weather implementation context
+### Artifact verification performance
 
-T-018 owns the source-neutral SQLite weather schema, migrations, constraints,
-and tests. It does **not** own implementation of all collectors. The backlog
-has no explicit weather-collector ticket between T-018/T-019 and T-020, so add
-scoped ingestion work before attempting the T-020 weather/flight join. Do not
-create inert placeholder collectors.
+`RunStateLedger.load_events()` currently recursively verifies every event
+evidence boundary and rehashes predecessor/events. Repeated command calls
+repeat artifact and raw-content reads. For the retained old-style 18-event
+lineage, one traversal was estimated at roughly 362 GiB of reads before further
+command-level repeats.
 
-The proposed first end-to-end exact-forecast cohort is GFS for both training
-and operational inference. This avoids feeding ICON-EU values into an ML
-artifact trained only on GFS: matching canonical units do not remove source,
-resolution, terrain, physics, or bias differences. Collect ICON-EU in shadow
-mode for comparison and eventual source-specific model/calibration. A future
-source switch must select a compatible weather snapshot and prediction artifact
-together, retaining source/model, grid point/elevation, interpolation, feature
-contract, calibration, and fallback provenance. The GFS fallback must be
-implemented and tested before ICON-EU is relied on operationally.
+The fix must not weaken integrity:
 
-ERA5 has three separate offline roles: an independent reanalysis outcome/
-feature benchmark, forecast-to-ERA5 verification and bias-correction pairs,
-and versioned site/season climatology/anomaly features. It is not a live
-fallback and must never silently fill a missing exact-forecast row. Keep
-forecast and reanalysis cohorts distinct initially. IGRA is a separate
-observed-profile validation branch and may only be an operational input if its
-actual publication time is before the prediction cutoff.
+- normal fresh/resume verifies only the effective immutable lineage;
+- all-history verification remains an explicit audit mode;
+- full SHA-256 remains mandatory for trusted effective files;
+- cache verified files/manifests/boundaries/matrices only within one command,
+  with full identity keys and stat-change invalidation;
+- retain atomic publication and snapshot-aware ledger append;
+- emit secret-free files/bytes/cache counters in command output, not SQLite.
 
-Direct DWD ICON-EU Open Data serves current GRIB runs; it is not a convenient
-free arbitrary-date exact-run archive. A direct-DWD operational collector must
-archive each selected complete run immediately as immutable raw/subset evidence
-with manifest, checksum, source URL, run/valid/lead times, model metadata, and
-licence data. ICON-DREAM-EU is a 6.5 km reanalysis from 2010 with a publication
-lag, not an archive of those operational ICON-EU forecasts.
+Existing database SHA fields stay unchanged: `raw_manifest_sha256`,
+`feature_manifest_sha256`, and `persistence_input_sha256` identify distinct
+provenance boundaries; `persisted_graph_sha` is a receipt.
 
-## Database and flight-data boundary
+### Storage scaling
 
-The migrated SQLite flight foundation contains `flight_sources`, `sites`,
-`source_site_mappings`, `ingestion_runs`, and `flight_records`. Preserve units,
-provenance, confidence, and the states `mock`, `manual`, `baseline`, `real`, and
-`missing` across boundaries.
+The retained GFS run is dominated by derived global arrays, not SQLite rows:
+raw payloads are about 1.09 GiB, active parser v5 artifacts about 10.92 GiB,
+and active normalizer v7 artifacts about 12.01 GiB; spatial/validator/features
+total only about 18 MiB. With superseded history, one retained day is about
+47 GiB, so naive 100-day retention is not viable.
 
-Important current behavior:
+The compact design is locked:
 
-- Canonical flight identity is source-specific: `(source_id, source_flight_id)`.
-  T-014 classifies each repeat as no-op revalidation, enrichment, preservation,
-  conflict, or a reviewed resolution; it never silently replaces a row.
-- A persisted flight retains the chosen source URL, canonical values, selected
-  source-site mapping, validation provenance, creator run, and latest validator
-  run. `validation_notes` is schema-v1 machine-verifiable quality/provenance JSON
-  after a T-014 reconciliation; pre-existing legacy text is not backfilled.
-- A conflict writes ignored immutable review evidence under
-  `data/interim/xccontest/<run-key>/reconciliation-v1/` and rolls back before
-  any flight/run write. Follow the `Flight reconciliation and review workflow` section of
-  `services/ml/README.md` exactly.
-- T-012 migrations are reviewed/applied local schema history. Do not rewrite or
-  alter applied migrations; generate a new reviewed migration when schema change
-  is required.
+- Decode and validate the full GRIB message in memory, preserving bitmap and
+  sentinel semantics; persist only the deterministic rectangular crop required
+  by configured site footprints.
+- The current seven sites need 77 unique nodes inside an 8 × 24 (192-cell)
+  crop, versus the provider's 1440 × 721 global grid. Derive this crop from the
+  immutable site snapshot and sampling policy; do not hard-code it.
+- A rectangle, rather than sparse nodes, preserves current bilinear/radius
+  sampling. Preserve float64 values, packed masks, global-to-local node
+  translation, and `gfs_0p25_global` SQLite identity.
+- Bind site-config SHA, sampling-policy SHA, and crop-selection version into
+  acquisition/artifact identity. Changed footprint inputs may not silently
+  reuse a compact or persisted graph.
+- Keep raw source evidence and existing completed artifacts. Do not introduce
+  raw pruning, new dependencies, or SQLite columns.
 
-## XCContest T-013: operational workflow
+Given identical raw GRIB, site snapshot, and policy, selected-node canonical
+and SQLite business values must be unchanged. Only derived on-disk representation
+and repeated verification work may change.
 
-The implemented commands preserve their individual durable stage boundaries:
+## Commands and safety
 
-```powershell
-uv run --env-file .env --project services/ml xccontest-collect --season <year>
-uv run --env-file .env --project services/ml xccontest-parse --run-key <uuid>
-uv run --env-file .env --project services/ml xccontest-site-mappings propose --run-key <uuid>
-uv run --env-file .env --project services/ml xccontest-site-mappings apply --review-file <mapping-decisions.jsonl>
-uv run --env-file .env --project services/ml xccontest-validate --run-key <uuid>
-uv run --env-file .env --project services/ml xccontest-persist --run-key <uuid> --policy-file <path>
-```
-
-The recommended orchestration commands are:
-
-```powershell
-uv run --env-file .env --project services/ml xccontest-ingest fresh 
-  --season <year> 
-  --headed 
-  --policy-file data/local/xccontest-import-policy.json
-
-uv run --env-file .env --project services/ml xccontest-ingest resume 
-  --run-key <uuid> 
-  --policy-file data/local/xccontest-import-policy.json
-```
-
-`fresh` performs preflight, collection, parsing, read-only proposal generation,
-validation, and persistence when safe. `resume` is offline: it reuses raw and
-interim artifacts and never launches a browser. Raw output remains under
-`data/raw/xccontest/<run-key>/`; parser, mapping, validation, and reconciliation
-review output remains under `data/interim/xccontest/<run-key>/`. New mapping
-snapshots create distinct `validation-v2/<snapshot>/` output directories; existing
-artifacts are not overwritten.
-
-After the mapping gate allows accepted records, persistence now compares them
-with canonical SQLite rows. Exact repeats revalidate, safe missing-to-known
-values enrich, and lower-quality incoming values cannot erase known values. A
-material difference returns `awaiting_reconciliation_review` (exit code 2) and
-writes no database row. Copy/review the returned `reconciliation-proposals.jsonl`
-into `reconciliation-decisions.jsonl`, then run the same offline `resume`
-command. The detailed contract, including every required JSONL field, is in the
-`Flight reconciliation and review workflow` section of `services/ml/README.md`.
-
-### Source safety
-
-- Use only the permitted normal browser workflow and comply with source terms.
-  Do not bypass login, challenges, access controls, or rate limits; do not use
-  proxies, IP rotation, parallel tabs, undocumented endpoints, or synthesized
-  pagination URLs.
-- Collector v3 defaults to a 30-second source delay before every navigation and
-  source-changing visible UI action. `--slow-mo-ms` is debugging-only.
-- A 3–29.999 second delay requires `--acknowledge-rate-limit-risk`; lower than
-  three seconds is rejected. The raw manifest records pacing policy.
-- On HTTP 500, challenge, failed initial navigation, or missing rendered table,
-  stop and investigate without repeated retries. A 500 can be an IP-specific
-  access response rather than a general source outage.
-- Collect only explicitly chosen seasons. XCContest season `Y` spans
-  `Y-1-10-01` through `Y-09-30`.
-
-### Mapping review gate
-
-`fresh` automatically writes read-only proposals but never applies them.
-Reviewers copy/edit the standard sibling file:
-
-```powershell
-$mappingDir = "data/interim/xccontest/<run-key>/site-mapping-v2"
-Copy-Item "$mappingDir/mapping-proposals.jsonl" "$mappingDir/mapping-decisions.jsonl"
-```
-
-Apply reviewed decisions manually, then run `resume`. An approved mapping enters
-SQLite after the human review. A rejected decision keeps matching flights in
-quarantine and excludes them from persistence, but it no longer blocks the
-accepted subset when all of the following match the immutable proposal:
-
-- `proposal_id`;
-- source/key type/key value; and
-- source-point coordinates where applicable.
-
-Missing, duplicate, mismatched, provisional, ambiguous, country-mismatched, or
-otherwise unreviewed mapping evidence remains blocking with
-`awaiting_mapping_review`. The result reports both
-`actionable_mapping_quarantine_count` (unresolved) and
-`reviewed_rejected_mapping_quarantine_count`. `--persist-approved-only` remains
-an explicit override for intentionally retaining unresolved records; normally do
-not need it after a complete accepted/rejected review.
-
-## Verified local imports
-
-All records below are local ignored data; never commit the database, raw HTML,
-or interim JSONL.
-
-| Ingestion run | Scope and result | Durable notes |
-| --- | --- | --- |
-| `f1032827-a98d-4c01-969e-e67b4885f90d` | First successful import: 267 accepted flights from the prior 2025/2026 collection; 1,200 seen, 664 rejected, 69 quarantined, 200 same-run duplicates removed. | Established the persistence slice and the first `ingestion_runs` row. |
-| `8d809838-3ff8-42ce-9977-3997cd2536bc` | Manual 2024 `fresh`, review/apply, then successful `resume` on 2026-08-11. 600 seen; 208 normalized candidates; 182 persisted accepted flights; 295 rejected; 26 quarantined; 97 same-run duplicates removed. | `ingestion_run_id=2`; validation snapshot `fbe9bc251bc07b287d16e2c2127c70daf0b781754ca871931bd6530680ea2204`; 26 quarantines were explicitly reviewed/rejected and `actionable_mapping_quarantine_count=0`. |
-
-For the 2024 run, eight reviewed mappings were approved and inserted, while ten
-proposals were rejected. The successful result used pipeline version
-`xccontest-collector/3|xccontest-parser/2|xccontest-validation/2|xccontest-persistence/2`.
-The raw manifest is complete, schema version 3, and covers season 2024/BG.
-
-## Verification baseline
-
-The latest T-015 code checks passed locally:
-
-```powershell
-uv run --project services/ml ruff format --check
-uv run --project services/ml ruff check
-uv run --project services/ml pytest
-```
-
-At the latest verification, all 77 ML tests passed, including 11 focused T-014
-reconciliation tests and the committed T-015 parser-fixture integration/regression
-test. The persistence/component tests use synthetic durable
-artifacts, real mapping-review transactions, and temporary SQLite migrated by
-the committed Drizzle migrations; they make no source request and never open the
-existing 449-row local database. The project owner asked not to run a
-fresh/collector command for T-014 verification. Manual verification is therefore
-an offline `xccontest-ingest resume` or `xccontest-persist` against existing
-local interim data only. Do not mistake fixtures/fakes for permission to make
-new live source requests.
-
-## T-014 review handoff
-
-**Delivered:** compare-and-reconcile persistence, same-run no-op replay,
-cross-run duplicate revalidation, partial-run resume support, atomic conflict
-pause/resolution, source URL preservation, schema-v1 quality notes, append-only
-run events, detailed operator documentation, and integration/component coverage
-through real temporary SQLite migrations and mapping-review transactions. No
-database migration or Docker instance was needed because existing text provenance
-fields are sufficient and SQLite tests migrate a temporary local file.
-
-**Manual review:** use only already collected `data/interim/xccontest/<run-key>/`
-artifacts. Do not run `fresh` or a collector command. If an existing run produces
-a reconciliation pause, follow the `Flight reconciliation and review workflow` section of
-`services/ml/README.md`; inspect the generated proposal, create the
-matching decisions file, and run offline `resume`.
-An exact repeated snapshot is expected to be a successful no-op. Do not edit raw,
-validation, proposal, or existing database evidence by hand.
-
-## T-015 parser fixture handoff
-
-**Delivered:** a small committed synthetic XCContest manifest-v3 mini-run under
-`data/samples/xccontest/parser-v2/synthetic-mini-run-v1/`, reviewed parser-v2
-golden JSONL/report outputs, and a fixture-driven offline parser
-integration/regression test. The test copies the fixture into a temporary raw
-layout, validates hashes/counters through the real parser, and compares every
-output artifact. It opens no browser, makes no network request, and does not
-access SQLite.
-
-The fixture is entirely project-authored: it contains no copied live/raw page,
-real pilot information, account data, or track. Its README records synthetic
-origin, sanitation/redistribution limits, test command, and case matrix.
-Coverage includes manifest-v3 compatibility; current/archived URL shapes;
-100/200/300 km boundaries; decimal parsing; route variants; season/timezone
-boundaries; launch evidence; exact and conflicting duplicate observations;
-under-threshold/malformed rows; and pilot-text exclusion from parser output.
-Browser navigation, source responses, pagination, retries, and rate policy
-remain collector/browser concerns, covered separately.
-
-**Validation:** `uv run --project services/ml ruff format --check`, `ruff
-check`, and the full `pytest` suite passed on 2026-08-13: 77 tests passed.
-
-## Routine commands
-
-From repository root:
-
-```powershell
-npm.cmd install
-uv sync --project services/ml
-Copy-Item .env.example .env
-npm.cmd run repo:check
-```
-
-For broad TypeScript validation use `npm.cmd run build`, `typecheck`, `lint`,
-`format:check`, and `test`. For ML work use the `uv run --project services/ml`
-commands above. Update this handoff only with a current operational snapshot;
-record durable design choices in `docs/decisions.md` and task status in
-`docs/tasks.md`.
+Use `uv run --project services/ml ...` for ML commands. Do not make a live
+network request unless the current phase explicitly calls for the owner-
+authorized bounded fresh operation. Resume must not construct or call a source
+transport. Do not mark S09, S10, or T-018 complete without the documented
+operational evidence.

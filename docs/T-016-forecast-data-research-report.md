@@ -745,7 +745,7 @@ flowchart LR
     F1 --> RAW["Immutable raw artifact + manifest"]
     R1 --> RAW
     O1 --> RAW
-    RAW --> P["Source decoder/parser"]
+    RAW --> P["Source parser"]
     P --> N["Canonical timeseries + profile levels"]
     N --> V["Units, time, grid, range, coverage validation"]
     V --> FB["Versioned feature builder"]
@@ -1011,7 +1011,7 @@ architecture remains necessary.
 ### Can two collectors share parser/normalizer/validation/persistence?
 
 They should share the canonical normalized contract, validator, feature
-builder and persistence. They cannot share one literal decoder because JSON,
+builder and persistence. They cannot share one literal parser because JSON,
 GRIB/NetCDF and fixed-width sounding files differ. Source adapters isolate that
 difference.
 

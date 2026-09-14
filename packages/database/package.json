@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Drizzle-owned SQLite schema and migration boundary for paragliding flight data.",
+  "description": "Drizzle-owned SQLite schema and migration boundary for flight and weather data.",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

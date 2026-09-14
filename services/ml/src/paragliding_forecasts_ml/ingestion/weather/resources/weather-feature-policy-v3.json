@@ -1,0 +1,595 @@
+{
+  "feature_policy_schema_version": 2,
+  "policy_version": "weather-feature-policy-v3",
+  "feature_contract_version": "weather-feature-contract/3",
+  "feature_builder_version": "weather-feature-builder/3",
+  "time_zone": "Europe/Sofia",
+  "flying_window_version": "sofia-flying-window/1",
+  "hourly_fields": [
+    {
+      "feature_key": "air_temperature_2m_k",
+      "field_code": "air_temperature_k",
+      "variant": "2m",
+      "statistic": "instantaneous",
+      "derivation_method": "identity/1"
+    },
+    {
+      "feature_key": "dew_point_temperature_2m_k",
+      "field_code": "dew_point_temperature_k",
+      "variant": "2m",
+      "statistic": "instantaneous",
+      "derivation_method": "identity/1"
+    },
+    {
+      "feature_key": "relative_humidity_2m_percent",
+      "field_code": "relative_humidity_percent",
+      "variant": "2m",
+      "statistic": "instantaneous",
+      "derivation_method": "identity/1"
+    },
+    {
+      "feature_key": "specific_humidity_2m_kg_per_kg",
+      "field_code": "specific_humidity_kg_per_kg",
+      "variant": "2m",
+      "statistic": "instantaneous",
+      "derivation_method": "identity/1"
+    },
+    {
+      "feature_key": "surface_pressure_pa",
+      "field_code": "air_pressure_pa",
+      "variant": "surface",
+      "statistic": "instantaneous",
+      "derivation_method": "identity/1"
+    },
+    {
+      "feature_key": "mean_sea_level_pressure_pa",
+      "field_code": "air_pressure_pa",
+      "variant": "mean_sea_level",
+      "statistic": "instantaneous",
+      "derivation_method": "identity/1"
+    },
+    {
+      "feature_key": "wind_u_10m_m_s",
+      "field_code": "wind_u_m_s",
+      "variant": "10m",
+      "statistic": "instantaneous",
+      "derivation_method": "identity/1"
+    },
+    {
+      "feature_key": "wind_v_10m_m_s",
+      "field_code": "wind_v_m_s",
+      "variant": "10m",
+      "statistic": "instantaneous",
+      "derivation_method": "identity/1"
+    },
+    {
+      "feature_key": "wind_speed_10m_m_s",
+      "field_code": "wind_speed_m_s",
+      "variant": "10m",
+      "statistic": "instantaneous",
+      "derivation_method": "component-wind/1"
+    },
+    {
+      "feature_key": "wind_direction_10m_degrees_from_north",
+      "field_code": "wind_direction_degrees_from_north",
+      "variant": "10m",
+      "statistic": "instantaneous",
+      "derivation_method": "component-wind/1"
+    },
+    {
+      "feature_key": "provider_boundary_layer_height_agl_m",
+      "field_code": "provider_boundary_layer_height_agl_m",
+      "statistic": "instantaneous",
+      "derivation_method": "identity/1"
+    },
+    {
+      "feature_key": "provider_cloud_base_agl_m",
+      "field_code": "provider_cloud_base_agl_m",
+      "statistic": "instantaneous",
+      "derivation_method": "identity/1"
+    },
+    {
+      "feature_key": "total_column_water_vapour_kg_m2",
+      "field_code": "total_column_water_vapour_kg_m2",
+      "statistic": "instantaneous",
+      "derivation_method": "identity/1"
+    },
+    {
+      "feature_key": "surface_cape_j_per_kg",
+      "field_code": "convective_available_potential_energy_j_per_kg",
+      "variant": "surface_parcel",
+      "statistic": "instantaneous",
+      "derivation_method": "identity/1"
+    },
+    {
+      "feature_key": "surface_cin_magnitude_j_per_kg",
+      "field_code": "convective_inhibition_magnitude_j_per_kg",
+      "variant": "surface_parcel",
+      "statistic": "instantaneous",
+      "derivation_method": "identity/1"
+    },
+    {
+      "feature_key": "mixed_layer_lcl_agl_m",
+      "field_code": "mixed_layer_lcl_agl_m",
+      "statistic": "instantaneous",
+      "derivation_method": "romps-liquid-lcl/1"
+    },
+    {
+      "feature_key": "pbl_minus_lcl_m",
+      "field_code": "pbl_minus_lcl_m",
+      "statistic": "instantaneous",
+      "derivation_method": "provider-pbl-minus-mixed-layer-lcl/1"
+    },
+    {
+      "feature_key": "surface_buoyancy_flux_kinematic_m2_s3",
+      "field_code": "surface_buoyancy_flux_kinematic_m2_s3",
+      "statistic": "instantaneous",
+      "derivation_method": "surface-buoyancy-flux/1"
+    },
+    {
+      "feature_key": "convective_velocity_scale_m_s",
+      "field_code": "convective_velocity_scale_m_s",
+      "statistic": "instantaneous",
+      "derivation_method": "deardorff-convective-velocity/1"
+    }
+  ],
+  "daily_fields": [
+    {
+      "feature_key": "air_temperature_2m_mean_k",
+      "field_code": "air_temperature_k",
+      "variant": "2m",
+      "statistic": "mean",
+      "derivation_method": "hourly-arithmetic-mean/1"
+    },
+    {
+      "feature_key": "air_temperature_2m_min_k",
+      "field_code": "air_temperature_k",
+      "variant": "2m",
+      "statistic": "min",
+      "derivation_method": "hourly-minimum/1"
+    },
+    {
+      "feature_key": "air_temperature_2m_max_k",
+      "field_code": "air_temperature_k",
+      "variant": "2m",
+      "statistic": "max",
+      "derivation_method": "hourly-maximum/1"
+    },
+    {
+      "feature_key": "dew_point_temperature_2m_mean_k",
+      "field_code": "dew_point_temperature_k",
+      "variant": "2m",
+      "statistic": "mean",
+      "derivation_method": "hourly-arithmetic-mean/1"
+    },
+    {
+      "feature_key": "relative_humidity_2m_mean_percent",
+      "field_code": "relative_humidity_percent",
+      "variant": "2m",
+      "statistic": "mean",
+      "derivation_method": "hourly-arithmetic-mean/1"
+    },
+    {
+      "feature_key": "relative_humidity_2m_max_percent",
+      "field_code": "relative_humidity_percent",
+      "variant": "2m",
+      "statistic": "max",
+      "derivation_method": "hourly-maximum/1"
+    },
+    {
+      "feature_key": "surface_pressure_mean_pa",
+      "field_code": "air_pressure_pa",
+      "variant": "surface",
+      "statistic": "mean",
+      "derivation_method": "hourly-arithmetic-mean/1"
+    },
+    {
+      "feature_key": "mean_sea_level_pressure_mean_pa",
+      "field_code": "air_pressure_pa",
+      "variant": "mean_sea_level",
+      "statistic": "mean",
+      "derivation_method": "hourly-arithmetic-mean/1"
+    },
+    {
+      "feature_key": "wind_u_10m_mean_m_s",
+      "field_code": "wind_u_m_s",
+      "variant": "10m",
+      "statistic": "mean",
+      "derivation_method": "hourly-arithmetic-mean/1"
+    },
+    {
+      "feature_key": "wind_v_10m_mean_m_s",
+      "field_code": "wind_v_m_s",
+      "variant": "10m",
+      "statistic": "mean",
+      "derivation_method": "hourly-arithmetic-mean/1"
+    },
+    {
+      "feature_key": "wind_speed_10m_mean_m_s",
+      "field_code": "wind_speed_m_s",
+      "variant": "10m",
+      "statistic": "mean",
+      "derivation_method": "component-wind/1"
+    },
+    {
+      "feature_key": "wind_speed_10m_max_m_s",
+      "field_code": "wind_speed_m_s",
+      "variant": "10m",
+      "statistic": "max",
+      "derivation_method": "component-wind/1"
+    },
+    {
+      "feature_key": "wind_direction_10m_mean_degrees_from_north",
+      "field_code": "wind_direction_degrees_from_north",
+      "variant": "10m",
+      "statistic": "mean",
+      "derivation_method": "component-wind/1"
+    },
+    {
+      "feature_key": "provider_boundary_layer_height_agl_mean_m",
+      "field_code": "provider_boundary_layer_height_agl_m",
+      "statistic": "mean",
+      "derivation_method": "hourly-arithmetic-mean/1"
+    },
+    {
+      "feature_key": "provider_boundary_layer_height_agl_max_m",
+      "field_code": "provider_boundary_layer_height_agl_m",
+      "statistic": "max",
+      "derivation_method": "hourly-maximum/1"
+    },
+    {
+      "feature_key": "provider_cloud_base_agl_mean_m",
+      "field_code": "provider_cloud_base_agl_m",
+      "statistic": "mean",
+      "derivation_method": "hourly-arithmetic-mean/1"
+    },
+    {
+      "feature_key": "provider_cloud_base_agl_min_m",
+      "field_code": "provider_cloud_base_agl_m",
+      "statistic": "min",
+      "derivation_method": "hourly-minimum/1"
+    },
+    {
+      "feature_key": "provider_cloud_base_agl_max_m",
+      "field_code": "provider_cloud_base_agl_m",
+      "statistic": "max",
+      "derivation_method": "hourly-maximum/1"
+    },
+    {
+      "feature_key": "total_column_water_vapour_mean_kg_m2",
+      "field_code": "total_column_water_vapour_kg_m2",
+      "statistic": "mean",
+      "derivation_method": "hourly-arithmetic-mean/1"
+    },
+    {
+      "feature_key": "total_cloud_cover_mean_percent",
+      "field_code": "cloud_cover_percent",
+      "variant": "total",
+      "statistic": "mean",
+      "derivation_method": "hourly-arithmetic-mean/1"
+    },
+    {
+      "feature_key": "total_cloud_cover_max_percent",
+      "field_code": "cloud_cover_percent",
+      "variant": "total",
+      "statistic": "max",
+      "derivation_method": "hourly-maximum/1"
+    },
+    {
+      "feature_key": "low_cloud_cover_mean_percent",
+      "field_code": "cloud_cover_percent",
+      "variant": "low",
+      "statistic": "mean",
+      "derivation_method": "hourly-arithmetic-mean/1"
+    },
+    {
+      "feature_key": "low_cloud_cover_max_percent",
+      "field_code": "cloud_cover_percent",
+      "variant": "low",
+      "statistic": "max",
+      "derivation_method": "hourly-maximum/1"
+    },
+    {
+      "feature_key": "mid_cloud_cover_mean_percent",
+      "field_code": "cloud_cover_percent",
+      "variant": "mid",
+      "statistic": "mean",
+      "derivation_method": "hourly-arithmetic-mean/1"
+    },
+    {
+      "feature_key": "high_cloud_cover_mean_percent",
+      "field_code": "cloud_cover_percent",
+      "variant": "high",
+      "statistic": "mean",
+      "derivation_method": "hourly-arithmetic-mean/1"
+    },
+    {
+      "feature_key": "precipitation_total_mm",
+      "field_code": "precipitation_amount_mm",
+      "statistic": "total",
+      "derivation_method": "exact-interval-day-reduction/1"
+    },
+    {
+      "feature_key": "precipitation_max_hourly_mm",
+      "field_code": "precipitation_amount_mm",
+      "statistic": "max",
+      "derivation_method": "exact-interval-day-reduction/1"
+    },
+    {
+      "feature_key": "shortwave_radiation_mean_w_m2",
+      "field_code": "shortwave_radiation_w_m2",
+      "statistic": "mean",
+      "derivation_method": "exact-interval-day-reduction/1"
+    },
+    {
+      "feature_key": "shortwave_radiation_max_w_m2",
+      "field_code": "shortwave_radiation_w_m2",
+      "statistic": "max",
+      "derivation_method": "exact-interval-day-reduction/1"
+    },
+    {
+      "feature_key": "surface_sensible_heat_flux_mean_w_m2",
+      "field_code": "surface_sensible_heat_flux_upward_w_m2",
+      "statistic": "mean",
+      "derivation_method": "exact-interval-day-reduction/1"
+    },
+    {
+      "feature_key": "surface_latent_heat_flux_mean_w_m2",
+      "field_code": "surface_latent_heat_flux_upward_w_m2",
+      "statistic": "mean",
+      "derivation_method": "exact-interval-day-reduction/1"
+    },
+    {
+      "feature_key": "cape_max_j_per_kg",
+      "field_code": "convective_available_potential_energy_j_per_kg",
+      "variant": "surface_parcel",
+      "statistic": "max",
+      "derivation_method": "surface-parcel-day-reduction/1"
+    },
+    {
+      "feature_key": "cin_magnitude_max_j_per_kg",
+      "field_code": "convective_inhibition_magnitude_j_per_kg",
+      "variant": "surface_parcel",
+      "statistic": "max",
+      "derivation_method": "surface-parcel-day-reduction/1"
+    },
+    {
+      "feature_key": "neighbourhood_pressure_gradient_mean_pa_per_km",
+      "field_code": "neighbourhood_pressure_gradient_pa_per_km",
+      "statistic": "mean",
+      "derivation_method": "neighbourhood-planar-fit/1"
+    },
+    {
+      "feature_key": "neighbourhood_pressure_gradient_max_pa_per_km",
+      "field_code": "neighbourhood_pressure_gradient_pa_per_km",
+      "statistic": "max",
+      "derivation_method": "neighbourhood-planar-fit/1"
+    },
+    {
+      "feature_key": "neighbourhood_low_level_divergence_mean_s_inverse",
+      "field_code": "neighbourhood_low_level_divergence_s_inverse",
+      "variant": "surface_10m",
+      "statistic": "mean",
+      "derivation_method": "neighbourhood-planar-fit/1"
+    },
+    {
+      "feature_key": "neighbourhood_low_level_divergence_min_s_inverse",
+      "field_code": "neighbourhood_low_level_divergence_s_inverse",
+      "variant": "surface_10m",
+      "statistic": "min",
+      "derivation_method": "neighbourhood-planar-fit/1"
+    },
+    {
+      "feature_key": "mixed_layer_lcl_agl_mean_m",
+      "field_code": "mixed_layer_lcl_agl_m",
+      "statistic": "mean",
+      "derivation_method": "hourly-arithmetic-mean/1"
+    },
+    {
+      "feature_key": "mixed_layer_lcl_agl_min_m",
+      "field_code": "mixed_layer_lcl_agl_m",
+      "statistic": "min",
+      "derivation_method": "hourly-minimum/1"
+    },
+    {
+      "feature_key": "mixed_layer_lcl_agl_max_m",
+      "field_code": "mixed_layer_lcl_agl_m",
+      "statistic": "max",
+      "derivation_method": "hourly-maximum/1"
+    },
+    {
+      "feature_key": "pbl_minus_lcl_mean_m",
+      "field_code": "pbl_minus_lcl_m",
+      "statistic": "mean",
+      "derivation_method": "hourly-arithmetic-mean/1"
+    },
+    {
+      "feature_key": "pbl_minus_lcl_max_m",
+      "field_code": "pbl_minus_lcl_m",
+      "statistic": "max",
+      "derivation_method": "hourly-maximum/1"
+    },
+    {
+      "feature_key": "surface_buoyancy_flux_kinematic_mean_m2_s3",
+      "field_code": "surface_buoyancy_flux_kinematic_m2_s3",
+      "statistic": "mean",
+      "derivation_method": "exact-interval-day-reduction/1"
+    },
+    {
+      "feature_key": "surface_buoyancy_flux_kinematic_max_m2_s3",
+      "field_code": "surface_buoyancy_flux_kinematic_m2_s3",
+      "statistic": "max",
+      "derivation_method": "exact-interval-day-reduction/1"
+    },
+    {
+      "feature_key": "convective_velocity_scale_mean_m_s",
+      "field_code": "convective_velocity_scale_m_s",
+      "statistic": "mean",
+      "derivation_method": "exact-interval-day-reduction/1"
+    },
+    {
+      "feature_key": "convective_velocity_scale_max_m_s",
+      "field_code": "convective_velocity_scale_m_s",
+      "statistic": "max",
+      "derivation_method": "exact-interval-day-reduction/1"
+    }
+  ],
+  "profile_layers": [
+    {
+      "layer_base_agl_m": 0.0,
+      "layer_top_agl_m": 1500.0,
+      "fields": [
+        {
+          "feature_key": "temperature_lapse_rate_mean_k_per_km",
+          "field_code": "temperature_lapse_rate_k_per_km",
+          "statistic": "mean",
+          "derivation_method": "endpoint-environmental-lapse/1"
+        },
+        {
+          "feature_key": "temperature_lapse_rate_max_k_per_km",
+          "field_code": "temperature_lapse_rate_k_per_km",
+          "statistic": "max",
+          "derivation_method": "endpoint-environmental-lapse/1"
+        },
+        {
+          "feature_key": "relative_humidity_mean_percent",
+          "field_code": "relative_humidity_percent",
+          "statistic": "mean",
+          "derivation_method": "agl-layer-trapezoid/1"
+        },
+        {
+          "feature_key": "specific_humidity_mean_kg_per_kg",
+          "field_code": "specific_humidity_kg_per_kg",
+          "statistic": "mean",
+          "derivation_method": "agl-layer-trapezoid/1"
+        },
+        {
+          "feature_key": "wind_u_mean_m_s",
+          "field_code": "wind_u_m_s",
+          "statistic": "mean",
+          "derivation_method": "agl-layer-trapezoid/1"
+        },
+        {
+          "feature_key": "wind_v_mean_m_s",
+          "field_code": "wind_v_m_s",
+          "statistic": "mean",
+          "derivation_method": "agl-layer-trapezoid/1"
+        },
+        {
+          "feature_key": "wind_speed_mean_m_s",
+          "field_code": "wind_speed_m_s",
+          "statistic": "mean",
+          "derivation_method": "agl-layer-trapezoid/1"
+        },
+        {
+          "feature_key": "wind_speed_max_m_s",
+          "field_code": "wind_speed_m_s",
+          "statistic": "max",
+          "derivation_method": "component-wind/1"
+        },
+        {
+          "feature_key": "wind_direction_mean_degrees_from_north",
+          "field_code": "wind_direction_degrees_from_north",
+          "statistic": "mean",
+          "derivation_method": "component-wind/1"
+        },
+        {
+          "feature_key": "wind_shear_mean_m_s_per_km",
+          "field_code": "wind_shear_m_s_per_km",
+          "statistic": "mean",
+          "derivation_method": "endpoint-bulk-vector-shear/1"
+        },
+        {
+          "feature_key": "wind_shear_max_m_s_per_km",
+          "field_code": "wind_shear_m_s_per_km",
+          "statistic": "max",
+          "derivation_method": "endpoint-bulk-vector-shear/1"
+        }
+      ]
+    },
+    {
+      "layer_base_agl_m": 1500.0,
+      "layer_top_agl_m": 3000.0,
+      "fields": [
+        {
+          "feature_key": "temperature_lapse_rate_mean_k_per_km",
+          "field_code": "temperature_lapse_rate_k_per_km",
+          "statistic": "mean",
+          "derivation_method": "endpoint-environmental-lapse/1"
+        },
+        {
+          "feature_key": "temperature_lapse_rate_max_k_per_km",
+          "field_code": "temperature_lapse_rate_k_per_km",
+          "statistic": "max",
+          "derivation_method": "endpoint-environmental-lapse/1"
+        },
+        {
+          "feature_key": "relative_humidity_mean_percent",
+          "field_code": "relative_humidity_percent",
+          "statistic": "mean",
+          "derivation_method": "agl-layer-trapezoid/1"
+        },
+        {
+          "feature_key": "specific_humidity_mean_kg_per_kg",
+          "field_code": "specific_humidity_kg_per_kg",
+          "statistic": "mean",
+          "derivation_method": "agl-layer-trapezoid/1"
+        },
+        {
+          "feature_key": "wind_u_mean_m_s",
+          "field_code": "wind_u_m_s",
+          "statistic": "mean",
+          "derivation_method": "agl-layer-trapezoid/1"
+        },
+        {
+          "feature_key": "wind_v_mean_m_s",
+          "field_code": "wind_v_m_s",
+          "statistic": "mean",
+          "derivation_method": "agl-layer-trapezoid/1"
+        },
+        {
+          "feature_key": "wind_speed_mean_m_s",
+          "field_code": "wind_speed_m_s",
+          "statistic": "mean",
+          "derivation_method": "agl-layer-trapezoid/1"
+        },
+        {
+          "feature_key": "wind_speed_max_m_s",
+          "field_code": "wind_speed_m_s",
+          "statistic": "max",
+          "derivation_method": "component-wind/1"
+        },
+        {
+          "feature_key": "wind_direction_mean_degrees_from_north",
+          "field_code": "wind_direction_degrees_from_north",
+          "statistic": "mean",
+          "derivation_method": "component-wind/1"
+        },
+        {
+          "feature_key": "wind_shear_mean_m_s_per_km",
+          "field_code": "wind_shear_m_s_per_km",
+          "statistic": "mean",
+          "derivation_method": "endpoint-bulk-vector-shear/1"
+        },
+        {
+          "feature_key": "wind_shear_max_m_s_per_km",
+          "field_code": "wind_shear_m_s_per_km",
+          "statistic": "max",
+          "derivation_method": "endpoint-bulk-vector-shear/1"
+        },
+        {
+          "feature_key": "vertical_velocity_mean_pa_s",
+          "field_code": "vertical_velocity_pa_s",
+          "statistic": "mean",
+          "derivation_method": "agl-layer-trapezoid/1"
+        },
+        {
+          "feature_key": "vertical_velocity_min_pa_s",
+          "field_code": "vertical_velocity_pa_s",
+          "statistic": "min",
+          "derivation_method": "agl-layer-trapezoid/1"
+        }
+      ]
+    }
+  ]
+}

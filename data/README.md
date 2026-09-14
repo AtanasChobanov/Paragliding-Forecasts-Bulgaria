@@ -36,6 +36,13 @@ files preserve the intended layout only.
   `interim/xccontest/<run-id>/`. These artifacts are not the canonical
   application store; accepted records are persisted in the ignored SQLite file
   under `local/` after validation and site matching.
+- Store weather raw evidence under `raw/weather/<run-key>/`: the immutable
+  `request-plan.json`, source-native payloads, and `manifest.json`. Store
+  immutable parser/normalizer/spatial/validator/feature/persistence evidence
+  under `interim/weather/<run-key>/<stage>-v<revision>/<input-sha256>/` and its
+  append-only state-event chain under `interim/weather/<run-key>/state/events/`.
+  Never overwrite an artifact or rewrite a state event; create a new run or a
+  new version/fingerprint output instead.
 - Use UTC internally for timestamps and preserve the source timezone when
   relevant.
 - Include units in schemas and validate coordinate, date, distance-band, and

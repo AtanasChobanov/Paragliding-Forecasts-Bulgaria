@@ -11,40 +11,61 @@ consequences. Temporary progress and Git state belong in
 
 ## Decision index
 
-| Decision ID | Title | Status | Date |
-| --- | --- | --- | --- |
-| DEC-001 | Use one repository with bounded subprojects | Accepted | 2026-07-15 |
-| DEC-002 | Use npm workspaces for TypeScript and uv for Python | Accepted | 2026-07-15 |
-| DEC-003 | Use TypeScript by default and limit Python to data/ML work | Accepted | 2026-07-15 |
-| DEC-004 | Use React/Vite for web and Node.js/Express for the public API | Accepted | 2026-07-15 |
-| DEC-005 | Share browser/API contracts in TypeScript and keep Python language-neutral | Accepted | 2026-07-15 |
-| DEC-006 | Use a local-first MVP and SQLite storage direction | Accepted | 2026-07-15 |
-| DEC-007 | Preserve explicit forecast status, provenance, units, and safety semantics | Accepted | 2026-07-15 |
-| DEC-008 | Keep generated/local data out of Git with a controlled fixture exception | Accepted | 2026-07-15 |
-| DEC-009 | Use short-lived ticket branches and pull-request review | Accepted | 2026-07-15 |
-| DEC-010 | Organize the API by feature with manual dependency injection | Accepted | 2026-07-17 |
-| DEC-011 | Use Zod as the runtime browser/API contract validator | Accepted | 2026-07-17 |
-| DEC-012 | Use TSX and Vitest for the initial API development loop | Accepted | 2026-07-17 |
-| DEC-013 | Use Pino logging and Problem Details HTTP errors | Accepted | 2026-07-17 |
-| DEC-014 | Separate internal numeric site IDs from public slugs | Accepted | 2026-07-20 |
-| DEC-015 | Add dashboard-specific forecast read models | Accepted | 2026-07-21 |
-| DEC-016 | Expose provisional map coordinates and confirm Pastrina spelling | Accepted | 2026-07-21 |
-| DEC-017 | Use a focused React dashboard stack with Leaflet | Accepted | 2026-07-22 |
-| DEC-018 | Add a provisional detailed forecast-input read model | Accepted | 2026-07-24 |
-| DEC-019 | Use Playwright Chromium for local browser smoke coverage | Accepted | 2026-07-25 |
-| DEC-020 | Use a phased Drizzle-owned SQLite foundation for flight data | Accepted | 2026-07-30 |
-| DEC-021 | Finalize the normalized T-012 flight foundation schema | Accepted | 2026-08-02 |
-| DEC-022 | Collect XCContest list pages through the permitted rendered UI boundary | Superseded | 2026-08-04 |
-| DEC-023 | Partition saturated XCContest first-page views through visible filters | Accepted | 2026-08-06 |
-| DEC-024 | Derive XCContest country scope from all canonical sites | Accepted | 2026-08-06 |
-| DEC-025 | Use durable artifacts between versioned XCContest ingestion stages | Accepted | 2026-08-07 |
-| DEC-026 | Configure geographic catchments for every initial launch site | Accepted | 2026-08-08 |
-| DEC-027 | Review source-site mappings before flight acceptance | Accepted | 2026-08-08 |
-| DEC-028 | Default XCContest collection to conservative source pacing | Accepted | 2026-08-11 |
-| DEC-029 | Gate one-command XCContest persistence on mapping review | Accepted | 2026-08-11 |
-| DEC-030 | Reconcile repeated XCContest source flights without silent overwrite | Accepted | 2026-08-12 |
-| DEC-031 | Lock weather-source roles and canonical feature semantics | Accepted | 2026-08-16 |
-| DEC-032 | Roll out weather ingestion and source-compatible ML in stages | Proposed | 2026-08-17 |
+| Decision ID | Title                                                                           | Status     | Date       |
+| ----------- | ------------------------------------------------------------------------------- | ---------- | ---------- |
+| DEC-001     | Use one repository with bounded subprojects                                     | Accepted   | 2026-07-15 |
+| DEC-002     | Use npm workspaces for TypeScript and uv for Python                             | Accepted   | 2026-07-15 |
+| DEC-003     | Use TypeScript by default and limit Python to data/ML work                      | Accepted   | 2026-07-15 |
+| DEC-004     | Use React/Vite for web and Node.js/Express for the public API                   | Accepted   | 2026-07-15 |
+| DEC-005     | Share browser/API contracts in TypeScript and keep Python language-neutral      | Accepted   | 2026-07-15 |
+| DEC-006     | Use a local-first MVP and SQLite storage direction                              | Accepted   | 2026-07-15 |
+| DEC-007     | Preserve explicit forecast status, provenance, units, and safety semantics      | Accepted   | 2026-07-15 |
+| DEC-008     | Keep generated/local data out of Git with a controlled fixture exception        | Accepted   | 2026-07-15 |
+| DEC-009     | Use short-lived ticket branches and pull-request review                         | Accepted   | 2026-07-15 |
+| DEC-010     | Organize the API by feature with manual dependency injection                    | Accepted   | 2026-07-17 |
+| DEC-011     | Use Zod as the runtime browser/API contract validator                           | Accepted   | 2026-07-17 |
+| DEC-012     | Use TSX and Vitest for the initial API development loop                         | Accepted   | 2026-07-17 |
+| DEC-013     | Use Pino logging and Problem Details HTTP errors                                | Accepted   | 2026-07-17 |
+| DEC-014     | Separate internal numeric site IDs from public slugs                            | Accepted   | 2026-07-20 |
+| DEC-015     | Add dashboard-specific forecast read models                                     | Accepted   | 2026-07-21 |
+| DEC-016     | Expose provisional map coordinates and confirm Pastrina spelling                | Accepted   | 2026-07-21 |
+| DEC-017     | Use a focused React dashboard stack with Leaflet                                | Accepted   | 2026-07-22 |
+| DEC-018     | Add a provisional detailed forecast-input read model                            | Accepted   | 2026-07-24 |
+| DEC-019     | Use Playwright Chromium for local browser smoke coverage                        | Accepted   | 2026-07-25 |
+| DEC-020     | Use a phased Drizzle-owned SQLite foundation for flight data                    | Accepted   | 2026-07-30 |
+| DEC-021     | Finalize the normalized T-012 flight foundation schema                          | Accepted   | 2026-08-02 |
+| DEC-022     | Collect XCContest list pages through the permitted rendered UI boundary         | Superseded | 2026-08-04 |
+| DEC-023     | Partition saturated XCContest first-page views through visible filters          | Accepted   | 2026-08-06 |
+| DEC-024     | Derive XCContest country scope from all canonical sites                         | Accepted   | 2026-08-06 |
+| DEC-025     | Use durable artifacts between versioned XCContest ingestion stages              | Accepted   | 2026-08-07 |
+| DEC-026     | Configure geographic catchments for every initial launch site                   | Accepted   | 2026-08-08 |
+| DEC-027     | Review source-site mappings before flight acceptance                            | Accepted   | 2026-08-08 |
+| DEC-028     | Default XCContest collection to conservative source pacing                      | Accepted   | 2026-08-11 |
+| DEC-029     | Gate one-command XCContest persistence on mapping review                        | Accepted   | 2026-08-11 |
+| DEC-030     | Reconcile repeated XCContest source flights without silent overwrite            | Accepted   | 2026-08-12 |
+| DEC-031     | Lock weather-source roles and canonical feature semantics                       | Accepted   | 2026-08-16 |
+| DEC-032     | Implement GFS and ERA5 weather ingestion in T-018                               | Superseded | 2026-08-17 |
+| DEC-033     | Finalize the normalized T-018 weather persistence schema                        | Accepted   | 2026-08-20 |
+| DEC-034     | Use one packaged atmospheric catalogue and durable stage protocol               | Accepted   | 2026-08-21 |
+| DEC-035     | Pin GFS GRIB parser identity and preserve only canonical weather quality states | Accepted   | 2026-08-21 |
+| DEC-036     | Use reviewed site coordinates with bilinear points and radius evidence          | Accepted   | 2026-08-24 |
+| DEC-037     | Validate weather sources through a hashed registry and policy                   | Accepted   | 2026-08-26 |
+| DEC-038     | Preserve immutable weather artifacts through explicit stage supersession        | Accepted   | 2026-08-26 |
+| DEC-039     | Separate hourly weather facts from daily feature builds                         | Accepted   | 2026-09-08 |
+| DEC-040     | Fix S07 daily window, profile band, and accepted derivations                    | Superseded | 2026-09-08 |
+| DEC-041     | Correct the common GFS S07 profile source contract                              | Accepted   | 2026-09-09 |
+| DEC-042     | Activate audited S07 humidity and turbulent-flux inputs                         | Accepted   | 2026-09-09 |
+| DEC-043     | Remove unrequired S07 resolved-inversion metrics                                | Accepted   | 2026-09-09 |
+| DEC-044     | Bind daily GFS collection to the Sofia flying-window policy                     | Accepted   | 2026-09-10 |
+| DEC-045     | Normalize GFS interval products to exact adjacent UTC windows                   | Accepted   | 2026-09-10 |
+| DEC-046     | Make weather persistence immutable, atomic, and artifact-replayable             | Accepted   | 2026-09-10 |
+| DEC-047     | Supply weather usage authority through an explicit local policy file            | Accepted   | 2026-09-11 |
+| DEC-048     | Resolve feature inputs by exact centralized canonical selectors                 | Accepted   | 2026-09-12 |
+| DEC-049     | Preserve immutable weather replay across catalogue revisions                    | Superseded | 2026-09-12 |
+| DEC-050     | Canonicalize component wind speed with math.hypot                               | Accepted   | 2026-09-13 |
+| DEC-051     | Repair expected-graph capture SQL recognition and version persistence /3        | Accepted   | 2026-09-13 |
+| DEC-052     | Require exact catalogue identity at every weather stage boundary                | Accepted   | 2026-09-13 |
+| DEC-053     | Defer ERA5 collection until model evaluation demonstrates a need                | Accepted   | 2026-09-14 |
 
 ## Individual decisions
 
@@ -810,7 +831,6 @@ column.
 [`architecture.md`](architecture.md), [`handoff.md`](handoff.md),
 [`../data/README.md`](../data/README.md), [`../CONTRIBUTING.md`](../CONTRIBUTING.md).
 
-
 ### DEC-022 - Collect XCContest list pages through the permitted rendered UI boundary
 
 **Status:** Accepted
@@ -1038,6 +1058,7 @@ SQLite persistence remain later T-013 slices.
 **Consequences:** A reviewed custom Drizzle data migration applies the six 5 km values to existing and fresh databases. Matching code must use inclusive Haversine distance checks, quarantine overlaps, and never call an external geocoder. API/UI contracts remain unchanged because catchments are ingestion configuration.
 
 **Related files:** [`../packages/database/src/schema.ts`](../packages/database/src/schema.ts), [`../packages/database/drizzle/20260808175017_set_launch_area_catchments/migration.sql`](../packages/database/drizzle/20260808175017_set_launch_area_catchments/migration.sql), [`handoff.md`](handoff.md).
+
 ### DEC-027 - Review source-site mappings before flight acceptance
 
 **Status:** Accepted
@@ -1051,6 +1072,7 @@ SQLite persistence remain later T-013 slices.
 **Consequences:** Validation communicates only through parser-v2 JSONL, SQLite mapping rows, and versioned interim files. It neither contacts XCContest nor writes ingestion provenance or flight records; a later T-013 persistence slice owns those writes. Any change to source matching, proposal, review, or validation output semantics increments the corresponding mapping or validation version.
 
 **Related files:** [`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/site_mapping.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/site_mapping.py), [`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/validator.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/validator.py), [`../services/ml/README.md`](../services/ml/README.md).
+
 ### DEC-028 - Default XCContest collection to conservative source pacing
 
 **Status:** Accepted
@@ -1113,7 +1135,6 @@ retroactive traceability behavior.
 **Related files:** [`../services/ml/README.md`](../services/ml/README.md),
 [`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/pipeline.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/pipeline.py),
 [`handoff.md`](handoff.md).
-
 
 ### DEC-030 - Reconcile repeated XCContest source flights without silent overwrite
 
@@ -1195,7 +1216,7 @@ responsible for committed sanitized parser fixtures.
 sources, but generic provider documentation could not prove exact per-model
 field availability, native units, null behavior, step semantics, terrain fit, or
 payload cost. T-017 tested representative Bulgarian sites, weather cases, and
-forecast leads, then decoded bounded GFS, ERA5, CERRA, and IGRA evidence and
+forecast leads, then parsed bounded GFS, ERA5, CERRA, and IGRA evidence and
 exact hosted IFS HRES/ICON-EU responses.
 
 **Decision:** Use GFS as the coarse exact long-history forecast comparator,
@@ -1225,76 +1246,1037 @@ remain unavailable. A commercial release still requires owner confirmation of
 provider licences, attribution, retention, and direct-source/archive operations.
 
 **Related files:** [`T-017-weather-feature-spike-report.md`](T-017-weather-feature-spike-report.md),
-[`T-017-weather-field-catalogue.json`](T-017-weather-field-catalogue.json),
+[`weather-field-catalogue.json`](../services/ml/src/paragliding_forecasts_ml/ingestion/atmosphere/resources/weather-field-catalogue.json),
 [`handoff.md`](handoff.md).
 
-### DEC-032 - Roll out weather ingestion and source-compatible ML in stages
+### DEC-032 - Implement GFS and ERA5 weather ingestion in T-018
 
-**Status:** Proposed
+**Status:** Superseded by DEC-053 for T-018 timing and delivery ownership
 
 **Date:** 2026-08-17
 
 **Context:** T-017 locks canonical weather semantics and source roles, but it
-does not implement storage or source collectors. GFS, ICON-EU, IFS HRES, ERA5,
-CERRA, and IGRA have different grid resolutions, terrain representations,
-field definitions, missingness, run archives, and forecast error distributions.
-An ML artifact trained only on GFS snapshots cannot safely accept an ICON-EU
-snapshot merely because its canonical field names and units match. The backlog
-currently has T-018 for the schema and T-019 for soundings, but no explicit
-weather-collector ticket before T-020 joins weather to flight days.
+does not implement storage or source collectors. The project now needs one
+complete, reproducible ingestion path before T-020: exact forecasts whose
+historical and operational distributions match, plus a separately preserved
+reanalysis baseline. A model trained on GFS snapshots cannot safely accept an
+ICON-EU or IFS HRES snapshot merely because canonical names and units match.
 
-**Proposed decision:** T-018 implements only the source-neutral weather schema,
-migrations, constraints, and tests; it must not hide a multi-source collector
-implementation. Add scoped weather-ingestion tickets before T-020. The first
-end-to-end exact-forecast cohort should use GFS for both historical training
-and operational inference, because the source/model distribution then matches.
-Collect ICON-EU in parallel (shadow mode) for comparison and future
-source-specific training/calibration. Treat IFS HRES as an optional
-surface/PBL component and defer CERRA to an offline experiment. Implement the
-GFS operational fallback before relying on ICON-EU operationally; a documented
-but unimplemented fallback is not a fallback.
+**Decision:** T-018 implements the source-neutral weather schema and the full
+GFS and ERA5 ingestion pipeline through SQLite. GFS is the only exact-forecast
+source in this phase, both for historical archive collection and for the
+current/future forecasts shown by the product. The collector selects an
+explicit, complete GFS run, retains run/availability/retrieval/valid/lead and
+grid provenance, and persists the source without substitution by another
+forecast model. When a new GFS run is unavailable, retain the most recent
+successful GFS result and expose its age rather than silently changing source.
 
-ERA5 is ingested independently and is never a live or silent row-level
-replacement for an unavailable exact forecast. Use it to create: (1) a separate
-reanalysis outcome/feature benchmark; (2) forecast-to-ERA5 verification and
-source/lead/site bias-correction pairs; and (3) versioned site/season
-climatology and anomaly features. Do not initially mix forecast and reanalysis
-rows in one cohort as if they had identical information availability. IGRA is a
-separate observed-profile branch for derivation and forecast validation; it is
-not an automatic operational input unless published before the prediction
-cutoff.
+ERA5 is collected independently through the registered CDS access path. It
+remains reanalysis, never a live or row-level substitute for a missing GFS
+forecast. T-018 stores it with its own reference/step/statistic provenance for
+later forecast-to-ERA5 verification, bias-correction pairs, climatology and
+separate reanalysis cohorts. Those joins, datasets and all ML work remain out
+of T-018. Product documentation and presentation that use ERA5 must include
+the applicable Copernicus/ECMWF attribution required by the dataset licence.
 
-Direct DWD ICON-EU Open Data is a current-run GRIB distribution rather than a
-convenient free exact historical-run query service. If direct DWD becomes the
-operational path, archive each selected complete run at collection time as an
-immutable, sufficiently raw Bulgaria/site-neighbourhood subset with manifest,
-checksum, source URL, run/valid/lead times, model metadata, and licence data.
-Do not confuse DWD's historical ICON-DREAM-EU reanalysis with an archive of
-operational ICON-EU forecasts.
+T-018 does not implement Open-Meteo, ICON-EU, IFS HRES, direct DWD ICON-EU or
+CERRA collectors. They remain future options, each requiring a new accepted
+source decision, source-specific adapter and compatible model evaluation:
 
-**Consequences:** A future prediction artifact must declare compatible source
-families/model versions, feature-contract version, calibration version, and
-fallback policy. A source fallback selects a compatible weather snapshot and
-ML artifact together; it must never relabel GFS output as ICON-EU or feed
-ICON-EU fields to a GFS-only artifact without a validated multi-source or
-source-to-common-space calibration. For fixed-radius neighbourhood features,
-use physical distances rather than a fixed number of model grid cells, and
-retain grid coordinates/elevation/interpolation provenance.
+- Open-Meteo ICON-EU or direct DWD ICON-EU could provide a finer regional
+  profile source. Direct DWD would require immutable collection-time archival
+  of every selected complete run because it is not an arbitrary-date archive.
+- Open-Meteo IFS HRES could provide a high-resolution surface/PBL component,
+  but it must not be treated as a complete profile source without a verified
+  profile-capable endpoint and a compatible model path.
+- CERRA could be used later as an offline terrain-resolution reanalysis
+  comparator, with its large full-domain payload and queued retrieval cost
+  handled outside operational collection.
+
+IGRA remains the T-019 observational sounding branch and is not part of this
+weather-forecast ingestion scope.
+
+**Consequences:** T-018's weather contract and persistence must retain source and
+provider-dataset identity, source product key, run/reference/availability,
+retrieval/valid/lead/step times, grid coordinates/elevation, interpolation, native provenance, field quality
+and feature-contract version. Forecast and reanalysis rows stay distinct. A
+future forecast-source addition must select a compatible weather snapshot and
+prediction artifact together; it must never relabel or silently blend another
+model's values into a GFS cohort. Neighbourhood calculations use physical
+distance and retain their footprint version.
 
 **Related files:** [`T-017-weather-feature-spike-report.md`](T-017-weather-feature-spike-report.md),
-[`T-017-weather-field-catalogue.json`](T-017-weather-field-catalogue.json),
+[`weather-field-catalogue.json`](../services/ml/src/paragliding_forecasts_ml/ingestion/atmosphere/resources/weather-field-catalogue.json),
 [`T-016-forecast-data-research-report.md`](T-016-forecast-data-research-report.md),
+[handoff.md](handoff.md).
+
+### DEC-033 - Finalize the normalized T-018 weather persistence schema
+
+**Status:** Accepted
+
+**Date:** 2026-08-20
+
+**Context:** T-018/S01 needs an exact relational contract before GFS and ERA5
+collectors can persist data. Earlier drafts mixed direct scalar values,
+repeatable atmospheric variants, interval values, field quality, grid sampling,
+and ingestion provenance. They also risked redundant site/grid foreign keys,
+a speculative artifact catalog, and a fabricated model-version value that GFS
+and ERA5 files do not reliably publish.
+
+**Decision:** The reviewed `T-012-flight-schema.drawio` weather section is the
+physical schema source of truth. Drizzle owns fourteen weather tables:
+
+- `weather_sources`, `weather_ingestion_runs`, and `weather_product_runs` for
+  provider dataset, pipeline execution, and native product/cycle identity;
+- `weather_site_sampling_configs`, `weather_grids`, `weather_grid_points`,
+  `weather_sampling_footprints`, and `weather_sampling_footprint_nodes` for one
+  approved site coordinate and reproducible point/neighbourhood sampling;
+- `weather_samples`, `weather_profile_levels`,
+  `weather_convection_measurements`, and `weather_interval_measurements` for
+  direct scalar, vertical-profile, repeatable CAPE/CIN, and explicit
+  interval/statistic values; and
+- `weather_feature_snapshots` plus `weather_field_provenance` for versioned
+  derived ML inputs and per-field native/quality meaning.
+
+Flight and weather ingestion provenance remains separate. The existing
+`ingestion_runs` table is renamed to `flight_ingestion_runs`; weather runs use
+`weather_ingestion_runs`. A weather run retains `ingestion_method` separately
+from `request_purpose`, run-level training/operational permission decisions,
+the raw manifest pointer/hash, one pipe-delimited `pipeline_version`, lifecycle,
+and counters. The rename preserves the old flight table's internal constraint
+and index names so SQLite can perform a data-preserving table rename instead of
+a risky rebuild.
+
+No `model_version` column is stored for GFS or ERA5. Reproducibility comes from
+`weather_sources`, `source_product_key`, reference/availability/valid times,
+raw manifest/hash, and versioned pipeline components; an absent provider
+semantic version is never replaced by an invented value.
+
+The storage shape is deliberately hybrid rather than EAV-only or one giant
+wide row. Direct single-valued surface fields live on `weather_samples`;
+pressure levels, parcel/layer convection variants, and time-window metrics use
+normalized child rows; derived ML-ready fields use a versioned wide feature
+snapshot. `weather_field_provenance` is the only owner of `quality_state`, one
+field at a time. Interval rows retain `source_step_start_hours` and
+`source_step_end_hours`, but do not duplicate a row-level quality state.
+Temperature is canonical Kelvin, humidity/cloud cover are percent, wind is
+metres per second, direction is degrees from north, and explicit AGL/MSL names
+are retained wherever present in the accepted diagram.
+
+The schema avoids transitively redundant foreign keys. A sample reaches its
+site/grid through `point_footprint_id`, and a footprint node reaches its grid
+through `grid_point_id`. Field-provenance ownership is polymorphic but exactly
+one of its five owner foreign keys must be set; partial unique indexes enforce
+one `(owner, field_code, field_variant)` row despite SQLite NULL semantics.
+Nullable convection layer/method-version identities use partial unique indexes
+for the same reason.
+
+One weather coordinate is approved per canonical site for T-018. Dobrich uses
+the Kardam accepted-flight centroid `43.746321, 28.074025`; the canonical
+`sites` coordinate stays the region/map centre. Multi-point regional
+aggregation is not implemented.
+
+There is no separate `weather_artifacts`, `weather_surface_samples`,
+`weather_profiles`, or generic one-to-many sampling-point table. Raw/interim
+files remain immutable filesystem evidence referenced by the run manifest.
+Soundings remain T-019.
+
+Cross-row rules that SQLite CHECK constraints cannot express remain mandatory
+pipeline validation: point interpolation weights sum to one; footprint/grid
+nodes belong to the same grid; point versus neighbourhood footprint roles are
+used correctly; grid first-seen runs match the grid source; and every interval
+metric and CAPE/CIN slot receives its matching field-provenance row in the same
+persistence transaction.
+
+The schema is delivered as one coherent generated/reviewed migration because
+all fourteen tables form one foreign-key graph. The migration contains no
+GFS/ERA5, site-coordinate, grid, or footprint seed rows; those require separate
+reviewed collector/configuration inputs. Migration tests may apply it only to
+temporary SQLite files before owner review; generation does not authorize
+application to the configured local database.
+
+**Consequences:** Collectors and persistence adapters have an exact target and
+must not create parallel JSON/EAV storage. Query indexes follow run lookup,
+product/source time, site/footprint valid time, profile pressure, interval
+window, field quality, and ingestion-provenance paths. Adding a new source or
+metric requires an explicit compatibility/schema decision rather than an
+unreviewed column or field code.
+
+**Related files:** [`T-012-flight-schema.drawio`](T-012-flight-schema.drawio),
+[`architecture.md`](architecture.md), [`handoff.md`](handoff.md),
+[`../packages/database/src/schema.ts`](../packages/database/src/schema.ts).
+
+### DEC-034 - Use one packaged atmospheric catalogue and durable stage protocol
+
+**Status:** Accepted
+
+**Date:** 2026-08-21
+
+**Context:** T-018/S02 needs runtime validation of the T-017 canonical weather
+vocabulary and reproducible boundaries before a GFS or ERA5 adapter can be
+implemented. A copied Python enum, mutable intermediate files, or one combined
+pipeline version would permit silent vocabulary drift and make offline replay
+ambiguous.
+
+**Decision:** Move the single machine-readable T-017 catalogue into the ML
+package resources. Load it at runtime with strict validation; do not retain a
+second manual field vocabulary. Use strict versioned contracts for request
+plans, raw manifests, native parser batches, canonical samples/profile levels,
+validation reports, feature snapshots, stage manifests, and persistence
+receipts. Source adapters own planning/collection and source-native parsing;
+source-neutral normalization, spatial alignment, validation, feature building,
+and persistence have separate component versions.
+
+Raw evidence lives under `data/raw/weather/<run-key>/`; all derived evidence and
+an append-only hash-linked state ledger live under
+`data/interim/weather/<run-key>/`. Every durable file is exclusive-create and
+SHA-256 verified. `fresh` and offline `resume` are execution modes, while
+`failed`, `partial`, `quarantined`, and `persisted` are protocol dispositions.
+The existing SQLite lifecycle remains `running`/`succeeded`/`failed`; S08 maps
+filesystem outcomes into it without a schema change.
+
+**Consequences:** S02 does not expose a placeholder weather command, make a
+network request, parse a real GRIB payload, or write SQLite. Each later slice
+must add only its real stage implementation and use the S02 artifact/hash/state
+boundary. The T-017 report and all decisions link to the packaged resource.
+
+**Related files:**
+[`weather-field-catalogue.json`](../services/ml/src/paragliding_forecasts_ml/ingestion/atmosphere/resources/weather-field-catalogue.json),
+[`contracts.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/atmosphere/contracts.py),
+[`artifacts.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/artifacts.py),
 [`handoff.md`](handoff.md).
+
+### DEC-035 - Pin GFS GRIB parser identity and preserve only canonical weather quality states
+
+**Status:** Accepted
+
+**Date:** 2026-08-21
+
+**Context:** T-018/S04 must make NOAA GFS GRIB parsing reproducible without
+trusting mutable ecCodes short names, while preserving the quality vocabulary
+already accepted by the weather persistence contract. GFS `HPBL` demonstrates
+the risk: in the observed operational table it has a numeric local parameter
+identity but an unusable generic short name.
+
+**Decision:** Use Python `eccodes` 2.47.0 and a versioned numeric profile for
+NOAA `kwbc` GRIB2 master table 2/local table 1. Verify centre, table versions,
+discipline/category/number, level, reference/valid time, step and statistics
+before grids pass the raw boundary. Preserve native missing bitmap/sentinel
+masks and use only `real`, `derived`, `missing`, `sentinel_missing`, and
+`invalid_payload` quality states. Normalize signed GFS CIN to the canonical
+positive magnitude while retaining the native sign convention; retain native
+U/V and derive wind speed/direction; retain a stated accumulation interval
+without inferred de-accumulation unless adjacent intervals and a reset are
+proven. GUST has no T-017/S01 destination, so retain it only as native evidence
+with an explicit unsupported canonical mapping outcome. Orography is not a
+canonical weather measurement, but it must cross the S04 boundary as static
+model-grid terrain evidence for S05 elevation diagnostics and below-terrain
+filtering.
+
+**Consequences:** S05 consumes hash-verified canonical grid artifacts, not raw
+GRIB. A new GUST persistence field requires a separate catalogue/schema decision.
+The pinned profile must be deliberately reviewed if NOAA changes its GRIB table
+or source identity.
+
+**Related files:** [`profile.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/profile.py),
+[`parser.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/parser.py),
+[`normalizer.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/normalizer.py),
+[`handoff.md`](handoff.md).
+
+### DEC-036 - Use reviewed site coordinates with bilinear points and radius evidence
+
+**Status:** Accepted
+
+**Date:** 2026-08-24
+
+**Context:** T-018/S05 needs one deterministic value at each approved weather
+site while retaining enough nearby-grid evidence for later spatial features.
+The regional Dobrich map centre is not a meaningful launch/sampling point, GFS
+terrain is much coarser than the reviewed site terrain, and silently selecting
+a nearest cell would discard useful sub-cell position information. The Project
+Brief asks for derived convergence and wind-shear indicators, but it does not
+require S05 itself to invent a pressure-gradient/divergence formula.
+
+**Decision:** Provision one reviewed `weather_site_sampling_configs` row for
+each of the seven canonical sites through committed data migrations. Six use
+their canonical site coordinate; Dobrich uses the accepted Kardam coordinate
+`43.746321, 28.074025`. Missing or incomplete configuration fails the offline
+sampling preflight and is never auto-created during ingestion.
+
+Fetch reviewed reference elevation through the explicit-network
+`copernicus-elevations` command using Copernicus DEM GLO-30, bilinear sampling,
+and EGM2008 orthometric height. The command is repeatable, not a refresh/resume
+protocol: it emits an ignored review artifact and never writes SQLite. A
+separate guarded migration pins the seven reviewed results and their reference;
+later provider changes require a new review and migration.
+
+The packaged `canonical-site-sampling-policy-v1` uses strict bilinear point
+sampling on the canonical regular latitude/longitude grid. Missing contributing
+nodes produce an explicit missing value; weights are never renormalized. Wind
+components are interpolated first, then speed and meteorological direction are
+derived. Nearest-point sampling remains schema-compatible for future policies
+but is not implemented by S05.
+
+Separately retain an inclusive 50 km Haversine node footprint for MSL pressure,
+surface U/V and 925 hPa U/V. S05 does not calculate convergence, divergence or
+pressure-gradient features; it preserves deterministic node evidence for the
+versioned S07 feature builder. Pressure-level geopotential height is MSL;
+subtract the reviewed site elevation and the bilinear model orography to expose
+site-AGL and model-AGL. Exclude a pressure level when either AGL value is
+negative. Always report signed and absolute model-minus-site terrain mismatch.
+
+Fingerprint the input manifest, canonical grid geometry and orography, reviewed
+site snapshot, packaged policy, point/radius footprints and component version.
+The per-sample identity key is an artifact-level deterministic identity, not a
+new SQLite column. Equal verified inputs and policy must produce byte-identical
+site and neighbourhood artifacts.
+
+**Consequences:** `gfs-sample --run-key <uuid>` is offline-only, reads the
+migrated SQLite configuration read-only, consumes only a complete normalized
+state event, and appends `spatially_aligned/complete`. Coarse GFS terrain/site
+differences remain visible and can affect pressure-level exclusion. S07 owns
+the scientific definition and validation of any neighbourhood-derived feature.
+
+**Related files:**
+[`canonical-site-sampling-policy-v1.json`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/resources/canonical-site-sampling-policy-v1.json),
+[`spatial.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/spatial.py),
+[`sites.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/sites.py),
+[`handoff.md`](handoff.md).
+
+### DEC-037 - Validate weather sources through a hashed registry and policy
+
+**Status:** Accepted
+
+**Date:** 2026-08-26
+
+**Context:** T-018/S06 must decide whether validation needs invented model IDs,
+persisted response headers, or an XCContest-style manual mapping gate. GFS and
+ERA5 have different expected coverage, while a source-neutral validator must
+fail closed for an unknown or inactive source without turning `weather_sources`
+into mutable collector transport configuration.
+
+**Decision:** Seed GFS `noaa_gfs_0p25_aws_grib2` and ERA5 `copernicus_era5` as
+active `weather_sources` rows through a guarded migration. Treat that table as
+the persistent registry/allow-list and snapshot/hash the exact row in every S06
+validation boundary. Source adapters retain their pinned endpoint and their
+source-specific request construction; the registry base URL is provenance, not
+a runtime override. Do not add a fabricated `model_id`/`model_version`, retain
+observed HTTP response headers, or add a manual alias/mapping approval path.
+
+Use packaged `source-aware-weather-validation-policy/1`, keyed by registry
+source code. S06 is offline-only and validates hash-linked S05 artifacts against
+source/kind, payload media/shape evidence, canonical unit/range/time/lead,
+profile order/duplicates/core null policy, and terrain mismatch. GFS requires
+a lead and, as superseded by DEC-041, the
+1000/975/950/925/900/850/800/750/700/650/600/550/500 hPa profile grain; ERA5 requires
+the same profile grain and no lead. Accepted, missing, and quarantined
+artifacts are immutable;
+quarantine returns exit `2` and blocks S07. S05 v2 no longer assigns a coverage
+status; S06 owns that disposition while still reading legacy S05 v1 artifacts.
+
+**Consequences:** Missing required coverage is not equivalent to a corrupt
+payload: both receive stable machine-readable reasons, but only violated source
+policy/payload integrity quarantines the affected sample. A repeated validator
+invocation reuses its evidence and produces no duplicate state event. New source
+support or a changed policy requires a new versioned policy/validator and an
+explicit compatibility decision.
+
+**Related files:**
+[`weather-validation-policy.json`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/resources/weather-validation-policy.json),
+[`validation.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/validation.py),
+[`schema.ts`](../packages/database/src/schema.ts),
+[`handoff.md`](handoff.md).
+
+### DEC-038 - Preserve immutable weather artifacts through explicit stage supersession
+
+**Status:** Accepted
+
+**Date:** 2026-08-26
+
+**Context:** A weather run can contain valid artifacts from multiple component
+versions, for example `spatial-v1` followed by `spatial-v2`. The original
+linear state ledger accepted only the next stage, so a newer artifact could be
+written immutably but remain absent from the ledger. Selecting the highest
+filesystem directory would bypass the audited state history and is unsafe.
+
+**Decision:** Keep state events append-only and read schema-v1 events for
+backward compatibility. New schema-v2 events may set `supersedes_sequence` only
+for a derived stage (`parsed`, `normalized`, `spatially_aligned`, `validated`,
+or later derived stages). It must identify the current completed boundary for
+that same stage and carry distinct immutable evidence. Raw collection and
+persistence remain non-supersedable within a run. Stage commands reuse an exact
+producer-version/fingerprint/upstream match; otherwise they create or verify the
+versioned artifact and append the explicit superseding event. Downstream stages
+select the latest completed event for their immediate input; validation also
+requires its own recorded upstream spatial boundary to match it.
+
+**Consequences:** A run remains reproducible at every historical boundary while
+newer parser, normalizer, spatial, validator, or feature versions can progress
+without a new run UUID. A completed artifact left unledgered by older code can
+be hash-verified and attached once, never rewritten. This does not turn raw
+collection into a mutable resume operation; a new collection remains a new run.
+
+**Related files:**
+[`state.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/state.py),
+[`artifacts.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/artifacts.py),
+[`parser_cli.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/parser_cli.py),
+[`spatial_cli.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/spatial_cli.py),
+[`validation_cli.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/validation_cli.py).
+
+### DEC-039 - Separate hourly weather facts from daily feature builds
+
+**Status:** Accepted
+
+**Date:** 2026-09-08
+
+**Context:** DEC-033 mixed provider-time facts with an ML feature row designed
+around one valid instant. S07 instead needs one feature build for a site's
+local flying day, calculated from accepted hourly inputs inside the fixed local
+flying window. The old schema also retained repeated valid ranges, hashes, and
+grid metadata that are derivable or belong in immutable artifacts rather than
+stable relational facts.
+
+**Decision:** Supersede the weather-storage portion of DEC-033 with a
+source-neutral hourly-to-daily contract. A provider cycle remains
+`weather_product_runs` and owns its `weather_sources` reference. Exact provider
+times live in `weather_product_valid_times` as unique
+`(product_run_id, valid_at_utc)` rows with optional non-negative lead.
+`weather_ingestion_runs` references one product run and one
+`target_local_date`; it does not repeat `source_id`. Its lifecycle, permission,
+manifest SHA-256, pipeline version, counters, and error fields remain because
+they describe the ingestion execution.
+
+Provider-time facts become `weather_point_samples` linked to their ingestion
+run, product valid time, and point footprint. Their child tables become
+`weather_point_profile_levels`, `weather_point_convection_measurements`, and
+`weather_point_interval_measurements`. Interval rows retain canonical
+start/end and statistic but not duplicate native step columns; native step
+evidence remains in `weather_field_provenance`. Profile levels retain provider
+geopotential MSL height, derived site-AGL height, and pressure-level vertical
+velocity. Model-AGL remains an interim diagnostic, not a relational column.
+
+Replace the one-sample feature row with one typed
+`weather_daily_feature_snapshots` row per ingestion, point footprint, and
+feature contract. `weather_daily_feature_snapshot_inputs` records the exact
+hourly input set as a relational many-to-many mapping, so one immutable hourly
+fact can participate in different feature-contract versions without copying
+it. `weather_daily_feature_profile_layers` stores repeatable daily vertical
+features with explicit AGL boundaries. `weather_field_provenance` gains daily
+snapshot and layer owners; its exactly-one-owner rule and partial unique
+indexes remain the field-quality and missing/unsupported source of truth.
+
+Provider PBL and cloud base remain explicitly provider-named. No derived-PBL
+column duplicates a provider value. Mixed-layer LCL, buoyancy flux, and
+convective velocity scale are nullable typed daily outputs and may be
+populated only by an accepted, versioned derivation; otherwise provenance must
+record `missing` or `unsupported`.
+
+Keep `weather_grids` as minimal provider grid identity
+`(source_id, grid_key)`. Grid points, footprints, and footprint nodes retain
+the interpolation geometry. Remove grid dimensions/step/hash, grid first-seen
+run, footprint version/hash, and feature input hash. Sampling identity is its
+method version plus immutable relational site/grid/node definition; daily input
+identity is the join table. The raw manifest hash is the only relational
+SHA-256 retained. Do not add a grid-point-measurement table or database
+window-policy table; raw node fields and the versioned flying-window policy
+remain immutable artifacts/code until database configuration has a product
+need.
+
+The generated migration is intentionally lossy for the unused pre-persistence
+weather runtime tables. It must fail before DDL when any legacy runtime weather
+row exists. Apply it only after owner review and confirmation that the target
+database has no weather runtime rows requiring conversion.
+
+**Consequences:** S07 can consume the same validated canonical contract from
+GFS or ERA5, aggregate hourly facts into one local-day build, and rebuild
+another feature-contract version from the recorded inputs. Local date is
+stored once on the ingestion run and exact UTC time once on the product valid
+time. Cross-row provider/run, footprint-role, complete-input, and flying-window
+rules remain persistence and feature-builder transaction responsibilities.
+
+**Related files:** [`schema.ts`](../packages/database/src/schema.ts),
+[`migration.sql`](../packages/database/drizzle/20260908181331_refactor_daily_weather_persistence/migration.sql),
+[`handoff.md`](handoff.md).
+
+### DEC-040 - Fix S07 daily window, profile band, and accepted derivations
+
+**Status:** Accepted
+
+**Date:** 2026-09-08
+
+**Context:** S07 needs one ML-ready site/day feature snapshot, while source
+artifacts remain hourly. The prior GFS selector and validation policy only kept
+925/850/700 hPa, which cannot reliably bracket the adopted AGL layers. The
+earlier feature plan also proposed aggregates that are not part of the reviewed
+typed daily schema.
+
+**Decision:** Use Europe/Sofia, 10:00--20:00 inclusive, as
+sofia-flying-window/1: exactly eleven expected hourly valid instants after
+DST-aware ZoneInfo conversion. An aggregate is missing only when that feature's
+required hourly or interval input coverage is incomplete; another feature in
+the same daily snapshot may remain complete. Do not split the day across runs
+or assemble one feature snapshot from multiple run keys.
+
+Collect, normalize, sample, and validate GFS HGT/TMP/RH/UGRD/VGRD/VVEL at
+1000/975/950/925/900/875/850/800/750/700 hPa, matching ERA5's first profile
+band. Pressure surfaces remain MSL evidence; site-AGL is height MSL minus
+reviewed site elevation MSL, and a level below site or model terrain is
+excluded. S07 uses no extrapolation: layer boundaries must be bracketed by
+valid retained profile values.
+
+Accepted formulas are component wind speed sqrt(u²+v²), meteorological
+direction from atan2(-u,-v), linear vertical interpolation, endpoint lapse and
+vector shear, trapezoidal height-weighted humidity, and full-rank
+least-squares planes for neighbourhood pressure-gradient and divergence
+∂u/∂x + ∂v/∂y. Arithmetic mean U/V precedes daily wind speed/direction.
+Positive canonical CIN is aggregated with maximum, not minimum. The applied
+schema correction migration records that decision.
+
+Provider PBL/cloud base remain provider facts. Derived PBL, mixed-layer LCL,
+surface buoyancy flux, and Deardorff convective velocity scale are unsupported
+until their source inputs and project methods are separately accepted. VVEL,
+gust, and TKE never fill those slots. S07 must emit missing/unsupported
+provenance and a machine-readable reason instead of a fabricated value.
+
+Keep the collector's 128 MiB default as a fail-closed per-command limit until
+a real full-profile 11-hour inventory establishes a reviewed larger daily cap.
+The next orchestration change must add a local-date/window option that derives
+the eleven UTC valid-at values in one run; it must not use a cross-run
+assembler or parallel requests merely to evade the cap.
+
+**Consequences:** S07 receives a source-neutral, sufficiently dense vertical
+profile and has exact, constrained formulas and missingness behavior. The
+remaining work is implementation of the feature artifact contract, builder,
+and daily collection orchestration; it is not another database redesign.
+
+**Related files:** [`T-018-S07-implementaion-plan.md`](T-018-S07-implementaion-plan.md),
+[`profile.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/profile.py),
+[`weather-validation-policy.json`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/resources/weather-validation-policy.json).
+
+### DEC-041 - Correct the common GFS S07 profile source contract
+
+**Status:** Accepted
+
+**Date:** 2026-09-09
+
+**Supersedes:** The GFS profile-band and mean-wind-speed wording in DEC-040.
+
+**Context:** DEC-040 required 875 hPa in the common
+`gfs.tCCz.pgrb2.0p25.fFFF` object. The official NOAA f003 inventory does not
+publish the required HGT/TMP/RH/UGRD/VGRD/VVEL messages at 875 hPa in that
+object, so the existing selector fails closed before collection. Its 700 hPa
+ceiling also cannot conservatively promise a 3000 m site-AGL boundary at all
+reviewed Bulgarian sites.
+
+**Decision:** Keep one GFS `pgrb2.0p25` object per valid instant; do not join
+`pgrb2b` merely to obtain 875 hPa. Ignore 875 hPa and require the ordered
+profile pressure grain
+`1000/975/950/925/900/850/800/750/700/650/600/550/500 hPa` for the current
+HGT/TMP/RH/UGRD/VGRD/VVEL GFS profile inputs. The 500 hPa top is conservative
+bracketing evidence for the fixed 1500 and 3000 m AGL feature boundaries, not
+a new daily pressure-band feature.
+
+The source-aware validation policy records the same profile pressure grain for
+both registered source contracts so a source-neutral S07 build has one required
+vertical shape. This slice changes only the implemented GFS collector/parser/
+normalizer path; the future ERA5 adapter must supply that already-declared
+shape through its own source implementation.
+
+Version the changed immutable boundaries: GFS collector `gfs-collector/3`,
+parser `gfs-parser/3`, numeric GRIB profile
+`noaa-gfs-grib2-table-v2`, normalizer `gfs-normalizer/3`, validation policy
+`source-aware-weather-validation-policy/2`, and validator
+`source-aware-weather-validator/3`. This preserves prior artifact boundaries
+and causes changed upstream evidence to be explicitly superseded rather than
+rewritten.
+
+For daily wind semantics, mean U/V produces only the resultant direction.
+`wind_speed_*_mean_m_s` is the arithmetic time/height mean of scalar
+`hypot(u, v)`, not `hypot(mean(u), mean(v))`; the separately stored component
+means retain the resultant-vector information.
+
+**Consequences:** Selector, numeric parser identity, canonical normalization,
+spatial input, source validation, fixtures, and tests use one 13-level
+contract and reject 875 hPa. A source artifact that lacks a required level is
+quarantined or reported as the existing explicit below-terrain missing state;
+no level is substituted or extrapolated. No database migration is needed for
+this source-contract correction.
+
+The next source-input checkpoint still has to add direct 2 m and
+pressure-level SPFH, and verify/pin SHTFL/LHTFL interval/sign metadata before
+S07 uses those accepted feature inputs. It must not infer either quantity from
+other fields.
+
+**Evidence:** [NOAA GFS pgrb2.0p25 f003 inventory](https://www.nco.ncep.noaa.gov/pmb/products/gfs/gfs.t00z.pgrb2.0p25.f003.shtml)
+shows 500--650 hPa HGT/TMP/RH/SPFH/VVEL/UGRD/VGRD and no 875 hPa entries;
+its surface section identifies 2 m SPFH and `SHTFL`/`LHTFL` as interval-average
+fluxes.
+
+**Related files:** [`profile.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/profile.py),
+[`inventory.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/inventory.py),
+[`weather-validation-policy.json`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/resources/weather-validation-policy.json),
+[`T-018-S07-implementaion-plan.md`](T-018-S07-implementaion-plan.md),
+[`handoff.md`](handoff.md).
+
+### DEC-042 - Activate audited S07 humidity and turbulent-flux inputs
+
+**Status:** Accepted
+
+**Date:** 2026-09-09
+
+**Context:** DEC-041 corrects the available common-object vertical band, but
+S07 still requires direct 2 m and pressure-level specific humidity plus
+validated sensible/latent heat-flux intervals. The pre-S07 catalogue and daily
+schema also retained four unaccepted derived field families and their five
+unused daily columns.
+
+**Decision:** Collect GFS `SPFH` at 2 m and at every DEC-041 pressure level.
+Normalize both as direct `specific_humidity_kg_per_kg` evidence, retaining the
+2 m `dimension` as `2m_above_ground` and profile `pressure_pa`; neither form is
+derived from temperature, relative humidity, or pressure. Require the direct 2
+m field and the profile field in the source-aware policy for both source
+contracts. A future T-038 ERA5 adapter remains responsible for providing the
+same canonical inputs through its separately specified source-normalization
+method if the DEC-053 evidence gate is met.
+
+Collect GFS `SHTFL` and `LHTFL` at surface only for lead hours at least one.
+Their GRIB statistic must be an interval average; retain their verified
+upward-positive GFS sign as canonical upward-positive W/m² interval evidence.
+They populate distinct sensible and latent heat-flux inputs. Do not calculate
+the removed kinematic buoyancy flux or Deardorff convective velocity scale.
+
+The active catalogue is `t017-spike-v2`: it admits the `unsupported` quality
+state with null native/canonical value invariants and removes
+`derived_boundary_layer_height_agl_m`, `mixed_layer_lcl_agl_m`,
+`surface_buoyancy_flux_kinematic_k_m_s`, and
+`convective_velocity_scale_m_s`. Spatial sampling preserves `unsupported` as
+null evidence rather than converting it into a real value.
+
+Add nullable hourly `specific_humidity_2m_kg_per_kg` with a `[0,1]` SQLite
+constraint. Remove the unused daily
+`mixed_layer_lcl_agl_{mean,max}_m`,
+`surface_buoyancy_flux_kinematic_mean_k_m_s`, and
+`convective_velocity_scale_{mean,max}_m_s` columns through the reviewed
+forward-only migration `20260909123754_correct_s07_feature_inputs`; never edit
+an applied migration.
+
+Version the changed immutable boundaries: GFS collector `gfs-collector/4`,
+parser `gfs-parser/4`, numeric GRIB profile
+`noaa-gfs-grib2-table-v3`, normalizer `gfs-normalizer/4`, spatial sampler
+`weather-spatial/3`, policy
+`source-aware-weather-validation-policy/3`, and validator
+`source-aware-weather-validator/4`.
+
+**Consequences:** A source artifact now has the direct humidity anchors and
+verified flux intervals that S07 needs, while unsupported values stay explicit
+null evidence. The forward migration is approved and covered by fresh-db,
+idempotence, strict-table, foreign-key, and constraint tests. Applying it to a
+non-test local database remains an explicit owner-authorized operation because
+it drops the five legacy daily columns.
+
+**Evidence:** [NOAA GFS pgrb2.0p25 f003 inventory](https://www.nco.ncep.noaa.gov/pmb/products/gfs/gfs.t00z.pgrb2.0p25.f003.shtml)
+identifies `SPFH` at 2 m and across the retained pressure band, and `SHTFL` /
+`LHTFL` as surface average fields.
+
+**Related files:** [`inventory.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/inventory.py),
+[`normalizer.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/normalizer.py),
+[`weather-validation-policy.json`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/resources/weather-validation-policy.json),
+[`schema.ts`](../packages/database/src/schema.ts),
+[`migration.sql`](../packages/database/drizzle/20260909123754_correct_s07_feature_inputs/migration.sql),
+and [`handoff.md`](handoff.md).
+
+### DEC-043 - Remove unrequired S07 resolved-inversion metrics
+
+**Status:** Accepted
+
+**Date:** 2026-09-09
+
+**Context:** The preliminary S07 plan and daily profile-layer schema contained
+`inversion_strength_max_k` and `inversion_depth_at_max_m`. These are model-level
+derivations from temperature and height profiles, not GPS or provider fields.
+They are not a project-brief requirement and have no accepted ML or prediction
+use. Their specialised detection method would add an unneeded second stability
+metric alongside the accepted lapse-rate and humidity profiles.
+
+**Decision:** Do not calculate, emit, catalogue, persist, or train on resolved
+inversion strength or depth in S07. Retain the accepted lapse-rate and humidity
+profile features as the S07 stability evidence. Remove both daily
+profile-layer columns and their paired SQLite constraint with the reviewed
+forward-only migration `20260909165706_remove_s07_inversion_metrics`; do not
+edit any applied migration.
+
+**Consequences:** The S07 vertical helper and test coverage exclude inversion
+run detection. Existing databases require the named forward migration before
+S08 persistence can rely on the cleaned profile-layer shape. No source
+collector, parser, normalizer, hourly sample, or field-catalogue change is
+required because these metrics were never raw canonical fields.
+
+**Related files:** [`T-018-S07-implementaion-plan.md`](T-018-S07-implementaion-plan.md),
+[`schema.ts`](../packages/database/src/schema.ts),
+[`migration.sql`](../packages/database/drizzle/20260909165706_remove_s07_inversion_metrics/migration.sql),
+and [`handoff.md`](handoff.md).
+
+### DEC-044 - Bind daily GFS collection to the Sofia flying-window policy
+
+**Status:** Accepted
+
+**Date:** 2026-09-10
+
+**Context:** The approved S07 feature contract is one `Europe/Sofia` local
+10:00--20:00 day, but the prior GFS collector exposed only repeatable raw UTC
+`--valid-at` arguments. This made the required DST conversion an error-prone
+caller responsibility and permitted accidental incomplete/cross-window runs.
+
+**Decision:** `gfs-collect --local-date YYYY-MM-DD` is the daily operational
+mode. It is mutually exclusive with low-level `--valid-at`, derives exactly the
+eleven Sofia 10:00--20:00 instants through IANA `zoneinfo`, and records
+`target_local_date` plus `sofia-flying-window/1` in request/resolved-plan
+provenance. The resolved-plan local-date shape is schema v2 and the collector
+is versioned as `gfs-collector/5`; existing schema-v1 explicit-UTC plans remain
+readable. One local day stays in one selected GFS cycle/run.
+
+**Consequences:** DST conversion cannot be silently supplied by callers.
+The 128 MiB default remains fail-closed; no larger default is inferred here.
+The bounded 2026-09-10 inventory check for local date `2026-09-11` resolved
+the `2026-09-10T00:00:00Z` GFS cycle, selected 594 ranges, and measured
+`1,168,112,596` bytes (`1114 MiB` minimum), with no payload download or
+artifact write. `--maximum-total-mib 1114` is therefore reviewed only for
+that exact replay scope; every new scope needs its own bounded measurement.
+
+**Related files:** [`cli.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/cli.py),
+[`models.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/models.py),
+[`planner.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/planner.py),
+and [`README.md`](../services/ml/README.md).
+
+### DEC-045 - GFS interval products are normalized to exact adjacent UTC windows
+
+**Status:** Accepted
+
+**Date:** 2026-09-10
+
+**Decision:**
+
+- Keep provider interval metadata (`startStep`, `endStep`, and step type)
+  as the authority for GFS accumulated and averaged fields.
+- Normalize accumulated fields such as total precipitation by subtracting
+  two values with the same accumulation anchor.
+- Normalize averaged fluxes such as downward short-wave, sensible-heat, and
+  latent-heat flux by subtracting their time integrals and dividing by the
+  requested adjacent interval duration.
+- Treat a valid numeric zero after normalization as observed information,
+  not as missing data.
+- Use the `[09:00, 10:00)` value only when needed as a boundary baseline;
+  the daily flying-window aggregate remains exactly `[10:00, 20:00)` local.
+- Stop requesting GFS gust because it has no accepted feature, persistence,
+  or model use in the current contract.
+- Rationale:
+  - GFS may encode forecast-hour 32 as an accumulation or average over
+    forecast hours 30-32 rather than only 31-32. Treating that value as a
+    one-hour quantity biases precipitation and energy-flux features.
+  - Exact interval reconstruction makes fresh and offline replay deterministic
+    and keeps temporal semantics explicit.
+
+### DEC-046 - Weather persistence is immutable, atomic, and artifact-replayable
+
+**Status:** Accepted
+
+**Date:** 2026-09-10
+
+**Decision:**
+
+- Python owns weather DML but never creates or migrates schema. It may write
+  only to a database already migrated by the committed Drizzle migrations.
+- Persist the complete weather graph in one `BEGIN IMMEDIATE` transaction
+  and mark the run `succeeded` last. Any failure rolls back the entire
+  graph, so no partially succeeded run is visible.
+- Identify an acquisition by its natural run key and immutable input
+  fingerprint. Replaying an exact persisted run fully revalidates the stored
+  graph and is a no-op; any mismatch is an explicit conflict and never an
+  overwrite.
+- Enrichment is append-only under a new feature-contract or replay run;
+  provider revisions use a new source/product run identity. An existing null
+  becoming a value under the same immutable identity is a conflict, not an
+  in-place patch.
+- Preserve expected missing values as SQL `NULL` with field-level
+  provenance and a reason code. Unsupported fields are absent from the
+  active contract and selector rather than stored as perpetually missing
+  metrics.
+- `weather-ingest resume` is artifact-only: it must neither instantiate a
+  network transport nor make a source request. Verified raw/interim artifacts
+  may rebuild derived stages and restore database writes into another freshly
+  migrated database.
+- GFS provider cloud base remains explicitly unsupported. Add a separately
+  named mixed-layer LCL estimate and PBL-minus-LCL gap, plus physically
+  derived surface buoyancy flux and convective velocity scale. Remove lower
+  layer omega from the feature contract while retaining upper-layer omega and
+  the shared persistence columns required to store it.
+- Rationale:
+  - The policy prevents silent data mutation and duplicate training examples,
+    makes recovery independent of another large GFS download, and preserves the
+    distinction between provider observations, physical estimates, and missing
+    information.
+
+### DEC-047 - Supply weather usage authority through an explicit local policy file
+
+**Status:** Accepted
+
+**Date:** 2026-09-11
+
+**Context:** `weather_ingestion_runs` requires explicit, non-null
+`model_training_allowed` and `operational_use_allowed` values. Existing GFS
+raw/request artifacts preserve the source permission basis and reference but
+do not carry those owner-authorized usage flags. Inferring or hard-coding either
+boolean would make an immutable replay appear authorized without evidence.
+
+**Decision:** Follow the established XCContest persistence boundary, scoped by
+weather source. By default `weather-persist` resolves local
+`data/local/gfs-usage-policy.json` for a GFS run and
+`data/local/era5-usage-policy.json` for an ERA5 run. An optional
+`--policy-file` override is permitted only when its strict source-specific
+schema matches the run: `gfs_usage_policy_schema_version` for GFS or
+`era5_usage_policy_schema_version` for ERA5, plus `permission_basis`,
+`permission_reference`, `model_training_allowed`, and
+`operational_use_allowed`. The adapter hashes the exact selected file bytes
+into the persistence input fingerprint and writes its asserted values to the
+terminal weather ingestion run. The policy file is local operator authority,
+not a replacement for the source raw manifest; the raw source basis/reference
+and attribution stay preserved from immutable collection evidence.
+
+The command does not download, alter, or recreate raw artifacts. Replaying a
+run with changed policy bytes is an immutable-input conflict, even if the
+booleans happen to be the same. Future fresh and resume orchestration must
+forward this explicit policy path; no default policy or inferred source-wide
+permission flags are allowed.
+
+**Consequences:** Existing retained raw runs can be persisted offline once an
+owner supplies the reviewed local policy file. Final production attribution,
+retention, and source terms remain an open release decision; this boundary
+records the local usage authority actually used for one immutable persistence
+run.
+
+**Related files:** [`persistence_models.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/persistence_models.py),
+[`persistence.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/persistence.py),
+[`persistence_cli.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/persistence_cli.py),
+and [`handoff.md`](handoff.md).
+
+### DEC-048 - Resolve feature inputs by exact centralized canonical selectors
+
+**Status:** Accepted
+
+**Date:** 2026-09-12
+
+**Decision:** Weather feature construction resolves every source-backed point,
+profile-surface-anchor, thermodynamic, and neighbourhood input through one
+central selector registry. A selector matches exactly on canonical `field_code`,
+`grain`, and `dimension`; zero matches remain feature-local missing evidence,
+while duplicate exact matches or an unmapped source-backed policy identity are
+build errors. It never falls back to dimensionless or source-specific inputs.
+
+The schema-v2 `weather-feature-policy-v3` keeps feature contract `/3` and
+snapshot/report schemas unchanged, but declares `weather-feature-builder/3`.
+The policy supplies the stage producer version, so the feature stage directory,
+fingerprint, manifest, and configuration cannot drift from the loaded policy.
+Prior v1/v2 policies and their immutable artifacts remain parseable and
+untouched. This correction does not alter the accepted GFS terrain policy or
+any SQLite persistence mapping.
+
+**Consequences:** Canonical `2m_above_ground`, `10m_above_ground`, surface,
+mean-sea-level, cloud, and surface-parcel convection identities are selected
+without ambiguity. The v3 build creates a new immutable boundary and supersedes
+the v2 ledger event; it does not rewrite prior artifacts. GFS provider cloud
+base remains `unsupported/source_field_unavailable`.
+
+### DEC-049 - Preserve immutable weather replay across catalogue revisions
+
+**Status:** Superseded by DEC-052
+
+**Date:** 2026-09-12
+
+**Context:** A retained GFS run recorded the valid `t017-spike-v2` catalogue
+identity. Later additive catalogue changes moved the current package to v3.
+Requiring every persisted historical request plan to equal the current package
+made the offline persistence path reject immutable evidence before SQLite was
+opened, contrary to DEC-046.
+
+**Decision:** Treat `RequestPlan` as a strict durable contract at replay time:
+verify its artifact hash, schema, run/source/source-kind identity, and planned
+artifact-key coverage against the raw manifest, but preserve its recorded
+catalogue version/hash without comparing them to the current package. New
+planning and request-plan publication remain guarded by an explicit current
+catalogue version/hash and source-ID check. The persistence adapter resolves
+usage policy through an explicit registry from canonical source ID to policy
+family (`noaa_gfs_0p25_aws_grib2` to `gfs`, `copernicus_era5` to `era5`).
+
+Persistence failures publish a valid `persistence/failed` stage manifest and a
+retryable `persisted/failed` ledger event only when a complete feature boundary
+exists. Failure metadata remains secret-free. Compact manifest/plan/policy
+checks run before the one required full raw-payload hash verification.
+
+**Consequences:** Existing hash-valid retained runs survive additive catalogue
+updates and require no new collector run. A new acquisition cannot be created
+with stale catalogue identity. Raw artifacts remain immutable, and persistence
+still performs a complete local raw hash verification before any database write.
+
+**Related files:** [`contracts.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/atmosphere/contracts.py),
+[`persistence.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/persistence.py),
+and [`persistence_models.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/persistence_models.py).
+
+### DEC-052 - Require exact catalogue identity at every weather stage boundary
+
+**Status:** Accepted
+
+**Date:** 2026-09-13
+
+**Context:** DEC-049 allowed a retained request plan to remain replayable after
+an additive catalogue revision. That made recovery convenient, but allowed a
+later stage to accept evidence produced against a different catalogue contract.
+Even additive changes can alter source or field semantics that a later stage
+expects. The normal supported operational path is now the fresh weather command,
+which creates every stage under one packaged catalogue identity.
+
+**Decision:** `RequestPlan` loading always validates that its canonical source
+ID exists in the currently packaged catalogue and that both its
+`catalogue_version` and `catalogue_sha256` exactly match that catalogue. This is
+an unconditional stage-boundary gate; there is no compatibility classifier or
+exception for additive changes. A mismatch stops processing before feature or
+SQLite persistence work. The canonical-source-ID to policy-family registry,
+raw-manifest cross-checks, full raw-payload verification, wind calculation, and
+expected-graph capture corrections remain independent safeguards.
+
+**Consequences:** A retained run created with an older catalogue is intentionally
+not eligible for later-stage continuation. It must be replaced through the
+fresh end-to-end weather flow. Each accepted run therefore has one catalogue
+contract across collection, parsing, normalization, spatial derivation, feature
+construction, and persistence. No database migration is required.
+
+**Related files:** [`contracts.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/atmosphere/contracts.py),
+[`artifacts.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/artifacts.py),
+and [`persistence.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/persistence.py).
+
+### DEC-050 - Canonicalize component wind speed with math.hypot
+
+**Status:** Accepted
+
+**Date:** 2026-09-13
+
+**Context:** Spatial sampling calculated scalar 10 m wind speed with
+`math.hypot(u, v)`, while the feature builder independently calculated the same
+physical formula as `(u**2 + v**2) ** 0.5`. Nine retained hourly values differed
+by exactly one IEEE-754 ULP, so the strict persistence parity guard correctly
+rejected them even though their meteorological meaning was identical.
+
+**Decision:** `component_wind_speed(u_m_s, v_m_s)` is the sole source-neutral
+implementation of scalar component wind speed. It requires finite components
+and returns `math.hypot(u_m_s, v_m_s)` with no rounding, tolerance, or unit
+conversion. Spatial v5 delegates to it without a version increase because the
+generated values are byte-identical to v5 evidence. The feature builder moves
+to `weather-feature-policy-v4` / `weather-feature-builder/4`, retaining feature
+contract /3 and creating a new immutable feature boundary. Persistence keeps
+its exact source/feature equality rule; no representation-tolerance comparator
+is permitted. Wind direction and its calm-wind semantics are unchanged.
+
+**Consequences:** Existing v3 feature evidence remains immutable but is not the
+effective feature boundary after a v4 rebuild. Retained spatial, validation,
+raw, parser, and normalizer evidence require no rerun. The owner rebuilds only
+features before retrying persistence. A material source/feature value mismatch
+continues to abort the SQLite transaction.
+
+**Related files:** [`wind.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/wind.py),
+[`spatial.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/spatial.py),
+and [`builder.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/features/builder.py).
+
+### DEC-051 - Repair expected-graph capture SQL recognition and version persistence /3
+
+**Status:** Accepted
+
+**Date:** 2026-09-13
+
+**Context:** The immutable v4 feature boundary passed strict source/feature
+parity and persistence inserted its candidate graph inside one SQLite
+transaction. Post-insert expected-graph capture then rejected the first normal
+`INSERT INTO weather_ingestion_runs (...) VALUES (...)` statement. Its raw
+regular expression double-escaped `\s`, `\(`, and `\)`, so it matched literal
+backslashes rather than the SQL emitted by the shared `_insert` helper. The
+transaction rolled back without a committed run graph.
+
+**Decision:** Keep the read-through expected-graph capture and strict complete
+immutable graph comparison. Correct its insert-expression escaping to match the
+SQL shape generated by `_insert`, add a focused unit test that runs that shared
+insert shape through the capture facade without writing its source SQLite
+connection, and move the executable boundary to `weather-persistence/3`.
+There is no schema migration or upstream artifact rebuild.
+
+**Consequences:** Failed `/2` persistence evidence remains immutable. The new
+version produces a distinct persistence input fingerprint and retry boundary;
+the owner retries only persistence against the valid feature-builder-v4
+artifact. The unit test protects the capture/parser contract, while broader
+persistence integration remains separately tracked in S08.
+
+**Related files:** [`persistence.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/persistence.py),
+[`persistence_models.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/weather/persistence_models.py),
+and [`test_expected_graph_capture.py`](../services/ml/tests/ingestion/weather/test_expected_graph_capture.py).
+
+### DEC-053 - Defer ERA5 collection until model evaluation demonstrates a need
+
+**Status:** Accepted
+
+**Date:** 2026-09-14
+
+**Supersedes:** DEC-032 only for the timing and delivery ownership of ERA5
+collection. DEC-031's source roles and the source-neutral contracts accepted by
+DEC-032 remain in force.
+
+**Context:** T-018 has implemented a source-neutral SQLite schema and a complete
+GFS fresh/offline-resume path through immutable artifacts, normalization,
+sampling, validation, features, and persistence. The Project Brief requires a
+working historical forecast or reanalysis pipeline and treats reanalysis as a
+practical fallback when exact historical forecasts are unavailable; it does not
+require both after a usable exact GFS archive is established. Implementing a CDS
+collector now would add credentials, transport, storage, and operational scope
+without evidence that the initial joined dataset or model needs paired
+forecast/reanalysis examples.
+
+**Decision:** T-018 finishes with the source-neutral weather schema and the GFS
+fresh/offline-resume pipeline through SQLite. Defer the ERA5 CDS collector and
+reanalysis adapter to T-038. Start T-038 only when joined GFS data, a baseline
+model, calibration, or backtesting demonstrates a concrete need for
+forecast-to-reanalysis bias pairs, climatology, weak cloud-base labels,
+confidence calibration, or fine tuning.
+
+ERA5 remains the accepted long-history reanalysis baseline from DEC-031. It is
+a separate `reanalysis` cohort and may never be relabelled as a GFS row, used as
+a live fallback, or substituted into the same forecast example. Preserve the
+existing provider-neutral catalogue and artifact contracts, registered
+`copernicus_era5` source, usage-policy family, provenance rules, nullable
+CIN/cloud-base destinations, and `era5_0p25_global` schema allowance as
+future-compatible capacity. Those contracts are not evidence that collection
+has been exercised.
+
+S10 adds no inert ERA5 collector, fake success path, placeholder row, CDS
+credential requirement, or ERA5 command. Any later adapter must retain its own
+reference/step/statistic provenance and applicable Copernicus/ECMWF permission
+and attribution evidence.
+
+**Consequences:** The former T-018/S09 is deferred rather than completed. T-018
+may complete after its remaining GFS hardening and bounded live acceptance gates
+pass. ERA5 remains visible as T-038, with a model/evaluation evidence gate,
+instead of being hidden unfinished T-018 work. Forecast and reanalysis storage
+remain distinct and no schema contraction or source-registry removal is
+authorized.
+
+**Related files:** [`T-018-S10-implementation-plan.md`](T-018-S10-implementation-plan.md),
+[`tasks.md`](tasks.md), [`architecture.md`](architecture.md),
+[`../services/ml/README.md`](../services/ml/README.md), and
+[`handoff.md`](handoff.md).
+
 ## Open decisions
 
-| Question | Options / constraints | Resolve by |
-| --- | --- | --- |
-| What exact T-012 field types, nullability, indexes, constraints, and migration layout should be used? | Must implement DEC-020's bounded Takt 2 tables, preserve source/provenance/validation data, retain numeric site IDs, and keep accepted flights distinct from quarantined candidates. | T-012 design and implementation. |
-| Which task owns the persisted prediction schema and SQLite forecast adapter? | The backlog has flight and weather schema tasks but no explicit owner for storing T-022-T-024 outputs and replacing the T-002 mock adapter. Public units/status/provenance must be mapped deliberately. | Backlog planning before real predictions are connected to the API. |
-| What are the final coordinates, aliases, and catchment radii for each site? | Current map points are provisional; Pastrina and the Dobrich regional model need particular confirmation. | T-009. |
-| What retention, attribution, licensing, and rate limits apply beyond the current XCContest browser workflow? | T-013 has a project-owner-confirmed ordinary low-volume UI workflow; do not extend it to bulk/commercial use or SkyNomad without explicit terms. | Before broader collection or product use. |
-| What production licences, attribution, retention, and direct-source/archive operations are required for the locked weather roles? | DEC-031 locks the technical source roles, but hosted Open-Meteo commercial use and direct ECMWF/DWD operational archiving still require owner confirmation and implementation. Models must not be silently substituted. | Before a commercial release. |
-| Which source-compatible weather-to-prediction rollout should become the MVP? | DEC-032 proposes GFS-only matched training/inference first, ICON-EU shadow collection, ERA5 verification/climatology, and later source-specific calibration or models. Confirm the rollout and create explicit weather-collector tickets before T-020. | Before weather collectors and T-020. |
-| Which first alert channel should be implemented? | Dashboard watchlist, email, Telegram, or another agreed channel; alerts require at least one-day lead time and deduplication. | T-027/T-028. |
-| What deployment/distribution model is required beyond local development? | The MVP is local-first; cloud/distributed infrastructure needs a demonstrated requirement. | No task assigned; decide when deployment becomes an accepted scope item. |
-| What license should the repository use? | No open-source license is currently selected. | Repository owner decision; no task assigned. |
+| Question                                                                                                                  | Options / constraints                                                                                                                                                                                                                                              | Resolve by                                                               |
+| ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| Which task owns the persisted prediction schema and SQLite forecast adapter?                                              | The backlog has flight and weather schema tasks but no explicit owner for storing T-022-T-024 outputs and replacing the T-002 mock adapter. Public units/status/provenance must be mapped deliberately.                                                            | Backlog planning before real predictions are connected to the API.       |
+| What are the final coordinates, aliases, and catchment radii for each site?                                               | Current map points are provisional; Pastrina and the Dobrich regional model need particular confirmation.                                                                                                                                                          | T-009.                                                                   |
+| What retention, attribution, licensing, and rate limits apply beyond the current XCContest browser workflow?              | T-013 has a project-owner-confirmed ordinary low-volume UI workflow; do not extend it to bulk/commercial use or SkyNomad without explicit terms.                                                                                                                   | Before broader collection or product use.                                |
+| What final production attribution, retention, and archive-operation wording is required for the selected weather sources? | T-018 uses direct NOAA GFS. T-038 may add CDS ERA5 only after its evidence gate; preserve source/permission evidence and the applicable Copernicus/ECMWF attribution if it does. Confirm final product wording and retention operations before commercial release. | Before a commercial release.                                             |
+| Which first alert channel should be implemented?                                                                          | Dashboard watchlist, email, Telegram, or another agreed channel; alerts require at least one-day lead time and deduplication.                                                                                                                                      | T-027/T-028.                                                             |
+| What deployment/distribution model is required beyond local development?                                                  | The MVP is local-first; cloud/distributed infrastructure needs a demonstrated requirement.                                                                                                                                                                         | No task assigned; decide when deployment becomes an accepted scope item. |
+| What license should the repository use?                                                                                   | No open-source license is currently selected.                                                                                                                                                                                                                      | Repository owner decision; no task assigned.                             |

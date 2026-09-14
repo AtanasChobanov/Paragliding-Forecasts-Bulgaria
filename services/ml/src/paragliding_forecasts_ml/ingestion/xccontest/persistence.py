@@ -386,7 +386,7 @@ def _existing_run(
         """SELECT id, source_id, source_url, permission_basis, permission_reference,
                   raw_manifest_path, raw_manifest_sha256, model_training_allowed,
                   operational_use_allowed, notes
-             FROM ingestion_runs WHERE run_key = ?""",
+             FROM flight_ingestion_runs WHERE run_key = ?""",
         (run_key,),
     ).fetchone()
     if row is None:
@@ -643,7 +643,7 @@ def persist_import(
         notes = json.dumps(existing_run_notes, sort_keys=True, separators=(",", ":"))
         if run_id is None:
             cursor = connection.execute(
-                "INSERT INTO ingestion_runs (run_key,source_id,ingestion_method,status,source_url,permission_basis,permission_reference,model_training_allowed,operational_use_allowed,raw_manifest_path,raw_manifest_sha256,pipeline_version,started_at_utc,completed_at_utc,records_seen,records_accepted,records_rejected,records_quarantined,records_deduplicated,notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO flight_ingestion_runs (run_key,source_id,ingestion_method,status,source_url,permission_basis,permission_reference,model_training_allowed,operational_use_allowed,raw_manifest_path,raw_manifest_sha256,pipeline_version,started_at_utc,completed_at_utc,records_seen,records_accepted,records_rejected,records_quarantined,records_deduplicated,notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     run_key,
                     source_id,
@@ -675,7 +675,7 @@ def persist_import(
             run_id = int(cursor.lastrowid)
         else:
             connection.execute(
-                "UPDATE ingestion_runs SET status = 'succeeded', completed_at_utc = ?, pipeline_version = ?, records_seen = ?, records_accepted = ?, records_rejected = ?, records_quarantined = ?, records_deduplicated = ?, notes = ? WHERE id = ?",
+                "UPDATE flight_ingestion_runs SET status = 'succeeded', completed_at_utc = ?, pipeline_version = ?, records_seen = ?, records_accepted = ?, records_rejected = ?, records_quarantined = ?, records_deduplicated = ?, notes = ? WHERE id = ?",
                 (
                     now,
                     pipeline,

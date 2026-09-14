@@ -1,5 +1,496 @@
 # Data and ML service
 
+
+## GFS raw planner and collector (T-018/S03)
+
+`gfs-collect` is the real, deliberately opt-in raw-only command. It checks the
+official `.idx` inventory and GRIB object metadata before collecting an explicit
+GFS cycle, or the newest complete cycle at/before a supplied cutoff. It writes a
+hash-verified request plan, native index, selected GRIB byte ranges, collection
+record and raw manifest below `data/raw/weather/<run-key>/`. It does not parse
+GRIB, sample a site, write SQLite, join flights, or train a model.
+
+A GFS message is global at 0.25 degrees: `.idx` byte ranges reduce variables,
+levels and leads, but cannot reduce the geographic grid. The S03 collector
+therefore does **not** use `weather_site_sampling_configs` to choose bytes; S05
+samples the already-provenanced global fields at those approved coordinates.
+Successful collection initializes the append-only run ledger and records the
+verified raw-manifest boundary.
+
+### Daily flying-window follow-up for S07
+
+The accepted product policy is one local Europe/Sofia day, 10:00--20:00
+inclusive (eleven valid instants), from one selected product run. Use
+`--local-date YYYY-MM-DD` for this operational mode: it derives and records the
+exact DST-aware eleven UTC instants under `sofia-flying-window/1`. The older,
+repeatable `--valid-at` interface remains available only for low-level,
+explicitly scoped collection and is mutually exclusive with `--local-date`.
+One local day must stay in one collection run; do not split it into child runs
+or build a cross-run assembler.
+GFS profile collection now includes HGT/TMP/RH/UGRD/VGRD/VVEL at
+1000/975/950/925/900/850/800/750/700/650/600/550/500 hPa. These pressure levels flow
+through parsing, normalization, canonical sampling, and source validation so
+the S07 builder can bracket AGL layers without a source-specific path.
+
+The default `--maximum-total-mib 128` remains a fail-closed safety limit. A
+bounded NOAA HEAD/`.idx` measurement on 2026-09-10 for local date `2026-09-11`
+resolved the `2026-09-10T00:00:00Z` run, selected 594 ranges, and required
+`1,168,112,596` bytes (`1114 MiB` minimum). It downloaded no GRIB payload and
+wrote no artifact. Use `--maximum-total-mib 1114` only when replaying that exact
+resolved day/run; measure and review each different daily scope rather than
+raising the global default or parallelising around it.
+
+Operational use should request the 10:00--20:00 `Europe/Sofia` thermal-XC window
+for today through D+2 from one selected complete GFS cycle. Historical/training
+use must be cohort-driven: request exact historical cycles only for the flight
+site-days and deterministic controls chosen by T-020, rather than bulk-fetching
+calendar years. The default 128 MiB cap applies to one command execution.
+
+The source policy is conservative: 400/401/403/404/405/410/413/416/422 and 500
+fail once; only 408, 429, 502, 503 and 504 retry. There are at most three total
+attempts; 408 waits 60 seconds once, 502/503/504 wait 30 then 120 seconds, and
+429 honours `Retry-After` with a 120-second minimum and a 900-second safe cap.
+A changed `.idx`, absent object, incomplete run and transport failure have
+separate recorded outcomes.
+
+Default tests make no network request:
+
+```powershell
+uv run --project services/ml pytest services/ml/tests/ingestion/gfs -q
+```
+
+Manual bounded live collection (do not run as part of the default test suite):
+
+```powershell
+uv run --project services/ml gfs-collect --purpose operational_forecast --explicit-run-at 2026-08-21T00:00:00Z --valid-at 2026-08-21T07:00:00Z --allow-live-network
+```
+
+Review the resulting manifest and byte cap before repeating it. The example has
+one valid time only; an operational D0--D2 request must explicitly list every
+chosen UTC valid hour after converting the local window, including DST.
+
+### Command options
+
+```powershell
+uv run --project services/ml gfs-collect [options]
+```
+
+| Option | Required | Behaviour |
+| --- | --- | --- |
+| `--purpose operational_forecast` or `historical_forecast` | Yes | Immutable provenance for intended use. It does not change native GFS message selection. |
+| `--local-date <YYYY-MM-DD>` | One time-scope mode | Derive and record the fixed DST-aware 10:00--20:00 Europe/Sofia window. Mutually exclusive with `--valid-at`. |
+| `--valid-at <UTC>` | One time-scope mode, repeatable | Low-level explicit forecast valid timestamp in `YYYY-MM-DDTHH:MM:SSZ`. Mutually exclusive with `--local-date`. |
+| `--explicit-run-at <UTC>` | One selection mode | Use this exact 00/06/12/18Z GFS cycle. Recommended for historical/training. |
+| `--newest-complete-before <UTC>` | One selection mode | Select the newest complete cycle available at or before this UTC cutoff. |
+| `--maximum-total-mib <integer>` | No; default `128` | Fail closed if selected byte ranges exceed the cap. One valid hour is currently about 31 MB. |
+| `--project-root <path>` | No; current directory | Root receiving `data/raw/weather/<run-key>/` and `data/interim/weather/<run-key>/`. |
+| `--allow-live-network` | Yes | Required acknowledgement before any NOAA request. |
+
+`--explicit-run-at` and `--newest-complete-before` are mutually exclusive. The
+planner checks at most eight six-hourly candidates when newest-run selection is
+used; this is intentionally not a CLI override.
+
+### Operational examples
+
+For the normal daily S07 collection mode, use one local date rather than eleven
+manual UTC flags:
+
+```powershell
+uv run --project services/ml gfs-collect `
+  --purpose operational_forecast `
+  --explicit-run-at <UTC-cycle> `
+  --local-date <YYYY-MM-DD> `
+  --maximum-total-mib <reviewed-daily-cap> `
+  --allow-live-network
+```
+Use an explicit reviewed cycle when you know which run to use:
+
+```powershell
+uv run --project services/ml gfs-collect `
+  --purpose operational_forecast `
+  --explicit-run-at 2026-08-21T00:00:00Z `
+  --valid-at 2026-08-21T07:00:00Z `
+  --allow-live-network
+```
+
+Use `--newest-complete-before` when the collector should choose the freshest
+complete cycle. The cutoff is an availability boundary, not the valid forecast
+time. This example asks for the newest cycle available by 10:30Z, then requests
+its 11:00Z forecast:
+
+```powershell
+uv run --project services/ml gfs-collect `
+  --purpose operational_forecast `
+  --newest-complete-before 2026-08-21T10:30:00Z `
+  --valid-at 2026-08-21T11:00:00Z `
+  --allow-live-network
+```
+
+For the intended 10:00--20:00 `Europe/Sofia` thermal-XC window, pass one
+`--local-date YYYY-MM-DD`. The CLI derives the UTC instants (DST-aware) and
+keeps them in one same-cycle run. Supply a reviewed explicit daily cap when the
+default 128 MiB cap proves insufficient; do not split the window into batches.
+
+### Historical example
+
+S03 already supports historical raw collection. Supply the exact historical run
+that existed before the flight day, rather than bulk-fetching calendar years:
+
+```powershell
+uv run --project services/ml gfs-collect `
+  --purpose historical_forecast `
+  --explicit-run-at 2025-06-14T00:00:00Z `
+  --valid-at 2025-06-15T10:00:00Z `
+  --allow-live-network
+```
+
+This is `f034`: the forecast issued at 00Z on 14 June and valid at 10Z on 15
+June. Repeat `--valid-at` only for a small same-cycle batch. T-020 will select
+the historical flight/control cohorts; S04--S08 must parse, sample, normalize,
+validate and persist the raw outputs before they form a training dataset.
+
+### Output and safety
+
+The `.idx` artifact is the official text index (message number, byte offset,
+native parameter, level and forecast descriptor). It contains no grid values.
+Each `gfs-f<lead>-r<ordinal>.grib2` is a real selected GRIB2 byte-range payload,
+not a pointer; it contains global 0.25-degree messages that S04 will parse.
+
+JSON artifacts are pretty-printed, deterministically sorted and SHA-256
+verified. Do not edit them after collection because their hash covers the exact
+stored bytes. Use a read-only formatter for older compact JSON files.
+
+### GFS GRIB parser and normalizer (T-018/S04)
+
+`gfs-parse` is an offline-only parser/normalizer stage. It accepts an existing,
+complete, hash-verified S03 run and never contacts NOAA or recalculates selector
+provenance:
+
+```powershell
+uv run --project services/ml gfs-parse --run-key <uuid> --database-url file:./data/local/paragliding.db
+```
+
+The parser pins ecCodes `2.47.0` and the observed NOAA `kwbc` GRIB2 table profile
+(master table `2`, local table `1`). It checks message number/order, numeric
+parameter identity, level, run/valid time, step range, statistic and grid
+metadata before values can cross the raw boundary. `HPBL` is identified through
+its numeric GRIB identity, not its ecCodes `shortName`.
+
+Parser v6 reads the migrated site rows from SQLite in read-only mode and combines
+them with the packaged sampling policy. It still validates every complete global
+message in transient memory, but persists only one deterministic compact
+little-endian float64 matrix, one little-bit-order packed compact missing mask,
+and `compact-native-grid-batch.json`. The descriptor records the verified native
+geometry, global crop bounds, all required global nodes, point/radius footprints,
+site and policy hashes, and the resulting selection fingerprint. For the current
+reviewed configuration this is a 77-node union inside an `8 x 24` crop; those
+dimensions are regression evidence rather than production constants. Legacy v5
+full-grid contracts remain readable and immutable.
+
+Normalizer v8 writes separate canonical surface/convection/interval grains and
+pressure-level grains for S05 without reconstructing the crop. Identity
+normalizations and static GFS orography reference their immutable parser matrix
+rows directly; transformed CIN, adjacent intervals and grid wind derivations are
+stored together in one `compact-canonical-derived-values.npy` matrix. Its stage
+inputs explicitly include the reused parser matrix. It retains native `u`/`v`,
+derives wind speed and meteorological direction, converts signed GFS CIN to
+positive magnitude while
+retaining the native convention, and records interval boundaries without
+inventing a rate. Precipitation is only de-accumulated when a proven reset and
+adjacent interval are available; the S03 shortest explicit accumulation interval
+is otherwise retained directly.
+
+Field quality uses only the persistence-compatible states: `real`, `derived`,
+`missing`, `sentinel_missing`, and `invalid_payload`. Bitmap/sentinel cells are
+`sentinel_missing`; a physically zero value remains `real`. A malformed message
+or incompatible identity fails as `invalid_payload`. `GUST` remains parsed as
+native evidence but has no T-017 canonical field or S01 persistence destination,
+so it is listed as an unsupported mapping outcome rather than persisted as a
+quality-state measurement.
+
+### Canonical site/grid sampling (T-018/S05)
+
+`gfs-sample` is offline-only. It requires a complete normalized state event,
+verifies every input hash, reads the migrated SQLite site configuration in
+read-only mode, writes immutable site/neighbourhood artifacts, and appends a
+`spatially_aligned/complete` event:
+
+```powershell
+uv run --project services/ml gfs-sample --run-key <uuid>
+```
+
+Spatial v6 verifies that the normalizer descriptor's site snapshot, policy,
+native geometry and selection hashes match its own read-only inputs. It keeps
+global node identities in footprints and provenance, but translates every
+lookup to compact coordinates and fails closed if a requested node is absent.
+The command-scoped verification session loads each referenced compact matrix at
+most once.
+
+The packaged `canonical-site-sampling-policy-v1` implements only:
+
+- bilinear point sampling on the canonical regular latitude/longitude grid;
+- an inclusive 50 km physical-radius footprint for later spatial features.
+
+Nearest-point sampling is deliberately not implemented. Bilinear weights are
+strict: if any positive-weight contributing node is missing, the result is
+missing and weights are not renormalized. U/V components are interpolated
+before wind speed and meteorological direction are derived, avoiding circular
+angle interpolation.
+
+Scalar component wind speed uses the shared `component_wind_speed` helper, which
+returns `math.hypot(u, v)` without rounding or tolerance. Spatial sampling and
+the feature builder use that same implementation so their immutable evidence
+remains bit-identical; persistence retains strict equality rather than accepting
+numerical-nearness.
+
+The radius artifact retains node values for MSL pressure, surface U/V and 925
+hPa U/V. S05 does not calculate pressure gradients, convergence or divergence;
+the versioned S07 feature builder owns those formulas and their scientific
+validation. Keeping the physical-radius nodes now prevents S07 from having to
+reinterpret or re-read the source grid.
+
+Each sample records reviewed site elevation, bilinear GFS model orography, and
+both signed and absolute terrain mismatch. Pressure-level geopotential heights
+remain MSL evidence; S05 derives site-AGL and model-AGL and excludes a level if
+either is negative. Coarse GFS terrain is never substituted for site terrain or
+silently adjusted to match it.
+
+The deterministic fingerprint includes the normalized manifest, grid geometry
+and orography, the complete reviewed site-config snapshot, policy bytes,
+footprints and component version. `sample_identity_key` is an artifact identity
+used for deterministic audit/testing; it is not a SQLite field. Equal verified
+inputs produce byte-identical `canonical-site-samples.json` and
+`neighbourhood-node-samples.json` outputs.
+
+### Source-aware validation and quarantine (T-018/S06)
+
+`weather-validate` is offline-only. It requires a complete S05 spatial event,
+verifies the complete hash chain to the raw manifest, reads the migrated
+`weather_sources` registry read-only, and writes an immutable
+`validator-v2/<fingerprint>/` boundary. The fingerprint includes the exact
+spatial-manifest hash, packaged source-policy bytes, and canonical registry-row
+hash.
+
+```powershell
+uv run --project services/ml weather-validate --run-key <uuid>
+```
+
+The implemented command validates GFS evidence. Its source-neutral contracts
+also retain the future ERA5 policy branch, but no ERA5 collector or end-to-end
+command exists. GFS requires forecast lead time and the
+1000/975/950/925/900/850/800/750/700/650/600/550/500 hPa profile band; ERA5 requires no
+forecast lead and the same policy profile set. The 875 hPa level is deliberately excluded. It checks
+source/kind, raw payload role/media type and GFS magic,
+catalogue units, finite/range values, time/lead/local-date consistency, field
+and sample duplicates, profile ordering, core nulls, and terrain mismatch.
+Below-terrain pressure-level exclusions and calm-wind direction are explicit
+non-penalizing missingness, not silent interpolation.
+
+The output partition is machine-readable: `accepted-samples.json`,
+`missing-evidence.json`, `quarantined-samples.json`, `validation-report.json`,
+`validation-snapshot.json`, and `stage-manifest.json`. Exit `0` means complete;
+exit `2` means quarantine (and blocks S07); exit `1` is an operational or hash
+chain failure. Repeating the same validated run reuses the prior immutable
+boundary and appends no duplicate ledger event. There is no manual alias or
+mapping approval file for weather validation.
+### Versioned daily feature artifacts (T-018/S07)
+
+`weather-build-features` is offline-only. It requires the current S06
+`validated/complete` state, verifies the complete S05/S06/raw hash chain, and
+writes one immutable policy-owned `feature_builder-v3/<fingerprint>/` boundary. The default schema-v2 policy is `weather-feature-policy-v3`, with feature contract `/3` and builder `/3`; v2 artifacts remain immutable and parseable:
+
+```powershell
+uv run --project services/ml weather-build-features --run-key <uuid>
+```
+
+Canonical inputs are selected exactly by field code, grain, and dimension through a central registry: 2 m fields use `2m_above_ground`, wind components use `10m_above_ground`, pressure distinguishes `surface` from `mean_sea_level`, cloud dimensions stay explicit, and CAPE/CIN use surface-parcel convection. There is no dimensionless or source-specific fallback; duplicate exact inputs and unmapped source-backed policy identities fail the build before an artifact is published.
+
+The stage never calls a provider and never writes SQLite. It emits ordered v2
+hourly feature snapshots, one daily site/local-date snapshot with the two
+approved AGL layers, and a machine-readable quality report. The fingerprint
+covers the validator manifest, accepted and missing S06 evidence, exact S05
+neighbourhood evidence, packaged feature-policy bytes, contract/builder
+versions. A missing feature is retained as `null` with its machine-readable
+reason; it does not turn a complete validation boundary into a failed feature
+build. Strict daily values need all eleven Europe/Sofia 10:00--20:00 instants,
+and interval values need exact non-overlapping `[10:00,20:00)` coverage.
+
+The planner fit uses only S05 neighbourhood mean-sea-level pressure and surface
+U/V nodes. It does not substitute the retained 925 hPa node values. A quarantined
+validator boundary returns exit `2` and creates no S07 artifact or state event;
+operational/hash-chain failures return exit `1`; a complete or reused boundary
+returns exit `0`.
+
+### Atomic offline weather persistence (T-018/S08)
+
+`weather-persist` consumes only the latest effective `validated/complete` and
+`features_built/complete` artifacts. It never creates or migrates SQLite schema
+and never starts a network request. Like `xccontest-persist`, it requires explicit local source usage authority;
+it has no implicit permission defaults. The default policy paths are
+`data/local/gfs-usage-policy.json` for GFS and
+`data/local/era5-usage-policy.json` for ERA5. The source-specific version key
+prevents passing a policy for one source to the other.
+
+```json
+{
+  "gfs_usage_policy_schema_version": 1,
+  "permission_basis": "source_terms",
+  "permission_reference": "Owner-reviewed GFS usage terms",
+  "model_training_allowed": false,
+  "operational_use_allowed": false
+}
+```
+
+```powershell
+# Resolves data/local/gfs-usage-policy.json for this GFS run.
+uv run --project services/ml weather-persist --run-key <uuid>
+
+# An explicit path is allowed only when its source-specific schema matches the run.
+uv run --project services/ml weather-persist --run-key <uuid> --policy-file <path-to-gfs-policy.json>
+```
+
+The adapter maps the canonical raw source ID to its policy family
+(`noaa_gfs_0p25_aws_grib2` to `gfs`; `copernicus_era5` to `era5`). Every
+request plan, including a retained plan loaded for persistence, must match the
+current packaged catalogue version and hash exactly. A catalogue update makes
+an older run ineligible for continuation: use the fresh end-to-end weather flow
+instead. Persistence still verifies every retained raw payload locally before
+writing SQLite, but validates compact plan/policy metadata first.
+
+The policy bytes hash is part of the immutable persistence input.
+`weather-persistence/3` retains the same strict graph comparison and corrects
+the read-through expected-graph capture so it recognizes the internally
+produced `INSERT` shape. It creates a distinct retry fingerprint; no weather
+collection, feature rebuild, or SQLite migration is required for that repair.
+
+Only GFS currently has a producer and runnable end-to-end ingestion command.
+The ERA5 registry, policy-family mapping, validation branch, and persistence
+capacity are future-compatible contracts, not an implemented CDS collection
+path. DEC-053 defers that adapter to T-038 until model or evaluation evidence
+demonstrates a concrete need.
+
+The adapter
+uses one `BEGIN IMMEDIATE` transaction, records field-level missing/unsupported
+provenance, and returns a no-op only when an existing terminal run has the same
+immutable inputs and complete expected graph counts. Do not commit policy files
+containing owner-specific terms or enable either usage flag without an explicit
+owner review.
+
+`weather-ingest` provides the matching orchestration boundary. `fresh` validates
+that the explicit policy and migrated SQLite schema exist before it reaches GFS
+and requires a reviewed byte cap plus `--allow-live-network`. `resume` exposes
+no transport or network flags and calls only the retained-artifact stage
+services before persistence:
+
+```powershell
+uv run --project services/ml weather-ingest resume `
+  --run-key <uuid>
+
+# Optional override; it must use the GFS policy schema for this GFS command.
+uv run --project services/ml weather-ingest resume `
+  --run-key <uuid> `
+  --policy-file <path-to-gfs-policy.json>
+```
+
+A `partial` raw run stops as `incomplete_coverage`; a validation quarantine
+stops before features or persistence. A successful persisted run returns
+`inserted`, `revalidated_no_op`, or `recovered_committed_write`.
+Both modes execute the same typed offline services in-process with one run
+context, one metadata-only ledger snapshot, and one command-scoped artifact
+verification session. Their structured result includes stage create/reuse
+dispositions and a secret-free `verification_summary`. Fresh duplicate
+acquisition identity additionally binds the reviewed site-config hash, packaged
+sampling-policy hash, and compact-selection version; changing any of those
+requires a new run rather than silently reusing an older compact graph.
+The real command chain is:
+
+```powershell
+uv run --project services/ml gfs-collect <reviewed options> --allow-live-network
+uv run --project services/ml gfs-parse --run-key <uuid>
+uv run --project services/ml gfs-sample --run-key <uuid>
+uv run --project services/ml weather-validate --run-key <uuid>
+uv run --project services/ml weather-build-features --run-key <uuid>
+```
+
+Only collection can access NOAA. Parse/normalize and sampling are offline
+resume stages; sampling never writes SQLite.
+
+### Explicit weather artifact audits
+
+`weather-artifacts audit` validates the small append-only ledger first, then
+hash-verifies either the current effective boundaries or every historical and
+superseded boundary. Normal stage commands never run the expensive all-history
+scope implicitly:
+
+```powershell
+uv run --project services/ml weather-artifacts audit --run-key <uuid> --scope effective
+uv run --project services/ml weather-artifacts audit --run-key <uuid> --scope all
+```
+
+Use `effective` for the operational lineage. Use `all` only for deliberate
+maintenance of retained history; missing or corrupt evidence referenced solely
+by an unused superseded event does not block the effective audit. The JSON
+report includes command-local files/bytes hashed, cache hits, manifests parsed,
+boundaries verified, just-written registrations, and hashing time; these
+diagnostics are not persisted in SQLite.
+
+### Verified T-018 bounded GFS acceptance
+
+On 2026-09-14, the owner-authorized bounded GFS run for local date
+`2026-09-14`, cycle `2026-09-14T00:00:00Z`, and
+`operational_forecast` completed under `--maximum-total-mib 1109`:
+
+- run key: `0200117a-2638-4e98-ac42-534db32315dd`;
+- raw boundary: `275fda76fb498ed3758c017fd337cb488876abb337a19c9617a709841b6c9047`;
+- 1,163,650,418 retained raw bytes and 25.32 MiB of interim artifacts;
+- parser v6, normalizer v8, spatial v6, validator v7, feature builder v4,
+  and persistence v3 completed successfully;
+- the compact artifacts contain an 8 x 24 crop for 77 required nodes; no
+  parser or normalizer global numeric array was retained;
+- the primary SQLite result contains 1 ingestion run, 77 point samples, 308
+  interval measurements, 759 profile levels, 154 convection measurements, 7
+  daily snapshots, 14 profile layers, 77 snapshot inputs, and 9,554 field
+  provenance rows.
+
+Collection completed in 15 minutes 8 seconds and the complete fresh flow in
+15 minutes 45 seconds. Its command-scoped verifier processed 597 files and
+1,163,650,418 bytes in 1.225 seconds, with 11,916 cache hits.
+
+The same-database `weather-ingest resume` returned `revalidated_no_op` with
+unchanged counts. A separately migrated seeded SQLite database restored the
+same graph through offline `resume`, returning `inserted` with the same counts
+and no network access. Finally, `weather-artifacts audit --scope effective`
+verified all seven effective boundaries from the eight-event ledger (619 files,
+1,190,198,723 bytes, and seven parsed manifests). The retained raw data is not
+committed; this evidence is an operational record, not a bundled fixture.
+
+### Reviewed Copernicus site elevation command
+
+`copernicus-elevations` repeatably samples Copernicus DEM GLO-30 for every
+approved site coordinate. Create an OAuth client under User Settings in the
+[Copernicus Data Space Sentinel Hub dashboard](https://shapps.dataspace.copernicus.eu/dashboard/)
+([official authentication instructions](https://documentation.dataspace.copernicus.eu/APIs/SentinelHub/Overview/Authentication.html))
+and put its values only in the ignored root `.env` file:
+
+```dotenv
+CDSE_CLIENT_ID=<client-id>
+CDSE_CLIENT_SECRET=<client-secret>
+```
+
+Then run:
+
+```powershell
+uv run --project services/ml copernicus-elevations --allow-live-network
+```
+
+The command uses bilinear sampling and EGM2008 orthometric MSL height, writes an
+ignored JSON review artifact, and never writes SQLite. It is intentionally a
+single repeatable fetch command, not a refresh/resume workflow. A provider-side
+dataset or processing change may produce a different result later; accepting
+that result requires review and a new guarded data migration. The currently
+reviewed seven values are pinned by
+`20260824184712_set_copernicus_site_elevations`.
+
 ## Status
 
 The permitted XCContest browser collector and its offline parser/normalizer are
@@ -8,6 +499,36 @@ local staging records only; it does not match sites, update mappings, write
 SQLite, or make source requests. Feature engineering, training, and prediction
 entry points start in later Takts.
 
+## Atmospheric durable protocol (T-018/S02)
+
+The packaged T-017 catalogue at
+`src/paragliding_forecasts_ml/ingestion/atmosphere/resources/weather-field-catalogue.json`
+is the only canonical atmospheric vocabulary. Runtime contracts validate field
+codes and canonical units directly against it; do not add a parallel Python
+field enum.
+
+A weather run owns immutable raw evidence under
+`data/raw/weather/<run-key>/`: `request-plan.json`, native payloads, and
+`manifest.json`. Derived outputs are immutable version/fingerprint directories
+under `data/interim/weather/<run-key>/`, with an append-only hash-linked state
+ledger under `state/events/`. Artifacts are written once, referenced by
+repository-relative path/SHA-256/byte count, and verified before a downstream
+stage can use them. A schema-v2 state event may explicitly supersede the current
+immutable parser/normalizer/spatial/validator boundary for the same run; it
+never overwrites the older artifact or event. Re-running a command reuses an
+exact version/fingerprint/upstream boundary, while a changed component version
+or upstream input appends a new event linked by `supersedes_sequence`.
+
+The contract stages are collector, parser, normalizer, spatial aligner,
+validator, feature builder, and persistence. Their versions are independent;
+`weather_ingestion_runs.pipeline_version` will receive their fixed-order
+pipe-delimited tuple only in S08. `fresh` creates one new run UUID and `resume`
+is offline. `failed` may retry from the last hash-verified stage; `partial` and
+`persisted` are terminal; `quarantined` may only be emitted or resolved by a new
+validation output.
+
+S02 deliberately registers no weather CLI command. S03 onward will expose a
+stage command only when it implements the corresponding real behavior.
 ## Why Python exists in a TypeScript-first repository
 
 Product behavior, HTTP transport, and the dashboard stay in TypeScript. Python
@@ -144,7 +665,7 @@ completion/coverage status, the configured source-pacing delay and risk acknowle
 category/date/sort scope, artifact hashes, per-view row counts, qualifying-distance counts,
 and run-wide observed/distinct/repeated
 flight-ID counts. The CLI also returns the repository-relative manifest path
-and SHA-256 needed by the later `ingestion_runs` write. The checkpoint and
+and SHA-256 needed by the later `flight_ingestion_runs` write. The checkpoint and
 failure report carry the available observation counters. `--max-views` is a
 fail-closed cap across the full run, rather than a pagination cap.
 
@@ -324,7 +845,7 @@ uv run --env-file .env --project services/ml xccontest-validate --run-key <uuid>
 
 The validator writes non-overwriting `validation-v2/<mapping-snapshot-sha256>/`
 outputs: `accepted-flights.jsonl`, `site-quarantine.jsonl`, and
-`validation-report.json`. It does not call XCContest or create `ingestion_runs` or
+`validation-report.json`. It does not call XCContest or create `flight_ingestion_runs` or
 `flight_records`; the later persistence slice owns that transaction. Re-run validation
 after mapping approvals to obtain a new mapping-snapshot output.
 The top-level `xccontest-ingest` command orchestrates the same collector, parser, mapping,
@@ -482,7 +1003,7 @@ The system deliberately keeps the mapping-review gate introduced by DEC-029:
 `--persist-approved-only` remains an explicit, exceptional path.  It may persist
 currently accepted records while unresolved mapping quarantines remain.  When
 mapping review later permits the remaining records, `resume` reuses the same
-`ingestion_runs` row and reconciles the earlier subset instead of failing on
+`flight_ingestion_runs` row and reconciles the earlier subset instead of failing on
 duplicates.  It is not the normal `fresh` workflow and never bypasses the
 mapping-review requirement for a quarantined record.
 
@@ -544,15 +1065,15 @@ validated accepted JSONL + current SQLite
 The transaction first verifies all raw/parser/validation SHA-256 evidence, the
 current mapping snapshot, and that every selected mapping is still approved for
 XCContest.  If any comparison needs reconciliation review, it rolls back before
-creating or changing an `ingestion_runs` or `flight_records` row.  Therefore a
+creating or changing an `flight_ingestion_runs` or `flight_records` row.  Therefore a
 batch containing one conflict and several new flights cannot partially persist.
 
 For a successful reconciliation:
 
-- The first persistence of a run creates its `ingestion_runs` row.  A later
+- The first persistence of a run creates its `flight_ingestion_runs` row.  A later
   partial-run resume updates that same row and appends a new event in its
   versioned `notes` JSON.
-- A cross-run duplicate creates a new `ingestion_runs` row, but never a second
+- A cross-run duplicate creates a new `flight_ingestion_runs` row, but never a second
   `flight_records` row for the same source identity.
 - `created_by_ingestion_run_id` is never changed. An applied reconciliation
   refreshes `last_validated_by_ingestion_run_id`, `validation_notes`, and
@@ -707,7 +1228,7 @@ a destructive database backfill.  A legacy row receives schema-v1 notes only
 when a later valid reconciliation actually updates or revalidates it.
 
 Run-level history is append-only within the versioned JSON held in
-`ingestion_runs.notes`.  Each applied event records its validation report and
+`flight_ingestion_runs.notes`.  Each applied event records its validation report and
 accepted JSONL paths/hashes, reconciliation plan hash, optional decisions hash,
 mapping-review completeness, outcome counts, and timestamp.
 
@@ -799,11 +1320,11 @@ connection = sqlite3.connect(Path('data/local/paragliding.db'))
 for label, sql in (
     ('flight_records', 'SELECT count(*) FROM flight_records'),
     ('quality_notes_v1', "SELECT count(*) FROM flight_records WHERE validation_notes LIKE '{\"schema_version\":1,%'"),
-    ('ingestion_runs', 'SELECT count(*) FROM ingestion_runs'),
+    ('flight_ingestion_runs', 'SELECT count(*) FROM flight_ingestion_runs'),
 ):
     print(label, connection.execute(sql).fetchone()[0])
 print(connection.execute(
-    "SELECT notes FROM ingestion_runs WHERE run_key = ?",
+    "SELECT notes FROM flight_ingestion_runs WHERE run_key = ?",
     ('8d809838-3ff8-42ce-9977-3997cd2536bc',),
 ).fetchone()[0])
 connection.close()
@@ -811,7 +1332,7 @@ connection.close()
 ```
 
 Expected counts after that first replay: `flight_records 449`,
-`quality_notes_v1 182`, and `ingestion_runs 2`. The printed run notes contain
+`quality_notes_v1 182`, and `flight_ingestion_runs 2`. The printed run notes contain
 `schema_version: 2` and one `reconciliation_applied` event.
 
 Run exactly the same `resume` command a second time. Expected result: exit code
