@@ -20,7 +20,8 @@ def build_parser() -> argparse.ArgumentParser:
         command = subcommands.add_parser(name)
         _selectors(command)
         command.add_argument("--allow-live-network", action="store_true")
-        if name == "fresh": command.add_argument("--maximum-total-mib", type=int)
+        if name == "fresh":
+            command.add_argument("--maximum-total-mib", type=int)
     resume_parser = subcommands.add_parser("resume")
     resume_parser.add_argument("--run-key", required=True)
     resume_parser.add_argument("--project-root", type=Path, default=Path.cwd())
@@ -32,7 +33,9 @@ def _selectors(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--date", dest="dates", action="append", default=[])
     parser.add_argument("--start-date")
     parser.add_argument("--end-date")
-    parser.add_argument("--nominal-hour", dest="nominal_hours", action="append", type=int, default=[])
+    parser.add_argument(
+        "--nominal-hour", dest="nominal_hours", action="append", type=int, default=[]
+    )
     parser.add_argument("--archive", choices=("auto", "recent", "period-of-record"), default="auto")
     parser.add_argument("--project-root", type=Path, default=Path.cwd())
 
@@ -45,15 +48,34 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             if not args.allow_live_network:
                 raise IgraInventoryError("inventory and fresh require --allow-live-network.")
-            dates, hours = parse_selection(dates=tuple(args.dates), start_date=args.start_date, end_date=args.end_date, nominal_hours=tuple(args.nominal_hours))
+            dates, hours = parse_selection(
+                dates=tuple(args.dates),
+                start_date=args.start_date,
+                end_date=args.end_date,
+                nominal_hours=tuple(args.nominal_hours),
+            )
             transport = RetryingIgraTransport(UrllibIgraTransport())
             if args.command == "inventory":
-                result, _policy_sha = inventory(transport, station_id=args.station_id, dates_utc=dates, nominal_hours=hours, requested_archive_mode=args.archive)
+                result, _policy_sha = inventory(
+                    transport,
+                    station_id=args.station_id,
+                    dates_utc=dates,
+                    nominal_hours=hours,
+                    requested_archive_mode=args.archive,
+                )
                 _write(result.model_dump(mode="json"))
                 return 0
             if args.maximum_total_mib is None or args.maximum_total_mib <= 0:
                 raise IgraInventoryError("fresh requires a positive --maximum-total-mib.")
-            result = fresh(station_id=args.station_id, dates_utc=dates, nominal_hours=hours, archive=args.archive, maximum_total_mib=args.maximum_total_mib, project_root=args.project_root, transport=transport)
+            result = fresh(
+                station_id=args.station_id,
+                dates_utc=dates,
+                nominal_hours=hours,
+                archive=args.archive,
+                maximum_total_mib=args.maximum_total_mib,
+                project_root=args.project_root,
+                transport=transport,
+            )
         _write(result)
         return int(result["exit_code"])
     except (IgraInventoryError, IgraPipelineError, RuntimeError, ValueError) as error:
@@ -62,7 +84,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def _write(result: object) -> None:
-    print(json.dumps(result, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":")))
+    print(json.dumps(result, ensure_ascii=False, allow_nan=False, sort_keys=True, indent=2))
 
 
 if __name__ == "__main__":
