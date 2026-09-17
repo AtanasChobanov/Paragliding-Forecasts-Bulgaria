@@ -3,54 +3,129 @@
 
 ## NOAA IGRA sounding ingestion (T-019)
 
-`igra-ingest` is the artifact-only NOAA IGRA v2.2 boundary for Sofia
-`BUM00015614`. It collects the numeric raw and provider-derived sounding
-members, retains only the selected UTC dates, and produces hash-verified JSONL
-and report artifacts. It does not write SQLite, add predictor features, join
-flights, compare GFS, render images, or perform OCR.
+`igra-ingest` is the artifact-only NOAA IGRA v2.2 observation boundary for
+Sofia `BUM00015614`. It gathers the numeric raw and provider-derived sounding
+members for explicitly selected UTC dates and publishes immutable,
+SHA-256-verified JSONL and report artifacts. It does **not** write SQLite, add
+prediction features, join flights, compare GFS, render a Skew-T, or perform
+image/OCR work.
 
-`inventory` and `fresh` deliberately require `--allow-live-network`. They use
-only the five source-policy URLs. `inventory` sends HEAD requests only and
-creates no local artifacts. `fresh` rechecks the fresh inventory, enforces an
-explicit compressed-byte cap before GET requests, stores an immutable raw
-snapshot, and then runs the offline parser, normalizer, and validator stages.
-`resume` has no live-network switch and replays only hash-verified local state.
+### Pipeline and artifact lifecycle
 
-Run these live commands manually after reviewing the preceding output; they
-were not run as part of the automated test suite:
+```text
+inventory (live HEAD only)
+  -> review size and source metadata
+fresh (live, bounded GET)
+  -> immutable raw source snapshot
+  -> fixed-width raw/derived parsing
+  -> unit/provenance normalization
+  -> validation and quarantine partition
+  -> effective validated manifest
+resume (offline only)
+  -> hash-verify the same artifacts
+  -> replay any incomplete offline stages / return the same result
+```
+
+`inventory` and `fresh` require `--allow-live-network` as an explicit operator
+acknowledgement. They use only the five approved NOAA source-policy URLs.
+`inventory` makes HEAD requests only: it records object metadata and the
+minimum required MiB but creates no local artifact. `fresh` repeats inventory,
+requires a positive `--maximum-total-mib`, rejects an over-cap scope before any
+GET, and may reuse an already verified immutable raw snapshot when the provider
+metadata is unchanged. It always creates a new run root and processes the full
+pipeline.
+
+A successful `fresh` creates data below `data/raw/soundings/<source-snapshot-id>/`
+and `data/interim/soundings/<run-key>/`. The source-stage reference is the JSON
+file `source-snapshot-reference.json`; its extension is intentional and it is
+not compatible with the earlier extensionless `snapshot` mistake. Parsed,
+normalized, and validator directories are versioned and fingerprinted. The
+validator boundary includes accepted, quarantined, and missing-evidence JSONL,
+a validation report, and `stage-manifest.json`. The terminal result's
+`validated_manifest` gives the exact relative path and SHA-256 of that manifest.
+Do not edit any generated artifact: its hash covers its exact bytes.
+
+`resume` has no network flag and must never contact NOAA. It only reads local
+state, recursively verifies referenced SHA-256 evidence, then reuses completed
+immutable stages or continues an interrupted offline stage. It is the preferred
+way to inspect a completed run and should return the same validated-manifest
+identity as `fresh`.
+
+### Commands and examples
+
+All command results are deterministic, sorted, pretty-printed JSON. The exit
+code is `0` when at least one sounding is accepted and none is quarantined, `2`
+when the selected scope has no accepted sounding or has quarantined soundings,
+and `1` for configuration, transport, parser, or evidence-verification errors.
+Read `accepted_soundings`, `quarantined_soundings`, `missing_evidence`,
+`source_snapshot_id`, and `validated_manifest` before using an output in a later
+validation task.
+
+First inventory the proposed live scope. This uses HEAD only and leaves no
+artifact behind:
 
 ```powershell
-# HEAD only: record all five Content-Length values and minimum_required_mib.
 uv run --project services/ml igra-ingest inventory `
   --station-id BUM00015614 `
   --date 2025-08-02 `
+  --date 2025-08-11 `
   --archive period-of-record `
   --allow-live-network
+```
 
-# Only if the reviewed inventory fits the explicit cap. This may download data.
+Review `minimum_required_mib`, the five `remote_objects`, their final URLs and
+content lengths. If the required size exceeds the intended cap, stop and choose
+a narrower scope; never increase the cap automatically. `--archive auto` uses
+the rolling archive only for current-UTC-year dates. Use
+`--archive period-of-record` for historical dates; `recent` explicitly selects
+the rolling source.
+
+After review, run the bounded collection. This command may download source
+objects and stores ignored local artifacts:
+
+```powershell
 uv run --project services/ml igra-ingest fresh `
   --station-id BUM00015614 `
   --date 2025-08-02 `
+  --date 2025-08-11 `
   --archive period-of-record `
   --maximum-total-mib 80 `
   --allow-live-network
-
-# Replace the placeholder with fresh's printed run_key. This command is offline.
-uv run --project services/ml igra-ingest resume --run-key <uuid>
 ```
 
-If inventory reports `minimum_required_mib` greater than `80`, stop rather than
-raising the cap automatically. Review the fresh JSON result, its run-key, and
-the referenced `validation_report` and validated manifest. A nonzero `2` means
-that the selected scope produced no accepted sounding or a quarantined profile;
-inspect the immutable evidence before choosing a different scope. `auto` uses
-the rolling archive only for dates in the current UTC year; use
-`period-of-record` for historical dates.
+`--date` can be repeated as above. Alternatively use `--start-date` and
+`--end-date` for an inclusive UTC range. `--nominal-hour` is repeatable and
+filters to specific nominal UTC hours; omit it to retain every actual sounding
+on the selected dates. The Sofia 10:00--20:00 flying window is deliberately not
+an ingestion filter: T-039 classifies observation timing later.
 
-Offline verification on 2026-09-17 passed Ruff and 291 ML tests, including a
-fake bounded fresh-to-resume flow and streamed ZIP-member parsing. Live NOAA
-acceptance remains owner-operated and T-019 stays In Progress until its results
-are reviewed and recorded.
+To replay a successful or interrupted run without network access, copy the
+`run_key` from `fresh` and run:
+
+```powershell
+uv run --project services/ml igra-ingest resume `
+  --run-key 5ae72afe-e71e-4c32-ade8-cd57426533e8
+```
+
+For that reviewed two-date example, the successful result has four accepted
+soundings, zero quarantined soundings and a validated manifest beneath
+`data/interim/soundings/5ae72afe-e71e-4c32-ade8-cd57426533e8/`. `resume` is
+safe to repeat; it is an offline evidence replay, not a new collection.
+
+### Scope and safety boundary
+
+IGRA is delayed observational evidence, not a prediction-time input. T-020
+must join flight labels only to pre-flight exact GFS features. T-039 may consume
+the effective validated manifest to compare GFS at the exact Sofia station and
+nominal time; it owns any calibration/bias assessment. Raw numeric profiles
+make later chart rendering possible, but no image scraping, OCR, or diagram
+interpretation belongs here.
+
+Offline verification on 2026-09-17 passed Ruff and the full ML test suite
+before live acceptance. The owner then successfully ran the reviewed bounded
+`fresh` scope and an offline `resume`: both returned four accepted soundings,
+zero quarantine/missing evidence, exit code `0`, and the identical validated
+manifest SHA-256. T-019 is now in Review.
 ## GFS raw planner and collector (T-018/S03)
 
 `gfs-collect` is the real, deliberately opt-in raw-only command. It checks the
