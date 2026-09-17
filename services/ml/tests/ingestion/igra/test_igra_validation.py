@@ -7,9 +7,14 @@ from paragliding_forecasts_ml.ingestion.igra.validation import validate
 FIXTURES = Path(__file__).parents[2] / "fixtures" / "igra"
 
 
+def _raw_member() -> bytes:
+    lines = (FIXTURES / "raw-selected-soundings.txt").read_bytes().splitlines()
+    return b"\n".join(line if line.startswith(b"#") else line + b" " for line in lines) + b"\n"
+
+
 def test_height_only_wind_level_does_not_quarantine_an_otherwise_usable_sounding() -> None:
     parsed = parse_members(
-        raw_content=(FIXTURES / "raw-selected-soundings.txt").read_bytes(),
+        raw_content=_raw_member(),
         derived_content=(FIXTURES / "derived-selected-soundings.txt").read_bytes(),
         station_id="BUM00015614",
         dates_utc=("2025-08-02",),
@@ -35,5 +40,7 @@ def test_height_only_wind_level_does_not_quarantine_an_otherwise_usable_sounding
 
 
 def test_empty_selection_publishes_missing_evidence() -> None:
-    result = validate((), (), (), (), requested_dates_utc=("2025-08-11",), requested_nominal_hours=(12,))
+    result = validate(
+        (), (), (), (), requested_dates_utc=("2025-08-11",), requested_nominal_hours=(12,)
+    )
     assert result.missing_evidence[0]["reason"] == "no_observation_for_selection"

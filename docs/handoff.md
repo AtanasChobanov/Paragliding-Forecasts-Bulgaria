@@ -18,9 +18,9 @@ Keep durable decisions in `docs/decisions.md`, ticket lifecycle in
 | Field | Value |
 | --- | --- |
 | Branch | `feature/T-019-sounding-ingestion` |
-| Ticket | `T-019` is **In Progress**. The artifact-first IGRA implementation and offline automated verification are complete; the owner live `fresh` published a source snapshot but stopped before parsing, and offline `resume` is now pending. `T-018` remains done and ERA5 remains deferred to T-038. |
-| Next work | Owner: after this fix is committed, run offline `igra-ingest resume --run-key 1b6c4ce0-a1bf-4d06-bfbd-390dc4de6c98` to continue the already downloaded snapshot. Review and record its output before any new `fresh`. Do not add SQL, a T-020 training join, GFS/IGRA comparison, ERA5, BUFR, or image/OCR scope. |
-| Fresh evidence | T-019: Ruff passed; `uv run --project services/ml pytest` passed **291** tests; `npm.cmd run repo:check`, `format:check`, `typecheck`, `lint`, and `test` passed. Owner live `fresh` downloaded and published the snapshot but stopped before parsing because NOAA's UTF-8 station list was incorrectly required to be all-ASCII; this is fixed and focused offline IGRA tests pass. |
+| Ticket | `T-019` is **In Progress**. The artifact-first IGRA implementation and offline automated verification are complete; the owner live `fresh` published a source snapshot but exposed provider-format parser defects; a clean new `fresh` after the fixes is pending. `T-018` remains done and ERA5 remains deferred to T-038. |
+| Next work | Owner: after this fix is committed, run a new reviewed bounded `igra-ingest fresh` for the two selected dates and inspect its result. The initial run deliberately has no compatibility path. Do not add SQL, a T-020 training join, GFS/IGRA comparison, ERA5, BUFR, or image/OCR scope. |
+| Fresh evidence | T-019: Ruff passed; `uv run --project services/ml pytest` passed **291** tests; `npm.cmd run repo:check`, `format:check`, `typecheck`, `lint`, and `test` passed. Owner live `fresh` downloaded and published the snapshot but exposed two parser defects: the provider-wide station list is UTF-8 and raw level rows are 52 bytes with a trailing padding column. Both are fixed; focused offline IGRA tests pass. |
 | Local DB | The primary and temporary restoration SQLite databases were migrated by the owner for T-018 acceptance. They are local ignored artifacts and must not be committed. |
 | User work | `docs/T-019-implementation-plan.md` is a local planning reference. Per owner instruction, do not stage or commit it. |
 ## T-019 implementation-plan boundary
@@ -62,37 +62,42 @@ expanded archives. `resume` constructs no transport and recursively verifies
 all referenced evidence before processing.
 The owner ran one live `fresh` on 2026-09-17. It successfully created source
 snapshot `c7dd598ab2114720d0ee53ae024eebfd6148a480293e5185d171e4155e3a6fe6`
-and then stopped before parsing because the provider-wide station list contains
-UTF-8 names. The station parser now scans fixed byte columns, decoding only the
-selected Sofia row; future source stages use
-`source-snapshot-reference.json`. `resume` also recognizes the old extensionless
-`snapshot` reference, so the existing run can continue offline after this fix.
-
+and then exposed two provider-format parser defects before completion: the
+provider-wide station list contains UTF-8 names, and raw level rows are 52 bytes
+including their final padding column. Both are now covered by local fixtures and
+regression tests. Future source stages use `source-snapshot-reference.json`;
+there is intentionally no compatibility path for the old extensionless
+`snapshot` reference.
 On 2026-09-17, `uv run --project services/ml ruff check services/ml` passed and
 `uv run --project services/ml pytest` passed 291 tests. Repository
 `repo:check`, formatting, TypeScript typecheck/lint, and workspace tests also
 passed. These checks used only local fixtures and a fake transport; they are not
 live source acceptance.
 
-### Owner-operated live acceptance — recovery pending
+### Owner-operated live acceptance — clean rerun pending
 
-The owner already ran the reviewed bounded `fresh` and the source snapshot was
-published. Do not download it again. After the parser fix is committed, continue
-that exact run offline:
+The initial live run is intentionally not recoverable: it contains the old
+extensionless source-stage reference and must not be reused. After this parser
+fix is committed, start one new bounded run for the already reviewed two-date
+scope:
 
 ```powershell
-uv run --project services/ml igra-ingest resume `
-  --run-key 1b6c4ce0-a1bf-4d06-bfbd-390dc4de6c98
+uv run --project services/ml igra-ingest fresh `
+  --station-id BUM00015614 `
+  --date 2025-08-02 `
+  --date 2025-08-11 `
+  --archive period-of-record `
+  --maximum-total-mib 80 `
+  --allow-live-network
 ```
 
 Review the resulting JSON, validated manifest, and validation report; record the
-outcome here before marking T-019 done. Only if this run cannot resume for a
-separate integrity/state reason should a new scope begin with HEAD-only
-`inventory`, review all five `Content-Length` values and `minimum_required_mib`,
-and then use bounded `fresh`. Do not automatically increase the cap. The CLI and
-resulting artifacts remain exactly scoped to IGRA observation handling; T-020
-and T-039 remain separate.
-
+outcome here before marking T-019 done. `fresh` repeats the live inventory and
+may safely reuse the verified immutable raw snapshot when provider metadata is
+unchanged; it always creates a new run root and runs the complete processing
+pipeline. Do not automatically increase the cap. The CLI and resulting artifacts
+remain exactly scoped to IGRA observation handling; T-020 and T-039 remain
+separate.
 ### Storage scaling
 
 The retained GFS run is dominated by derived global arrays, not SQLite rows:

@@ -8,6 +8,11 @@ from paragliding_forecasts_ml.ingestion.igra.transport import BytesIgraResponse,
 FIXTURES = Path(__file__).parents[2] / "fixtures" / "igra"
 
 
+def _raw_member() -> bytes:
+    lines = (FIXTURES / "raw-selected-soundings.txt").read_bytes().splitlines()
+    return b"\n".join(line if line.startswith(b"#") else line + b" " for line in lines) + b"\n"
+
+
 class FakeIgraTransport(IgraTransport):
     def __init__(self, objects: dict[str, bytes]) -> None:
         self.objects = objects
@@ -29,7 +34,7 @@ class FakeIgraTransport(IgraTransport):
 
 
 def test_fake_fresh_then_offline_resume(tmp_path: Path) -> None:
-    raw = _zip("BUM00015614-data.txt", (FIXTURES / "raw-selected-soundings.txt").read_bytes())
+    raw = _zip("BUM00015614-data.txt", _raw_member())
     derived = _zip(
         "BUM00015614-drvd.txt", (FIXTURES / "derived-selected-soundings.txt").read_bytes()
     )

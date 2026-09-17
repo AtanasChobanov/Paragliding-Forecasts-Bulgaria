@@ -157,7 +157,7 @@ def _parse_raw(
             level_body, level_original, level_line = _next_level(lines, "Raw")
             if level_body.startswith("#"):
                 raise IgraParseError("Raw IGRA record has fewer level rows than its NUMLEV.")
-            _width(level_body, 51, "raw level", level_line)
+            _width(level_body, 52, "raw level", level_line)
             values = _raw_level_values(level_body, level_line)
             digest.update(level_original)
             if selected:
