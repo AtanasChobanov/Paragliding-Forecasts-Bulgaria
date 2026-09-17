@@ -138,9 +138,11 @@ forecast substitute.
 
 Raw and interim weather artifacts remain filesystem evidence. The database
 stores the ingestion manifest path and SHA-256 rather than duplicating every
-artifact in a `weather_artifacts` table. Sounding storage and collection remain
-T-019, while flight/weather joins, training cohorts, and ML execution remain
-T-020 or later.
+artifact in a `weather_artifacts` table. Sounding collection and artifact-first
+storage remain T-019; relational sounding persistence is deferred until a
+concrete indexed/API/model consumer exists. Flight/weather joins, training
+cohorts, and ML execution remain T-020 or later, while GFS/IGRA observational
+validation remains the separate T-039 boundary.
 
 The physical SQLite schema is a language-neutral boundary. Python batch code
 may read/write the migrated file through a non-migrating persistence adapter,

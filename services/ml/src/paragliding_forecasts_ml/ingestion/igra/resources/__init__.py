@@ -1,0 +1,1 @@
+"""Versioned source-policy resources for the IGRA adapter."""

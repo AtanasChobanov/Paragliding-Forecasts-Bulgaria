@@ -66,6 +66,7 @@ consequences. Temporary progress and Git state belong in
 | DEC-051     | Repair expected-graph capture SQL recognition and version persistence /3        | Accepted   | 2026-09-13 |
 | DEC-052     | Require exact catalogue identity at every weather stage boundary                | Accepted   | 2026-09-13 |
 | DEC-053     | Defer ERA5 collection until model evaluation demonstrates a need                | Accepted   | 2026-09-14 |
+| DEC-054     | Keep IGRA soundings artifact-first and outside the training join                 | Accepted   | 2026-09-15 |
 
 ## Individual decisions
 
@@ -2267,6 +2268,60 @@ authorized.
 **Related files:** [`T-018-S10-implementation-plan.md`](T-018-S10-implementation-plan.md),
 [`tasks.md`](tasks.md), [`architecture.md`](architecture.md),
 [`../services/ml/README.md`](../services/ml/README.md), and
+[`handoff.md`](handoff.md).
+
+### DEC-054 - Keep IGRA soundings artifact-first and outside the training join
+
+**Status:** Accepted
+
+**Date:** 2026-09-15
+
+**Context:** GFS already supplies the forecast vertical profiles used by the
+historical and operational weather path. T-019 still needs the independently
+observed upper-air branch accepted in DEC-031. A live NOAA IGRA v2.2 spike
+confirmed that Sofia station `BUM00015614` is published as mutable raw and
+derived station ZIP snapshots rather than a date-query API. Observations are
+normally nominal 06/12 UTC, are published with delay, have variable pressure
+and height-only levels, and are not information available to the pre-flight
+model. The Project Brief's initial `soundings` table is explicitly a starting
+model, while T-019's actual consumer is offline validation/calibration.
+
+**Decision:** T-019 implements artifact-only `igra-ingest` inventory, fresh,
+and offline-resume handling for explicitly selected UTC observation dates. It
+uses official NOAA HTTPS, immutable hash-verified station snapshots, a
+fixed-width raw/derived parser, canonical units and field provenance, native
+QA/missing evidence, and validated JSONL/report artifacts. It does not write
+SQLite, implement a database schema, collect BUFR, generate/OCR images, or
+derive project CAPE/CIN.
+
+The ingestion command retains every actual sounding on the selected dates and
+does not apply the `Europe/Sofia` 10:00--20:00 flying window. A later comparison
+classifies observations against that window and compares an in-window sounding
+with the exact hourly GFS valid profile sampled at the IGRA station coordinate.
+It may not use the Vitosha site sample or a daily GFS aggregate as a substitute.
+
+T-020's primary model-ready join contains flight labels and exact GFS forecast
+features. IGRA soundings are not predictor columns and are not a required join;
+using observations published after the forecast would create train/inference
+leakage and Sofia-only missingness. A separate later task owns GFS/IGRA
+validation and any evidence-based calibration or bias-correction work.
+
+T-019's effective validated artifact manifest is the direct input boundary for
+future GFS/IGRA validation and calibration. Relational persistence is unnecessary
+for that workflow and remains optional until a concrete API/UI, indexed-analysis,
+or operational consumer requires it. Any later Drizzle index must retain replay
+from T-019's immutable artifacts rather than becoming their sole copy.
+
+**Consequences:** T-019 remains a bounded parser/ingestion task and introduces
+no SQL or new scientific dependency. Provider ETag/`Last-Modified` values may
+avoid redundant transport but never replace SHA-256 verification. Raw and
+derived records join by station and nominal UTC timestamp; release time is
+preserved and cross-checked when present, while missing provider-derived
+records/parameters remain expected missing evidence. Skew-T rendering can be
+added later from accepted numeric levels without changing the source boundary.
+
+**Related files:** [`T-019-implementation-plan.md`](T-019-implementation-plan.md),
+[`tasks.md`](tasks.md), [`architecture.md`](architecture.md), and
 [`handoff.md`](handoff.md).
 
 ## Open decisions
