@@ -10,7 +10,12 @@ from uuid import uuid4
 from pydantic import BaseModel
 
 from ..atmosphere.contracts import ArtifactReference
-from ..weather.serialization import canonical_json_bytes, pretty_json_bytes, sha256_bytes, sha256_file
+from ..weather.serialization import (
+    canonical_json_bytes,
+    pretty_json_bytes,
+    sha256_bytes,
+    sha256_file,
+)
 from .models import IgraSourceSnapshotManifest
 
 
@@ -54,7 +59,9 @@ def stage_input_fingerprint(
 class IgraArtifactStore:
     """Own a UUID run root and safely publish shared raw provider snapshots."""
 
-    def __init__(self, run_key: str, *, project_root: Path | None = None, create: bool = False) -> None:
+    def __init__(
+        self, run_key: str, *, project_root: Path | None = None, create: bool = False
+    ) -> None:
         self.run_key = run_key
         self.project_root = (project_root or repository_root()).resolve()
         self.interim_dir = self.project_root / "data" / "interim" / "soundings" / run_key
@@ -141,7 +148,9 @@ class IgraArtifactStore:
             raise IgraArtifactError(f"Refusing to overwrite immutable artifact: {path}") from error
         finally:
             temporary.unlink(missing_ok=True)
-        return self.reference_for(path, artifact_key, media_type=media_type, record_count=record_count)
+        return self.reference_for(
+            path, artifact_key, media_type=media_type, record_count=record_count
+        )
 
     def publish_directory(self, work_directory: Path, destination: Path) -> Path:
         """Publish a complete work directory once, otherwise verify/reuse the winner."""
@@ -151,6 +160,10 @@ class IgraArtifactStore:
         if not work_directory.is_dir():
             raise IgraArtifactError("Only a complete work directory can be published.")
         destination.parent.mkdir(parents=True, exist_ok=True)
+        if destination.exists():
+            self.verify_directory(destination)
+            shutil.rmtree(work_directory)
+            return destination
         try:
             os.rename(work_directory, destination)
         except FileExistsError:
@@ -188,7 +201,9 @@ class IgraArtifactStore:
             record_count=record_count,
         )
 
-    def verify_reference(self, reference: ArtifactReference, *, expected_root: Path | None = None) -> Path:
+    def verify_reference(
+        self, reference: ArtifactReference, *, expected_root: Path | None = None
+    ) -> Path:
         path = (self.project_root / reference.relative_path).resolve()
         self._assert_allowed(path)
         if expected_root is not None and not _contained_by(path, expected_root.resolve()):
@@ -206,8 +221,13 @@ class IgraArtifactStore:
 
     def _assert_allowed(self, path: Path) -> None:
         resolved = path.resolve()
-        if not (_contained_by(resolved, self.interim_dir.resolve()) or _contained_by(resolved, self.raw_root.resolve())):
-            raise IgraArtifactError("IGRA artifacts must remain below raw soundings or this run's interim root.")
+        if not (
+            _contained_by(resolved, self.interim_dir.resolve())
+            or _contained_by(resolved, self.raw_root.resolve())
+        ):
+            raise IgraArtifactError(
+                "IGRA artifacts must remain below raw soundings or this run's interim root."
+            )
 
 
 def _contained_by(path: Path, root: Path) -> bool:

@@ -4,7 +4,6 @@ from paragliding_forecasts_ml.ingestion.igra.normalizer import normalize
 from paragliding_forecasts_ml.ingestion.igra.parser import parse_members
 from paragliding_forecasts_ml.ingestion.igra.validation import validate
 
-
 FIXTURES = Path(__file__).parents[2] / "fixtures" / "igra"
 
 

@@ -55,7 +55,7 @@ class IgraRemoteObject(IgraContract):
 
     @field_validator("safe_basename")
     @classmethod
-    def safe_basename(cls, value: str) -> str:
+    def safe_basename_must_be_safe(cls, value: str) -> str:
         if value in {".", ".."} or "/" in value or "\\" in value:
             raise ValueError("Remote basename must be one safe filename.")
         return value

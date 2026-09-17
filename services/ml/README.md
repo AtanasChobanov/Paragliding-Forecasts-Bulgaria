@@ -1,6 +1,56 @@
 # Data and ML service
 
 
+## NOAA IGRA sounding ingestion (T-019)
+
+`igra-ingest` is the artifact-only NOAA IGRA v2.2 boundary for Sofia
+`BUM00015614`. It collects the numeric raw and provider-derived sounding
+members, retains only the selected UTC dates, and produces hash-verified JSONL
+and report artifacts. It does not write SQLite, add predictor features, join
+flights, compare GFS, render images, or perform OCR.
+
+`inventory` and `fresh` deliberately require `--allow-live-network`. They use
+only the five source-policy URLs. `inventory` sends HEAD requests only and
+creates no local artifacts. `fresh` rechecks the fresh inventory, enforces an
+explicit compressed-byte cap before GET requests, stores an immutable raw
+snapshot, and then runs the offline parser, normalizer, and validator stages.
+`resume` has no live-network switch and replays only hash-verified local state.
+
+Run these live commands manually after reviewing the preceding output; they
+were not run as part of the automated test suite:
+
+```powershell
+# HEAD only: record all five Content-Length values and minimum_required_mib.
+uv run --project services/ml igra-ingest inventory `
+  --station-id BUM00015614 `
+  --date 2025-08-02 `
+  --archive period-of-record `
+  --allow-live-network
+
+# Only if the reviewed inventory fits the explicit cap. This may download data.
+uv run --project services/ml igra-ingest fresh `
+  --station-id BUM00015614 `
+  --date 2025-08-02 `
+  --archive period-of-record `
+  --maximum-total-mib 80 `
+  --allow-live-network
+
+# Replace the placeholder with fresh's printed run_key. This command is offline.
+uv run --project services/ml igra-ingest resume --run-key <uuid>
+```
+
+If inventory reports `minimum_required_mib` greater than `80`, stop rather than
+raising the cap automatically. Review the fresh JSON result, its run-key, and
+the referenced `validation_report` and validated manifest. A nonzero `2` means
+that the selected scope produced no accepted sounding or a quarantined profile;
+inspect the immutable evidence before choosing a different scope. `auto` uses
+the rolling archive only for dates in the current UTC year; use
+`period-of-record` for historical dates.
+
+Offline verification on 2026-09-17 passed Ruff and 291 ML tests, including a
+fake bounded fresh-to-resume flow and streamed ZIP-member parsing. Live NOAA
+acceptance remains owner-operated and T-019 stays In Progress until its results
+are reviewed and recorded.
 ## GFS raw planner and collector (T-018/S03)
 
 `gfs-collect` is the real, deliberately opt-in raw-only command. It checks the

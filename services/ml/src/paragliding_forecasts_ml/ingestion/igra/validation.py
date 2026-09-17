@@ -40,7 +40,7 @@ def validate(
 
     by_sounding: dict[str, list[CanonicalSoundingLevel]] = defaultdict(list)
     for level in levels:
-        normalized, invalid = _invalidated_level(level)
+        normalized, _invalid = _invalidated_level(level)
         by_sounding[normalized.sounding_key].append(normalized)
     invalid_values = [item for values in by_sounding.values() for level in values for item in _invalid_evidence(level)]
     duplicates = {key for key, count in Counter(item.sounding_key for item in soundings).items() if count > 1}
@@ -97,8 +97,20 @@ def validate(
         invalid_values=tuple(sorted(invalid_values, key=lambda item: (str(item["sounding_key"]), int(item["ordinal"]), str(item["field"])))),
         accepted_provider_parameters=associations[0],
         accepted_provider_levels=associations[1],
-        rejected_derived_associations=tuple(sorted(association_rejections, key=lambda item: (str(item["sounding_key"]), str(item["reason"]))),
-        missing_evidence=tuple(sorted(missing, key=lambda item: (str(item["date_utc"]), str(item.get("hour_utc", "")), str(item["reason"]))),
+        rejected_derived_associations=tuple(
+            sorted(
+                association_rejections,
+                key=lambda item: (str(item["sounding_key"]), str(item["reason"])),
+            )
+        ),
+        missing_evidence=tuple(
+            sorted(
+                missing,
+                key=lambda item: (
+                    str(item["date_utc"]), str(item.get("hour_utc", "")), str(item["reason"])
+                ),
+            )
+        ),
         report=report,
     )
 

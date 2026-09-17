@@ -3,7 +3,6 @@ from pathlib import Path
 from paragliding_forecasts_ml.ingestion.igra.normalizer import normalize
 from paragliding_forecasts_ml.ingestion.igra.parser import parse_members
 
-
 FIXTURES = Path(__file__).parents[2] / "fixtures" / "igra"
 
 

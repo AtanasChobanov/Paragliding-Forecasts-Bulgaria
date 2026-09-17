@@ -210,7 +210,7 @@ def _release_timestamp(nominal_date: str, release_hhmm: str | None, nominal: str
     minute = 0 if precision == "hour" else int(minute_digits)
     if minute > 59:
         return None, "missing", None
-    target = datetime.fromisoformat(nominal.replace("Z", "+00:00"))
+    target = datetime.fromisoformat(nominal)
     candidates = [
         datetime.combine(target.date() + timedelta(days=offset), datetime.min.time(), tzinfo=UTC).replace(hour=hour, minute=minute)
         for offset in (-1, 0, 1)

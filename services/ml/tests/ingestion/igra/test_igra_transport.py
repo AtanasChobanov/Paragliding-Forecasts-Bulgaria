@@ -1,4 +1,8 @@
-from paragliding_forecasts_ml.ingestion.igra.transport import BytesIgraResponse, IgraTransport, RetryingIgraTransport
+from paragliding_forecasts_ml.ingestion.igra.transport import (
+    BytesIgraResponse,
+    IgraTransport,
+    RetryingIgraTransport,
+)
 
 
 class TransientTransport(IgraTransport):

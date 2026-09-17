@@ -13,23 +13,23 @@
 Keep durable decisions in `docs/decisions.md`, ticket lifecycle in
 `docs/tasks.md`, and only current actionable state here.
 
-## Current state — 2026-09-15
+## Current state — 2026-09-17
 
-| Field          | Value                                                                                                                                                                                            |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Branch         | `feature/T-019-sounding-ingestion`                                                                                                                                                                |
-| Ticket         | `T-019` is **In Progress**. Its NOAA IGRA implementation plan and architectural boundary are ready; no ingestion code has been implemented. `T-018` remains done and ERA5 remains deferred to T-038.   |
-| Next work      | Implement only the artifact-first T-019 boundary in `docs/T-019-implementation-plan.md` and DEC-054. Do not add SQL, a T-020 training join, GFS/IGRA comparison, ERA5, BUFR, or image/OCR scope. |
-| Fresh evidence | Bounded current-catalogue GFS fresh, same-DB offline no-op, second-DB offline restoration, and effective artifact audit all passed on 2026-09-14.                                                |
-| Local DB       | The primary and temporary restoration SQLite databases were migrated by the owner for acceptance. They are local ignored artifacts and must not be committed.                                    |
-| User work      | The deletions of the old S07/S08 plan files are user-owned. Do not restore, stage, or commit them without explicit instruction.                                                                  |
-
+| Field | Value |
+| --- | --- |
+| Branch | `feature/T-019-sounding-ingestion` |
+| Ticket | `T-019` is **In Progress**. The artifact-first IGRA implementation and offline automated verification are complete; the owner has not run the bounded live NOAA acceptance. `T-018` remains done and ERA5 remains deferred to T-038. |
+| Next work | Owner: run `igra-ingest inventory`, review its five HEAD sizes and cap, then run the reviewed bounded `fresh` and offline `resume` below. Record the output and only then consider task completion. Do not add SQL, a T-020 training join, GFS/IGRA comparison, ERA5, BUFR, or image/OCR scope. |
+| Fresh evidence | T-019: Ruff passed; `uv run --project services/ml pytest` passed **291** tests; `npm.cmd run repo:check`, `format:check`, `typecheck`, `lint`, and `test` passed. All T-019 execution used local fixtures/fake transport; no live NOAA request was made. |
+| Local DB | The primary and temporary restoration SQLite databases were migrated by the owner for T-018 acceptance. They are local ignored artifacts and must not be committed. |
+| User work | `docs/T-019-implementation-plan.md` is a local planning reference. Per owner instruction, do not stage or commit it. |
 ## T-019 implementation-plan boundary
 
 The accepted research and executable implementation logic are in
 [`T-019-implementation-plan.md`](T-019-implementation-plan.md)
-and DEC-054. T-019 is **In Progress**: the spike fetched and inspected live
-provider evidence, but it did not add production ingestion code.
+and DEC-054. T-019 is **In Progress**: its artifact-first ingestion code is
+implemented, but its owner-operated live NOAA acceptance has not run in this
+branch.
 
 - Source: official NOAA/NCEI IGRA v2.2 raw and provider-derived station ZIPs
   for Sofia `BUM00015614`; station snapshots update daily and observations are
@@ -51,6 +51,54 @@ The bounded live spike artifacts are local and ignored under
 `data/raw/sounding-spike/20260915-igra-sofia/`. The current raw plus derived
 period-of-record ZIP pair totals 75,420,975 bytes (71.93 MiB); this is evidence
 for the documented explicit 80 MiB example cap, not a permanent assumed size.
+### Verified offline implementation
+
+The implementation performs a fresh five-object HEAD inventory, validates
+identity encoding and source metadata, checks the reviewed compressed-byte cap
+before streaming any GET, verifies the expected ZIP members, and publishes only
+immutable, SHA-256-addressed snapshots and stage outputs. Parser input is read
+line-by-line from the ZIP members, retaining selected records rather than whole
+expanded archives. `resume` constructs no transport and recursively verifies
+all referenced evidence before processing.
+
+On 2026-09-17, `uv run --project services/ml ruff check services/ml` passed and
+`uv run --project services/ml pytest` passed 291 tests. Repository
+`repo:check`, formatting, TypeScript typecheck/lint, and workspace tests also
+passed. These checks used only local fixtures and a fake transport; they are not
+live source acceptance.
+
+### Owner-operated live acceptance — not run
+
+Run this HEAD-only inventory first and record all five `Content-Length` values,
+`minimum_required_mib`, selected archive, and source metadata:
+
+```powershell
+uv run --project services/ml igra-ingest inventory `
+  --station-id BUM00015614 `
+  --date 2025-08-02 `
+  --archive period-of-record `
+  --allow-live-network
+```
+
+If and only if the reviewed inventory is at most the explicit 80 MiB cap, run
+one fresh collection, inspect its JSON result, then rerun the exact completed
+run offline:
+
+```powershell
+uv run --project services/ml igra-ingest fresh `
+  --station-id BUM00015614 `
+  --date 2025-08-02 `
+  --archive period-of-record `
+  --maximum-total-mib 80 `
+  --allow-live-network
+
+uv run --project services/ml igra-ingest resume --run-key <fresh-run-key>
+```
+
+Do not automatically increase the cap if inventory is larger. Review the
+validated manifest/report and record the outcome here before marking T-019
+done. The CLI and resulting artifacts remain exactly scoped to IGRA observation
+handling; T-020 and T-039 remain separate.
 
 ### Storage scaling
 

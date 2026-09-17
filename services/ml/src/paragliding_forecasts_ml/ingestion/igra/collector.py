@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import zipfile
 from datetime import UTC, datetime
@@ -83,7 +82,7 @@ def collect_snapshot(
         else:
             store.write_snapshot_manifest(station_id, snapshot_id, manifest)
         return manifest, False
-    except Exception:
+    except Exception:  # noqa: TRY203
         # The protocol intentionally leaves only an unreferenced work directory for inspection/recovery.
         raise
 
@@ -240,7 +239,7 @@ def _remote_metadata_matches(
 
 def _unsafe_zip_member(name: str) -> bool:
     normalized = name.replace("\\", "/")
-    return normalized.startswith("/") or "../" in normalized or normalized.startswith("../")
+    return normalized.startswith(("/", "../")) or "../" in normalized
 
 
 def _utc_now() -> str:
