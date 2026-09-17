@@ -2317,8 +2317,14 @@ no SQL or new scientific dependency. Provider ETag/`Last-Modified` values may
 avoid redundant transport but never replace SHA-256 verification. Raw and
 derived records join by station and nominal UTC timestamp; release time is
 preserved and cross-checked when present, while missing provider-derived
-records/parameters remain expected missing evidence. Skew-T rendering can be
-added later from accepted numeric levels without changing the source boundary.
+records/parameters remain expected missing evidence. A future local Skew-T
+renderer is a derived presentation artifact: it must retain the accepted
+sounding identity, input hashes and renderer/policy version and cannot replace
+numeric JSONL. Image scraping/OCR remains a separate last-resort path only when
+numeric evidence is unavailable; it must preserve the original image and
+provenance, retain per-token confidence/units/geometry, require human review,
+and publish explicitly `image_derived` evidence rather than canonical numeric
+observations. Neither presentation nor OCR output may become a T-020 predictor.
 
 **Related files:** [`T-019-implementation-plan.md`](T-019-implementation-plan.md),
 [`tasks.md`](tasks.md), [`architecture.md`](architecture.md), and

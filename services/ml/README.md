@@ -107,10 +107,43 @@ uv run --project services/ml igra-ingest resume `
   --run-key 5ae72afe-e71e-4c32-ade8-cd57426533e8
 ```
 
-For that reviewed two-date example, the successful result has four accepted
-soundings, zero quarantined soundings and a validated manifest beneath
-`data/interim/soundings/5ae72afe-e71e-4c32-ade8-cd57426533e8/`. `resume` is
-safe to repeat; it is an offline evidence replay, not a new collection.
+For that reviewed two-date example, the live HEAD-only inventory reported five
+objects totaling exactly `75,714,341` compressed bytes (`73 MiB` minimum) with
+no warnings. The bounded `fresh` returned `network_mode: "cache_reuse"`, four
+accepted soundings, zero quarantined soundings, zero missing-evidence records,
+and exit code `0`. Its source snapshot ID is
+`c7dd598ab2114720d0ee53ae024eebfd6148a480293e5185d171e4155e3a6fe6`.
+`resume` returned the same outcome and its effective manifest SHA-256 is
+`b7cb4e3100f321a28dcad36ecd456a2c2b1310544db2a9a3cdc10c943b0c4abd`, below
+`data/interim/soundings/5ae72afe-e71e-4c32-ade8-cd57426533e8/`. It is safe to
+repeat because it is an offline evidence replay, not a new collection.
+
+### Future Skew-T and image-only handling (not implemented)
+
+The accepted numeric levels are the only planned input for a future Skew-T
+renderer. A future dedicated ticket should add an offline renderer that resolves
+one accepted sounding from the effective validated manifest and emits a derived
+SVG or PNG. The renderer must keep the source sounding key, input artifact
+SHA-256s, rendering-policy and renderer versions, units, station coordinates,
+and generated-at time beside the image. It must never replace the numeric JSONL,
+become the source of truth, or be used by T-020 as a predictor. Tests should
+prove the rendered artifact is reproducible from fixed accepted numeric fixtures
+and that a changed input hash produces a new presentation artifact.
+
+OCR or scraping of a third-party sounding diagram is a last-resort, separate
+future enhancement only when the original numeric source is unavailable. That
+future adapter should (1) retain the original image immutably with URL, licence,
+retrieval metadata, MIME type, dimensions, and SHA-256; (2) store every OCR
+candidate with its pixel bounding box, raw token, OCR engine/model version,
+confidence, recognised unit and coordinate transform; (3) validate axis,
+station, nominal time, units, and physically plausible profile ordering before
+any mapping; and (4) require explicit human review before publishing a
+separately labelled `image_derived` evidence artifact. Low-confidence,
+ambiguous, or unreviewed values must remain quarantine/manual-review evidence,
+not silently become canonical observations. OCR output must retain uncertainty,
+may not overwrite an accepted numeric profile, and remains excluded from model
+predictors and GFS/IGRA calibration until a dedicated validation policy accepts
+it.
 
 ### Scope and safety boundary
 

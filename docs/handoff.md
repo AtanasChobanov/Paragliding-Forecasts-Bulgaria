@@ -19,7 +19,7 @@ Keep durable decisions in `docs/decisions.md`, ticket lifecycle in
 | --- | --- |
 | Branch | `feature/T-019-sounding-ingestion` |
 | Ticket | `T-019` is **Review**. The artifact-first IGRA pipeline is implemented and owner-operated live acceptance succeeded for the reviewed two-date scope. `T-018` remains in Review and ERA5 remains deferred to T-038. |
-| Reviewed live evidence | Owner ran `fresh` for Sofia `BUM00015614`, 2025-08-02 and 2025-08-11, period-of-record, 80 MiB cap. It accepted 4 soundings, quarantined 0, had 0 missing-evidence records, and exited 0. The result's source snapshot was `c7dd598ab2114720d0ee53ae024eebfd6148a480293e5185d171e4155e3a6fe6`. |
+| Reviewed live evidence | HEAD-only inventory found five objects totaling `75,714,341` compressed bytes (`73 MiB` minimum) with no warnings. Owner then ran `fresh` for Sofia `BUM00015614`, 2025-08-02 and 2025-08-11, period-of-record, 80 MiB cap. It used verified cache reuse, accepted 4 soundings, quarantined 0, had 0 missing-evidence records, and exited 0. The source snapshot ID was `c7dd598ab2114720d0ee53ae024eebfd6148a480293e5185d171e4155e3a6fe6`. |
 | Offline replay evidence | Owner ran `resume` for `5ae72afe-e71e-4c32-ade8-cd57426533e8`. It returned the same four accepted soundings, no quarantine/missing evidence, exit 0, and the identical effective manifest SHA-256 `b7cb4e3100f321a28dcad36ecd456a2c2b1310544db2a9a3cdc10c943b0c4abd`. |
 | Next work | Review the task implementation and evidence; do not add SQL, T-020 training joins, GFS/IGRA comparison, ERA5, BUFR, or image/OCR scope. |
 | Local DB | The primary and temporary restoration SQLite databases were migrated by the owner for T-018 acceptance. They are local ignored artifacts and must not be committed. |
