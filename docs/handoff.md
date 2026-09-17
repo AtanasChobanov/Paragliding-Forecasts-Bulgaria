@@ -4,110 +4,99 @@
 
 1. `AGENTS.md` for repository rules.
 2. `docs/tasks.md` for ticket status and scope.
-3. This handoff for the active T-018 operational state.
+3. This handoff for the T-019 sounding-ingestion planning state.
 4. The relevant sections of `docs/project-brief.md` and
    `docs/architecture.md` for product/system constraints.
-5. DEC-031 through DEC-053 in `docs/decisions.md` for accepted weather
+5. DEC-031 through DEC-054 in `docs/decisions.md` for accepted weather
    decisions, including the ERA5 deferral boundary.
 
 Keep durable decisions in `docs/decisions.md`, ticket lifecycle in
 `docs/tasks.md`, and only current actionable state here.
 
-## Current state — 2026-09-14
+## Current state — 2026-09-17
 
-| Field          | Value                                                                                                                                                                                                                 |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Branch         | `feature/T-018-weather-ingestion`                                                                                                                                                                                     |
-| Ticket         | `T-018` is **Done**. S01–S08 and S10 are complete; S09/ERA5 remains separately deferred to T-038.                                                                                                                  |
-| Next work      | Do not extend weather ingestion implicitly. Future ERA5 work starts only under T-038 when the recorded decision gate is met.                                                                                         |
-| Fresh evidence | Bounded current-catalogue GFS fresh, same-DB offline no-op, second-DB offline restoration, and effective artifact audit all passed on 2026-09-14.                                                                    |
-| Local DB       | The primary and temporary restoration SQLite databases were migrated by the owner for acceptance. They are local ignored artifacts and must not be committed.                                                         |
-| User work      | The deletions of the old S07/S08 plan files are user-owned. Do not restore, stage, or commit them without explicit instruction.                                                                                       |
+| Field | Value |
+| --- | --- |
+| Branch | `feature/T-019-sounding-ingestion` |
+| Ticket | `T-019` is **Review**. The artifact-first IGRA pipeline is implemented and owner-operated live acceptance succeeded for the reviewed two-date scope. `T-018` remains in Review and ERA5 remains deferred to T-038. |
+| Reviewed live evidence | HEAD-only inventory found five objects totaling `75,714,341` compressed bytes (`73 MiB` minimum) with no warnings. Owner then ran `fresh` for Sofia `BUM00015614`, 2025-08-02 and 2025-08-11, period-of-record, 80 MiB cap. It used verified cache reuse, accepted 4 soundings, quarantined 0, had 0 missing-evidence records, and exited 0. The source snapshot ID was `c7dd598ab2114720d0ee53ae024eebfd6148a480293e5185d171e4155e3a6fe6`. |
+| Offline replay evidence | Owner ran `resume` for `5ae72afe-e71e-4c32-ade8-cd57426533e8`. It returned the same four accepted soundings, no quarantine/missing evidence, exit 0, and the identical effective manifest SHA-256 `b7cb4e3100f321a28dcad36ecd456a2c2b1310544db2a9a3cdc10c943b0c4abd`. |
+| Next work | Review the task implementation and evidence; do not add SQL, T-020 training joins, GFS/IGRA comparison, ERA5, BUFR, or image/OCR scope. |
+| Local DB | The primary and temporary restoration SQLite databases were migrated by the owner for T-018 acceptance. They are local ignored artifacts and must not be committed. |
+| User work | `docs/T-019-implementation-plan.md` is a local planning reference. Per owner instruction, do not stage or commit it. |
 
-## Active T-018 boundary
+## T-019 implementation and operational boundary
 
-T-018 now owns the source-neutral SQLite schema and a complete **GFS** path:
-immutable raw artifacts/manifests, parsing, canonical normalization,
-site/grid sampling, validation/quarantine, feature building, and idempotent
-SQLite persistence.
+The accepted research and executable implementation logic are in
+[`T-019-implementation-plan.md`](T-019-implementation-plan.md) and DEC-054.
+The operational documentation and commands are in
+[`../services/ml/README.md`](../services/ml/README.md). The task is now in
+**Review**, not Done: its scoped implementation and evidence are ready for
+review, while follow-on work remains deliberately separate.
 
-- GFS is the sole exact-forecast source in this implementation phase. Preserve
-  run/availability/retrieval/valid/lead/grid provenance and never substitute a
-  model for an unavailable run.
-- Preserve units, source/model/run/valid/lead provenance, confidence, and
-  explicit missing/quality states. Never turn a sentinel or missing field into
-  a physical value.
-- No Airflow/scheduler, raw-retention deletion, partial/sampled integrity hash,
-  unrelated feature/model work, or SQLite schema expansion belongs in S10.
+- Source: official NOAA/NCEI IGRA v2.2 raw and provider-derived station ZIPs
+  for Sofia `BUM00015614`; station snapshots update daily and observations are
+  normally published with roughly two days of delay.
+- Command boundary: live HEAD-only `igra-ingest inventory`, bounded live
+  `fresh`, then hash-verified offline `resume`, for explicit UTC dates.
+- Storage: immutable raw station snapshots plus selected, normalized, and
+  validated JSONL/report artifacts only. No SQLite or Drizzle work belongs in
+  T-019.
+- Time policy: every actual sounding on the requested UTC dates is retained.
+  The Sofia 10:00–20:00 flying window is classified later, not filtered here.
+- ML boundary: T-020 joins flight labels only to pre-flight exact GFS features.
+  IGRA observations are not predictors and are not a required join.
+- Comparison boundary: T-039 may consume the effective validated manifest to
+  compare GFS at the exact IGRA station and nominal time, then quantify
+  profile error and calibration/bias evidence.
 
-## S09 / ERA5 decision
+### Verified pipeline evidence
 
-ERA5 ingestion is deferred from T-018. The implemented exact GFS source and
-feature/persistence path are sufficient for the initial model; the project
-brief does not require an ERA5 collector once usable exact forecasts exist.
+The successful fresh command was:
 
-Create the durable decision and backlog adjustment as S10 Phase 0 (expected
-future task: T-038). Start ERA5 only when real joined GFS data, baseline model,
-backtests, or calibration show a need for forecast/reanalysis bias pairs,
-climatology, weak cloud-base labels, confidence calibration, or fine tuning.
+```powershell
+uv run --project services/ml igra-ingest fresh `
+  --station-id BUM00015614 `
+  --date 2025-08-02 `
+  --date 2025-08-11 `
+  --archive period-of-record `
+  --maximum-total-mib 80 `
+  --allow-live-network
+```
 
-ERA5 must remain a separate `reanalysis` cohort, never a GFS fallback row or a
-same-example forecast substitute. Keep its future-compatible source registry,
-schema capacity, policy family, provenance rules, and nullable CIN/cloud-base
-destinations; do not implement a placeholder collector or CDS credential path.
+It published run `5ae72afe-e71e-4c32-ade8-cd57426533e8` and its effective
+validator manifest at:
 
-## Completed S10 operational evidence
+```text
+data/interim/soundings/5ae72afe-e71e-4c32-ade8-cd57426533e8/validator-v1/af4e1b3b9a8a2aa11de719ae11fd8ec51dafe179d3dea12675b4ddc872b72300/stage-manifest.json
+```
 
-The executable plan is retained at `docs/T-018-S10-implementation-plan.md`.
-Its required GFS-only implementation, compact artifact migration, and shared
-fresh/offline-resume orchestration are complete.
+`fresh` first checks all five remote objects with HEAD, enforces the compressed
+byte cap before any GET, then stores/reuses hash-verified source evidence. It
+streams the selected ZIP members, parses fixed-width raw and derived records,
+normalizes units/provenance, validates them, partitions accepted/quarantined/
+missing evidence, and writes the effective `stage-manifest.json`. Its terminal
+JSON is sorted and pretty-printed; `validated_manifest` is the trustworthy
+handoff reference for T-039.
 
-The owner-authorized live acceptance used run
-`0200117a-2638-4e98-ac42-534db32315dd` for local date `2026-09-14`, GFS cycle
-`2026-09-14T00:00:00Z`, purpose `operational_forecast`, and reviewed cap
-`1109 MiB`. The fresh result inserted the graph into the primary SQLite
-database. It retained 1,163,650,418 raw bytes, 25.32 MiB of interim artifacts,
-an 8 x 24 compact crop covering 77 required nodes, and no global parser or
-normalizer arrays. Collection took 15 minutes 8 seconds; fresh end-to-end took
-15 minutes 45 seconds. Its verifier processed 597 files / 1,163,650,418 bytes
-in 1.225 seconds with 11,916 cache hits.
+The offline replay was:
 
-The same-database resume returned `revalidated_no_op` with unchanged counts.
-Offline resume into a separately migrated seeded SQLite database returned
-`inserted` with the same 1 run, 77 samples, 308 intervals, 759 profile levels,
-154 convection measurements, 7 daily snapshots, 14 profile layers, 77 snapshot
-inputs, and 9,554 provenance rows. Both resumes reported no network access and
-reused all derived boundaries.
+```powershell
+uv run --project services/ml igra-ingest resume `
+  --run-key 5ae72afe-e71e-4c32-ade8-cd57426533e8
+```
 
-`weather-artifacts audit --scope effective` passed: it verified the eight-event
-ledger's seven effective boundaries, hashing 619 files / 1,190,198,723 bytes
-and parsing seven manifests. Full-history audit remains optional maintenance.
-The raw and SQLite acceptance artifacts are local-only and must not be committed.
+It performed no live transport, verified the artifact chain, and returned the
+same outcome and manifest identity. This is the command to use for safe local
+inspection or recovery of an interrupted offline stage. New fresh runs use the
+explicit `source-snapshot-reference.json` source-stage reference; the old
+extensionless `snapshot` reference is intentionally unsupported and old runs
+must be re-collected.
 
-## Why S10 is necessary
-
-### Artifact verification performance
-
-`RunStateLedger.load_events()` currently recursively verifies every event
-evidence boundary and rehashes predecessor/events. Repeated command calls
-repeat artifact and raw-content reads. For the retained old-style 18-event
-lineage, one traversal was estimated at roughly 362 GiB of reads before further
-command-level repeats.
-
-The fix must not weaken integrity:
-
-- normal fresh/resume verifies only the effective immutable lineage;
-- all-history verification remains an explicit audit mode;
-- full SHA-256 remains mandatory for trusted effective files;
-- cache verified files/manifests/boundaries/matrices only within one command,
-  with full identity keys and stat-change invalidation;
-- retain atomic publication and snapshot-aware ledger append;
-- emit secret-free files/bytes/cache counters in command output, not SQLite.
-
-Existing database SHA fields stay unchanged: `raw_manifest_sha256`,
-`feature_manifest_sha256`, and `persistence_input_sha256` identify distinct
-provenance boundaries; `persisted_graph_sha` is a receipt.
-
+Prior local verification passed Ruff and the full ML suite (293 tests). The
+current JSON presentation change also passed its formatter, focused Ruff check,
+and three focused CLI tests. These local checks use fixtures/fake transport;
+the owner commands above are the recorded real NOAA acceptance.
 ### Storage scaling
 
 The retained GFS run is dominated by derived global arrays, not SQLite rows:

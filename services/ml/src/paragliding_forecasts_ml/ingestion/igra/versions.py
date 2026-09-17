@@ -1,0 +1,11 @@
+"""Version and identity constants for the independent IGRA boundary."""
+
+IGRA_SOURCE_ID = "noaa_igra_bum00015614"
+IGRA_STATION_ID = "BUM00015614"
+SOURCE_POLICY_VERSION = "igra_source_policy/1"
+COLLECTOR_VERSION = "igra_collector/1"
+PARSER_VERSION = "igra_parser/1"
+NORMALIZER_VERSION = "igra_normalizer/1"
+VALIDATOR_VERSION = "igra_validator/1"
+STATE_VERSION = "igra_state/1"
+SOURCE_POLICY_RESOURCE = "igra-source-policy-v1.json"

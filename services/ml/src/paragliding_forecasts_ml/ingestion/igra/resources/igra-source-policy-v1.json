@@ -1,0 +1,25 @@
+{
+  "archive_templates": {
+    "derived_period_of_record": "https://www.ncei.noaa.gov/data/integrated-global-radiosonde-archive/access/derived-por/{station_id}-drvd.txt.zip",
+    "period_of_record": "https://www.ncei.noaa.gov/data/integrated-global-radiosonde-archive/access/data-por/{station_id}-data.txt.zip",
+    "recent": "https://www.ncei.noaa.gov/data/integrated-global-radiosonde-archive/access/data-y2d/{station_id}-data-beg{year}.txt.zip"
+  },
+  "citation": "NOAA/NCEI Integrated Global Radiosonde Archive (IGRA) version 2.2, DOI:10.7289/V5X63K0Q.",
+  "content_types": ["application/octet-stream", "application/zip", "text/plain"],
+  "expected_members": {
+    "derived_zip": "{station_id}-drvd.txt",
+    "period_of_record_zip": "{station_id}-data.txt",
+    "recent_zip": "{station_id}-data-beg{year}.txt"
+  },
+  "format_urls": {
+    "derived_format": "https://www.ncei.noaa.gov/data/integrated-global-radiosonde-archive/doc/igra2-derived-format.txt",
+    "raw_format": "https://www.ncei.noaa.gov/data/integrated-global-radiosonde-archive/doc/igra2-data-format.txt",
+    "station_list": "https://www.ncei.noaa.gov/pub/data/igra/igra2-station-list.txt"
+  },
+  "permission_reference": "https://www.ncei.noaa.gov/products/weather-balloon/integrated-global-radiosonde-archive",
+  "policy_version": "igra_source_policy/1",
+  "retry": {"maximum_attempts": 3, "maximum_retry_after_seconds": 900, "retry_statuses": [408, 429, 502, 503, 504]},
+  "source_id": "noaa_igra_bum00015614",
+  "station_id": "BUM00015614",
+  "zip_limits": {"maximum_compression_ratio": 20, "maximum_total_uncompressed_bytes": 1073741824, "maximum_uncompressed_member_bytes": 536870912}
+}
