@@ -314,7 +314,9 @@ class CanonicalSounding(IgraContract):
     def optional_utc(cls, value: str | None) -> str | None:
         return None if value is None else validate_utc_timestamp(value)
 
-    @field_validator("latitude_deg", "longitude_deg", "inventory_latitude_deg", "inventory_longitude_deg")
+    @field_validator(
+        "latitude_deg", "longitude_deg", "inventory_latitude_deg", "inventory_longitude_deg"
+    )
     @classmethod
     def finite_coordinate(cls, value: float | None) -> float | None:
         return finite_or_none(value)
@@ -338,7 +340,16 @@ class CanonicalSoundingLevel(IgraContract):
     elapsed_seconds: int | None = Field(default=None, ge=0)
     provenance: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
-    @field_validator("geopotential_height_msl_m", "temperature_k", "dew_point_k", "relative_humidity_percent", "wind_direction_degrees", "wind_speed_m_s", "u_wind_m_s", "v_wind_m_s")
+    @field_validator(
+        "geopotential_height_msl_m",
+        "temperature_k",
+        "dew_point_k",
+        "relative_humidity_percent",
+        "wind_direction_degrees",
+        "wind_speed_m_s",
+        "u_wind_m_s",
+        "v_wind_m_s",
+    )
     @classmethod
     def finite_numbers(cls, value: float | None) -> float | None:
         return finite_or_none(value)
@@ -434,6 +445,8 @@ class IgraRunStateEvent(IgraContract):
         if self.disposition == "quarantined" and self.stage != "validated":
             raise ValueError("Only validation can quarantine an IGRA run.")
         return self
+
+
 class NativeIgraDerivedLevel(IgraContract):
     """Every documented derived pressure-level field, retained before unit conversion."""
 

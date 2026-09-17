@@ -38,7 +38,9 @@ def collect_snapshot(
     cap = maximum_total_mib * 1024 * 1024
     if sum(item.content_length for item in objects) > cap:
         raise IgraCollectionError("Inventory bytes exceed the reviewed IGRA compressed-byte cap.")
-    cached = find_reusable_snapshot(store, station_id=station_id, archive_mode=archive_mode, objects=objects)
+    cached = find_reusable_snapshot(
+        store, station_id=station_id, archive_mode=archive_mode, objects=objects
+    )
     if cached is not None:
         return cached, True
     policy, policy_sha256 = load_source_policy()
@@ -58,7 +60,9 @@ def collect_snapshot(
         destination = store.snapshot_directory(station_id, snapshot_id)
         store.publish_directory(work, destination)
         references = tuple(
-            _reference_for_path(store, destination / "payloads" / item.safe_basename, item.artifact_key)
+            _reference_for_path(
+                store, destination / "payloads" / item.safe_basename, item.artifact_key
+            )
             for item in objects
         )
         manifest = IgraSourceSnapshotManifest(
@@ -76,9 +80,13 @@ def collect_snapshot(
         )
         manifest_path = destination / "manifest.json"
         if manifest_path.exists():
-            existing = IgraSourceSnapshotManifest.model_validate_json(manifest_path.read_bytes(), strict=True)
+            existing = IgraSourceSnapshotManifest.model_validate_json(
+                manifest_path.read_bytes(), strict=True
+            )
             if existing != manifest:
-                raise IgraCollectionError("Existing snapshot manifest conflicts with identical content identity.")
+                raise IgraCollectionError(
+                    "Existing snapshot manifest conflicts with identical content identity."
+                )
         else:
             store.write_snapshot_manifest(station_id, snapshot_id, manifest)
         return manifest, False
@@ -101,13 +109,19 @@ def find_reusable_snapshot(
         return None
     for path in sorted(station_root.glob("*/manifest.json")):
         try:
-            manifest = IgraSourceSnapshotManifest.model_validate_json(path.read_bytes(), strict=True)
-            if manifest.archive_mode != archive_mode or not _remote_metadata_matches(manifest.remote_objects, objects):
+            manifest = IgraSourceSnapshotManifest.model_validate_json(
+                path.read_bytes(), strict=True
+            )
+            if manifest.archive_mode != archive_mode or not _remote_metadata_matches(
+                manifest.remote_objects, objects
+            ):
                 continue
             snapshot_dir = path.parent
             for reference in manifest.artifacts:
                 store.verify_reference(reference, expected_root=snapshot_dir)
-            _verify_zip_payloads(snapshot_dir / "payloads", manifest.remote_objects, load_source_policy()[0])
+            _verify_zip_payloads(
+                snapshot_dir / "payloads", manifest.remote_objects, load_source_policy()[0]
+            )
             return manifest
         except (OSError, ValueError, IgraArtifactError, IgraCollectionError):
             continue
@@ -126,7 +140,11 @@ def source_snapshot_id(
                 "station_id": station_id,
                 "archive_mode": archive_mode,
                 "artifacts": [
-                    {"artifact_key": item.artifact_key, "byte_count": item.byte_count, "sha256": item.sha256}
+                    {
+                        "artifact_key": item.artifact_key,
+                        "byte_count": item.byte_count,
+                        "sha256": item.sha256,
+                    }
                     for item in artifacts
                 ],
             }
@@ -134,7 +152,9 @@ def source_snapshot_id(
     )
 
 
-def _stream_verified_object(transport: IgraTransport, item: IgraRemoteObject, destination: Path) -> None:
+def _stream_verified_object(
+    transport: IgraTransport, item: IgraRemoteObject, destination: Path
+) -> None:
     conditional = {"Accept-Encoding": "identity"}
     if item.etag:
         conditional["If-Match"] = item.etag
@@ -143,9 +163,13 @@ def _stream_verified_object(transport: IgraTransport, item: IgraRemoteObject, de
     response = transport.request(item.final_url, method="GET", headers=conditional)
     try:
         if response.status == 304:
-            raise IgraCollectionError("A 304 response requires a separately verified local snapshot.")
+            raise IgraCollectionError(
+                "A 304 response requires a separately verified local snapshot."
+            )
         if response.status != 200:
-            raise IgraCollectionError(f"IGRA GET failed for {item.artifact_key}: HTTP {response.status}.")
+            raise IgraCollectionError(
+                f"IGRA GET failed for {item.artifact_key}: HTTP {response.status}."
+            )
         _validate_get_headers(response, item)
         received = 0
         try:
@@ -153,7 +177,9 @@ def _stream_verified_object(transport: IgraTransport, item: IgraRemoteObject, de
                 for chunk in response.iter_chunks():
                     received += len(chunk)
                     if received > item.content_length:
-                        raise IgraCollectionError("IGRA response exceeds its inventoried Content-Length.")
+                        raise IgraCollectionError(
+                            "IGRA response exceeds its inventoried Content-Length."
+                        )
                     handle.write(chunk)
                 handle.flush()
                 os.fsync(handle.fileno())
@@ -181,11 +207,17 @@ def _validate_get_headers(response, item: IgraRemoteObject) -> None:
         raise IgraCollectionError("IGRA object changed between HEAD and GET length checks.")
     if item.etag and response.header("ETag") != item.etag:
         raise IgraCollectionError("IGRA object changed between HEAD and GET ETag checks.")
-    if not item.etag and item.last_modified and response.header("Last-Modified") != item.last_modified:
+    if (
+        not item.etag
+        and item.last_modified
+        and response.header("Last-Modified") != item.last_modified
+    ):
         raise IgraCollectionError("IGRA object changed between HEAD and GET modification checks.")
 
 
-def _verify_zip_payloads(payload_directory: Path, objects: tuple[IgraRemoteObject, ...], policy: dict[str, object]) -> None:
+def _verify_zip_payloads(
+    payload_directory: Path, objects: tuple[IgraRemoteObject, ...], policy: dict[str, object]
+) -> None:
     limits = policy["zip_limits"]
     assert isinstance(limits, dict)
     total_uncompressed = 0
@@ -199,14 +231,31 @@ def _verify_zip_payloads(payload_directory: Path, objects: tuple[IgraRemoteObjec
                 if len(infos) != 1:
                     raise IgraCollectionError("IGRA ZIP must contain exactly one member.")
                 info = infos[0]
-                if info.is_dir() or info.filename != item.expected_member_name or _unsafe_zip_member(info.filename):
-                    raise IgraCollectionError("IGRA ZIP member is unsafe or not the expected provider member.")
-                if info.flag_bits & 0x1 or info.compress_type not in {zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED}:
-                    raise IgraCollectionError("IGRA ZIP encryption or compression method is not supported.")
+                if (
+                    info.is_dir()
+                    or info.filename != item.expected_member_name
+                    or _unsafe_zip_member(info.filename)
+                ):
+                    raise IgraCollectionError(
+                        "IGRA ZIP member is unsafe or not the expected provider member."
+                    )
+                if info.flag_bits & 0x1 or info.compress_type not in {
+                    zipfile.ZIP_STORED,
+                    zipfile.ZIP_DEFLATED,
+                }:
+                    raise IgraCollectionError(
+                        "IGRA ZIP encryption or compression method is not supported."
+                    )
                 if info.file_size > int(limits["maximum_uncompressed_member_bytes"]):
-                    raise IgraCollectionError("IGRA ZIP member exceeds the uncompressed byte limit.")
-                if info.compress_size < 1 or info.file_size / info.compress_size > int(limits["maximum_compression_ratio"]):
-                    raise IgraCollectionError("IGRA ZIP compression ratio exceeds the source policy.")
+                    raise IgraCollectionError(
+                        "IGRA ZIP member exceeds the uncompressed byte limit."
+                    )
+                if info.compress_size < 1 or info.file_size / info.compress_size > int(
+                    limits["maximum_compression_ratio"]
+                ):
+                    raise IgraCollectionError(
+                        "IGRA ZIP compression ratio exceeds the source policy."
+                    )
                 total_uncompressed += info.file_size
                 if archive.testzip() is not None:
                     raise IgraCollectionError("IGRA ZIP member CRC verification failed.")
@@ -227,7 +276,11 @@ def _remote_metadata_matches(
     if len(cached) != len(current):
         return False
     for old, new in zip(cached, current, strict=True):
-        if (old.artifact_key, old.final_url, old.content_length) != (new.artifact_key, new.final_url, new.content_length):
+        if (old.artifact_key, old.final_url, old.content_length) != (
+            new.artifact_key,
+            new.final_url,
+            new.content_length,
+        ):
             return False
         if old.etag is not None:
             if old.etag != new.etag:

@@ -15,6 +15,7 @@ def test_range_selection_is_sorted_and_inclusive() -> None:
 
 
 def test_auto_historical_selection_uses_period_of_record() -> None:
-    assert resolve_archive_mode(
-        "auto", ("2025-08-02",), now=datetime(2026, 9, 15, tzinfo=UTC)
-    ) == "period-of-record"
+    assert (
+        resolve_archive_mode("auto", ("2025-08-02",), now=datetime(2026, 9, 15, tzinfo=UTC))
+        == "period-of-record"
+    )

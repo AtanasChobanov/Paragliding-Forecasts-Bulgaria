@@ -43,14 +43,21 @@ def normalize(
         key = _sounding_key(raw.station_id, raw.nominal_date_utc, raw.nominal_hour_utc)
         keys[(raw.station_id, raw.nominal_date_utc, raw.nominal_hour_utc)] = key
         nominal = _nominal_timestamp(raw.nominal_date_utc, raw.nominal_hour_utc)
-        release, precision, delta = _release_timestamp(raw.nominal_date_utc, raw.release_time_hhmm, nominal)
+        release, precision, delta = _release_timestamp(
+            raw.nominal_date_utc, raw.release_time_hhmm, nominal
+        )
         normalized_levels = tuple(_normalize_level(key, level) for level in raw.levels)
         levels.extend(normalized_levels)
         thermo = any(
-            level.temperature_k is not None or level.dew_point_k is not None or level.relative_humidity_percent is not None
+            level.temperature_k is not None
+            or level.dew_point_k is not None
+            or level.relative_humidity_percent is not None
             for level in normalized_levels
         )
-        wind = any(level.wind_speed_m_s is not None and level.wind_direction_degrees is not None for level in normalized_levels)
+        wind = any(
+            level.wind_speed_m_s is not None and level.wind_direction_degrees is not None
+            for level in normalized_levels
+        )
         soundings.append(
             CanonicalSounding(
                 sounding_key=key,
@@ -83,7 +90,9 @@ def normalize(
                 sounding_key=key,
                 native_record_sha256=derived.record_sha256,
                 values=_normalize_derived_parameters(derived.parameters),
-                provenance={name: _derived_provenance(value) for name, value in derived.parameters.items()},
+                provenance={
+                    name: _derived_provenance(value) for name, value in derived.parameters.items()
+                },
             )
         )
         for level in derived.levels:
@@ -92,14 +101,22 @@ def normalize(
                     sounding_key=key,
                     ordinal=level.ordinal,
                     values=_normalize_derived_level(level.values),
-                    provenance={name: _derived_provenance(value) for name, value in level.values.items()},
+                    provenance={
+                        name: _derived_provenance(value) for name, value in level.values.items()
+                    },
                 )
             )
     return IgraNormalizationResult(
-        soundings=tuple(sorted(soundings, key=lambda item: (item.nominal_at_utc or "", item.record_sha256))),
+        soundings=tuple(
+            sorted(soundings, key=lambda item: (item.nominal_at_utc or "", item.record_sha256))
+        ),
         levels=tuple(sorted(levels, key=lambda item: (item.sounding_key, item.ordinal))),
-        provider_parameters=tuple(sorted(parameters, key=lambda item: (item.sounding_key, item.native_record_sha256))),
-        provider_levels=tuple(sorted(provider_levels, key=lambda item: (item.sounding_key, item.ordinal))),
+        provider_parameters=tuple(
+            sorted(parameters, key=lambda item: (item.sounding_key, item.native_record_sha256))
+        ),
+        provider_levels=tuple(
+            sorted(provider_levels, key=lambda item: (item.sounding_key, item.ordinal))
+        ),
         report={
             "raw_soundings": len(raw_soundings),
             "canonical_soundings": len(soundings),
@@ -120,7 +137,11 @@ def _normalize_level(sounding_key: str, level) -> CanonicalSoundingLevel:
     speed_native, speed_prov = _value(level.wind_speed, "wind_speed_tenth_m_s")
     elapsed, elapsed_prov = _elapsed(level.elapsed_time)
     temperature = temperature_native / 10 + 273.15 if temperature_native is not None else None
-    dew_point = temperature - dpdp_native / 10 if temperature is not None and dpdp_native is not None else None
+    dew_point = (
+        temperature - dpdp_native / 10
+        if temperature is not None and dpdp_native is not None
+        else None
+    )
     reported_rh = rh_native / 10 if rh_native is not None else None
     derived_rh = _relative_humidity(temperature, dew_point)
     speed = speed_native / 10 if speed_native is not None else None
@@ -161,12 +182,18 @@ def _value(native: int | None, field: str) -> tuple[int | None, dict[str, object
     if native in {-9999, -8888, -99999}:
         return None, {
             "quality_state": "sentinel_missing",
-            "missing_reason": "source_removed_by_qa" if native == -8888 else "source_missing_before_qa",
+            "missing_reason": "source_removed_by_qa"
+            if native == -8888
+            else "source_missing_before_qa",
             "native_value": None,
             "native_field": field,
         }
     if native is None:
-        return None, {"quality_state": "missing", "missing_reason": "blank_native", "native_field": field}
+        return None, {
+            "quality_state": "missing",
+            "missing_reason": "blank_native",
+            "native_field": field,
+        }
     return native, {"quality_state": "real", "native_value": native, "native_field": field}
 
 
@@ -176,7 +203,11 @@ def _elapsed(native: int | None) -> tuple[int | None, dict[str, object]]:
         return None, provenance
     seconds = value % 100
     if seconds > 59:
-        return None, {**provenance, "quality_state": "invalid_payload", "invalid_reason": "etime_seconds"}
+        return None, {
+            **provenance,
+            "quality_state": "invalid_payload",
+            "invalid_reason": "etime_seconds",
+        }
     return (value // 100) * 60 + seconds, provenance
 
 
@@ -192,14 +223,18 @@ def _relative_humidity(temperature_k: float | None, dew_point_k: float | None) -
     return value if isfinite(value) else None
 
 
-def _wind_components(speed: float | None, direction: int | None) -> tuple[float | None, float | None]:
+def _wind_components(
+    speed: float | None, direction: int | None
+) -> tuple[float | None, float | None]:
     if speed is None or direction is None:
         return None, None
     radians_from_north = radians(direction)
     return -speed * sin(radians_from_north), -speed * cos(radians_from_north)
 
 
-def _release_timestamp(nominal_date: str, release_hhmm: str | None, nominal: str | None) -> tuple[str | None, str, int | None]:
+def _release_timestamp(
+    nominal_date: str, release_hhmm: str | None, nominal: str | None
+) -> tuple[str | None, str, int | None]:
     if release_hhmm in {None, "9999"} or nominal is None:
         return None, "missing", None
     hour = int(release_hhmm[0:2])
@@ -212,7 +247,9 @@ def _release_timestamp(nominal_date: str, release_hhmm: str | None, nominal: str
         return None, "missing", None
     target = datetime.fromisoformat(nominal)
     candidates = [
-        datetime.combine(target.date() + timedelta(days=offset), datetime.min.time(), tzinfo=UTC).replace(hour=hour, minute=minute)
+        datetime.combine(
+            target.date() + timedelta(days=offset), datetime.min.time(), tzinfo=UTC
+        ).replace(hour=hour, minute=minute)
         for offset in (-1, 0, 1)
     ]
     chosen = min(candidates, key=lambda candidate: abs((candidate - target).total_seconds()))
@@ -233,13 +270,22 @@ def _sounding_key(station_id: str, nominal_date: str, nominal_hour: int | None) 
 
 
 def _scaled_provenance(provenance: dict[str, object], method: str) -> dict[str, object]:
-    return {**provenance, "normalization_method": method, "normalization_version": NORMALIZER_VERSION}
+    return {
+        **provenance,
+        "normalization_method": method,
+        "normalization_version": NORMALIZER_VERSION,
+    }
 
 
 def _derived_provenance_from(provenance: dict[str, object], method: str) -> dict[str, object]:
     if provenance.get("quality_state") != "real":
         return provenance
-    return {**provenance, "quality_state": "derived", "derivation_method": method, "derivation_version": NORMALIZER_VERSION}
+    return {
+        **provenance,
+        "quality_state": "derived",
+        "derivation_method": method,
+        "derivation_version": NORMALIZER_VERSION,
+    }
 
 
 def _derived_provenance(native: int | None) -> dict[str, object]:
@@ -268,10 +314,21 @@ def _normalize_derived_parameters(values: dict[str, int | None]) -> dict[str, fl
 def _normalize_derived_level(values: dict[str, int | None]) -> dict[str, float | int | None]:
     result: dict[str, float | int | None] = {}
     scaled = {
-        "temperature", "temperature_gradient", "potential_temperature", "potential_temperature_gradient",
-        "virtual_temperature", "virtual_potential_temperature", "vapor_pressure", "saturation_vapor_pressure",
-        "reported_relative_humidity", "calculated_relative_humidity", "relative_humidity_gradient", "u_wind",
-        "u_wind_gradient", "v_wind", "v_wind_gradient",
+        "temperature",
+        "temperature_gradient",
+        "potential_temperature",
+        "potential_temperature_gradient",
+        "virtual_temperature",
+        "virtual_potential_temperature",
+        "vapor_pressure",
+        "saturation_vapor_pressure",
+        "reported_relative_humidity",
+        "calculated_relative_humidity",
+        "relative_humidity_gradient",
+        "u_wind",
+        "u_wind_gradient",
+        "v_wind",
+        "v_wind_gradient",
     }
     for name, native in values.items():
         value, _ = _value(native, name)

@@ -26,9 +26,11 @@ _APPROVED_HOSTS = frozenset({"ncei.noaa.gov", "www.ncei.noaa.gov"})
 def load_source_policy() -> tuple[dict[str, object], str]:
     """Load and hash the one packaged policy; no mutable runtime configuration exists."""
 
-    content = files("paragliding_forecasts_ml.ingestion.igra.resources").joinpath(
-        SOURCE_POLICY_RESOURCE
-    ).read_bytes()
+    content = (
+        files("paragliding_forecasts_ml.ingestion.igra.resources")
+        .joinpath(SOURCE_POLICY_RESOURCE)
+        .read_bytes()
+    )
     policy = json.loads(content)
     if policy.get("policy_version") != SOURCE_POLICY_VERSION:
         raise IgraInventoryError("Packaged IGRA source policy version is inconsistent.")
@@ -58,14 +60,19 @@ def parse_selection(
             end = date.fromisoformat(end_date or "")
             if end < start:
                 raise IgraInventoryError("IGRA date range end precedes its start.")
-            values = tuple(date.fromordinal(day).isoformat() for day in range(start.toordinal(), end.toordinal() + 1))
+            values = tuple(
+                date.fromordinal(day).isoformat()
+                for day in range(start.toordinal(), end.toordinal() + 1)
+            )
     except ValueError as error:
         raise IgraInventoryError("Dates must be real YYYY-MM-DD UTC dates.") from error
     if len(values) != len(set(values)):
         raise IgraInventoryError("Duplicate dates are not permitted.")
     if len(values) > 366:
         raise IgraInventoryError("At most 366 unique UTC dates are permitted per run.")
-    if len(nominal_hours) != len(set(nominal_hours)) or any(hour < 0 or hour > 23 for hour in nominal_hours):
+    if len(nominal_hours) != len(set(nominal_hours)) or any(
+        hour < 0 or hour > 23 for hour in nominal_hours
+    ):
         raise IgraInventoryError("Nominal hours must be unique values from 0 through 23.")
     return tuple(sorted(values)), tuple(sorted(nominal_hours))
 
@@ -101,14 +108,16 @@ def resolved_object_templates(
     templates = policy["archive_templates"]
     expected = policy["expected_members"]
     format_urls = policy["format_urls"]
-    assert isinstance(templates, dict) and isinstance(expected, dict) and isinstance(format_urls, dict)
+    assert (
+        isinstance(templates, dict) and isinstance(expected, dict) and isinstance(format_urls, dict)
+    )
     year = date.fromisoformat(dates_utc[0]).year
     raw_key = "recent_zip" if archive_mode == "recent" else "period_of_record_zip"
     raw_template_key = "recent" if archive_mode == "recent" else "period_of_record"
     raw_url = str(templates[raw_template_key]).format(station_id=station_id, year=year)
-    raw_member = str(expected["recent_zip" if archive_mode == "recent" else "period_of_record_zip"]).format(
-        station_id=station_id, year=year
-    )
+    raw_member = str(
+        expected["recent_zip" if archive_mode == "recent" else "period_of_record_zip"]
+    ).format(station_id=station_id, year=year)
     derived_url = str(templates["derived_period_of_record"]).format(station_id=station_id)
     derived_member = str(expected["derived_zip"]).format(station_id=station_id)
     return (
@@ -168,7 +177,11 @@ def _validated_head(
         raise IgraInventoryError(f"IGRA HEAD failed for {key}: HTTP {response.status}.")
     requested_host = urlparse(requested_url).hostname
     final = urlparse(response.final_url)
-    if final.scheme != "https" or final.hostname not in _APPROVED_HOSTS or requested_host not in _APPROVED_HOSTS:
+    if (
+        final.scheme != "https"
+        or final.hostname not in _APPROVED_HOSTS
+        or requested_host not in _APPROVED_HOSTS
+    ):
         raise IgraInventoryError("IGRA redirect host or scheme is not approved.")
     encoding = response.header("Content-Encoding")
     if encoding not in {None, "", "identity"}:
@@ -183,7 +196,11 @@ def _validated_head(
     if not basename:
         raise IgraInventoryError("IGRA final URL has no safe filename.")
     content_type = (response.header("Content-Type") or "").split(";", 1)[0].lower()
-    if media_class == "zip" and content_type not in {"application/zip", "application/octet-stream", "application/x-zip-compressed"}:
+    if media_class == "zip" and content_type not in {
+        "application/zip",
+        "application/octet-stream",
+        "application/x-zip-compressed",
+    }:
         raise IgraInventoryError("IGRA ZIP response has an unexpected Content-Type.")
     if media_class == "text" and content_type not in {"text/plain", "application/octet-stream"}:
         raise IgraInventoryError("IGRA text response has an unexpected Content-Type.")

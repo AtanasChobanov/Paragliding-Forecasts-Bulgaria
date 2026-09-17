@@ -128,7 +128,9 @@ class RetryingIgraTransport(IgraTransport):
                     return response
                 response.close()
                 if attempt == self.policy.maximum_attempts:
-                    raise IgraTransportError(f"IGRA transient HTTP {response.status} exhausted retries.")
+                    raise IgraTransportError(
+                        f"IGRA transient HTTP {response.status} exhausted retries."
+                    )
             delay = (30.0, 120.0)[attempt - 1]
             retry_after = retry_after_seconds(response.header("Retry-After")) if response else None
             if retry_after is not None:

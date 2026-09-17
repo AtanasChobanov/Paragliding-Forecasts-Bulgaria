@@ -17,7 +17,13 @@ class IgraStateError(RuntimeError):
 
 RunStage = Literal["planned", "source_snapshot_complete", "parsed", "normalized", "validated"]
 RunDisposition = Literal["ready", "complete", "quarantined", "failed"]
-_STAGES: tuple[RunStage, ...] = ("planned", "source_snapshot_complete", "parsed", "normalized", "validated")
+_STAGES: tuple[RunStage, ...] = (
+    "planned",
+    "source_snapshot_complete",
+    "parsed",
+    "normalized",
+    "validated",
+)
 
 
 class IgraRunStateLedger:
@@ -54,8 +60,18 @@ class IgraRunStateLedger:
             if event.previous_event_sha256 != predecessor or path.name != self._filename(event):
                 raise IgraStateError("State event predecessor or filename is inconsistent.")
             if events:
-                self._validate_next(tuple(events), event.stage, event.disposition, event.evidence, event.supersedes_sequence)
-            elif event.invocation_mode != "fresh" or event.stage != "planned" or event.disposition != "ready":
+                self._validate_next(
+                    tuple(events),
+                    event.stage,
+                    event.disposition,
+                    event.evidence,
+                    event.supersedes_sequence,
+                )
+            elif (
+                event.invocation_mode != "fresh"
+                or event.stage != "planned"
+                or event.disposition != "ready"
+            ):
                 raise IgraStateError("The first IGRA event must be fresh/planned/ready.")
             events.append(event)
             predecessor = sha256_bytes(content)
@@ -112,13 +128,21 @@ class IgraRunStateLedger:
         if evidence is None:
             raise IgraStateError("A completed stage requires immutable boundary evidence.")
         if supersedes_sequence is not None:
-            if stage in {"planned", "source_snapshot_complete"} or supersedes_sequence > len(events):
+            if stage in {"planned", "source_snapshot_complete"} or supersedes_sequence > len(
+                events
+            ):
                 raise IgraStateError("Only derived stages may supersede a valid prior boundary.")
             previous = events[supersedes_sequence - 1]
             if previous.stage != stage or previous.disposition not in {"complete", "quarantined"}:
-                raise IgraStateError("Supersession must target a completed boundary of the same stage.")
+                raise IgraStateError(
+                    "Supersession must target a completed boundary of the same stage."
+                )
             return
-        completed = [event.stage for event in events if event.disposition in {"ready", "complete", "quarantined"}]
+        completed = [
+            event.stage
+            for event in events
+            if event.disposition in {"ready", "complete", "quarantined"}
+        ]
         current = completed[-1]
         expected = _STAGES[_STAGES.index(current) + 1] if current != "validated" else None
         if stage != expected:
@@ -126,7 +150,9 @@ class IgraRunStateLedger:
 
     def _write(self, event: IgraRunStateEvent) -> None:
         try:
-            self.store.write_state_event(event.sequence, f"{event.stage.replace('_', '-')}-{event.disposition}", event)
+            self.store.write_state_event(
+                event.sequence, f"{event.stage.replace('_', '-')}-{event.disposition}", event
+            )
         except IgraArtifactError as error:
             raise IgraStateError(str(error)) from error
 

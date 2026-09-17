@@ -42,8 +42,15 @@ def validate(
     for level in levels:
         normalized, _invalid = _invalidated_level(level)
         by_sounding[normalized.sounding_key].append(normalized)
-    invalid_values = [item for values in by_sounding.values() for level in values for item in _invalid_evidence(level)]
-    duplicates = {key for key, count in Counter(item.sounding_key for item in soundings).items() if count > 1}
+    invalid_values = [
+        item
+        for values in by_sounding.values()
+        for level in values
+        for item in _invalid_evidence(level)
+    ]
+    duplicates = {
+        key for key, count in Counter(item.sounding_key for item in soundings).items() if count > 1
+    }
     accepted: list[CanonicalSounding] = []
     quarantined: list[CanonicalSounding] = []
     accepted_levels: list[CanonicalSoundingLevel] = []
@@ -54,10 +61,22 @@ def validate(
         usable: list[CanonicalSoundingLevel] = []
         for level in candidates:
             if level.pressure_pa is None and level.geopotential_height_msl_m is None:
-                excluded.append({"sounding_key": sounding.sounding_key, "ordinal": level.ordinal, "reason": "no_vertical_coordinate"})
+                excluded.append(
+                    {
+                        "sounding_key": sounding.sounding_key,
+                        "ordinal": level.ordinal,
+                        "reason": "no_vertical_coordinate",
+                    }
+                )
                 continue
             if not _has_measurement(level):
-                excluded.append({"sounding_key": sounding.sounding_key, "ordinal": level.ordinal, "reason": "no_usable_measurement"})
+                excluded.append(
+                    {
+                        "sounding_key": sounding.sounding_key,
+                        "ordinal": level.ordinal,
+                        "reason": "no_usable_measurement",
+                    }
+                )
                 continue
             usable.append(level)
         reason = _quarantine_reason(sounding, usable, duplicates)
@@ -90,11 +109,28 @@ def validate(
         "rejected_derived_associations": len(association_rejections),
     }
     return IgraValidationResult(
-        accepted_soundings=tuple(sorted(accepted, key=lambda item: (item.nominal_at_utc or "", item.record_sha256))),
-        quarantined_soundings=tuple(sorted(quarantined, key=lambda item: (item.nominal_at_utc or "", item.record_sha256))),
-        accepted_levels=tuple(sorted(accepted_levels, key=lambda item: (item.sounding_key, item.ordinal))),
-        excluded_levels=tuple(sorted(excluded, key=lambda item: (str(item["sounding_key"]), int(item["ordinal"])))),
-        invalid_values=tuple(sorted(invalid_values, key=lambda item: (str(item["sounding_key"]), int(item["ordinal"]), str(item["field"])))),
+        accepted_soundings=tuple(
+            sorted(accepted, key=lambda item: (item.nominal_at_utc or "", item.record_sha256))
+        ),
+        quarantined_soundings=tuple(
+            sorted(quarantined, key=lambda item: (item.nominal_at_utc or "", item.record_sha256))
+        ),
+        accepted_levels=tuple(
+            sorted(accepted_levels, key=lambda item: (item.sounding_key, item.ordinal))
+        ),
+        excluded_levels=tuple(
+            sorted(excluded, key=lambda item: (str(item["sounding_key"]), int(item["ordinal"])))
+        ),
+        invalid_values=tuple(
+            sorted(
+                invalid_values,
+                key=lambda item: (
+                    str(item["sounding_key"]),
+                    int(item["ordinal"]),
+                    str(item["field"]),
+                ),
+            )
+        ),
         accepted_provider_parameters=associations[0],
         accepted_provider_levels=associations[1],
         rejected_derived_associations=tuple(
@@ -107,7 +143,9 @@ def validate(
             sorted(
                 missing,
                 key=lambda item: (
-                    str(item["date_utc"]), str(item.get("hour_utc", "")), str(item["reason"])
+                    str(item["date_utc"]),
+                    str(item.get("hour_utc", "")),
+                    str(item["reason"]),
                 ),
             )
         ),
@@ -115,7 +153,9 @@ def validate(
     )
 
 
-def _invalidated_level(level: CanonicalSoundingLevel) -> tuple[CanonicalSoundingLevel, tuple[dict[str, object], ...]]:
+def _invalidated_level(
+    level: CanonicalSoundingLevel,
+) -> tuple[CanonicalSoundingLevel, tuple[dict[str, object], ...]]:
     updates: dict[str, object] = {}
     provenance = {name: dict(value) for name, value in level.provenance.items()}
     checks = {
@@ -134,7 +174,15 @@ def _invalidated_level(level: CanonicalSoundingLevel) -> tuple[CanonicalSounding
                 "quality_state": "invalid_payload",
                 "invalid_reason": "hard_range",
             }
-            invalid.append({"sounding_key": level.sounding_key, "ordinal": level.ordinal, "field": field, "native_value": value, "reason": "hard_range"})
+            invalid.append(
+                {
+                    "sounding_key": level.sounding_key,
+                    "ordinal": level.ordinal,
+                    "field": field,
+                    "native_value": value,
+                    "reason": "hard_range",
+                }
+            )
     if updates:
         updates["provenance"] = provenance
         return level.model_copy(update=updates), tuple(invalid)
@@ -145,7 +193,14 @@ def _invalid_evidence(level: CanonicalSoundingLevel) -> tuple[dict[str, object],
     evidence: list[dict[str, object]] = []
     for field, provenance in level.provenance.items():
         if provenance.get("quality_state") == "invalid_payload":
-            evidence.append({"sounding_key": level.sounding_key, "ordinal": level.ordinal, "field": field, "reason": provenance.get("invalid_reason", "invalid_payload")})
+            evidence.append(
+                {
+                    "sounding_key": level.sounding_key,
+                    "ordinal": level.ordinal,
+                    "field": field,
+                    "reason": provenance.get("invalid_reason", "invalid_payload"),
+                }
+            )
     return tuple(evidence)
 
 
@@ -180,10 +235,15 @@ def _quarantine_reason(
     if not usable:
         return "no_usable_vertical_coordinate"
     thermodynamic = any(
-        level.temperature_k is not None or level.dew_point_k is not None or level.relative_humidity_percent is not None
+        level.temperature_k is not None
+        or level.dew_point_k is not None
+        or level.relative_humidity_percent is not None
         for level in usable
     )
-    wind = any(level.wind_speed_m_s is not None and level.wind_direction_degrees is not None for level in usable)
+    wind = any(
+        level.wind_speed_m_s is not None and level.wind_direction_degrees is not None
+        for level in usable
+    )
     if not thermodynamic and not wind:
         return "no_usable_profile_family"
     return None
@@ -193,15 +253,22 @@ def _derived_associations(
     parameters: tuple[ProviderDerivedSoundingParameters, ...],
     levels: tuple[ProviderDerivedSoundingLevel, ...],
     accepted_keys: set[str],
-) -> tuple[tuple[tuple[ProviderDerivedSoundingParameters, ...], tuple[ProviderDerivedSoundingLevel, ...]], list[dict[str, object]]]:
+) -> tuple[
+    tuple[tuple[ProviderDerivedSoundingParameters, ...], tuple[ProviderDerivedSoundingLevel, ...]],
+    list[dict[str, object]],
+]:
     counts = Counter(item.sounding_key for item in parameters)
     rejected: list[dict[str, object]] = []
     accepted_parameters: list[ProviderDerivedSoundingParameters] = []
     for parameter in parameters:
         if parameter.sounding_key not in accepted_keys:
-            rejected.append({"sounding_key": parameter.sounding_key, "reason": "unmatched_or_quarantined_raw"})
+            rejected.append(
+                {"sounding_key": parameter.sounding_key, "reason": "unmatched_or_quarantined_raw"}
+            )
         elif counts[parameter.sounding_key] > 1:
-            rejected.append({"sounding_key": parameter.sounding_key, "reason": "duplicate_derived_identity"})
+            rejected.append(
+                {"sounding_key": parameter.sounding_key, "reason": "duplicate_derived_identity"}
+            )
         else:
             accepted_parameters.append(parameter)
     accepted_parameter_keys = {item.sounding_key for item in accepted_parameters}
@@ -223,12 +290,26 @@ def _missing_evidence(
         for requested_date in requested_dates_utc:
             for requested_hour in requested_nominal_hours:
                 if (requested_date, requested_hour) not in observed:
-                    evidence.append({"date_utc": requested_date, "hour_utc": requested_hour, "reason": "no_observation_for_selection"})
+                    evidence.append(
+                        {
+                            "date_utc": requested_date,
+                            "hour_utc": requested_hour,
+                            "reason": "no_observation_for_selection",
+                        }
+                    )
     else:
         for requested_date in requested_dates_utc:
             if not any(date == requested_date for date, _hour in observed):
-                evidence.append({"date_utc": requested_date, "reason": "no_observation_for_selection"})
+                evidence.append(
+                    {"date_utc": requested_date, "reason": "no_observation_for_selection"}
+                )
     for sounding in soundings:
         if sounding.sounding_key not in with_derived:
-            evidence.append({"date_utc": sounding.nominal_date_utc, "hour_utc": sounding.nominal_hour_utc, "reason": "missing_provider_derived_record"})
+            evidence.append(
+                {
+                    "date_utc": sounding.nominal_date_utc,
+                    "hour_utc": sounding.nominal_hour_utc,
+                    "reason": "missing_provider_derived_record",
+                }
+            )
     return evidence

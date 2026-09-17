@@ -18,8 +18,8 @@ class TransientTransport(IgraTransport):
 
 def test_retry_retries_a_transient_response() -> None:
     upstream = TransientTransport()
-    response = RetryingIgraTransport(upstream, sleeper=lambda _: None, random_uniform=lambda _a, _b: 0).request(
-        "https://ncei.noaa.gov/example", method="HEAD"
-    )
+    response = RetryingIgraTransport(
+        upstream, sleeper=lambda _: None, random_uniform=lambda _a, _b: 0
+    ).request("https://ncei.noaa.gov/example", method="HEAD")
     assert response.status == 200
     assert upstream.calls == 2
