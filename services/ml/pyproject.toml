@@ -31,6 +31,7 @@ weather-ingest = "paragliding_forecasts_ml.ingestion.weather.pipeline_cli:main"
 weather-artifacts = "paragliding_forecasts_ml.ingestion.weather.artifact_audit_cli:main"
 copernicus-elevations = "paragliding_forecasts_ml.ingestion.copernicus.elevation_cli:main"
 xccontest-ingest = "paragliding_forecasts_ml.ingestion.xccontest.pipeline_cli:main"
+igra-ingest = "paragliding_forecasts_ml.ingestion.igra.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.12.1,<0.13"]
