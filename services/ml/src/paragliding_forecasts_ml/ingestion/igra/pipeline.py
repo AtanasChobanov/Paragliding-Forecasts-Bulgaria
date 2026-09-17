@@ -93,7 +93,7 @@ def fresh(
         "source_snapshot",
         COLLECTOR_VERSION,
         (plan_ref, snapshot_ref),
-        {"snapshot": snapshot_ref.model_dump(mode="json")},
+        {"source-snapshot-reference.json": snapshot_ref.model_dump(mode="json")},
     )
     ledger.append(
         stage="source_snapshot_complete",
@@ -122,7 +122,9 @@ def resume(*, run_key: str, project_root: Path | None = None) -> dict[str, objec
         if event.stage == "source_snapshot_complete" and event.disposition == "complete"
     )
     source_stage = _load_stage(store, source_event.evidence)
-    payload = json.loads(store.verify_reference(_output(source_stage, "snapshot")).read_bytes())
+    payload = json.loads(
+        store.verify_reference(_source_snapshot_reference(source_stage)).read_bytes()
+    )
     snapshot_ref = ArtifactReference.model_validate(payload, strict=True)
     snapshot = IgraSourceSnapshotManifest.model_validate_json(
         store.verify_reference(snapshot_ref).read_bytes(), strict=True
@@ -356,6 +358,16 @@ def _load_stage(store: IgraArtifactStore, reference: ArtifactReference | None) -
     for output in manifest.outputs:
         store.verify_reference(output)
     return manifest
+
+
+def _source_snapshot_reference(manifest: IgraStageManifest) -> ArtifactReference:
+    """Read current naming while allowing offline recovery of the first v1 runs."""
+
+    for key in ("source_snapshot_reference", "snapshot"):
+        for output in manifest.outputs:
+            if output.artifact_key == key:
+                return output
+    raise IgraPipelineError("Source snapshot stage has no snapshot-reference artifact.")
 
 
 def _output(manifest: IgraStageManifest, key: str) -> ArtifactReference:

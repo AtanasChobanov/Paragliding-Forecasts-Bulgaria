@@ -18,9 +18,9 @@ Keep durable decisions in `docs/decisions.md`, ticket lifecycle in
 | Field | Value |
 | --- | --- |
 | Branch | `feature/T-019-sounding-ingestion` |
-| Ticket | `T-019` is **In Progress**. The artifact-first IGRA implementation and offline automated verification are complete; the owner has not run the bounded live NOAA acceptance. `T-018` remains done and ERA5 remains deferred to T-038. |
-| Next work | Owner: run `igra-ingest inventory`, review its five HEAD sizes and cap, then run the reviewed bounded `fresh` and offline `resume` below. Record the output and only then consider task completion. Do not add SQL, a T-020 training join, GFS/IGRA comparison, ERA5, BUFR, or image/OCR scope. |
-| Fresh evidence | T-019: Ruff passed; `uv run --project services/ml pytest` passed **291** tests; `npm.cmd run repo:check`, `format:check`, `typecheck`, `lint`, and `test` passed. All T-019 execution used local fixtures/fake transport; no live NOAA request was made. |
+| Ticket | `T-019` is **In Progress**. The artifact-first IGRA implementation and offline automated verification are complete; the owner live `fresh` published a source snapshot but stopped before parsing, and offline `resume` is now pending. `T-018` remains done and ERA5 remains deferred to T-038. |
+| Next work | Owner: after this fix is committed, run offline `igra-ingest resume --run-key 1b6c4ce0-a1bf-4d06-bfbd-390dc4de6c98` to continue the already downloaded snapshot. Review and record its output before any new `fresh`. Do not add SQL, a T-020 training join, GFS/IGRA comparison, ERA5, BUFR, or image/OCR scope. |
+| Fresh evidence | T-019: Ruff passed; `uv run --project services/ml pytest` passed **291** tests; `npm.cmd run repo:check`, `format:check`, `typecheck`, `lint`, and `test` passed. Owner live `fresh` downloaded and published the snapshot but stopped before parsing because NOAA's UTF-8 station list was incorrectly required to be all-ASCII; this is fixed and focused offline IGRA tests pass. |
 | Local DB | The primary and temporary restoration SQLite databases were migrated by the owner for T-018 acceptance. They are local ignored artifacts and must not be committed. |
 | User work | `docs/T-019-implementation-plan.md` is a local planning reference. Per owner instruction, do not stage or commit it. |
 ## T-019 implementation-plan boundary
@@ -60,6 +60,13 @@ immutable, SHA-256-addressed snapshots and stage outputs. Parser input is read
 line-by-line from the ZIP members, retaining selected records rather than whole
 expanded archives. `resume` constructs no transport and recursively verifies
 all referenced evidence before processing.
+The owner ran one live `fresh` on 2026-09-17. It successfully created source
+snapshot `c7dd598ab2114720d0ee53ae024eebfd6148a480293e5185d171e4155e3a6fe6`
+and then stopped before parsing because the provider-wide station list contains
+UTF-8 names. The station parser now scans fixed byte columns, decoding only the
+selected Sofia row; future source stages use
+`source-snapshot-reference.json`. `resume` also recognizes the old extensionless
+`snapshot` reference, so the existing run can continue offline after this fix.
 
 On 2026-09-17, `uv run --project services/ml ruff check services/ml` passed and
 `uv run --project services/ml pytest` passed 291 tests. Repository
@@ -67,38 +74,24 @@ On 2026-09-17, `uv run --project services/ml ruff check services/ml` passed and
 passed. These checks used only local fixtures and a fake transport; they are not
 live source acceptance.
 
-### Owner-operated live acceptance — not run
+### Owner-operated live acceptance — recovery pending
 
-Run this HEAD-only inventory first and record all five `Content-Length` values,
-`minimum_required_mib`, selected archive, and source metadata:
-
-```powershell
-uv run --project services/ml igra-ingest inventory `
-  --station-id BUM00015614 `
-  --date 2025-08-02 `
-  --archive period-of-record `
-  --allow-live-network
-```
-
-If and only if the reviewed inventory is at most the explicit 80 MiB cap, run
-one fresh collection, inspect its JSON result, then rerun the exact completed
-run offline:
+The owner already ran the reviewed bounded `fresh` and the source snapshot was
+published. Do not download it again. After the parser fix is committed, continue
+that exact run offline:
 
 ```powershell
-uv run --project services/ml igra-ingest fresh `
-  --station-id BUM00015614 `
-  --date 2025-08-02 `
-  --archive period-of-record `
-  --maximum-total-mib 80 `
-  --allow-live-network
-
-uv run --project services/ml igra-ingest resume --run-key <fresh-run-key>
+uv run --project services/ml igra-ingest resume `
+  --run-key 1b6c4ce0-a1bf-4d06-bfbd-390dc4de6c98
 ```
 
-Do not automatically increase the cap if inventory is larger. Review the
-validated manifest/report and record the outcome here before marking T-019
-done. The CLI and resulting artifacts remain exactly scoped to IGRA observation
-handling; T-020 and T-039 remain separate.
+Review the resulting JSON, validated manifest, and validation report; record the
+outcome here before marking T-019 done. Only if this run cannot resume for a
+separate integrity/state reason should a new scope begin with HEAD-only
+`inventory`, review all five `Content-Length` values and `minimum_required_mib`,
+and then use bounded `fresh`. Do not automatically increase the cap. The CLI and
+resulting artifacts remain exactly scoped to IGRA observation handling; T-020
+and T-039 remain separate.
 
 ### Storage scaling
 

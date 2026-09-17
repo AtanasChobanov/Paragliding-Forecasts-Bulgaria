@@ -30,7 +30,9 @@ class FakeIgraTransport(IgraTransport):
 
 def test_fake_fresh_then_offline_resume(tmp_path: Path) -> None:
     raw = _zip("BUM00015614-data.txt", (FIXTURES / "raw-selected-soundings.txt").read_bytes())
-    derived = _zip("BUM00015614-drvd.txt", (FIXTURES / "derived-selected-soundings.txt").read_bytes())
+    derived = _zip(
+        "BUM00015614-drvd.txt", (FIXTURES / "derived-selected-soundings.txt").read_bytes()
+    )
     urls = {
         "https://www.ncei.noaa.gov/pub/data/igra/igra2-station-list.txt": (
             FIXTURES / "station-list-sample.txt"
@@ -50,6 +52,12 @@ def test_fake_fresh_then_offline_resume(tmp_path: Path) -> None:
         transport=FakeIgraTransport(urls),
     )
     assert result["exit_code"] == 0
+    source_references = list(
+        (tmp_path / "data" / "interim" / "soundings" / str(result["run_key"])).glob(
+            "source_snapshot-v*/**/source-snapshot-reference.json"
+        )
+    )
+    assert len(source_references) == 1
     resumed = resume(run_key=str(result["run_key"]), project_root=tmp_path)
     assert resumed["run_key"] == result["run_key"]
     assert resumed["network_mode"] == "cache_reuse"
