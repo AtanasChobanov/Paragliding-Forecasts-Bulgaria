@@ -242,8 +242,8 @@ class NativeIgraSounding(IgraContract):
     nominal_hour_utc: int | None = Field(default=None, ge=0, le=23)
     release_time_hhmm: str | None = None
     level_count: int = Field(ge=0)
-    pressure_source: str = Field(max_length=1)
-    nonpressure_source: str = Field(max_length=1)
+    pressure_source: str = Field(max_length=8)
+    nonpressure_source: str = Field(max_length=8)
     latitude_native: int | None = None
     longitude_native: int | None = None
     record_ordinal: int = Field(ge=1)
@@ -434,3 +434,84 @@ class IgraRunStateEvent(IgraContract):
         if self.disposition == "quarantined" and self.stage != "validated":
             raise ValueError("Only validation can quarantine an IGRA run.")
         return self
+class NativeIgraDerivedLevel(IgraContract):
+    """Every documented derived pressure-level field, retained before unit conversion."""
+
+    native_derived_level_schema_version: Literal[1] = 1
+    derived_record_sha256: str
+    ordinal: int = Field(ge=1)
+    values: dict[str, int | None] = Field(min_length=1)
+    raw_artifact_key: str = Field(min_length=1)
+    line_number: int = Field(ge=1)
+
+    @field_validator("derived_record_sha256")
+    @classmethod
+    def derived_hash(cls, value: str) -> str:
+        if SHA256_PATTERN.fullmatch(value) is None:
+            raise ValueError("Derived record hash must be a SHA-256.")
+        return value
+
+
+class NativeIgraDerivedSounding(IgraContract):
+    """Derived header parameters and independent NUMLEV sequence for one nominal observation."""
+
+    native_derived_sounding_schema_version: Literal[1] = 1
+    station_id: str = Field(min_length=1)
+    nominal_date_utc: str
+    nominal_hour_utc: int | None = Field(default=None, ge=0, le=23)
+    release_time_hhmm: str | None = None
+    level_count: int = Field(ge=0)
+    parameters: dict[str, int | None] = Field(min_length=1)
+    record_ordinal: int = Field(ge=1)
+    record_sha256: str
+    raw_artifact_key: str = Field(min_length=1)
+    header_line_number: int = Field(ge=1)
+    levels: tuple[NativeIgraDerivedLevel, ...]
+
+    @field_validator("nominal_date_utc")
+    @classmethod
+    def derived_nominal_date(cls, value: str) -> str:
+        if _DATE_RE.fullmatch(value) is None:
+            raise ValueError("Derived nominal date must be YYYY-MM-DD.")
+        date.fromisoformat(value)
+        return value
+
+    @field_validator("release_time_hhmm")
+    @classmethod
+    def derived_release(cls, value: str | None) -> str | None:
+        if value is not None and _HHMM_RE.fullmatch(value) is None:
+            raise ValueError("Derived release time must preserve exactly four digits.")
+        return value
+
+    @field_validator("record_sha256")
+    @classmethod
+    def derived_record_hash(cls, value: str) -> str:
+        if SHA256_PATTERN.fullmatch(value) is None:
+            raise ValueError("Derived record hash must be a SHA-256.")
+        return value
+
+    @model_validator(mode="after")
+    def exact_derived_level_count(self) -> NativeIgraDerivedSounding:
+        if self.level_count != len(self.levels):
+            raise ValueError("Derived NUMLEV must match its following rows.")
+        return self
+
+
+class ProviderDerivedSoundingParameters(IgraContract):
+    """Normalized NOAA-derived header parameters; they never overwrite raw observations."""
+
+    provider_derived_parameters_schema_version: Literal[1] = 1
+    sounding_key: str = Field(min_length=1)
+    native_record_sha256: str
+    values: dict[str, float | int | None] = Field(min_length=1)
+    provenance: dict[str, dict[str, Any]] = Field(default_factory=dict)
+
+
+class ProviderDerivedSoundingLevel(IgraContract):
+    """Normalized NOAA-derived pressure level, kept as a distinct provider variant."""
+
+    provider_derived_level_schema_version: Literal[1] = 1
+    sounding_key: str = Field(min_length=1)
+    ordinal: int = Field(ge=1)
+    values: dict[str, float | int | None] = Field(min_length=1)
+    provenance: dict[str, dict[str, Any]] = Field(default_factory=dict)
