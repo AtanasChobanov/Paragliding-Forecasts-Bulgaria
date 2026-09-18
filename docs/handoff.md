@@ -4,7 +4,7 @@
 
 1. `AGENTS.md` for repository rules.
 2. `docs/tasks.md` for ticket status and scope.
-3. This handoff for the T-019 sounding-ingestion planning state.
+3. This handoff for the active T-020 joined-dataset state.
 4. The relevant sections of `docs/project-brief.md` and
    `docs/architecture.md` for product/system constraints.
 5. DEC-031 through DEC-054 in `docs/decisions.md` for accepted weather
@@ -13,15 +13,16 @@
 Keep durable decisions in `docs/decisions.md`, ticket lifecycle in
 `docs/tasks.md`, and only current actionable state here.
 
-## Current state — 2026-09-17
+## Current state — 2026-09-18
 
 | Field | Value |
 | --- | --- |
-| Branch | `feature/T-019-sounding-ingestion` |
-| Ticket | `T-019` is **Review**. The artifact-first IGRA pipeline is implemented and owner-operated live acceptance succeeded for the reviewed two-date scope. `T-018` remains in Review and ERA5 remains deferred to T-038. |
+| Branch | `feature/T-020-joined-weather-dataset` |
+| Ticket | `T-020` is **In Progress**. Its first verification found and repaired a precision-level negative shortwave-radiation value that blocked historic GFS persistence; it does not yet implement the joined dataset. `T-018` and `T-019` remain in Review, and ERA5 remains deferred to T-038. |
+| Historical GFS evidence | The owner collected 2025-08-02 successfully. The first retained-flight-date check, 2023-10-03 from the 2023-10-02 00Z GFS run, initially rolled back because a bilinear shortwave result was about `-8.8e-14 W/m²`. The repaired `weather-spatial/7` clamps only numerical zero noise (absolute value at most `1e-12`) for precipitation and shortwave radiation; material negative values still fail. Offline `weather-ingest resume --run-key 45a58867-ad60-43f6-b926-07b077503ee5 --policy-file data/local/gfs-usage-policy.json` then reused retained raw/parser/normalizer artifacts, made no network request, and inserted the seven site snapshots. |
 | Reviewed live evidence | HEAD-only inventory found five objects totaling `75,714,341` compressed bytes (`73 MiB` minimum) with no warnings. Owner then ran `fresh` for Sofia `BUM00015614`, 2025-08-02 and 2025-08-11, period-of-record, 80 MiB cap. It used verified cache reuse, accepted 4 soundings, quarantined 0, had 0 missing-evidence records, and exited 0. The source snapshot ID was `c7dd598ab2114720d0ee53ae024eebfd6148a480293e5185d171e4155e3a6fe6`. |
 | Offline replay evidence | Owner ran `resume` for `5ae72afe-e71e-4c32-ade8-cd57426533e8`. It returned the same four accepted soundings, no quarantine/missing evidence, exit 0, and the identical effective manifest SHA-256 `b7cb4e3100f321a28dcad36ecd456a2c2b1310544db2a9a3cdc10c943b0c4abd`. |
-| Next work | Review the task implementation and evidence; do not add SQL, T-020 training joins, GFS/IGRA comparison, ERA5, BUFR, or image/OCR scope. |
+| Next work | Define and implement the T-020 joined-dataset contract. Join flight labels only to exact preflight GFS features; do not add GFS/IGRA comparison, ERA5, BUFR, or image/OCR scope. |
 | Local DB | The primary and temporary restoration SQLite databases were migrated by the owner for T-018 acceptance. They are local ignored artifacts and must not be committed. |
 | User work | `docs/T-019-implementation-plan.md` is a local planning reference. Per owner instruction, do not stage or commit it. |
 
