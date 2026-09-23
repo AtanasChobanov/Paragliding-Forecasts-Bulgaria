@@ -67,6 +67,9 @@ consequences. Temporary progress and Git state belong in
 | DEC-052     | Require exact catalogue identity at every weather stage boundary                | Accepted   | 2026-09-13 |
 | DEC-053     | Defer ERA5 collection until model evaluation demonstrates a need                | Accepted   | 2026-09-14 |
 | DEC-054     | Keep IGRA soundings artifact-first and outside the training join                 | Accepted   | 2026-09-15 |
+| DEC-055     | Match historical GFS examples to the prior-evening forecast cutoff              | Accepted   | 2026-09-23 |
+| DEC-056     | Build nested XC labels from confirmed flights and explicit activity evidence    | Accepted   | 2026-09-23 |
+| DEC-057     | Use a configurable hybrid rule-and-score overdevelopment baseline               | Accepted   | 2026-09-23 |
 
 ## Individual decisions
 
@@ -2326,9 +2329,155 @@ provenance, retain per-token confidence/units/geometry, require human review,
 and publish explicitly `image_derived` evidence rather than canonical numeric
 observations. Neither presentation nor OCR output may become a T-020 predictor.
 
-**Related files:** [`T-019-implementation-plan.md`](T-019-implementation-plan.md),
-[`tasks.md`](tasks.md), [`architecture.md`](architecture.md), and
+**Related files:** [`tasks.md`](tasks.md), [`architecture.md`](architecture.md),
+[`../services/ml/README.md`](../services/ml/README.md), and
 [`handoff.md`](handoff.md).
+
+
+### DEC-055 - Match historical GFS examples to the prior-evening forecast cutoff
+
+**Status:** Accepted
+
+**Date:** 2026-09-23
+
+**Context:** The production workflow must issue its main forecast during the
+evening before the forecast day and then repeat the three-day view every day.
+Training on a GFS run that became available after the operational forecast was
+issued would leak future information and would overstate model quality. The
+Project Owner accepted an evening window of approximately 18:00--20:00 local
+time and deferred an optional morning refresh until after the MVP.
+
+**Decision:** Use `20:00 Europe/Sofia` as the versioned MVP as-of cutoff. For
+each issue date, select the newest complete GFS cycle whose required products
+were available at or before that cutoff. Convert the local cutoff through the
+IANA timezone so summer and winter UTC offsets are handled correctly; do not
+hard-code an offset. The selected cycle's reference time, provider availability
+time, cutoff, valid times, and lead hours remain part of every joined example.
+
+The daily operational cohort covers D+1, D+2, and D+3. Historical examples use
+the same horizon: a D+2 example for a target date is built from the issue date
+two local calendar days earlier, not from a newer D+1 or same-day run. If no
+complete cycle existed by the cutoff, the join records missing weather evidence
+and does not substitute a later cycle, reanalysis, or observation.
+
+The exact scheduler minute may later move earlier within the accepted evening
+window only through a new versioned cutoff policy and matching historical
+rebuild. A future morning refresh is a separate issue-time cohort whose
+performance must be evaluated separately; it cannot silently share evening
+examples.
+
+**Consequences:** T-020 must create horizon-matched rows and preserve the as-of
+selection evidence. Operational prediction and alert work must use the same
+cutoff policy. The accepted window means "available by forecast time", not a
+literal 24-hour lead requirement.
+
+**Related files:** [`tasks.md`](tasks.md), [`architecture.md`](architecture.md),
+[`project-brief.md`](project-brief.md), and [`handoff.md`](handoff.md).
+
+### DEC-056 - Build nested XC labels from confirmed flights and explicit activity evidence
+
+**Status:** Accepted
+
+**Date:** 2026-09-23
+
+**Context:** XCContest stores flights below 100 km, but the implemented
+collector, parser, and SQLite constraint were intentionally designed around a
+100 km minimum. That is enough to find positive examples, but it cannot
+distinguish a site-day with shorter recorded flights from a day with no source
+evidence. Treating every absent 100+ flight as a negative would confound weather,
+pilot participation, source coverage, privacy, and late uploads.
+
+**Decision:** The model target is the recorded XC achievement at one canonical
+site and one `Europe/Sofia` local date. Thresholds are inclusive: `100+`, `200+`,
+and `300+` mean `>= 100`, `>= 200`, and `>= 300` scored kilometres. Labels are
+nested and are derived from the maximum accepted scored distance for the
+site-day:
+
+- `positive` for threshold T when at least one approved, accepted flight is
+  `>= T`;
+- `negative` when no accepted flight is `>= T`, at least one approved, accepted
+  flight at any positive distance proves recorded activity at that site-day,
+  and complete source/mapping coverage proves that an in-scope `>= T` candidate
+  was not lost;
+- `unknown` in every other case. In particular, a day with no accepted flight
+  is unknown and never becomes negative by absence alone.
+
+For the MVP, one accepted positive-distance flight is the minimum affirmative
+activity observation. The joined dataset must also retain the actual activity
+flight count, maximum and total distance, collection-completeness state, and
+mapping-completeness state so later evaluation can require a higher activity
+count without fetching the source again. Unknown labels remain in an audit
+output but are excluded from model fitting and probability calibration.
+
+Keep two acquisition purposes separate. The existing threshold profile remains
+the coverage mechanism for 100+ positives and threshold absence. A new
+all-distance activity profile collects and persists positive-distance flights,
+especially those below 100 km, for the seven canonical locations. A captured
+short flight is valid activity evidence even when that daily all-distance view
+is saturated; saturation reduces recall and leaves undiscovered site-days
+unknown, but it may not manufacture a negative. Raw manifest and reviewed site
+mapping evidence determine coverage, not a guess based on row count.
+
+From these rules, a complete site-day with maximum 78 km has labels `0,0,0`; a
+157 km day has `1,0,0`; a 240 km day has `1,1,0`; and a 330 km day has `1,1,1`.
+This guarantees the label order needed later for
+`P(300 km) <= P(200 km) <= P(100 km)`.
+
+**Consequences:** The flight schema must accept positive distances below 100 km,
+while source IDs, approved mapping, validation, reconciliation, and provenance
+rules remain unchanged. T-020 emits tri-state audit labels and only binary
+training rows with sufficient evidence. Product text must describe recorded XC
+potential rather than safety or guaranteed flyability.
+
+**Related files:** [`T-020-xccontest-activity-ingestion-plan.md`](T-020-xccontest-activity-ingestion-plan.md),
+[`tasks.md`](tasks.md), [`architecture.md`](architecture.md),
+[`project-brief.md`](project-brief.md), and [`handoff.md`](handoff.md).
+
+### DEC-057 - Use a configurable hybrid rule-and-score overdevelopment baseline
+
+**Status:** Accepted
+
+**Date:** 2026-09-23
+
+**Context:** T-024 needs an inspectable MVP risk estimate before enough
+expert-confirmed examples exist for a separate ML model. Hard thresholds alone
+would create unstable jumps around boundary values, while an unexplained score
+would not show pilots why the result changed.
+
+**Decision:** T-024 uses a versioned decision tree plus smooth score. The
+configurable score may combine precipitation amount, intensity and duration,
+thunder/convective probability, CAPE or other accepted instability indicators,
+forecast overdevelopment evidence, low cloudbase with precipitation or cloud,
+and the time window of adverse conditions. Transition bands or smooth
+piecewise contributions replace single-point cliffs around ordinary thresholds.
+
+A critical override sets `High` regardless of the accumulated score. The first
+policy must include override branches for configured high precipitation chance,
+configured high overdevelopment/convective evidence, and wind above `10 m/s`
+in the policy's explicitly named relevant wind field/window. Medium-risk cases
+may include low cloudbase and extensive low cloud even without a critical
+factor. Exact precipitation, instability, cloudbase, cloud and duration
+thresholds remain configuration values reviewed with the Project Owner rather
+than literals embedded in code.
+
+Every result carries the policy version, contributing factors, points or
+normalized contributions, triggered override, missing-input state, confidence,
+and concise user-facing reasons. API and UI show `Low`, `Medium`, or `High` plus
+the main reasons. Missing critical inputs cannot silently produce `Low`.
+
+Tests must cover all three levels, transition boundaries, multiple-factor
+combinations, each critical override, missing/partial inputs, deterministic
+reasons, and policy configuration validation. The result is an informational
+assessment of forecast overdevelopment and convective conditions; it is not a
+safety guarantee and does not replace pilot judgement.
+
+**Consequences:** No separate overdevelopment ML model is required for the MVP.
+Later expert and observed labels may justify one, but it must be compared with
+this reproducible baseline. The final numerical policy still belongs to T-024
+and must be reviewed before that task is marked complete.
+
+**Related files:** [`tasks.md`](tasks.md), [`architecture.md`](architecture.md),
+[`project-brief.md`](project-brief.md), and [`handoff.md`](handoff.md).
 
 ## Open decisions
 
@@ -2338,6 +2487,7 @@ observations. Neither presentation nor OCR output may become a T-020 predictor.
 | What are the final coordinates, aliases, and catchment radii for each site?                                               | Current map points are provisional; Pastrina and the Dobrich regional model need particular confirmation.                                                                                                                                                          | T-009.                                                                   |
 | What retention, attribution, licensing, and rate limits apply beyond the current XCContest browser workflow?              | T-013 has a project-owner-confirmed ordinary low-volume UI workflow; do not extend it to bulk/commercial use or SkyNomad without explicit terms.                                                                                                                   | Before broader collection or product use.                                |
 | What final production attribution, retention, and archive-operation wording is required for the selected weather sources? | T-018 uses direct NOAA GFS. T-038 may add CDS ERA5 only after its evidence gate; preserve source/permission evidence and the applicable Copernicus/ECMWF attribution if it does. Confirm final product wording and retention operations before commercial release. | Before a commercial release.                                             |
-| Which first alert channel should be implemented?                                                                          | Dashboard watchlist, email, Telegram, or another agreed channel; alerts require at least one-day lead time and deduplication.                                                                                                                                      | T-027/T-028.                                                             |
+| Which first alert channel should be implemented?                                                                          | Dashboard watchlist, email, Telegram, or another agreed channel; the primary issue uses the accepted prior-evening cutoff and still requires deduplication.                                                                                                                                      | T-027/T-028.                                                             |
+| Which cloudbase baseline, target semantics, and MSL/AGL output should T-022 use?                                           | The Project Owner deferred the choice. T-022 must define whether it is a deterministic GFS-derived estimate or a separately labelled model target, identify any observational label source, and preserve MSL/AGL semantics before implementation.               | Before T-022 implementation.                                             |
 | What deployment/distribution model is required beyond local development?                                                  | The MVP is local-first; cloud/distributed infrastructure needs a demonstrated requirement.                                                                                                                                                                         | No task assigned; decide when deployment becomes an accepted scope item. |
 | What license should the repository use?                                                                                   | No open-source license is currently selected.                                                                                                                                                                                                                      | Repository owner decision; no task assigned.                             |

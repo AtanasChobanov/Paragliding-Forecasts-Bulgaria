@@ -4,33 +4,74 @@
 
 1. `AGENTS.md` for repository rules.
 2. `docs/tasks.md` for ticket status and scope.
-3. This handoff for the active T-020 joined-dataset state.
-4. The relevant sections of `docs/project-brief.md` and
+3. This handoff for the active T-020/T-040 state.
+4. [`T-020-xccontest-activity-ingestion-plan.md`](T-020-xccontest-activity-ingestion-plan.md).
+5. DEC-055 through DEC-057 in `docs/decisions.md`, plus DEC-023 through
+   DEC-030 for the existing XCContest boundary.
+6. The relevant sections of `docs/project-brief.md` and
    `docs/architecture.md` for product/system constraints.
-5. DEC-031 through DEC-054 in `docs/decisions.md` for accepted weather
-   decisions, including the ERA5 deferral boundary.
 
 Keep durable decisions in `docs/decisions.md`, ticket lifecycle in
 `docs/tasks.md`, and only current actionable state here.
 
-## Current state — 2026-09-18
+## Current state - 2026-09-23
 
 | Field | Value |
 | --- | --- |
 | Branch | `feature/T-020-joined-weather-dataset` |
-| Ticket | `T-020` is **In Progress**. Its first verification found and repaired a precision-level negative shortwave-radiation value that blocked historic GFS persistence; it does not yet implement the joined dataset. `T-018` and `T-019` remain in Review, and ERA5 remains deferred to T-038. |
-| Historical GFS evidence | The owner collected 2025-08-02 successfully. The first retained-flight-date check, 2023-10-03 from the 2023-10-02 00Z GFS run, initially rolled back because a bilinear shortwave result was about `-8.8e-14 W/m²`. The repaired `weather-spatial/7` clamps only numerical zero noise (absolute value at most `1e-12`) for precipitation and shortwave radiation; material negative values still fail. Offline `weather-ingest resume --run-key 45a58867-ad60-43f6-b926-07b077503ee5 --policy-file data/local/gfs-usage-policy.json` then reused retained raw/parser/normalizer artifacts, made no network request, and inserted the seven site snapshots. |
-| Reviewed live evidence | HEAD-only inventory found five objects totaling `75,714,341` compressed bytes (`73 MiB` minimum) with no warnings. Owner then ran `fresh` for Sofia `BUM00015614`, 2025-08-02 and 2025-08-11, period-of-record, 80 MiB cap. It used verified cache reuse, accepted 4 soundings, quarantined 0, had 0 missing-evidence records, and exited 0. The source snapshot ID was `c7dd598ab2114720d0ee53ae024eebfd6148a480293e5185d171e4155e3a6fe6`. |
-| Offline replay evidence | Owner ran `resume` for `5ae72afe-e71e-4c32-ade8-cd57426533e8`. It returned the same four accepted soundings, no quarantine/missing evidence, exit 0, and the identical effective manifest SHA-256 `b7cb4e3100f321a28dcad36ecd456a2c2b1310544db2a9a3cdc10c943b0c4abd`. |
-| Next work | Define and implement the T-020 joined-dataset contract. Join flight labels only to exact preflight GFS features; do not add GFS/IGRA comparison, ERA5, BUFR, or image/OCR scope. |
-| Local DB | The primary and temporary restoration SQLite databases were migrated by the owner for T-018 acceptance. They are local ignored artifacts and must not be committed. |
-| User work | `docs/T-019-implementation-plan.md` is a local planning reference. Per owner instruction, do not stage or commit it. |
+| Ticket | T-020 remains **In Progress** and has no joined-dataset implementation yet. T-040 is **To Do** and now owns the prerequisite sub-100 XCContest expansion. T-018 and T-019 remain in Review; ERA5 remains deferred to T-038. |
+| Product decisions | The Project Owner accepted the prior-evening forecast cutoff, tri-state flight labels based on recorded activity, and the configurable hybrid overdevelopment baseline. Cloudbase semantics are deferred. |
+| XCContest gap | The current collector is optimized for complete 100+ coverage, parser-v2 rejects sub-100 rows, and SQLite enforces 100--2000 km. That cannot produce reliable activity-backed negatives. |
+| Approved design | Preserve the current threshold profile. Add a separate date-scoped all-distance activity profile, persist all observed positive-distance flights for approved mappings, record complete/partial coverage, and keep absent-flight days unknown. |
+| Implementation plan | [`T-020-xccontest-activity-ingestion-plan.md`](T-020-xccontest-activity-ingestion-plan.md) defines commands, collection/resume logic, manifest v4, parser/schema/mapping changes, replay, tests, rollout, and T-020 row semantics. |
+| Historical GFS evidence | The owner collected 2025-08-02 successfully. The 2023-10-03 run initially rolled back on numerical shortwave noise; weather-spatial/7 now clamps only absolute values at most `1e-12` and the retained run resumed offline and inserted seven site snapshots. |
+| Next work | Implement T-040 in the documented order. Start with fixtures and a Drizzle migration, replay existing raw XCContest artifacts offline, then perform one bounded headed activity-date acceptance check. Build T-020 labels before requesting more GFS. |
+| Live-source gate | Before a multi-date all-distance backfill, confirm the retained XCContest authority covers that larger rendered-UI workload. Keep sequential 30-second pacing; do not parallelize years or countries. |
+| Storage risk | Current retained GFS derived artifacts are too large for an unbounded negative-day backfill. T-020 must first emit a deduplicated acquisition plan and use the compact site-footprint design or an explicitly bounded sample. |
+
+## Accepted T-020 business logic
+
+### Forecast issue policy
+
+- The main daily issue covers D+1, D+2, and D+3.
+- The reproducible MVP cutoff is `20:00 Europe/Sofia` on the issue date.
+- Historical rows use only the newest complete GFS cycle available by that
+  cutoff and the matching forecast horizon.
+- A later or same-day run may not replace missing pre-cutoff evidence.
+- A morning refresh is optional after MVP and is a separate issue-time cohort.
+
+### XC distance labels
+
+- `100+`, `200+`, and `300+` are inclusive thresholds.
+- A confirmed accepted flight at/above a threshold is positive.
+- A negative requires accepted positive-distance activity plus mature, complete
+  threshold and mapping evidence showing no flight reached the threshold.
+- No accepted flight is unknown, not negative.
+- One accepted short flight is the MVP activity minimum; counts and distances
+  remain in the audit so stricter sensitivity checks need no new collection.
+- Known labels are nested: `label_300 <= label_200 <= label_100`. T-023 must
+  preserve the equivalent probability order.
+
+### Overdevelopment baseline
+
+T-024 uses the DEC-057 configurable decision tree plus smooth score. It includes
+precipitation, instability/convective evidence, cloud/base combinations,
+duration/window effects, and a critical `High` override for configured severe
+precipitation/overdevelopment evidence or wind over `10 m/s` in the named
+policy field/window. API/UI output must include main reasons. Missing critical
+inputs cannot silently return `Low`. The result is informational and does not
+replace pilot judgement.
+
+### Deferred cloudbase choice
+
+The Project Owner will decide the T-022 cloudbase method later. Before coding,
+T-022 must lock the target, label/evidence source if any, MSL/AGL semantics, and
+missing/confidence behavior.
 
 ## T-019 implementation and operational boundary
 
-The accepted research and executable implementation logic are in
-[`T-019-implementation-plan.md`](T-019-implementation-plan.md) and DEC-054.
-The operational documentation and commands are in
+The accepted T-019 boundary is recorded in DEC-054. The operational
+implementation documentation and commands are in
 [`../services/ml/README.md`](../services/ml/README.md). The task is now in
 **Review**, not Done: its scoped implementation and evidence are ready for
 review, while follow-on work remains deliberately separate.

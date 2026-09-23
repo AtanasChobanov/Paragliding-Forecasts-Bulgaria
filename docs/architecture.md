@@ -163,6 +163,22 @@ enable repeatable parsing, auditability, and reprocessing without another
 source request. Canonical accepted flight records are written to SQLite;
 ambiguous or rejected candidates remain in ignored interim/quarantine outputs.
 
+XCContest acquisition has two explicit purposes. The `threshold-100` profile
+preserves the existing 100+ coverage strategy. The
+`all-distance-activity` profile works through source-offered dates and retains
+observed positive-distance flights, including sub-100 km records. First-page
+saturation and mapping gaps remain explicit artifact evidence. They may reduce
+recall but may not be converted into false negative labels. Reviewed
+out-of-scope source-site evidence is durable and scoped to the current seven
+canonical locations.
+
+T-020 labels one `Europe/Sofia` site-day as positive, negative, or unknown for
+each inclusive 100/200/300 km threshold. Positive means a confirmed accepted
+threshold flight. Negative additionally requires accepted activity, mature and
+complete threshold coverage, and terminal mapping evidence. No accepted flight
+means unknown. Generated joined datasets remain ignored, deterministic JSONL
+artifacts with a hashed manifest rather than new canonical database tables.
+
 The initial project-brief prediction fields map to the T-002 internal
 `ForecastPrediction` domain model: numeric site identity/date, generation
 timestamp, cloudbase, three XC probability bands, overdevelopment risk,
@@ -197,6 +213,18 @@ Every displayed forecast must preserve:
 Missing values are not zero. Mock or baseline values are not real observations.
 Those distinctions must survive ingestion, storage, API serialization, and UI
 rendering.
+
+The MVP main issue uses a versioned 20:00 `Europe/Sofia` prior-evening cutoff
+and produces D+1, D+2, and D+3 forecasts. Historical rows use the newest complete
+GFS cycle available by that same cutoff and horizon; later cycles, reanalysis,
+and observations are not substitutes. A future morning refresh is a separate
+issue-time cohort.
+
+The overdevelopment MVP is a configurable decision-tree plus smooth score with
+critical `High` overrides, explicit missing-input behavior, policy version, and
+user-facing reasons. It is an informational weather-risk assessment rather than
+a safety guarantee. Cloudbase target and MSL/AGL semantics remain open for
+T-022.
 
 The contract models these states from one canonical five-state Zod enum. Its
 available-value subset is derived by excluding `missing` and is used only for
