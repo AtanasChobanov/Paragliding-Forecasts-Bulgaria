@@ -4,30 +4,35 @@
 
 1. `AGENTS.md` for repository rules.
 2. `docs/tasks.md` for ticket status and scope.
-3. This handoff for the active T-020/T-040 state.
-4. [`T-020-xccontest-activity-ingestion-plan.md`](T-020-xccontest-activity-ingestion-plan.md).
-5. DEC-055 through DEC-057 in `docs/decisions.md`, plus DEC-023 through
+3. This handoff for the active T-020 state.
+4. [`T-020-xccontest-activity-ingestion-plan.md`](T-020-xccontest-activity-ingestion-plan.md)
+   for the flight-ingestion prerequisite only.
+5. [`T-022-sounding-cloudbase-research-note.md`](T-022-sounding-cloudbase-research-note.md)
+   for the cloudbase/sounding investigation.
+6. DEC-055 through DEC-058 in `docs/decisions.md`, plus DEC-023 through
    DEC-030 for the existing XCContest boundary.
-6. The relevant sections of `docs/project-brief.md` and
+7. The relevant sections of `docs/project-brief.md` and
    `docs/architecture.md` for product/system constraints.
 
 Keep durable decisions in `docs/decisions.md`, ticket lifecycle in
 `docs/tasks.md`, and only current actionable state here.
 
-## Current state - 2026-09-23
+## Current state - 2026-09-24
 
 | Field | Value |
 | --- | --- |
 | Branch | `feature/T-020-joined-weather-dataset` |
-| Ticket | T-020 remains **In Progress** and has no joined-dataset implementation yet. T-040 is **To Do** and now owns the prerequisite sub-100 XCContest expansion. T-018 and T-019 remain in Review; ERA5 remains deferred to T-038. |
-| Product decisions | The Project Owner accepted the prior-evening forecast cutoff, tri-state flight labels based on recorded activity, and the configurable hybrid overdevelopment baseline. Cloudbase semantics are deferred. |
-| XCContest gap | The current collector is optimized for complete 100+ coverage, parser-v2 rejects sub-100 rows, and SQLite enforces 100--2000 km. That cannot produce reliable activity-backed negatives. |
-| Approved design | Preserve the current threshold profile. Add a separate date-scoped all-distance activity profile, persist all observed positive-distance flights for approved mappings, record complete/partial coverage, and keep absent-flight days unknown. |
-| Implementation plan | [`T-020-xccontest-activity-ingestion-plan.md`](T-020-xccontest-activity-ingestion-plan.md) defines commands, collection/resume logic, manifest v4, parser/schema/mapping changes, replay, tests, rollout, and T-020 row semantics. |
+| Ticket | T-020 remains **In Progress** and has no joined-dataset implementation yet. Its first implementation step is the sub-100 XCContest ingestion prerequisite documented in the focused plan. T-018 and T-019 remain in Review; ERA5 remains deferred to T-038. |
+| Product decisions | The Project Owner accepted the prior-evening forecast cutoff, tri-state flight labels based on recorded activity, and the configurable hybrid overdevelopment baseline. The owner also confirmed that blue days may still be flyable and asked that sounding-derived cloudbase, thermal-top, inversion, and overdevelopment diagnostics be evaluated. |
+| XCContest gap | The current collector is optimized for complete 100+ coverage, parser-v2 rejects sub-100 rows, and SQLite enforces 100--2000 km. That cannot produce activity-backed negative examples. |
+| Approved ingestion design | Keep the user-facing `--season` scope. Capture the parent season view in source-default order first, run the existing threshold-first phase, then internally traverse source-offered dates. For each activity scope capture source-default order before distance/pilot/points/duration sorts, and partition saturated dates by exact glider class. Persist observed 0..2000 km records, while only positive-distance rows may later prove activity. |
+| Database scope | Change only the `flight_records.scored_distance_km` check from 100..2000 to 0..2000 and matching parser/validator contracts. Add no table, column, or index. Existing mapping review/quarantine remains. |
+| Implementation plan | [`T-020-xccontest-activity-ingestion-plan.md`](T-020-xccontest-activity-ingestion-plan.md) contains only flight-ingestion changes, tests, migration, recovery, and bounded live acceptance. It does not implement the joined dataset. |
+| Sounding finding | IGRA is real balloon observation data and the current pipeline covers Sofia only. A forecast/model sounding from existing GFS profiles works at all seven locations. NOAA READY is a GFS sounding interface, not independent observations, and is not recommended as a production dependency. |
 | Historical GFS evidence | The owner collected 2025-08-02 successfully. The 2023-10-03 run initially rolled back on numerical shortwave noise; weather-spatial/7 now clamps only absolute values at most `1e-12` and the retained run resumed offline and inserted seven site snapshots. |
-| Next work | Implement T-040 in the documented order. Start with fixtures and a Drizzle migration, replay existing raw XCContest artifacts offline, then perform one bounded headed activity-date acceptance check. Build T-020 labels before requesting more GFS. |
+| Next work | Implement the T-020 flight-ingestion prerequisite in the documented order: fixtures, collector contracts/strategy, manifest/checkpoint version, parser/validator widening, the single Drizzle constraint migration, offline replay, then one bounded headed acceptance. The joined dataset follows after this prerequisite. |
 | Live-source gate | Before a multi-date all-distance backfill, confirm the retained XCContest authority covers that larger rendered-UI workload. Keep sequential 30-second pacing; do not parallelize years or countries. |
-| Storage risk | Current retained GFS derived artifacts are too large for an unbounded negative-day backfill. T-020 must first emit a deduplicated acquisition plan and use the compact site-footprint design or an explicitly bounded sample. |
+| Storage risk | Current retained GFS derived artifacts are too large for an unbounded negative-day backfill. Before broader GFS acquisition, use the compact site-footprint design or an explicitly bounded sample. |
 
 ## Accepted T-020 business logic
 
@@ -62,11 +67,20 @@ policy field/window. API/UI output must include main reasons. Missing critical
 inputs cannot silently return `Low`. The result is informational and does not
 replace pilot judgement.
 
-### Deferred cloudbase choice
+### Sounding and cloudbase direction
 
-The Project Owner will decide the T-022 cloudbase method later. Before coding,
-T-022 must lock the target, label/evidence source if any, MSL/AGL semantics, and
-missing/confidence behavior.
+"Sounding" may mean a real balloon profile or a virtual forecast-model profile.
+T-019 already supplies the real NOAA IGRA Sofia observations, but they arrive
+after the event and do not cover all seven sites. They remain validation
+evidence under T-039.
+
+T-022 should evaluate a deterministic sounding calculation from the existing
+GFS profiles at every site. The current pipeline already produces mixed-layer
+LCL and PBL-minus-LCL features. The output must preserve a distinct `blue`
+state because a dry thermic day may be flyable without a visible cloud base.
+Exact parcel policy, inversion threshold, usable-thermal-top rule, display time,
+and MSL/AGL presentation remain open. See
+[`T-022-sounding-cloudbase-research-note.md`](T-022-sounding-cloudbase-research-note.md).
 
 ## T-019 implementation and operational boundary
 

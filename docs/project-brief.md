@@ -90,12 +90,10 @@ begins.
 
 ## 4.1 Flight Records
 
-The project needs a historical dataset of recorded flights for the target
-regions. Keep 100 km+, 200 km+, and 300 km+ achievement thresholds and also
-collect positive-distance flights below 100 km as activity evidence. A confirmed
-threshold flight is positive evidence; a shorter accepted flight plus complete
-source and mapping coverage may support a threshold-negative label. A date with
-no accepted flight remains unknown rather than automatically becoming a bad day.
+The project needs a historical dataset of good and record flights for
+the target regions. The developer should start with 100 km+ flights and
+keep labels for 200 km+ and 300 km+ thresholds so that the model can
+later learn different levels of XC potential.
 
 - Preferred sources: XCContest.org and SkyNomad forum; pilot-provided
   IGC tracks or manually confirmed records can be added later.
@@ -147,7 +145,7 @@ information design.
 | 200+ km chance | Probability of a 200 km+ XC opportunity. | Percent; likely sparse-data aware. |
 | 300+ km chance | Probability of exceptional long-distance potential. | Percent; conservative until enough examples exist. |
 | Overdevelopment risk | Chance that convection, cloud spread, storms, or precipitation reduce flyability/safety. | Low/medium/high plus main drivers. |
-| Lead-time alert | Daily D+1/D+2/D+3 warning when a forecast date crosses configured thresholds. | Main issue on the prior evening from data available by the versioned 20:00 `Europe/Sofia` cutoff; morning refresh is optional after MVP. |
+| Lead-time alert | User warning when tomorrow or a later day crosses configured thresholds. | Minimum 1 day before the expected opportunity. |
 
 ## Mid-June UI Minimum
 
@@ -264,16 +262,16 @@ data pipeline, model, and UI are still evolving.
   consistency, coordinate sanity checks, missing-value thresholds,
   distance-band labels, and source traceability.
 
-- **Model validation:** backtesting on known positive and negative site-days,
-  with unknown labels reported separately; include 100/200/300 km calibration,
-  false-positive/false-negative examples, and nested probability checks.
+- **Model validation:** backtesting on historical flight days, with
+  separate reporting for 100 km+, 200 km+, and 300 km+ labels; include
+  calibration checks and false-positive/false-negative examples.
 
 - **UI testing:** basic browser checks for the local server, site
   selector, date selector, forecast cards, loading/error states, and
   clear labels for mock, baseline, real, and missing data.
 
-- **Alert testing:** tests proving the primary D+1/D+2/D+3 issue uses only
-  inputs available by the prior-evening cutoff and avoids unnecessary duplicates.
+- **Alert testing:** tests proving alerts are generated at least 1 day
+  before a qualifying forecast day and are not duplicated unnecessarily.
 
 - **Review evidence:** each Takt review should include test output,
   screenshots, or a short validation note linked to the relevant
@@ -285,7 +283,7 @@ data pipeline, model, and UI are still evolving.
 | Forecast features | Repeatable checks for calculated weather/sounding features and units. | From Takt 3 onward |
 | Model output | Backtest report with metrics, confidence notes, and known limitations. | From Takt 4 onward |
 | Local UI | Browser smoke test for the dashboard and visible forecast outputs. | From Takt 1 onward |
-| Alerts | Threshold, prior-evening cutoff, three-horizon, and deduplication tests. | From Takt 5 onward |
+| Alerts | Threshold and timing tests for 1-day-minimum warning behavior. | From Takt 5 onward |
 
 # 11. Initial Data Model
 

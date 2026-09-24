@@ -70,6 +70,7 @@ consequences. Temporary progress and Git state belong in
 | DEC-055     | Match historical GFS examples to the prior-evening forecast cutoff              | Accepted   | 2026-09-23 |
 | DEC-056     | Build nested XC labels from confirmed flights and explicit activity evidence    | Accepted   | 2026-09-23 |
 | DEC-057     | Use a configurable hybrid rule-and-score overdevelopment baseline               | Accepted   | 2026-09-23 |
+| DEC-058     | Evaluate a GFS model-sounding cloudbase baseline with a blue-day state           | Proposed   | 2026-09-24 |
 
 ## Individual decisions
 
@@ -2423,11 +2424,12 @@ From these rules, a complete site-day with maximum 78 km has labels `0,0,0`; a
 This guarantees the label order needed later for
 `P(300 km) <= P(200 km) <= P(100 km)`.
 
-**Consequences:** The flight schema must accept positive distances below 100 km,
-while source IDs, approved mapping, validation, reconciliation, and provenance
-rules remain unchanged. T-020 emits tri-state audit labels and only binary
-training rows with sufficient evidence. Product text must describe recorded XC
-potential rather than safety or guaranteed flyability.
+**Consequences:** The flight schema and ingestion stages must accept the
+inclusive 0..2000 km source domain, while only positive-distance rows may later
+prove activity. Source IDs, approved mapping, validation, reconciliation, and
+provenance rules remain unchanged. T-020 emits tri-state audit labels and only
+binary training rows with sufficient evidence. Product text must describe
+recorded XC potential rather than safety or guaranteed flyability.
 
 **Related files:** [`T-020-xccontest-activity-ingestion-plan.md`](T-020-xccontest-activity-ingestion-plan.md),
 [`tasks.md`](tasks.md), [`architecture.md`](architecture.md),
@@ -2479,6 +2481,54 @@ and must be reviewed before that task is marked complete.
 **Related files:** [`tasks.md`](tasks.md), [`architecture.md`](architecture.md),
 [`project-brief.md`](project-brief.md), and [`handoff.md`](handoff.md).
 
+### DEC-058 - Evaluate a GFS model-sounding cloudbase baseline with a blue-day state
+
+**Status:** Proposed
+
+**Date:** 2026-09-24
+
+**Context:** The Project Owner confirmed that a blue, cloudless thermic day may
+still be flyable and suggested sounding analysis for cloud base, cloud top,
+blocking inversions, and overdevelopment. "Sounding" can mean an observed
+radiosonde profile or a virtual profile sampled from a forecast model. The
+implemented IGRA boundary contains real balloon observations for Sofia, but the
+official station inventory has no current balloon station at each project
+location. Observations also arrive after forecast issue time.
+
+NOAA READY can produce GFS/GFS0p25 soundings for arbitrary coordinates, but it
+is another interface to model data rather than independent observations. Its
+API requires a key, has a published daily call limit, returns text, and does
+not guarantee 24/7 availability. The existing GFS pipeline already holds
+surface and pressure-level temperature, moisture, height and wind profiles,
+CAPE/CIN, boundary-layer height, mixed-layer LCL, and PBL-minus-LCL evidence.
+
+**Proposal:** Evaluate a deterministic T-022 baseline from the existing GFS
+profile at each site and valid time. Keep IGRA Sofia exclusively as later
+validation under T-039. Do not add NOAA READY as a production dependency; it
+may be used for a bounded manual comparison.
+
+The candidate output distinguishes:
+
+- `cumulus`, with nullable AGL/MSL cloud-base values derived from a versioned
+  parcel and LCL method;
+- `blue`, where useful thermic mixing may exist but the parcel does not reach
+  saturation, with no fabricated cloud-base number;
+- `indeterminate`, when required evidence is missing or contradictory.
+
+A blue state is not a negative XC label. A usable thermal-top estimate,
+inversion/cap diagnostics, LFC/EL, CAPE/CIN, and deep-moisture evidence may be
+reported separately and may support the T-024 explainable risk score.
+
+**Consequences:** T-022 still has to select and verify the parcel definition,
+vertical interpolation, inversion and blue-day thresholds, terrain/elevation
+reference, flying-window display rule, MSL/AGL presentation, and missing/
+confidence behavior. This proposal becomes Accepted only after those semantics
+are reviewed. Adding MetPy remains optional and requires a concrete dependency
+review; its upstream license is BSD-3-Clause.
+
+**Related files:** [`T-022-sounding-cloudbase-research-note.md`](T-022-sounding-cloudbase-research-note.md),
+[`architecture.md`](architecture.md), and [`handoff.md`](handoff.md).
+
 ## Open decisions
 
 | Question                                                                                                                  | Options / constraints                                                                                                                                                                                                                                              | Resolve by                                                               |
@@ -2488,6 +2538,6 @@ and must be reviewed before that task is marked complete.
 | What retention, attribution, licensing, and rate limits apply beyond the current XCContest browser workflow?              | T-013 has a project-owner-confirmed ordinary low-volume UI workflow; do not extend it to bulk/commercial use or SkyNomad without explicit terms.                                                                                                                   | Before broader collection or product use.                                |
 | What final production attribution, retention, and archive-operation wording is required for the selected weather sources? | T-018 uses direct NOAA GFS. T-038 may add CDS ERA5 only after its evidence gate; preserve source/permission evidence and the applicable Copernicus/ECMWF attribution if it does. Confirm final product wording and retention operations before commercial release. | Before a commercial release.                                             |
 | Which first alert channel should be implemented?                                                                          | Dashboard watchlist, email, Telegram, or another agreed channel; the primary issue uses the accepted prior-evening cutoff and still requires deduplication.                                                                                                                                      | T-027/T-028.                                                             |
-| Which cloudbase baseline, target semantics, and MSL/AGL output should T-022 use?                                           | The Project Owner deferred the choice. T-022 must define whether it is a deterministic GFS-derived estimate or a separately labelled model target, identify any observational label source, and preserve MSL/AGL semantics before implementation.               | Before T-022 implementation.                                             |
+| Which exact GFS sounding policy and output semantics should T-022 use?                                                     | DEC-058 proposes deterministic GFS model soundings with `cumulus`, `blue`, and `indeterminate` states. Select the parcel definition, inversion/blue thresholds, usable thermal top, display time, elevation reference, MSL/AGL presentation, and missing/confidence behavior. IGRA Sofia remains validation only. | Before T-022 implementation.                                             |
 | What deployment/distribution model is required beyond local development?                                                  | The MVP is local-first; cloud/distributed infrastructure needs a demonstrated requirement.                                                                                                                                                                         | No task assigned; decide when deployment becomes an accepted scope item. |
 | What license should the repository use?                                                                                   | No open-source license is currently selected.                                                                                                                                                                                                                      | Repository owner decision; no task assigned.                             |

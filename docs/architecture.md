@@ -163,14 +163,18 @@ enable repeatable parsing, auditability, and reprocessing without another
 source request. Canonical accepted flight records are written to SQLite;
 ambiguous or rejected candidates remain in ignored interim/quarantine outputs.
 
-XCContest acquisition has two explicit purposes. The `threshold-100` profile
+XCContest acquisition starts with one source-default parent-season capture, then
+continues with two explicit purposes. The `threshold-100` phase
 preserves the existing 100+ coverage strategy. The
-`all-distance-activity` profile works through source-offered dates and retains
-observed positive-distance flights, including sub-100 km records. First-page
-saturation and mapping gaps remain explicit artifact evidence. They may reduce
-recall but may not be converted into false negative labels. Reviewed
-out-of-scope source-site evidence is durable and scoped to the current seven
-canonical locations.
+`all-distance-activity` phase is part of T-020 and works internally through
+source-offered season dates while the public command remains season-based. For
+each activity scope, it captures source-default order before explicit distance,
+pilot, points, and duration sorts, then uses exact glider classes when a daily
+parent view is saturated. It retains observed 0..2000 km records for the seven
+canonical locations. Only a positive-distance row may later prove activity.
+First-page saturation and mapping gaps remain explicit artifact evidence and
+may not be converted into false negative labels. Existing mapping review and
+quarantine remain sufficient; no new exclusion table is required.
 
 T-020 labels one `Europe/Sofia` site-day as positive, negative, or unknown for
 each inclusive 100/200/300 km threshold. Positive means a confirmed accepted
@@ -223,8 +227,15 @@ issue-time cohort.
 The overdevelopment MVP is a configurable decision-tree plus smooth score with
 critical `High` overrides, explicit missing-input behavior, policy version, and
 user-facing reasons. It is an informational weather-risk assessment rather than
-a safety guarantee. Cloudbase target and MSL/AGL semantics remain open for
-T-022.
+a safety guarantee.
+
+The proposed T-022 cloudbase baseline uses forecast-model soundings from the
+existing GFS profiles at all seven sites. IGRA Sofia remains later observational
+validation rather than a prediction input. The output must distinguish a
+nullable numeric cumulus base from a `blue` thermic-day state and a missing or
+indeterminate state. Exact parcel, inversion, usable-thermal-top, intraday, and
+MSL/AGL presentation rules remain open and are documented in
+[`T-022-sounding-cloudbase-research-note.md`](T-022-sounding-cloudbase-research-note.md).
 
 The contract models these states from one canonical five-state Zod enum. Its
 available-value subset is derived by excluding `missing` and is used only for
