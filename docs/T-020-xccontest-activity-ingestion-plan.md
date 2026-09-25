@@ -468,6 +468,9 @@ the ticket prefix, as required by `CONTRIBUTING.md`. The intended sequence is:
 12. `T-020 avoid unnecessary activity transitions` — accept every daily default
     view without an active next page, partition paginated parents before sorting,
     and move between dates through the current season's rendered selectors.
+13. `T-020 accept identical empty-date transitions` — require the requested control
+    value plus changed URL, document, or flight fragment so consecutive empty days
+    cannot deadlock on byte-identical rendered results.
 
 These are planned commit boundaries, not permission to commit during this
 planning update. Adjust a boundary only if the implementation reveals that two

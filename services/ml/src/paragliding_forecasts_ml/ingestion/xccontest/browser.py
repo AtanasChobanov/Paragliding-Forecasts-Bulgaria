@@ -7,7 +7,16 @@ from datetime import date
 from itertools import pairwise
 from typing import Self
 
-from playwright.sync_api import Browser, BrowserContext, Page, Playwright, sync_playwright
+from playwright.sync_api import (
+    Browser,
+    BrowserContext,
+    Page,
+    Playwright,
+    sync_playwright,
+)
+from playwright.sync_api import (
+    TimeoutError as PlaywrightTimeoutError,
+)
 
 from .models import (
     SOURCE_LIST_URL,
@@ -206,12 +215,26 @@ class PlaywrightFlightListDriver:
         page = self._active_page
         if page.locator(selector).input_value() == value:
             return
+        previous_url = page.url
         previous_fragment = page.locator(FLIGHTS_CONTAINER_SELECTOR).evaluate(
             "element => element.outerHTML"
         )
+        page.locator("html").evaluate(
+            "element => element.dataset.xccontestCollectorTransition = 'pending'"
+        )
         self._pace_source_transition()
         page.locator(selector).select_option(value)
-        self._wait_for_selected_value(selector, value, previous_fragment)
+        try:
+            self._wait_for_selected_value(
+                selector,
+                value,
+                previous_fragment,
+                previous_url=previous_url,
+            )
+        finally:
+            page.locator("html").evaluate(
+                "element => delete element.dataset.xccontestCollectorTransition"
+            )
 
     def _ensure_sort(self, sort_key: str, sort_direction: str) -> None:
         page = self._active_page
@@ -262,21 +285,32 @@ class PlaywrightFlightListDriver:
         selector: str,
         expected_value: str,
         previous_fragment: str | None = None,
+        *,
+        previous_url: str | None = None,
     ) -> None:
-        if previous_fragment is None:
-            self._active_page.wait_for_function(
-                "([selector, expectedValue]) => document.querySelector(selector)?.value === expectedValue",
-                arg=[selector, expected_value],
-            )
-        else:
-            self._active_page.wait_for_function(
-                """([selector, expectedValue, previousHtml]) => {
-                    const flights = document.querySelector("#flights");
-                    return document.querySelector(selector)?.value === expectedValue
-                        && flights?.outerHTML !== previousHtml;
-                }""",
-                arg=[selector, expected_value, previous_fragment],
-            )
+        try:
+            if previous_fragment is None or previous_url is None:
+                self._active_page.wait_for_function(
+                    "([selector, expectedValue]) => document.querySelector(selector)?.value === expectedValue",
+                    arg=[selector, expected_value],
+                )
+            else:
+                self._active_page.wait_for_function(
+                    """([selector, expectedValue, previousHtml, previousUrl]) => {
+                        const flights = document.querySelector("#flights");
+                        const documentChanged =
+                            document.documentElement.dataset.xccontestCollectorTransition !== "pending";
+                        return document.querySelector(selector)?.value === expectedValue
+                            && (window.location.href !== previousUrl
+                                || documentChanged
+                                || flights?.outerHTML !== previousHtml);
+                    }""",
+                    arg=[selector, expected_value, previous_fragment, previous_url],
+                )
+        except PlaywrightTimeoutError as error:
+            raise BrowserCollectionError(
+                f"XCContest control {selector} did not settle on {expected_value!r}."
+            ) from error
         self._wait_for_flights_container()
 
     def _pace_source_transition(self) -> None:

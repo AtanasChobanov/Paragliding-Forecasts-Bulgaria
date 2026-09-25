@@ -828,7 +828,10 @@ sort views are requested. A paginated daily parent is partitioned through the ex
 only an exact-category default view that is itself paginated triggers the explicit distance,
 pilot, points, and airtime orderings in both directions. Date and category changes use the
 rendered selectors on the current season page, so archived season URLs retain their year path
-and the collector does not revisit the root page between dates. This activity phase finds
+and the collector does not revisit the root page between dates. A control transition requires
+the expected selected value plus a changed URL, document, or rendered flight fragment; this
+allows consecutive empty dates with byte-identical flight HTML without accepting stale rows.
+This activity phase finds
 0--2000 km source rows; it supplements rather than weakens the 100+ coverage process. Date
 traversal is internal: the public CLI remains season-only and has no user-selected date or
 date-range option.

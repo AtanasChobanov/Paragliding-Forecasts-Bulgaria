@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from paragliding_forecasts_ml.ingestion.xccontest.browser import (
     COUNTRY_SELECTOR,
@@ -50,6 +51,49 @@ def test_passes_wait_for_function_values_by_keyword_argument() -> None:
             ['select[name="filter[country]"]', "BG"],
         )
     ]
+
+
+def test_selected_value_wait_accepts_a_new_document_with_identical_results() -> None:
+    page = FakePage()
+    driver = PlaywrightFlightListDriver(
+        CollectorConfig(seasons=(2025,), country_codes=("BG",)), sleeper=lambda _: None
+    )
+    driver._page = page
+
+    driver._wait_for_selected_value(
+        'select[name="filter[date]"]',
+        "2025-03-16",
+        '<section id="flights"></section>',
+        previous_url="https://www.xcontest.org/2025/world/en/flights/",
+    )
+
+    expression, arguments = page.wait_calls[0]
+    assert "window.location.href !== previousUrl" in expression
+    assert "xccontestCollectorTransition" in expression
+    assert arguments == [
+        'select[name="filter[date]"]',
+        "2025-03-16",
+        '<section id="flights"></section>',
+        "https://www.xcontest.org/2025/world/en/flights/",
+    ]
+
+
+class TimeoutPage(FakePage):
+    def wait_for_function(self, expression: str, *, arg: object = None) -> None:
+        raise PlaywrightTimeoutError("timed out")
+
+
+def test_selected_value_timeout_names_the_unsettled_control() -> None:
+    driver = PlaywrightFlightListDriver(
+        CollectorConfig(seasons=(2025,), country_codes=("BG",)), sleeper=lambda _: None
+    )
+    driver._page = TimeoutPage()
+
+    with pytest.raises(
+        BrowserCollectionError,
+        match=r'control select\[name="filter\[date\]"\] did not settle on \'2025-03-16\'',
+    ):
+        driver._wait_for_selected_value('select[name="filter[date]"]', "2025-03-16")
 
 
 def test_maps_only_collector_control_fields() -> None:
