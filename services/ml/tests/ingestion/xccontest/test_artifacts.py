@@ -12,6 +12,7 @@ from paragliding_forecasts_ml.ingestion.xccontest.models import (
     PageObservation,
     RowObservation,
     TargetCollectionStatus,
+    source_default_scope,
 )
 from paragliding_forecasts_ml.ingestion.xccontest.versions import (
     COLLECTOR_VERSION,
@@ -90,6 +91,25 @@ def test_writes_country_aware_immutable_fragment_and_manifest_v3(tmp_path) -> No
     assert manifest["artifacts"][0]["country_code"] == "BG"
     assert manifest["artifacts"][0]["row_observation_count"] == 1
     assert manifest["artifacts"][0]["qualifying_row_observation_count"] == 1
+
+
+def test_source_default_artifact_uses_the_stable_unsorted_token(tmp_path) -> None:
+    store = RawArtifactStore(project_root=tmp_path, run_key="test-run")
+    selected_page = page()
+    default_page = PageObservation(
+        season=selected_page.season,
+        scope=source_default_scope(PRIMARY_GLIDER_CATEGORY),
+        country_filter=selected_page.country_filter,
+        glider_category_filter=selected_page.glider_category_filter,
+        date_filter=selected_page.date_filter,
+        rows=selected_page.rows,
+        fragment_html=selected_page.fragment_html,
+        has_next_page=False,
+    )
+
+    entry = store.write_page(default_page)
+
+    assert entry.relative_path.endswith("-sort-source-default.html")
 
 
 def test_country_aware_paths_prevent_scope_collisions(tmp_path) -> None:

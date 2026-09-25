@@ -105,7 +105,7 @@ class RawArtifactStore:
         artifact_path = self.raw_dir / (
             f"season-{page.season}-country-{page.country_filter}-category-{scope.category.key}"
             f"-date-{scope.date_key}"
-            f"-sort-{scope.sort_key}-{scope.sort_direction}.html"
+            f"-sort-{scope.artifact_sort_token}.html"
         )
         if artifact_path.exists():
             raise FileExistsError(f"Refusing to overwrite immutable artifact: {artifact_path}")

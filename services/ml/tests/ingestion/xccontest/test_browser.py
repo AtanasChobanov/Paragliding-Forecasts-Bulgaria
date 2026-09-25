@@ -7,7 +7,12 @@ from paragliding_forecasts_ml.ingestion.xccontest.browser import (
     BrowserCollectionError,
     PlaywrightFlightListDriver,
 )
-from paragliding_forecasts_ml.ingestion.xccontest.models import CollectorConfig
+from paragliding_forecasts_ml.ingestion.xccontest.models import (
+    PRIMARY_GLIDER_CATEGORY,
+    CollectorConfig,
+    FlightListScope,
+    source_default_scope,
+)
 
 
 class FakeFlightsLocator:
@@ -84,6 +89,57 @@ def test_select_country_uses_the_rendered_country_control(monkeypatch) -> None:
     driver.select_country("RS")
 
     assert selected == [(COUNTRY_SELECTOR, "RS")]
+
+
+def test_source_default_scope_resets_the_canonical_view_without_sorting(monkeypatch) -> None:
+    driver = PlaywrightFlightListDriver(
+        CollectorConfig(seasons=(2025,), country_codes=("BG",)), sleeper=lambda _: None
+    )
+    driver._selected_season = 2025
+    driver._selected_country = "BG"
+    calls: list[tuple[str, ...]] = []
+    monkeypatch.setattr(driver, "_reset_to_source_default", lambda: calls.append(("reset",)))
+    monkeypatch.setattr(
+        driver,
+        "_select_option",
+        lambda selector, value: calls.append(("select", selector, value)),
+    )
+    monkeypatch.setattr(
+        driver,
+        "_ensure_sort",
+        lambda *_: pytest.fail("source_default must not click a sortable column"),
+    )
+
+    driver.select_scope(source_default_scope(PRIMARY_GLIDER_CATEGORY, date_filter="2025-07-01"))
+
+    assert calls == [
+        ("reset",),
+        ("select", 'select[name="filter[detail_glider_catg]"]', "FAI3"),
+        ("select", 'select[name="filter[date]"]', "2025-07-01"),
+    ]
+
+
+def test_explicit_scope_does_not_reset_and_applies_its_sort(monkeypatch) -> None:
+    driver = PlaywrightFlightListDriver(
+        CollectorConfig(seasons=(2025,), country_codes=("BG",)), sleeper=lambda _: None
+    )
+    calls: list[tuple[str, ...]] = []
+    monkeypatch.setattr(driver, "_reset_to_source_default", lambda: calls.append(("reset",)))
+    monkeypatch.setattr(
+        driver,
+        "_select_option",
+        lambda selector, value: calls.append(("select", selector, value)),
+    )
+    monkeypatch.setattr(
+        driver,
+        "_ensure_sort",
+        lambda key, direction: calls.append(("sort", key, direction)),
+    )
+
+    driver.select_scope(FlightListScope(PRIMARY_GLIDER_CATEGORY))
+
+    assert calls[-1] == ("sort", "distance", "descending")
+    assert ("reset",) not in calls
 
 
 class FakeResponse:

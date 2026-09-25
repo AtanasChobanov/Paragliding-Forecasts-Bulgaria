@@ -46,6 +46,8 @@ class PlaywrightFlightListDriver:
         self._browser: Browser | None = None
         self._context: BrowserContext | None = None
         self._page: Page | None = None
+        self._selected_season: int | None = None
+        self._selected_country: str | None = None
 
     def __enter__(self) -> Self:
         self._playwright = sync_playwright().start()
@@ -75,31 +77,27 @@ class PlaywrightFlightListDriver:
     def prepare_season(self, season: int) -> None:
         """Select one XCContest season through the rendered control."""
 
-        page = self._active_page
-        self._pace_source_transition()
-        response = page.goto(ROOT_URL, wait_until="domcontentloaded")
-        if response is None or not 200 <= response.status < 400:
-            status = "no response" if response is None else str(response.status)
-            raise BrowserCollectionError(f"XCContest flights page navigation failed with {status}.")
-        self._wait_for_flights_container()
-
-        season_option = self._season_option_value(season)
-        self._pace_source_transition()
-        page.locator(SEASON_SELECTOR).select_option(season_option)
-        page.wait_for_load_state("domcontentloaded")
-        self._wait_for_flights_container()
+        self._navigate_to_root()
+        self._select_season(season)
+        self._selected_season = season
+        self._selected_country = None
 
     def select_country(self, country_code: str) -> None:
         """Select one discovered ISO2 country through the rendered control."""
 
         self._select_option(COUNTRY_SELECTOR, country_code)
+        self._selected_country = country_code
 
     def select_scope(self, scope: FlightListScope) -> None:
         """Change only rendered category, date and table-order controls."""
 
+        if scope.sort_mode == "source_default":
+            self._reset_to_source_default()
         self._select_option(GLIDER_SELECTOR, scope.category.filter_value)
         self._select_option(DATE_SELECTOR, scope.date_filter or "")
-        self._ensure_sort(scope.sort_key, scope.sort_direction)
+        if scope.sort_mode == "explicit":
+            assert scope.sort_key is not None and scope.sort_direction is not None
+            self._ensure_sort(scope.sort_key, scope.sort_direction)
 
     def available_dates(self, season: int) -> tuple[str, ...]:
         """Read source-offered ISO dates; never invent a calendar or URL filter."""
@@ -193,6 +191,34 @@ class PlaywrightFlightListDriver:
         raise BrowserCollectionError(
             f"XCContest did not offer season {season} in its season selector."
         )
+
+    def _navigate_to_root(self) -> None:
+        page = self._active_page
+        self._pace_source_transition()
+        response = page.goto(ROOT_URL, wait_until="domcontentloaded")
+        if response is None or not 200 <= response.status < 400:
+            status = "no response" if response is None else str(response.status)
+            raise BrowserCollectionError(f"XCContest flights page navigation failed with {status}.")
+        self._wait_for_flights_container()
+
+    def _select_season(self, season: int) -> None:
+        page = self._active_page
+        season_option = self._season_option_value(season)
+        self._pace_source_transition()
+        page.locator(SEASON_SELECTOR).select_option(season_option)
+        page.wait_for_load_state("domcontentloaded")
+        self._wait_for_flights_container()
+
+    def _reset_to_source_default(self) -> None:
+        """Return to a canonical source list before recording an unsorted view."""
+
+        if self._selected_season is None or self._selected_country is None:
+            raise BrowserCollectionError(
+                "XCContest source-default scope requires a selected season and country."
+            )
+        self._navigate_to_root()
+        self._select_season(self._selected_season)
+        self._select_option(COUNTRY_SELECTOR, self._selected_country)
 
     def _select_option(self, selector: str, value: str) -> None:
         page = self._active_page

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 SOURCE_CODE = "xccontest"
@@ -38,10 +38,17 @@ class FlightListScope:
 
     category: GliderCategory
     date_filter: str | None = None
-    sort_key: str = "distance"
-    sort_direction: str = "descending"
+    sort_key: str | None = "distance"
+    sort_direction: str | None = "descending"
+    sort_mode: str = field(default="explicit", kw_only=True)
 
     def __post_init__(self) -> None:
+        if self.sort_mode == "source_default":
+            if self.sort_key is not None or self.sort_direction is not None:
+                raise ValueError("XCContest source-default scope cannot declare an explicit sort.")
+            return
+        if self.sort_mode != "explicit":
+            raise ValueError("XCContest sort mode must be source_default or explicit.")
         if self.sort_key not in {"distance", "pilot", "points", "duration"}:
             raise ValueError(f"Unsupported XCContest sort key: {self.sort_key}.")
         if self.sort_direction not in {"ascending", "descending"}:
@@ -51,10 +58,36 @@ class FlightListScope:
     def date_key(self) -> str:
         return self.date_filter or "all"
 
+    @property
+    def artifact_sort_token(self) -> str:
+        """Stable filename/manifest token without inventing a default source order."""
+
+        if self.sort_mode == "source_default":
+            return "source-default"
+        assert self.sort_key is not None and self.sort_direction is not None
+        return f"{self.sort_key}-{self.sort_direction}"
+
+
+def source_default_scope(
+    category: GliderCategory = PRIMARY_GLIDER_CATEGORY,
+    *,
+    date_filter: str | None = None,
+) -> FlightListScope:
+    """Represent XCContest's reset list view with no provider sort claim."""
+
+    return FlightListScope(
+        category=category,
+        date_filter=date_filter,
+        sort_mode="source_default",
+        sort_key=None,
+        sort_direction=None,
+    )
+
 
 RESCUE_SORTS = tuple(
     FlightListScope(
         category=PRIMARY_GLIDER_CATEGORY,
+        sort_mode="explicit",
         sort_key=sort_key,
         sort_direction=direction,
     )

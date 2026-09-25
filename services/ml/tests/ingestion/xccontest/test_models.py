@@ -10,6 +10,7 @@ from paragliding_forecasts_ml.ingestion.xccontest.models import (
     RECOMMENDED_DELAY_SECONDS,
     CollectorConfig,
     FlightListScope,
+    source_default_scope,
 )
 
 
@@ -50,6 +51,23 @@ def test_config_requires_unique_seasons_countries_and_normal_user_delay() -> Non
 def test_scope_rejects_unknown_source_sort() -> None:
     with pytest.raises(ValueError, match="Unsupported"):
         FlightListScope(PRIMARY_GLIDER_CATEGORY, sort_key="unknown")
+
+
+def test_source_default_scope_has_no_invented_sort_and_rejects_mixed_state() -> None:
+    selected = source_default_scope(PRIMARY_GLIDER_CATEGORY, date_filter="2025-07-01")
+
+    assert selected.sort_mode == "source_default"
+    assert selected.sort_key is None
+    assert selected.sort_direction is None
+    assert selected.artifact_sort_token == "source-default"
+
+    with pytest.raises(ValueError, match="cannot declare"):
+        FlightListScope(
+            PRIMARY_GLIDER_CATEGORY,
+            sort_mode="source_default",
+            sort_key="distance",
+            sort_direction="descending",
+        )
 
 
 def test_cli_parser_keeps_headless_default_and_supports_multiple_seasons() -> None:
