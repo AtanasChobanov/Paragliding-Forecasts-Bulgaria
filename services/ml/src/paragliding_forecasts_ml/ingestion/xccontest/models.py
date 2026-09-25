@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from math import isfinite
 
 SOURCE_CODE = "xccontest"
@@ -15,6 +15,17 @@ MIN_DELAY_SECONDS = 3.0
 RECOMMENDED_DELAY_SECONDS = 30.0
 DEFAULT_DELAY_SECONDS = RECOMMENDED_DELAY_SECONDS
 DEFAULT_MAX_VIEWS = 2_000
+ACTIVITY_DATE_POLICY = "bulgarian-xc-league-15-feb-to-15-oct"
+ACTIVITY_DATE_START_MONTH_DAY = "02-15"
+ACTIVITY_DATE_END_MONTH_DAY = "10-15"
+
+
+def is_supported_activity_date(value: str) -> bool:
+    """Return whether one source-offered date is inside the supported XC window."""
+
+    selected_date = date.fromisoformat(value)
+    month_day = selected_date.strftime("%m-%d")
+    return ACTIVITY_DATE_START_MONTH_DAY <= month_day <= ACTIVITY_DATE_END_MONTH_DAY
 
 
 @dataclass(frozen=True)
@@ -254,6 +265,7 @@ class TargetCollectionStatus:
     country_code: str
     status: str
     unresolved_scopes: tuple[FlightListScope, ...]
+    skipped_activity_dates: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -274,3 +286,4 @@ class CollectionReport:
     row_observations_seen: int
     distinct_source_flights_seen: int
     repeated_source_flight_observations: int
+    skipped_activity_date_count: int = 0

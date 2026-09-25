@@ -10,6 +10,7 @@ from paragliding_forecasts_ml.ingestion.xccontest.models import (
     RECOMMENDED_DELAY_SECONDS,
     CollectorConfig,
     FlightListScope,
+    is_supported_activity_date,
     source_default_scope,
 )
 
@@ -51,6 +52,13 @@ def test_config_requires_unique_seasons_countries_and_normal_user_delay() -> Non
 def test_scope_rejects_unknown_source_sort() -> None:
     with pytest.raises(ValueError, match="Unsupported"):
         FlightListScope(PRIMARY_GLIDER_CATEGORY, sort_key="unknown")
+
+
+def test_activity_date_policy_keeps_bulgarian_xc_league_window() -> None:
+    assert is_supported_activity_date("2025-02-15")
+    assert is_supported_activity_date("2025-10-15")
+    assert not is_supported_activity_date("2025-02-14")
+    assert not is_supported_activity_date("2024-10-16")
 
 
 def test_source_default_scope_has_no_invented_sort_and_rejects_mixed_state() -> None:

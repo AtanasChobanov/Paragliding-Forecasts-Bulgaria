@@ -2593,3 +2593,40 @@ collection remains separately owner-authorized.
 | Which exact GFS sounding policy and output semantics should T-022 use?                                                     | DEC-058 proposes deterministic GFS model soundings with `cumulus`, `blue`, and `indeterminate` states. Select the parcel definition, inversion/blue thresholds, usable thermal top, display time, elevation reference, MSL/AGL presentation, and missing/confidence behavior. IGRA Sofia remains validation only. | Before T-022 implementation.                                             |
 | What deployment/distribution model is required beyond local development?                                                  | The MVP is local-first; cloud/distributed infrastructure needs a demonstrated requirement.                                                                                                                                                                         | No task assigned; decide when deployment becomes an accepted scope item. |
 | What license should the repository use?                                                                                   | No open-source license is currently selected.                                                                                                                                                                                                                      | Repository owner decision; no task assigned.                             |
+
+### DEC-060 - Bound XCContest activity scans to the Bulgarian XC season and stop empty-date sorts
+
+**Status:** Accepted
+
+**Date:** 2026-09-25
+
+**Context:** T-020's all-distance daily scan captures one source-default view plus eight
+explicit sort views for every source-offered date. Most winter dates have no rendered rows,
+so that policy consumes paced source workload without producing training evidence. The
+Bulgarian XC League's published season is 15 February through 15 October, while the main
+XC season is commonly described more narrowly as April through September. Winter flying can
+still occur, so skipped dates cannot be relabelled as no-flight or zero-probability days.
+
+**Decision:** Keep the public XCContest command season-only. Internally, collect daily
+all-distance activity and date-partition fallback views only from 15 February through
+15 October inclusive; record every source-offered date outside that window in manifest v5's
+per-target `skipped_activity_dates` audit. For an in-window date/category, retain the
+source-default view first, but when its verified row set is empty, record the `empty` scope
+and skip the eight explicit re-sort views. The untouched season parent and threshold-first
+entry views retain their existing behavior.
+
+**Consequences:** The policy reduces paced source views without manufacturing negative
+examples. Out-of-window absence remains an explicit coverage limitation; a future product
+season state must say that the XC forecast is outside its supported season rather than show
+`0%`. Old v1--v4 manifests remain readable under their original scope. New v5 manifests
+must validate the fixed policy, skipped dates, and the absence of date-scoped artifacts
+outside the policy window. No date CLI option, parallel collection, pager use, or source
+API bypass is added.
+
+**Sources:** [Bulgarian XC League rules](https://www.xcontest.org/bulgaria/rules/),
+[Bulgaria tourism paragliding guide](https://www.tourism.government.bg/sites/tourism.government.bg/files/uploads/info_materials/eng/sport.pdf),
+and [Sopot XC conditions](https://airtribune.com/bpcup-2025-sopot-round/info).
+
+**Related files:** [`T-020-xccontest-activity-ingestion-plan.md`](T-020-xccontest-activity-ingestion-plan.md),
+[`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/collector.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/collector.py),
+and [`../services/ml/README.md`](../services/ml/README.md).

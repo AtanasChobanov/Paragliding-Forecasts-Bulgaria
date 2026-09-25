@@ -38,6 +38,7 @@ def test_resume_command_uses_only_a_run_key_and_skips_database_discovery(
         completed_seasons=(2025,),
         completed_target_count=1,
         unresolved_scope_count=0,
+        skipped_activity_date_count=0,
         artifact_count=2,
         row_observations_seen=2,
         distinct_source_flights_seen=2,

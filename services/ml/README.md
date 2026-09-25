@@ -820,13 +820,15 @@ rendered exact `CCC`, `EN D`, `EN C`, `EN B`, and `EN A` controls. It never acti
 pager or constructs an offset URL.
 
 Only after that threshold phase, the collector reads the dates offered by XCContest's
-visible date control in chronological order. For each date it captures the all-distance
-source-default view before the explicit distance, pilot, points, and airtime orderings in
-both directions. A saturated daily parent view falls back to the same exact classes, each
-with its own default-then-sorted sequence. This activity phase finds 0--2000 km source rows;
-it supplements rather than weakens the 100+
-coverage process. Date traversal is internal: the public CLI remains season-only and has no
-user-selected date or date-range option.
+visible date control in chronological order. Its all-distance activity scan collects only
+15 February through 15 October inclusive and records every skipped 16 October--14 February
+source date in the immutable target audit. For each in-window date it captures the
+all-distance source-default view before the explicit distance, pilot, points, and airtime
+orderings in both directions. A verified empty default view stops there: reordering an empty
+result cannot reveal a flight. A saturated daily parent view falls back to the same exact
+classes, each with its own default-then-sorted sequence. This activity phase finds 0--2000 km
+source rows; it supplements rather than weakens the 100+ coverage process. Date traversal is
+internal: the public CLI remains season-only and has no user-selected date or date-range option.
 
 Every navigation and rendered-control transition is sequential and source-paced; this
 collector intentionally does not open parallel tabs or retry a failed source operation. A
@@ -839,12 +841,13 @@ parser input and retains the source fields without conversion. The ephemeral
 values drive coverage, threshold, and country checks; it is not an ingestion-stage payload.
 
 The in-memory `CollectionReport` is only a compact command/log summary: manifest relative
-path and hash, lifecycle, requested/completed scope summaries, aggregate counters, and the
+path and hash, lifecycle, requested/completed scope summaries, aggregate counters, skipped activity-date count, and the
 unresolved-scope count. Per-artifact detail and target statuses exist only in the immutable
 manifest; no raw root path, raw HTML, or row data is carried by the report.
 
-Manifest schema v4 records the database-derived `all_sites` country scope, per-target status,
-source date and category, acquisition purpose (`threshold_100` or
+Manifest schema v5 records the database-derived `all_sites` country scope, per-target status,
+the immutable activity-date policy and exact skipped dates, source date and category,
+acquisition purpose (`threshold_100` or
 `all_distance_activity`), source-default or explicit sort mode, next-page evidence, source
 flight IDs, observation counts below 100 km and at/above 100 km, hashes, timestamps, and
 per-activity scope completeness. The checkpoint records every verified completed artifact and the latest

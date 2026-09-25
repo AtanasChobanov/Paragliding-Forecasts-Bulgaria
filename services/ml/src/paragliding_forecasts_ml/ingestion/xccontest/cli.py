@@ -108,6 +108,7 @@ def _emit_report(report) -> int:
                 "completed_seasons": list(report.completed_seasons),
                 "completed_target_count": report.completed_target_count,
                 "unresolved_scope_count": report.unresolved_scope_count,
+                "skipped_activity_date_count": report.skipped_activity_date_count,
                 "artifact_count": report.artifact_count,
                 "row_observations_seen": report.row_observations_seen,
                 "distinct_source_flights_seen": report.distinct_source_flights_seen,

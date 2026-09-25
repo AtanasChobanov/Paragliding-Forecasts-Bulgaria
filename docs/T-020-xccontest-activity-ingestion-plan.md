@@ -67,9 +67,11 @@ Each requested season is collected in this order:
    explicit sort;
 2. run the existing threshold-first 100+ strategy, beginning with distance
    descending;
-3. enumerate the dates offered by XCContest for that season;
-4. collect all-distance activity views for every offered date, again capturing
-   each default view before its explicit sorts;
+3. enumerate the dates offered by XCContest for that season and retain the
+   exact out-of-window dates in the target audit;
+4. collect all-distance activity views only for dates from 15 February through
+   15 October inclusive, again capturing each default view before its explicit
+   sorts;
 5. deduplicate observations across season, default, category, date, and sorted
    views;
 6. continue through the existing offline stages and persistence boundary.
@@ -80,9 +82,9 @@ arguments are also processed sequentially.
 
 ### 3.3 Source-default view comes first
 
-For every date and category scope in the activity phase, capture the source's
-default list view before applying any explicit sort. This can expose stable
-flight IDs that are absent from the first page of another ordering.
+For every in-window date and category scope in the activity phase, capture the
+source's default list view before applying any explicit sort. This can expose
+stable flight IDs that are absent from the first page of another ordering.
 
 "Default" has a strict technical meaning:
 
@@ -108,23 +110,31 @@ After the source-default capture, collect explicit sort views in this order:
 
 Distance descending remains the authoritative saturation check. The other
 sorts are rescue views that improve discovery when only page one is visible.
-Repeated IDs are expected and are reconciled by the existing source-flight
-identity rules.
+When the verified source-default view has no rows, its date/category scope is
+recorded as `empty` and the eight explicit sort views are skipped: reordering an
+empty source result cannot discover a flight. Repeated IDs are expected and are
+reconciled by the existing source-flight identity rules.
 
 ### 3.5 Internal date traversal, unchanged CLI
 
 Date traversal is an internal collector strategy, not a new command feature.
 For every requested season, the browser adapter reads the dates exposed by the
-XCContest date filter and processes them in deterministic chronological order.
+XCContest date filter, processes the in-window dates in deterministic
+chronological order, and records every skipped source date. The supported
+all-distance activity window is 15 February through 15 October inclusive;
+16 October through 14 February is intentionally outside this activity scan.
 The user continues to request a season only.
 
 Why dates are still needed internally: a full season has far more rows than
 one visible page. A daily scope is much more likely to expose all activity rows,
 including short flights. Removing date partitioning would leave most sub-100
-records permanently hidden behind the source's page-one limit.
+records permanently hidden behind the source's page-one limit. The date policy
+reduces live workload; it does not turn an out-of-window absence into negative
+activity evidence.
 
-The manifest stores the chosen source date value and normalized local date for
-audit and offline replay. It does not expose new date-selection CLI options.
+Manifest v5 stores the chosen policy plus the exact skipped source dates in
+its target audit for offline replay. It does not expose new date-selection CLI
+options.
 
 ### 3.6 Category fallback
 
@@ -156,6 +166,10 @@ Per season/date/category, record:
 - duplicate observations across views;
 - `complete`, `partial_saturated`, `empty`, or `failed` status;
 - the reason for a partial or failed status.
+
+Per season/country target, retain the exact source dates skipped by the
+15-February--15-October activity policy. They are a declared coverage boundary,
+not empty daily views and not negative-label evidence.
 
 A partial scope may still persist the valid flights it found. It may not report
 complete all-distance coverage. Later dataset logic may use an observed short
@@ -193,7 +207,7 @@ distance with 100 km. The activity collector's saturation state depends on
 
 ### 5.3 Manifest version
 
-Publish a new manifest schema version because old manifests require a sort and
+Publish manifest schema v5 because the activity-scan date policy and its skipped-date audit are immutable coverage evidence; old manifests require a sort and
 describe only 100+ qualifying observations. The new version must preserve:
 
 - acquisition purpose (`threshold_100` or `all_distance_activity`);
@@ -203,7 +217,9 @@ describe only 100+ qualifying observations. The new version must preserve:
 - total and distinct observation counts;
 - count below 100 km and count at/above 100 km;
 - immutable artifact path, hash, and retrieval time;
-- unresolved/failed scope summaries.
+- unresolved/failed scope summaries;
+- the immutable 15-February--15-October activity-date policy and exact skipped
+  source dates for every season/country target.
 
 Offline readers must reject an unknown version. Existing historical manifests
 remain readable under their old 100+ contract; they are not retroactively
@@ -318,7 +334,10 @@ Add deterministic rendered-HTML fixtures for:
 - quiet date whose parent PG view has no next page;
 - busy date that requires exact category partitioning;
 - class/date scope still saturated after every sort;
-- empty verified date;
+- empty verified date, which records one source-default artifact and skips all
+  explicit sorts;
+- supported-window boundaries and out-of-window dates, which are skipped and
+  retained in the manifest target audit;
 - failed/unverified date;
 - the same flight repeated across default, category, and sort views;
 - 0 km, sub-100, exactly 100, and 2000 km boundary rows.
@@ -329,7 +348,8 @@ Prove:
 
 - default view is captured before any sort action;
 - the browser does not carry a previous sort into `source_default`;
-- source-offered dates are traversed internally in deterministic order;
+- source-offered dates are traversed internally in deterministic order, with
+  only 15 February--15 October collected and every skipped date retained;
 - no date/range CLI option is introduced;
 - the season source-default capture occurs before threshold sorting, and the
   threshold phase finishes before daily activity collection starts;
@@ -437,6 +457,9 @@ the ticket prefix, as required by `CONTRIBUTING.md`. The intended sequence is:
    audit rejections, and preserve only residual human review.
 10. `T-020 document automatic mapping dispositions` — update the operator workflow,
     durable decision, plan, and handoff with the v3 artifact contract.
+11. `T-020 skip out-of-season empty activity views` — bound the daily activity
+    scan to 15 February--15 October, retain skipped-date audit evidence, and
+    avoid explicit sorts after a verified empty source-default view.
 
 These are planned commit boundaries, not permission to commit during this
 planning update. Adjust a boundary only if the implementation reveals that two
@@ -450,7 +473,7 @@ This ingestion prerequisite is complete when:
 - the public collection scope remains season-based;
 - one source-default season view is captured before threshold sorting;
 - threshold-first 100+ coverage finishes before the daily activity phase;
-- every source-offered season date is scanned internally for activity;
+- every in-window source-offered date is scanned internally for activity, while exact out-of-window dates remain auditable;
 - source-default order is captured before explicit sorts;
 - valid 0..2000 km rows pass every stage and can be stored;
 - deterministic unique coordinate matches are automatically mapped with retained decision evidence;

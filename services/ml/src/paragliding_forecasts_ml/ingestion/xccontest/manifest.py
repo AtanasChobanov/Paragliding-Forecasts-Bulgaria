@@ -9,13 +9,21 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .models import SOURCE_CODE, SOURCE_LIST_URL, THRESHOLD_COVERAGE_DISTANCE_KM
+from .models import (
+    ACTIVITY_DATE_END_MONTH_DAY,
+    ACTIVITY_DATE_POLICY,
+    ACTIVITY_DATE_START_MONTH_DAY,
+    SOURCE_CODE,
+    SOURCE_LIST_URL,
+    THRESHOLD_COVERAGE_DISTANCE_KM,
+    is_supported_activity_date,
+)
 from .selectors import DISTANCE_SELECTOR
 from .versions import RAW_MANIFEST_SCHEMA_VERSION
 
 COUNTRY_CODE_PATTERN = re.compile(r"^[A-Z]{2}$")
 FLIGHT_ROW_ID_PATTERN = re.compile(r"^flight-([0-9]+)$")
-SUPPORTED_MANIFEST_SCHEMA_VERSIONS = (1, 2, 3, RAW_MANIFEST_SCHEMA_VERSION)
+SUPPORTED_MANIFEST_SCHEMA_VERSIONS = (1, 2, 3, 4, RAW_MANIFEST_SCHEMA_VERSION)
 
 
 class ManifestValidationError(ValueError):
@@ -304,6 +312,33 @@ def _validate_v4_scope_and_targets(
     return countries, seasons
 
 
+def _validate_v5_activity_date_policy(manifest: dict[str, Any]) -> None:
+    scope = manifest["scope"]
+    if scope.get("activity_date_policy") != {
+        "name": ACTIVITY_DATE_POLICY,
+        "included_from_month_day": ACTIVITY_DATE_START_MONTH_DAY,
+        "included_through_month_day": ACTIVITY_DATE_END_MONTH_DAY,
+    }:
+        raise ManifestValidationError("Manifest v5 activity-date policy is invalid.")
+
+    for target in manifest["target_statuses"]:
+        skipped_dates = target.get("skipped_activity_dates")
+        if not isinstance(skipped_dates, list) or len(set(skipped_dates)) != len(skipped_dates):
+            raise ManifestValidationError("Manifest v5 skipped activity dates are invalid.")
+        for value in skipped_dates:
+            if not isinstance(value, str):
+                raise ManifestValidationError("Manifest v5 skipped activity dates are invalid.")
+            try:
+                if is_supported_activity_date(value):
+                    raise ManifestValidationError(
+                        "Manifest v5 skipped activity date is inside the supported window."
+                    )
+            except ValueError as error:
+                raise ManifestValidationError(
+                    "Manifest v5 skipped activity date is invalid."
+                ) from error
+
+
 def _validate_v4_artifacts_and_counts(
     manifest: dict[str, Any],
     artifacts: list[dict[str, Any]],
@@ -381,6 +416,22 @@ def _validate_v4_artifacts_and_counts(
     return {field: counts[field] for field in fields[:4]}
 
 
+def _validate_v5_activity_artifact_dates(artifacts: list[dict[str, Any]]) -> None:
+    for artifact in artifacts:
+        value = artifact.get("date_filter")
+        if value is None:
+            continue
+        if not isinstance(value, str):
+            raise ManifestValidationError("Manifest v5 artifact date is invalid.")
+        try:
+            if not is_supported_activity_date(value):
+                raise ManifestValidationError(
+                    "Manifest v5 artifact date falls outside the supported activity window."
+                )
+        except ValueError as error:
+            raise ManifestValidationError("Manifest v5 artifact date is invalid.") from error
+
+
 def load_manifest(
     run_key: str, project_root: Path
 ) -> tuple[Path, dict[str, Any], list[dict[str, Any]], ManifestContract]:
@@ -405,10 +456,13 @@ def load_manifest(
     if not isinstance(artifacts, list) or not artifacts:
         raise ManifestValidationError("Raw manifest must contain at least one artifact.")
 
-    if schema_version == 4:
+    if schema_version >= 4:
         countries, seasons = _validate_v4_scope_and_targets(manifest)
         expected_counts = _validate_v4_artifacts_and_counts(manifest, artifacts, countries, seasons)
         _validate_v3_source_pacing(manifest)
+        if schema_version == 5:
+            _validate_v5_activity_date_policy(manifest)
+            _validate_v5_activity_artifact_dates(artifacts)
         collector_version = manifest["collector_version"]
         status = manifest["status"]
         legacy_country = None

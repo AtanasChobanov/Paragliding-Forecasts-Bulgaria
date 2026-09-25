@@ -11,6 +11,9 @@ from pathlib import Path
 from uuid import uuid4
 
 from .models import (
+    ACTIVITY_DATE_END_MONTH_DAY,
+    ACTIVITY_DATE_POLICY,
+    ACTIVITY_DATE_START_MONTH_DAY,
     SOURCE_CODE,
     SOURCE_LIST_URL,
     THRESHOLD_COVERAGE_DISTANCE_KM,
@@ -504,6 +507,11 @@ class RawArtifactStore:
                 "primary_glider_category": "FAI3",
                 "minimum_observed_scored_distance_km": 0,
                 "threshold_coverage_distance_km": THRESHOLD_COVERAGE_DISTANCE_KM,
+                "activity_date_policy": {
+                    "name": ACTIVITY_DATE_POLICY,
+                    "included_from_month_day": ACTIVITY_DATE_START_MONTH_DAY,
+                    "included_through_month_day": ACTIVITY_DATE_END_MONTH_DAY,
+                },
                 "completed_seasons": list(completed_seasons),
             },
             "target_statuses": [
@@ -514,6 +522,7 @@ class RawArtifactStore:
                     "unresolved_scopes": [
                         scope_metadata(scope) for scope in status.unresolved_scopes
                     ],
+                    "skipped_activity_dates": list(status.skipped_activity_dates),
                 }
                 for status in target_statuses
             ],

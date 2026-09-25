@@ -164,14 +164,22 @@ def test_collects_activity_dates_in_order_after_threshold_with_category_fallback
     busy_date = "2025-07-02"
     first_default = source_default_scope(PRIMARY_GLIDER_CATEGORY, date_filter=first_date)
     first_distance = scope(date_filter=first_date)
+    busy_default = source_default_scope(PRIMARY_GLIDER_CATEGORY, date_filter=busy_date)
     busy_distance = scope(date_filter=busy_date)
     busy_ccc_distance = scope(EXACT_GLIDER_CATEGORIES[0], date_filter=busy_date)
     pages = {
         ("BG", primary): observation(primary, (120.0,)),
         ("BG", first_default): observation(first_default, (78.0, 0.0)),
         ("BG", first_distance): observation(first_distance, (78.0, 0.0)),
+        ("BG", busy_default): observation(busy_default, (80.0, 0.0)),
         ("BG", busy_distance): observation(busy_distance, (80.0, 0.0), has_next_page=True),
         ("BG", busy_ccc_distance): observation(busy_ccc_distance, (70.0, 0.0), has_next_page=True),
+        **{
+            ("BG", source_default_scope(category, date_filter=busy_date)): observation(
+                source_default_scope(category, date_filter=busy_date), (70.0, 0.0)
+            )
+            for category in EXACT_GLIDER_CATEGORIES
+        },
     }
     driver, _artifacts, instance = collector(
         tmp_path,
@@ -217,6 +225,74 @@ def test_collects_activity_dates_in_order_after_threshold_with_category_fallback
         for scope_item in activity_scopes(PRIMARY_GLIDER_CATEGORY, first_date)[1:]
         for row in pages.get(("BG", scope_item), observation(scope_item, ())).rows
     )
+
+
+def test_skips_outside_supported_activity_dates_and_records_them(tmp_path) -> None:
+    primary = scope()
+    first_active_date = "2025-02-15"
+    second_active_date = "2025-09-30"
+    first_default = source_default_scope(PRIMARY_GLIDER_CATEGORY, date_filter=first_active_date)
+    second_default = source_default_scope(PRIMARY_GLIDER_CATEGORY, date_filter=second_active_date)
+    driver, artifacts, instance = collector(
+        tmp_path,
+        {
+            ("BG", primary): observation(primary, (120.0,)),
+            ("BG", first_default): observation(first_default, (40.0,)),
+            ("BG", second_default): observation(second_default, (50.0,)),
+        },
+        dates=("2024-10-16", "2025-02-14", first_active_date, second_active_date),
+    )
+
+    report = instance.collect()
+
+    selected_dates = {scope.date_filter for _country, scope in driver.selected_scopes}
+    assert selected_dates == {None, first_active_date, second_active_date}
+    assert report.skipped_activity_date_count == 2
+    manifest = json.loads((artifacts.raw_dir / "manifest.json").read_text())
+    assert manifest["target_statuses"][0]["skipped_activity_dates"] == [
+        "2024-10-16",
+        "2025-02-14",
+    ]
+
+
+def test_empty_activity_default_view_skips_explicit_sorts(tmp_path) -> None:
+    primary = scope()
+    empty_date = "2025-07-01"
+    empty_default = source_default_scope(PRIMARY_GLIDER_CATEGORY, date_filter=empty_date)
+    driver, artifacts, instance = collector(
+        tmp_path,
+        {
+            ("BG", primary): observation(primary, (120.0,)),
+            ("BG", empty_default): observation(empty_default, ()),
+        },
+        dates=(empty_date,),
+    )
+
+    report = instance.collect()
+
+    assert [scope for _country, scope in driver.selected_scopes] == [
+        source_default_scope(PRIMARY_GLIDER_CATEGORY),
+        primary,
+        empty_default,
+    ]
+    assert report.artifact_count == 3
+    manifest = json.loads((artifacts.raw_dir / "manifest.json").read_text())
+    assert manifest["activity_scope_statuses"] == [
+        {
+            "season": 2025,
+            "country_code": "BG",
+            "category": "pg",
+            "date_filter": empty_date,
+            "source_default_captured": True,
+            "explicit_sorts": [],
+            "distance_descending_has_next_page": None,
+            "row_observations_seen": 0,
+            "distinct_source_flights_seen": 0,
+            "duplicate_observations": 0,
+            "status": "empty",
+            "reason": None,
+        }
+    ]
 
 
 def test_checkpoint_resume_reuses_verified_default_view_without_refetching(tmp_path) -> None:

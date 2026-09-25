@@ -261,6 +261,7 @@ def test_fresh_continues_offline_for_incomplete_collection(monkeypatch, tmp_path
         completed_seasons=(2024,),
         completed_target_count=1,
         unresolved_scope_count=1,
+        skipped_activity_date_count=0,
         artifact_count=1,
         row_observations_seen=10,
         distinct_source_flights_seen=10,

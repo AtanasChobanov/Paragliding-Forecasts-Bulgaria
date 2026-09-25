@@ -6,6 +6,7 @@ import json
 import pytest
 
 from paragliding_forecasts_ml.ingestion.xccontest.artifacts import RawArtifactStore
+from paragliding_forecasts_ml.ingestion.xccontest.manifest import load_manifest
 from paragliding_forecasts_ml.ingestion.xccontest.models import (
     PRIMARY_GLIDER_CATEGORY,
     CollectorConfig,
@@ -50,7 +51,7 @@ def finalize(store: RawArtifactStore, country_codes: tuple[str, ...] = ("BG",)):
     )
 
 
-def test_writes_country_aware_immutable_fragment_and_manifest_v4(tmp_path) -> None:
+def test_writes_country_aware_immutable_fragment_and_manifest_v5(tmp_path) -> None:
     store = RawArtifactStore(project_root=tmp_path, run_key="test-run")
     entry = store.write_page(page())
     manifest_path = finalize(store)
@@ -80,6 +81,11 @@ def test_writes_country_aware_immutable_fragment_and_manifest_v4(tmp_path) -> No
         "primary_glider_category": "FAI3",
         "minimum_observed_scored_distance_km": 0,
         "threshold_coverage_distance_km": 100.0,
+        "activity_date_policy": {
+            "name": "bulgarian-xc-league-15-feb-to-15-oct",
+            "included_from_month_day": "02-15",
+            "included_through_month_day": "10-15",
+        },
         "completed_seasons": [2025],
     }
     assert manifest["target_statuses"] == [
@@ -88,6 +94,7 @@ def test_writes_country_aware_immutable_fragment_and_manifest_v4(tmp_path) -> No
             "country_code": "BG",
             "status": "complete_primary",
             "unresolved_scopes": [],
+            "skipped_activity_dates": [],
         }
     ]
     assert "permission_reference" not in manifest
@@ -98,6 +105,8 @@ def test_writes_country_aware_immutable_fragment_and_manifest_v4(tmp_path) -> No
     assert manifest["artifacts"][0]["row_observation_count"] == 1
     assert manifest["artifacts"][0]["at_or_above_100km_row_observation_count"] == 1
     assert manifest["artifacts"][0]["below_100km_row_observation_count"] == 0
+    _path, _manifest, _artifacts, contract = load_manifest("test-run", tmp_path)
+    assert contract.schema_version == RAW_MANIFEST_SCHEMA_VERSION
 
 
 def test_checkpoint_resumes_only_hash_verified_scopes_without_rewriting_artifacts(tmp_path) -> None:
