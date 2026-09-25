@@ -365,7 +365,7 @@ export const flightRecords = sqliteTable(
     ),
     check(
       "flight_records_scored_distance_km_range_check",
-      sql`${table.scoredDistanceKm} BETWEEN 100 AND 2000`,
+      sql`${table.scoredDistanceKm} BETWEEN 0 AND 2000`,
     ),
     check(
       "flight_records_route_type_check",

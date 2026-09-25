@@ -67,6 +67,7 @@ const validFlightSql = (
   id: number,
   sourceFlightId: string,
   validationLevel = "metadata",
+  scoredDistanceKm = 150,
 ): string => `
   INSERT INTO flight_records (
     id, source_id, source_flight_id, source_flight_url, source_site_mapping_id,
@@ -76,7 +77,7 @@ const validFlightSql = (
     created_at_utc, updated_at_utc
   ) VALUES (
     ${String(id)}, 1, '${sourceFlightId}', 'https://www.xcontest.org/world/en/flights/detail:test', 100,
-    '2026-08-01T12:00:00Z', 3600, 150, 'free_flight',
+'2026-08-01T12:00:00Z', 3600, ${String(scoredDistanceKm)}, 'free_flight',
     ${validationLevel === "track" ? "'https://www.xcontest.org/track.php?id=test'" : "NULL"},
     '${validationLevel}', 'validated test record', '2026-08-02T10:00:00Z',
     1000, 1000, '2026-08-02T10:00:00Z', '2026-08-02T10:00:00Z'
@@ -258,7 +259,7 @@ describe("database foundation migrations", () => {
 
     expect(sqlite.prepare("PRAGMA foreign_keys").get()).toEqual({ foreign_keys: 1 });
     expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({
-      count: 15,
+      count: 16,
     });
 
     if (databaseUrl === undefined) {
@@ -268,7 +269,7 @@ describe("database foundation migrations", () => {
     runMigrations(databaseUrl);
 
     expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({
-      count: 15,
+      count: 16,
     });
     expect(
       sqlite
@@ -441,6 +442,23 @@ describe("database foundation migrations", () => {
         'test-pipeline', '2026-08-11T08:00:00Z', '2026-08-11T08:01:00Z'
       );
     `);
+  });
+  it("accepts the full flight distance storage domain and rejects out-of-range values", () => {
+    insertReferenceRows();
+    const sqlite = activeConnection().sqlite;
+
+    const distances: ReadonlyArray<readonly [number, number]> = [
+      [10, 0],
+      [11, 78.5],
+      [12, 100],
+      [13, 2000],
+    ];
+    for (const [id, distance] of distances) {
+      sqlite.exec(validFlightSql(id, `distance-${id}`, "metadata", distance));
+    }
+
+    expectSqlFailure(validFlightSql(14, "negative-distance", "metadata", -0.01));
+    expectSqlFailure(validFlightSql(15, "too-far-distance", "metadata", 2000.01));
   });
   it("enforces source consistency, flight identity, and validation levels", () => {
     insertReferenceRows();
