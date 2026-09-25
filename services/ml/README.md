@@ -780,6 +780,19 @@ uv run --env-file .env --project services/ml xccontest-collect --season 2025
 uv run --env-file .env --project services/ml xccontest-collect --season 2025 --season 2024
 ```
 
+If collection is interrupted before its immutable manifest is finalized, recover the same
+source run rather than starting a new one:
+
+```powershell
+uv run --env-file .env --project services/ml xccontest-collect resume --run-key <uuid>
+```
+
+Collector recovery verifies every checkpointed artifact hash, restores the recorded collection
+configuration (including source pacing and view cap), and resumes with the first unfinished
+scope. It is a source-paced browser operation, not an offline replay, and it does not add date
+selection options. In contrast, `xccontest-ingest resume` is the later browser-free offline
+parse/validate/reconcile/persist continuation.
+
 It is headless by default. Use `--headed` for local UI inspection. `--slow-mo-ms` is
 only a Playwright debugging slowdown, not a rate-limit control. Source-changing browser
 operations wait 30 seconds by default. `--source-delay-seconds` may increase that delay;
@@ -793,44 +806,51 @@ then the process environment, then `file:./data/local/paragliding.db`; only rela
 `uv run --env-file .env`, not by a Python dotenv dependency.
 
 The collector processes every requested `season × country` target sequentially in one
-browser session, starting each target with `FAI3` (`PG *`) sorted by descending distance. If the first view is
-saturated — a source-provided next page exists and its last distance is at least
-100 km — it does not activate the pager or construct an offset URL. Instead it
-uses the rendered exact `CCC`, `EN D`, `EN C`, `EN B`, and `EN A` controls. A
-saturated exact category is split through every date offered by XCContest's
-visible date control. If a category/date view is still saturated, the collector
-captures the visible pilot, points, and airtime orderings in both directions as
-best-effort supplementary evidence.
+browser session. For each season it first captures the parent `FAI3` (`PG *`) source-default
+view, without claiming that this is any explicit source ordering. It then preserves the
+threshold-first 100+ km phase: distance descending comes first; a saturated view (a
+source-provided next page and a last distance of at least 100 km) is partitioned with the
+rendered exact `CCC`, `EN D`, `EN C`, `EN B`, and `EN A` controls. It never activates the
+pager or constructs an offset URL.
+
+Only after that threshold phase, the collector reads the dates offered by XCContest's
+visible date control in chronological order. For each date it captures the all-distance
+source-default view before the explicit distance, pilot, points, and airtime orderings in
+both directions. A saturated daily parent view falls back to the same exact classes, each
+with its own default-then-sorted sequence. This activity phase finds 0--2000 km source rows;
+it supplements rather than weakens the 100+
+coverage process. Date traversal is internal: the public CLI remains season-only and has no
+user-selected date or date-range option.
 
 Every navigation and rendered-control transition is sequential and source-paced; this
 collector intentionally does not open parallel tabs or retry a failed source operation. A
 failed navigation response, challenge, or missing rendered table stops the run for manual
-inspection. It writes nonempty exact
-rendered `#flights` fragments under ignored `data/raw/xccontest/<run-key>/` and
-progress/failure state under ignored `data/interim/xccontest/<run-key>/`. The
-exact saved HTML fragment is the durable parser input and retains the source
-fields without conversion. The ephemeral `RowObservation` model contains only
-flight ID, distance, and launch country because those values drive collector
-coverage, threshold, and country checks; it is not an ingestion-stage payload.
+inspection. It writes exact rendered `#flights` fragments — including verified empty daily
+views — under ignored `data/raw/xccontest/<run-key>/`, with progress/failure state under
+ignored `data/interim/xccontest/<run-key>/`. The exact saved HTML fragment is the durable
+parser input and retains the source fields without conversion. The ephemeral
+`RowObservation` model contains only flight ID, distance, and launch country because those
+values drive coverage, threshold, and country checks; it is not an ingestion-stage payload.
 
-The in-memory `CollectionReport` is likewise only a compact command/log summary:
-manifest relative path and hash, lifecycle, requested/completed scope summaries, and
-aggregate counters. Per-artifact detail and target statuses exist only in the immutable
+The in-memory `CollectionReport` is only a compact command/log summary: manifest relative
+path and hash, lifecycle, requested/completed scope summaries, aggregate counters, and the
+unresolved-scope count. Per-artifact detail and target statuses exist only in the immutable
 manifest; no raw root path, raw HTML, or row data is carried by the report.
 
-Manifest schema v3 records the database-derived `all_sites` country scope, per-target country statuses, country-aware artifact paths, source URL, collector lifecycle timestamps,
-completion/coverage status, the configured source-pacing delay and risk acknowledgement,
-category/date/sort scope, artifact hashes, per-view row counts, qualifying-distance counts,
-and run-wide observed/distinct/repeated
-flight-ID counts. The CLI also returns the repository-relative manifest path
-and SHA-256 needed by the later `flight_ingestion_runs` write. The checkpoint and
-failure report carry the available observation counters. `--max-views` is a
-fail-closed cap across the full run, rather than a pagination cap.
+Manifest schema v4 records the database-derived `all_sites` country scope, per-target status,
+source date and category, acquisition purpose (`threshold_100` or
+`all_distance_activity`), source-default or explicit sort mode, next-page evidence, source
+flight IDs, observation counts below 100 km and at/above 100 km, hashes, timestamps, and
+per-activity scope completeness. The checkpoint records every verified completed artifact and the latest
+scope, so recovery starts at the first unfinished scope without refetching completed views.
+`--max-views` remains a fail-closed cap across the full run, rather than a pagination cap.
 
-A run reports `incomplete` when a category/date view remains saturated after
-all supplementary sort views. Those views can discover additional flight IDs,
-but cannot prove that every qualifying row was exposed. Treat that manifest
-status as a coverage warning, not as a successful complete sample.
+A run reports `incomplete` when a category/date view remains saturated after all supplementary
+sort views. Valid observed flights can still proceed through the offline review and persistence
+stages, but `flight_ingestion_runs` lineage retains the partial coverage state; absence of a
+row is never a known-negative result. A stored 0 km row is retained as source evidence, but a
+later dataset/label builder must require a positive distance before using it as activity
+evidence.
 
 Automated tests use a fake UI driver; they do not make live XCContest requests.
 When a developer's browser environment cannot render the list table, stop and
@@ -843,15 +863,16 @@ Parse an already collected raw run without browser or network access:
 uv run --project services/ml xccontest-parse --run-key <uuid>
 ```
 
-Parser v2 accepts legacy BG-only manifests plus complete manifest-v2 and manifest-v3 runs. For
-v2/v3 it verifies country/season scope, target completion, artifact and run
-counters, every SHA-256, and the actual saved row/qualifying counts before
-normalizing the numeric flight ID, UTC takeoff timestamp, launch evidence,
-route, distance, duration, and both supported XCContest detail URL forms. It
-applies the 100--2000 km staging range, removes identical same-run duplicate
-records, and keeps every contributing raw artifact reference. Unknown or
-ambiguous launch evidence, site mapping approval, and SQLite persistence remain
-outside this command.
+Parser v2 accepts legacy BG-only, manifest-v2, and manifest-v3 runs under their original
+100--2000 km contract, plus manifest-v4 runs under the inclusive 0--2000 km storage contract.
+It rejects unknown manifest versions. For versioned runs it verifies scope, artifact and
+run counters, every SHA-256, and the actual saved row/qualifying counts before normalizing the
+numeric flight ID, UTC takeoff timestamp, launch evidence, route, distance, duration, and both
+supported XCContest detail URL forms. It removes identical same-run duplicates and keeps every
+contributing raw artifact reference. A valid version-v4 incomplete manifest is replayable
+offline: its coverage limitation remains provenance rather than a parser failure. Unknown or
+ambiguous launch evidence, site mapping approval, and SQLite persistence remain outside this
+command.
 
 ### Frozen parser fixture regression test
 
@@ -1061,7 +1082,7 @@ evidence, run metadata, or the CLI contract must increment `collector_version`. 
 edit that changes manifest fields, shape, semantics, or compatibility must increment
 `manifest_schema_version` as well. A collector commit or pull request without the
 applicable version bump, focused tests, and corresponding README/decision update is
-incomplete. Current values are `xccontest-collector/2` and manifest schema v2. Current
+incomplete. Current values are `xccontest-collector/4` and manifest schema v4. Current
 version identifiers live in `ingestion/xccontest/versions.py`; manifest compatibility
 policy remains in `manifest.py`.
 
