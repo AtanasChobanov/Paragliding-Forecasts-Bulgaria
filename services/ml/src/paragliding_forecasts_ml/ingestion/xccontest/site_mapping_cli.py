@@ -8,7 +8,12 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from .site_mapping import SiteMappingError, apply_mapping_decisions, write_mapping_proposals
+from .site_mapping import (
+    SiteMappingError,
+    apply_mapping_decisions,
+    auto_apply_coordinate_mappings,
+    write_mapping_proposals,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -25,6 +30,11 @@ def build_parser() -> argparse.ArgumentParser:
     apply = subcommands.add_parser("apply", help="Apply a human-reviewed mapping JSONL file.")
     apply.add_argument("--review-file", required=True, type=Path, metavar="PATH")
     apply.add_argument("--database-url", metavar="DATABASE_URL")
+    automatic = subcommands.add_parser(
+        "auto-apply", help="Apply only deterministic unique-catchment coordinate mappings."
+    )
+    automatic.add_argument("--run-key", required=True, metavar="UUID")
+    automatic.add_argument("--database-url", metavar="DATABASE_URL")
     return parser
 
 
@@ -33,6 +43,10 @@ def main(arguments: Sequence[str] | None = None) -> int:
     try:
         if namespace.command == "propose":
             result = write_mapping_proposals(namespace.run_key, database_url=namespace.database_url)
+        elif namespace.command == "auto-apply":
+            result = auto_apply_coordinate_mappings(
+                namespace.run_key, database_url=namespace.database_url
+            )
         else:
             result = apply_mapping_decisions(
                 namespace.review_file, database_url=namespace.database_url

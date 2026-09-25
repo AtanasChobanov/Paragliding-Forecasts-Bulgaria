@@ -10,6 +10,7 @@ from paragliding_forecasts_ml.ingestion.xccontest.persistence import (
     PersistenceError,
     validate_record,
 )
+from paragliding_forecasts_ml.ingestion.xccontest.site_mapping import auto_apply_coordinate_mappings
 from paragliding_forecasts_ml.ingestion.xccontest.validator import validate_run
 from paragliding_forecasts_ml.ingestion.xccontest.versions import VALIDATION_VERSION
 
@@ -190,3 +191,49 @@ def test_quarantines_conflicting_approved_evidence(tmp_path: Path) -> None:
     quarantined = read_jsonl(validated.quarantine_path)
     assert quarantined[0]["reason"] == "ambiguous_mapping"
     assert quarantined[0]["matching_mapping_ids"] == [1, 2]
+
+
+def test_auto_mapped_unique_coordinate_is_accepted_without_manual_review(tmp_path: Path) -> None:
+    create_database(tmp_path)
+    record = candidate("100", token="auto-sopot-token")
+    record["launch_takeoff_id"] = "auto-sopot-takeoff"
+    write_parser_output(tmp_path, [record])
+
+    automatic = auto_apply_coordinate_mappings(
+        "test-run", database_url=database_url(), project_root=tmp_path
+    )
+    validated = validate_run("test-run", database_url=database_url(), project_root=tmp_path)
+
+    accepted = read_jsonl(validated.accepted_path)
+    assert automatic["automatic_decision_count"] == 3
+    assert accepted[0]["site_slug"] == "sopot"
+    assert accepted[0]["mapping_key_type"] == "source_takeoff_id"
+
+
+def test_auto_rejects_outside_coordinate_without_mapping_review(tmp_path: Path) -> None:
+    create_database(tmp_path)
+    outside = candidate("100", token="unknown-token")
+    outside["launch_latitude_deg"] = 40.0
+    outside["launch_longitude_deg"] = 22.0
+    write_parser_output(tmp_path, [outside])
+
+    validated = validate_run("test-run", database_url=database_url(), project_root=tmp_path)
+
+    quarantined = read_jsonl(validated.quarantine_path)
+    assert quarantined[0]["reason"] == "outside_configured_catchments"
+    assert quarantined[0]["mapping_disposition"] == "auto_rejected"
+    assert validated.report["records_auto_rejected"] == 1
+
+
+def test_quarantines_known_mapping_with_conflicting_coordinate(tmp_path: Path) -> None:
+    create_database(tmp_path)
+    conflicting = candidate("100", token="sopot-token")
+    conflicting["launch_latitude_deg"] = 42.7302
+    conflicting["launch_longitude_deg"] = 24.0923
+    write_parser_output(tmp_path, [conflicting])
+
+    validated = validate_run("test-run", database_url=database_url(), project_root=tmp_path)
+
+    quarantined = read_jsonl(validated.quarantine_path)
+    assert quarantined[0]["reason"] == "mapping_coordinate_conflict"
+    assert quarantined[0]["mapping_disposition"] == "review_required"

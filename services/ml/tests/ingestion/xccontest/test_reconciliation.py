@@ -29,8 +29,11 @@ from paragliding_forecasts_ml.ingestion.xccontest.site_mapping import (
     repository_root,
 )
 from paragliding_forecasts_ml.ingestion.xccontest.versions import (
+    MAPPING_OUTPUT_DIRECTORY,
+    MAPPING_VERSION,
     PARSER_VERSION,
     PERSISTENCE_VERSION,
+    VALIDATION_OUTPUT_DIRECTORY,
     VALIDATION_VERSION,
 )
 
@@ -253,7 +256,7 @@ def _write_run(
 ) -> Path:
     raw = root / "data" / "raw" / "xccontest" / run_key
     parser = root / "data" / "interim" / "xccontest" / run_key / "parser-v2"
-    output = parser.parent / "validation-v2" / snapshot
+    output = parser.parent / VALIDATION_OUTPUT_DIRECTORY / snapshot
     raw.mkdir(parents=True, exist_ok=True)
     parser.mkdir(parents=True, exist_ok=True)
     output.mkdir(parents=True, exist_ok=True)
@@ -418,10 +421,11 @@ def _unknown_mapping_quarantines(count: int) -> list[dict]:
 
 
 def _write_mapping_proposal_report(root: Path, run_key: str) -> None:
-    directory = root / "data" / "interim" / "xccontest" / run_key / "site-mapping-v2"
+    directory = root / "data" / "interim" / "xccontest" / run_key / MAPPING_OUTPUT_DIRECTORY
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "proposal-report.json").write_text(
-        json.dumps({"source": "xccontest", "run_key": run_key}), encoding="utf-8"
+        json.dumps({"source": "xccontest", "run_key": run_key, "mapping_version": MAPPING_VERSION}),
+        encoding="utf-8",
     )
 
 
@@ -429,7 +433,7 @@ def _write_mapping_rejections(
     root: Path, run_key: str, quarantines: list[dict], database_url: str
 ) -> dict[str, int]:
     _write_mapping_proposal_report(root, run_key)
-    directory = root / "data" / "interim" / "xccontest" / run_key / "site-mapping-v2"
+    directory = root / "data" / "interim" / "xccontest" / run_key / MAPPING_OUTPUT_DIRECTORY
     proposals: list[dict] = []
     for quarantine in quarantines:
         candidate = quarantine["candidate"]

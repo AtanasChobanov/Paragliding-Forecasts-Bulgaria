@@ -67,6 +67,24 @@ class MappingCatalog:
         return {site.id: site for site in self.sites}
 
 
+@dataclass(frozen=True)
+class CatchmentResolution:
+    """Deterministic geographic relation between a source point and project sites."""
+
+    point: tuple[float, float] | None
+    matches: tuple[dict[str, object], ...]
+
+    @property
+    def disposition(self) -> str | None:
+        if self.point is None:
+            return None
+        if not self.matches:
+            return "outside_configured_catchments"
+        if len(self.matches) == 1:
+            return "inside_unique_catchment"
+        return "ambiguous_catchment"
+
+
 def repository_root() -> Path:
     """Locate the repository from the installed source-tree package layout."""
 
@@ -199,6 +217,34 @@ def catchment_suggestions(
     return sorted(suggestions, key=lambda item: (item["distance_km"], item["site_id"]))
 
 
+def catchment_resolution(record: dict[str, Any], sites: tuple[Site, ...]) -> CatchmentResolution:
+    """Classify a valid source point against every configured project catchment."""
+
+    point = _point_evidence(record)
+    if point is None:
+        return CatchmentResolution(point=None, matches=())
+    latitude, longitude = point
+    matches: list[dict[str, object]] = []
+    for site in sites:
+        if site.catchment_radius_km is None:
+            continue
+        distance = haversine_distance_km(latitude, longitude, site.latitude_deg, site.longitude_deg)
+        if distance <= site.catchment_radius_km:
+            matches.append(
+                {
+                    "site_id": site.id,
+                    "site_slug": site.slug,
+                    "distance_km": round(distance, 3),
+                    "catchment_radius_km": site.catchment_radius_km,
+                    "reason": "inside_configured_catchment",
+                }
+            )
+    return CatchmentResolution(
+        point=point,
+        matches=tuple(sorted(matches, key=lambda item: (item["distance_km"], item["site_id"]))),
+    )
+
+
 def _safe_run_directory(run_key: str, root: Path) -> Path:
     if not run_key or Path(run_key).name != run_key:
         raise SiteMappingError("Run key must be one path segment.")
@@ -234,6 +280,13 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
             raise SiteMappingError(f"JSONL record at {path}:{line_number} must be an object.")
         records.append(record)
     return records
+
+
+def _write_jsonl(path: Path, records: list[dict[str, Any]]) -> None:
+    with path.open("x", encoding="utf-8", newline="\n") as output:
+        for record in records:
+            output.write(json.dumps(record, ensure_ascii=False, sort_keys=True))
+            output.write("\n")
 
 
 def load_parser_records(
@@ -396,16 +449,42 @@ def write_mapping_proposals(
     """Create grouped, human-reviewable proposals without changing SQLite."""
 
     root = (project_root or repository_root()).resolve()
-    records, report, normalized_path, report_path = load_parser_records(run_key, root)
+    records, parser_report, normalized_path, parser_report_path = load_parser_records(run_key, root)
     catalog = load_mapping_catalog(database_url, project_root=root)
     groups: dict[tuple[str, str], dict[str, Any]] = {}
+    automatically_rejected_candidate_count = 0
     for record in records:
         if record.get("parser_status") != "normalized":
             continue
         try:
-            if any(mapping.status == "approved" for mapping in matching_mappings(record, catalog)):
-                continue
-            key_type, key_value = _proposal_key(record)
+            approved = [
+                mapping
+                for mapping in matching_mappings(record, catalog)
+                if mapping.status == "approved"
+            ]
+            geographic = catchment_resolution(record, catalog.sites)
+            review_reason: str | None = None
+            if approved:
+                target_site_ids = {mapping.site_id for mapping in approved}
+                geographic_site_id = (
+                    int(geographic.matches[0]["site_id"])
+                    if geographic.disposition == "inside_unique_catchment"
+                    else None
+                )
+                if len(target_site_ids) != 1 or not (
+                    geographic.disposition == "outside_configured_catchments"
+                    or (
+                        geographic_site_id is not None and geographic_site_id not in target_site_ids
+                    )
+                ):
+                    continue
+                key_type, key_value = _proposal_key(record)
+                review_reason = "mapping_coordinate_conflict"
+            else:
+                if geographic.disposition == "outside_configured_catchments":
+                    automatically_rejected_candidate_count += 1
+                    continue
+                key_type, key_value = _proposal_key(record)
         except SiteMappingError:
             continue
         key_json = json.dumps(key_value, sort_keys=True)
@@ -423,9 +502,14 @@ def write_mapping_proposals(
                 "sample_source_flight_ids": [],
                 "seasons": set(),
                 "catchment_suggestions": [],
+                "review_reasons": set(),
+                "matching_mapping_ids": set(),
             },
         )
         group["candidate_count"] += 1
+        if review_reason is not None:
+            group["review_reasons"].add(review_reason)
+            group["matching_mapping_ids"].update(mapping.id for mapping in approved)
         display_name = _clean_text(record.get("launch_name_raw"))
         if display_name is not None:
             group["source_display_names"].add(display_name)
@@ -439,10 +523,11 @@ def write_mapping_proposals(
             if suggestion not in group["catchment_suggestions"]:
                 group["catchment_suggestions"].append(suggestion)
     output_directory = _safe_run_directory(run_key, root) / MAPPING_OUTPUT_DIRECTORY
-    if output_directory.exists():
-        raise FileExistsError(f"Refusing to overwrite mapping proposal output: {output_directory}")
-    output_directory.mkdir(parents=True, exist_ok=False)
     proposals_path = output_directory / "mapping-proposals.jsonl"
+    report_path = output_directory / "proposal-report.json"
+    if proposals_path.exists() or report_path.exists():
+        raise FileExistsError(f"Refusing to overwrite mapping proposal output: {output_directory}")
+    output_directory.mkdir(parents=True, exist_ok=True)
     proposal_records: list[dict[str, Any]] = []
     for group in groups.values():
         suggestion_count = len(group["catchment_suggestions"])
@@ -458,11 +543,23 @@ def write_mapping_proposals(
                 **{
                     key: value
                     for key, value in group.items()
-                    if key not in {"source_display_names", "seasons"}
+                    if key
+                    not in {
+                        "source_display_names",
+                        "seasons",
+                        "review_reasons",
+                        "matching_mapping_ids",
+                    }
                 },
                 "source_display_names": sorted(group["source_display_names"]),
                 "seasons": sorted(group["seasons"]),
-                "recommendation": reason,
+                "review_reasons": sorted(group["review_reasons"]),
+                "matching_mapping_ids": sorted(group["matching_mapping_ids"]),
+                "recommendation": (
+                    "mapping_coordinate_conflict"
+                    if "mapping_coordinate_conflict" in group["review_reasons"]
+                    else reason
+                ),
             }
         )
     proposal_records.sort(key=lambda item: (item["key_type"], str(item["key_value"])))
@@ -475,12 +572,12 @@ def write_mapping_proposals(
         "run_key": run_key,
         "source": SOURCE_CODE,
         "parser_normalized_path": normalized_path.relative_to(root).as_posix(),
-        "parser_report_path": report_path.relative_to(root).as_posix(),
-        "parser_normalized_candidates": report["normalized_candidates"],
+        "parser_report_path": parser_report_path.relative_to(root).as_posix(),
+        "parser_normalized_candidates": parser_report["normalized_candidates"],
         "proposal_count": len(proposal_records),
+        "automatically_rejected_candidate_count": automatically_rejected_candidate_count,
         "mapping_snapshot_sha256": mapping_snapshot_sha256(catalog),
     }
-    report_path = output_directory / "proposal-report.json"
     report_path.write_text(
         json.dumps(report_payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -512,6 +609,145 @@ def _load_decisions(path: Path) -> list[dict[str, Any]]:
     if not path.is_file():
         raise SiteMappingError(f"Mapping review file does not exist: {path}")
     return read_jsonl(path)
+
+
+def _automatic_mapping_decisions(
+    records: list[dict[str, Any]], catalog: MappingCatalog
+) -> list[dict[str, Any]]:
+    """Derive approved mappings only from unambiguous, in-country coordinates."""
+
+    snapshot = mapping_snapshot_sha256(catalog)
+    candidates: list[tuple[dict[str, Any], Site, dict[str, object], dict[str, object]]] = []
+    key_targets: dict[tuple[str, object], set[int]] = {}
+    for record in records:
+        if record.get("parser_status") != "normalized":
+            continue
+        try:
+            evidence = candidate_evidence(record)
+            resolution = catchment_resolution(record, catalog.sites)
+        except SiteMappingError:
+            continue
+        if resolution.disposition != "inside_unique_catchment":
+            continue
+        match = resolution.matches[0]
+        site = catalog.sites_by_id[int(match["site_id"])]
+        if _clean_text(record.get("launch_country_code_iso2")) != site.country_code_iso2:
+            continue
+        active = [
+            mapping
+            for mapping in matching_mappings(record, catalog)
+            if mapping.status in {"approved", "provisional"}
+        ]
+        if any(mapping.site_id != site.id for mapping in active):
+            continue
+        mapping_keys: dict[str, object] = {
+            key_type: evidence[key_type]
+            for key_type in ("source_point", "source_takeoff_id", "source_site_token")
+            if key_type in evidence
+        }
+        if not mapping_keys:
+            continue
+        for key_type, key_value in mapping_keys.items():
+            key_targets.setdefault((key_type, key_value), set()).add(site.id)
+        candidates.append((record, site, match, mapping_keys))
+
+    conflicting_keys = {key for key, site_ids in key_targets.items() if len(site_ids) > 1}
+    decisions: dict[tuple[str, object], dict[str, Any]] = {}
+    for record, site, match, mapping_keys in candidates:
+        if any(
+            (key_type, key_value) in conflicting_keys
+            for key_type, key_value in mapping_keys.items()
+        ):
+            continue
+        display_name = _clean_text(record.get("launch_name_raw"))
+        point = mapping_keys.get("source_point")
+        assert isinstance(point, tuple)
+        reference = (
+            "automatic-unique-catchment:v1; "
+            f"catalog:{snapshot}; site:{site.slug}; "
+            f"point:{point[0]:.6f},{point[1]:.6f}; "
+            f"distance-km:{float(match['distance_km']):.3f}; "
+            f"radius-km:{float(match['catchment_radius_km']):.3f}"
+        )
+        notes = "Automatically approved from one configured geographic catchment."
+        for key_type, key_value in mapping_keys.items():
+            identity = (key_type, key_value)
+            decision: dict[str, Any] = {
+                "decision": "approved",
+                "key_type": key_type,
+                "site_slug": site.slug,
+                "source_display_name": display_name,
+                "verification_reference": reference,
+                "notes": notes,
+            }
+            if key_type == "source_point":
+                assert isinstance(key_value, tuple)
+                decision["key_value"] = None
+                decision["point_latitude_deg"] = key_value[0]
+                decision["point_longitude_deg"] = key_value[1]
+            else:
+                assert isinstance(key_value, str)
+                decision["key_value"] = key_value
+                decision["point_latitude_deg"] = None
+                decision["point_longitude_deg"] = None
+            existing = decisions.get(identity)
+            if existing is None:
+                decisions[identity] = decision
+            elif existing["site_slug"] != site.slug:
+                raise SiteMappingError("Automatic mapping evidence resolves to different sites.")
+    return [decisions[key] for key in sorted(decisions, key=lambda item: (item[0], str(item[1])))]
+
+
+def auto_apply_coordinate_mappings(
+    run_key: str,
+    *,
+    database_url: str | None = None,
+    project_root: Path | None = None,
+) -> dict[str, Any]:
+    """Persist deterministic coordinate-backed mappings and retain their decision evidence."""
+
+    root = (project_root or repository_root()).resolve()
+    records, parser_report, normalized_path, parser_report_path = load_parser_records(run_key, root)
+    output_directory = _safe_run_directory(run_key, root) / MAPPING_OUTPUT_DIRECTORY
+    decisions_path = output_directory / "automatic-mapping-decisions.jsonl"
+    report_path = output_directory / "automatic-mapping-report.json"
+    proposals_path = output_directory / "mapping-proposals.jsonl"
+    if report_path.is_file():
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        if not isinstance(report, dict) or report.get("run_key") != run_key:
+            raise SiteMappingError("Automatic mapping report belongs to another run.")
+        return report
+    if proposals_path.exists():
+        raise SiteMappingError(
+            "Automatic mappings must be applied before human proposals are written."
+        )
+    catalog = load_mapping_catalog(database_url, project_root=root)
+    if decisions_path.is_file():
+        decisions = read_jsonl(decisions_path)
+    else:
+        decisions = _automatic_mapping_decisions(records, catalog)
+        output_directory.mkdir(parents=True, exist_ok=True)
+        _write_jsonl(decisions_path, decisions)
+    applied = apply_mapping_decisions(decisions_path, database_url=database_url, project_root=root)
+    updated_catalog = load_mapping_catalog(database_url, project_root=root)
+    report = {
+        "mapping_version": MAPPING_VERSION,
+        "run_key": run_key,
+        "source": SOURCE_CODE,
+        "parser_normalized_path": normalized_path.relative_to(root).as_posix(),
+        "parser_report_path": parser_report_path.relative_to(root).as_posix(),
+        "parser_normalized_candidates": parser_report["normalized_candidates"],
+        "pre_auto_mapping_snapshot_sha256": mapping_snapshot_sha256(catalog),
+        "mapping_snapshot_sha256": mapping_snapshot_sha256(updated_catalog),
+        "automatic_decisions_path": decisions_path.relative_to(root).as_posix(),
+        "automatic_decisions_sha256": hashlib.sha256(decisions_path.read_bytes()).hexdigest(),
+        "automatic_decision_count": len(decisions),
+        "applied": applied,
+    }
+    report_path.write_text(
+        json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    return report
 
 
 def apply_mapping_decisions(

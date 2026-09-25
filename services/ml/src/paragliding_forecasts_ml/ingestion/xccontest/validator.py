@@ -16,6 +16,7 @@ from .site_mapping import (
     _clean_text,
     _safe_run_directory,
     candidate_evidence,
+    catchment_resolution,
     catchment_suggestions,
     load_mapping_catalog,
     load_parser_records,
@@ -45,18 +46,36 @@ def _sha256(path: Path) -> str:
 
 
 def _mapping_resolution(record: dict[str, Any], catalog: MappingCatalog) -> dict[str, Any]:
+    """Resolve approved source evidence while preserving geographic contradictions for review."""
+
     try:
         evidence = candidate_evidence(record)
         mappings = matching_mappings(record, catalog)
+        geographic = catchment_resolution(record, catalog.sites)
     except SiteMappingError as error:
-        return {"outcome": "quarantined", "reason": str(error), "mapping_ids": []}
+        return {
+            "outcome": "quarantined",
+            "reason": str(error),
+            "mapping_ids": [],
+            "mapping_disposition": "review_required",
+        }
     approved = [mapping for mapping in mappings if mapping.status == "approved"]
     provisional = [mapping for mapping in mappings if mapping.status == "provisional"]
     if not approved:
+        if geographic.disposition == "outside_configured_catchments":
+            return {
+                "outcome": "quarantined",
+                "reason": "outside_configured_catchments",
+                "mapping_ids": [mapping.id for mapping in mappings],
+                "mapping_disposition": "auto_rejected",
+                "geographic_disposition": geographic.disposition,
+            }
         return {
             "outcome": "quarantined",
             "reason": "mapping_not_approved" if provisional else "unknown_mapping",
             "mapping_ids": [mapping.id for mapping in mappings],
+            "mapping_disposition": "review_required",
+            "geographic_disposition": geographic.disposition,
         }
     target_site_ids = {mapping.site_id for mapping in approved}
     if len(target_site_ids) != 1:
@@ -64,6 +83,8 @@ def _mapping_resolution(record: dict[str, Any], catalog: MappingCatalog) -> dict
             "outcome": "quarantined",
             "reason": "ambiguous_mapping",
             "mapping_ids": [mapping.id for mapping in approved],
+            "mapping_disposition": "review_required",
+            "geographic_disposition": geographic.disposition,
         }
     site = catalog.sites_by_id[target_site_ids.pop()]
     country = _clean_text(record.get("launch_country_code_iso2"))
@@ -72,6 +93,23 @@ def _mapping_resolution(record: dict[str, Any], catalog: MappingCatalog) -> dict
             "outcome": "quarantined",
             "reason": "mapping_country_mismatch",
             "mapping_ids": [mapping.id for mapping in approved],
+            "mapping_disposition": "review_required",
+            "geographic_disposition": geographic.disposition,
+        }
+    geographic_site_id = (
+        int(geographic.matches[0]["site_id"])
+        if geographic.disposition == "inside_unique_catchment"
+        else None
+    )
+    if geographic.disposition == "outside_configured_catchments" or (
+        geographic_site_id is not None and geographic_site_id != site.id
+    ):
+        return {
+            "outcome": "quarantined",
+            "reason": "mapping_coordinate_conflict",
+            "mapping_ids": [mapping.id for mapping in approved],
+            "mapping_disposition": "review_required",
+            "geographic_disposition": geographic.disposition,
         }
     for key_type in (
         "source_takeoff_id",
@@ -181,6 +219,8 @@ def validate_run(
                 "source_flight_id": source_flight_id,
                 "validation_status": "quarantined",
                 "reason": resolution["reason"],
+                "mapping_disposition": resolution["mapping_disposition"],
+                "geographic_disposition": resolution.get("geographic_disposition"),
                 "matching_mapping_ids": resolution["mapping_ids"],
                 "catchment_suggestions": suggestions,
                 "candidate": record,
@@ -230,6 +270,9 @@ def validate_run(
         "records_accepted": len(accepted),
         "records_rejected": rejected,
         "records_quarantined": len(quarantined),
+        "records_auto_rejected": sum(
+            record.get("mapping_disposition") == "auto_rejected" for record in quarantined
+        ),
         "records_deduplicated": deduplicated,
     }
     report_path.write_text(

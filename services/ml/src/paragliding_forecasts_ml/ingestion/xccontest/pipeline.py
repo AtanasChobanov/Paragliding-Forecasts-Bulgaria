@@ -21,6 +21,7 @@ from .site_mapping import (
     _proposal_id,
     _proposal_key,
     _safe_run_directory,
+    auto_apply_coordinate_mappings,
     load_mapping_catalog,
     load_parser_records,
     mapping_snapshot_sha256,
@@ -29,7 +30,13 @@ from .site_mapping import (
     write_mapping_proposals,
 )
 from .validator import ValidationError, validate_run
-from .versions import MAPPING_OUTPUT_DIRECTORY, PARSER_OUTPUT_DIRECTORY, VALIDATION_OUTPUT_DIRECTORY
+from .versions import (
+    MAPPING_OUTPUT_DIRECTORY,
+    MAPPING_VERSION,
+    PARSER_OUTPUT_DIRECTORY,
+    VALIDATION_OUTPUT_DIRECTORY,
+    VALIDATION_VERSION,
+)
 
 MAPPING_REVIEW_REASONS = frozenset(
     {
@@ -37,6 +44,7 @@ MAPPING_REVIEW_REASONS = frozenset(
         "mapping_not_approved",
         "ambiguous_mapping",
         "mapping_country_mismatch",
+        "mapping_coordinate_conflict",
     }
 )
 
@@ -115,15 +123,32 @@ def _existing_or_parsed(run_key: str, root: Path) -> dict[str, Any]:
         raise PipelineError(f"XCContest parser did not complete: {error}") from error
 
 
-def _existing_or_proposed(run_key: str, root: Path, database_url: str | None) -> dict[str, Any]:
+def _existing_or_auto_mapped(run_key: str, root: Path, database_url: str | None) -> dict[str, Any]:
     output_dir = _safe_run_directory(run_key, root) / MAPPING_OUTPUT_DIRECTORY
-    if output_dir.is_dir():
-        report = _json_object(output_dir / "proposal-report.json", "Mapping proposal report")
-        if report.get("run_key") != run_key:
-            raise PipelineError("Existing mapping proposal report belongs to another run.")
+    report_path = output_dir / "automatic-mapping-report.json"
+    if report_path.is_file():
+        report = _json_object(report_path, "Automatic mapping report")
+        if report.get("run_key") != run_key or report.get("mapping_version") != MAPPING_VERSION:
+            raise PipelineError("Existing automatic mapping report is incompatible with this run.")
         return report
     try:
-        return write_mapping_proposals(run_key, database_url=database_url)
+        return auto_apply_coordinate_mappings(run_key, database_url=database_url, project_root=root)
+    except (SiteMappingError, FileExistsError) as error:
+        raise PipelineError(
+            f"XCContest automatic coordinate mapping did not complete: {error}"
+        ) from error
+
+
+def _existing_or_proposed(run_key: str, root: Path, database_url: str | None) -> dict[str, Any]:
+    output_dir = _safe_run_directory(run_key, root) / MAPPING_OUTPUT_DIRECTORY
+    report_path = output_dir / "proposal-report.json"
+    if report_path.is_file():
+        report = _json_object(report_path, "Mapping proposal report")
+        if report.get("run_key") != run_key or report.get("mapping_version") != MAPPING_VERSION:
+            raise PipelineError("Existing mapping proposal report is incompatible with this run.")
+        return report
+    try:
+        return write_mapping_proposals(run_key, database_url=database_url, project_root=root)
     except (SiteMappingError, FileExistsError) as error:
         raise PipelineError(f"XCContest mapping proposal did not complete: {error}") from error
 
@@ -139,13 +164,17 @@ def _existing_or_validated(run_key: str, root: Path, database_url: str | None) -
     output_dir = _safe_run_directory(run_key, root) / VALIDATION_OUTPUT_DIRECTORY / snapshot
     if output_dir.is_dir():
         report = _json_object(output_dir / "validation-report.json", "Validation report")
-        if report.get("run_key") != run_key or report.get("mapping_snapshot_sha256") != snapshot:
+        if (
+            report.get("run_key") != run_key
+            or report.get("mapping_snapshot_sha256") != snapshot
+            or report.get("validator_version") != VALIDATION_VERSION
+        ):
             raise PipelineError(
                 "Existing validation output does not match the current mapping snapshot."
             )
         return report
     try:
-        return validate_run(run_key, database_url=database_url).report
+        return validate_run(run_key, database_url=database_url, project_root=root).report
     except (ValidationError, FileExistsError) as error:
         raise PipelineError(f"XCContest validation did not complete: {error}") from error
 
@@ -213,7 +242,10 @@ def _actionable_quarantines(report: dict[str, Any], run_key: str, root: Path) ->
     rejected_proposals = _rejected_review_proposal_ids(run_key, root)
     unresolved = reviewed_rejected = 0
     for record in records:
-        if record.get("reason") not in MAPPING_REVIEW_REASONS:
+        disposition = record.get("mapping_disposition")
+        if disposition == "auto_rejected":
+            continue
+        if disposition != "review_required" and record.get("reason") not in MAPPING_REVIEW_REASONS:
             continue
         candidate = record.get("candidate")
         if not isinstance(candidate, dict):
@@ -237,6 +269,7 @@ def _paused_result(
     status: str,
     run_key: str,
     parser_report: dict[str, Any],
+    automatic_mapping_report: dict[str, Any],
     proposal_report: dict[str, Any],
     validation_report: dict[str, Any],
     actionable_quarantine_count: int,
@@ -246,6 +279,7 @@ def _paused_result(
         "status": status,
         "run_key": run_key,
         "parser": parser_report,
+        "automatic_mappings": automatic_mapping_report,
         "mapping_proposals": proposal_report,
         "validation": validation_report,
         "actionable_mapping_quarantine_count": actionable_quarantine_count,
@@ -266,6 +300,7 @@ def resume_run(
     resolved_url, _ = _preflight(policy_path, database_url)
     root = repository_root()
     parser_report = _existing_or_parsed(run_key, root)
+    automatic_mapping_report = _existing_or_auto_mapped(run_key, root, resolved_url)
     proposal_report = _existing_or_proposed(run_key, root, resolved_url)
     validation_report = _existing_or_validated(run_key, root, resolved_url)
     actionable, reviewed_rejected = _actionable_quarantines(validation_report, run_key, root)
@@ -274,6 +309,7 @@ def resume_run(
             status="awaiting_mapping_review",
             run_key=run_key,
             parser_report=parser_report,
+            automatic_mapping_report=automatic_mapping_report,
             proposal_report=proposal_report,
             validation_report=validation_report,
             actionable_quarantine_count=actionable,
@@ -284,6 +320,7 @@ def resume_run(
             status="no_accepted_records",
             run_key=run_key,
             parser_report=parser_report,
+            automatic_mapping_report=automatic_mapping_report,
             proposal_report=proposal_report,
             validation_report=validation_report,
             actionable_quarantine_count=actionable,
@@ -309,6 +346,7 @@ def resume_run(
         "status": status,
         "run_key": run_key,
         "parser": parser_report,
+        "automatic_mappings": automatic_mapping_report,
         "mapping_proposals": proposal_report,
         "validation": validation_report,
         "actionable_mapping_quarantine_count": actionable,
