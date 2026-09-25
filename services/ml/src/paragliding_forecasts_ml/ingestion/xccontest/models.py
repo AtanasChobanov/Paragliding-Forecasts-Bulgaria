@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from math import isfinite
 
 SOURCE_CODE = "xccontest"
 SOURCE_LIST_URL = "https://www.xcontest.org/world/en/flights/"
-MIN_DISTANCE_KM = 100.0
+STORAGE_MIN_DISTANCE_KM = 0.0
+THRESHOLD_COVERAGE_DISTANCE_KM = 100.0
+MAX_DISTANCE_KM = 2_000.0
 MIN_DELAY_SECONDS = 3.0
 RECOMMENDED_DELAY_SECONDS = 30.0
 DEFAULT_DELAY_SECONDS = RECOMMENDED_DELAY_SECONDS
@@ -157,8 +160,11 @@ class RowObservation:
     def __post_init__(self) -> None:
         if not self.source_flight_id:
             raise ValueError("XCContest row must expose a source flight ID.")
-        if self.distance_km < 0:
-            raise ValueError("XCContest distance cannot be negative.")
+        if (
+            not isfinite(self.distance_km)
+            or not STORAGE_MIN_DISTANCE_KM <= self.distance_km <= MAX_DISTANCE_KM
+        ):
+            raise ValueError("XCContest distance must be finite and between 0 and 2000 km.")
 
 
 @dataclass(frozen=True)
@@ -199,7 +205,7 @@ class PageObservation:
             and self.scope.sort_direction == "descending"
             and self.has_next_page
             and self.last_distance_km is not None
-            and self.last_distance_km >= MIN_DISTANCE_KM
+            and self.last_distance_km >= THRESHOLD_COVERAGE_DISTANCE_KM
         )
 
     @property

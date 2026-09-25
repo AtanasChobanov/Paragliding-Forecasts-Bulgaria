@@ -4,7 +4,14 @@ import json
 import sqlite3
 from pathlib import Path
 
+import pytest
+
+from paragliding_forecasts_ml.ingestion.xccontest.persistence import (
+    PersistenceError,
+    validate_record,
+)
 from paragliding_forecasts_ml.ingestion.xccontest.validator import validate_run
+from paragliding_forecasts_ml.ingestion.xccontest.versions import VALIDATION_VERSION
 
 
 def database_url() -> str:
@@ -49,6 +56,7 @@ def candidate(flight_id: str, *, token: str, name: str = "Sopot") -> dict:
         "source_flight_id": flight_id,
         "source_flight_url": "https://www.xcontest.org/world/en/flights/detail:pilot/1.01.2026/10:00",
         "parser_status": "normalized",
+        "scored_distance_km": 78.5,
         "launch_name_raw": name,
         "launch_country_code_iso2": "BG",
         "launch_latitude_deg": 42.68733,
@@ -88,6 +96,49 @@ def read_jsonl(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
 
+@pytest.mark.parametrize("distance", [0, 78.5, 100, 2_000])
+def test_persistence_accepts_the_full_storage_distance_domain(distance: float) -> None:
+    record = {
+        "source": "xccontest",
+        "validation_status": "accepted",
+        "validator_version": VALIDATION_VERSION,
+        "source_flight_id": "100",
+        "source_flight_url": "https://www.xcontest.org/world/en/flights/detail:pilot/1",
+        "source_site_mapping_id": 1,
+        "site_id": 1,
+        "mapping_key_type": "source_site_token",
+        "scored_distance_km": distance,
+        "duration_seconds": 3600,
+        "route_type": "free_flight",
+        "takeoff_at_utc": "2026-08-01T12:00:00Z",
+        "validated_at_utc": "2026-08-08T12:00:00Z",
+    }
+
+    validate_record(record)
+
+
+@pytest.mark.parametrize("distance", [-0.01, 2_000.01, float("nan")])
+def test_persistence_rejects_distances_outside_the_storage_domain(distance: float) -> None:
+    record = {
+        "source": "xccontest",
+        "validation_status": "accepted",
+        "validator_version": VALIDATION_VERSION,
+        "source_flight_id": "100",
+        "source_flight_url": "https://www.xcontest.org/world/en/flights/detail:pilot/1",
+        "source_site_mapping_id": 1,
+        "site_id": 1,
+        "mapping_key_type": "source_site_token",
+        "scored_distance_km": distance,
+        "duration_seconds": 3600,
+        "route_type": "free_flight",
+        "takeoff_at_utc": "2026-08-01T12:00:00Z",
+        "validated_at_utc": "2026-08-08T12:00:00Z",
+    }
+
+    with pytest.raises(PersistenceError, match="invalid distance"):
+        validate_record(record)
+
+
 def test_accepts_only_approved_mapping_and_quarantines_unknown(tmp_path: Path) -> None:
     create_database(tmp_path)
     write_parser_output(
@@ -108,6 +159,18 @@ def test_accepts_only_approved_mapping_and_quarantines_unknown(tmp_path: Path) -
     assert len(validated.report["accepted_flights_sha256"]) == 64
     assert validated.report["site_quarantine_path"].endswith("site-quarantine.jsonl")
     assert len(validated.report["site_quarantine_sha256"]) == 64
+
+
+def test_quarantines_invalid_distance_before_mapping_resolution(tmp_path: Path) -> None:
+    create_database(tmp_path)
+    invalid = candidate("100", token="sopot-token")
+    invalid["scored_distance_km"] = -0.1
+    write_parser_output(tmp_path, [invalid])
+
+    validated = validate_run("test-run", database_url=database_url(), project_root=tmp_path)
+
+    quarantined = read_jsonl(validated.quarantine_path)
+    assert quarantined[0]["reason"] == "invalid_scored_distance"
 
 
 def test_quarantines_conflicting_approved_evidence(tmp_path: Path) -> None:

@@ -14,7 +14,12 @@ from urllib.parse import parse_qs, urlsplit, urlunsplit
 from selectolax.parser import HTMLParser
 
 from .manifest import ManifestValidationError, load_manifest
-from .models import MIN_DISTANCE_KM, SOURCE_CODE
+from .models import (
+    MAX_DISTANCE_KM,
+    SOURCE_CODE,
+    STORAGE_MIN_DISTANCE_KM,
+    THRESHOLD_COVERAGE_DISTANCE_KM,
+)
 from .selectors import (
     DETAIL_LINK_SELECTOR,
     DISTANCE_SELECTOR,
@@ -27,7 +32,6 @@ from .selectors import (
 )
 from .versions import PARSER_OUTPUT_DIRECTORY, PARSER_VERSION
 
-MAX_DISTANCE_KM = 2_000.0
 FLIGHT_ID_PATTERN = re.compile(r"^flight-([0-9]+)$")
 DATE_PATTERN = re.compile(r"^(\d{2})\.(\d{2})\.(\d{2})$")
 TIME_PATTERN = re.compile(r"^(\d{1,2}):(\d{2})$")
@@ -142,16 +146,16 @@ def _parse_takeoff_at_utc(takeoff_cell: Any, season: int) -> str:
     return candidates[0].astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _parse_distance(row: Any) -> float:
+def _parse_distance(row: Any, *, minimum_distance_km: float) -> float:
     value = _required_text(
         _cell(row, DISTANCE_SELECTOR, "scored distance").text(), "scored distance"
     )
     if NUMBER_PATTERN.fullmatch(value) is None:
         raise ParseError("Scored distance must be a decimal number in kilometres.")
     distance = float(value.replace(",", "."))
-    if not MIN_DISTANCE_KM <= distance <= MAX_DISTANCE_KM:
+    if not minimum_distance_km <= distance <= MAX_DISTANCE_KM:
         raise ParseError(
-            f"Scored distance must be between {MIN_DISTANCE_KM:g} and {MAX_DISTANCE_KM:g} km."
+            f"Scored distance must be between {minimum_distance_km:g} and {MAX_DISTANCE_KM:g} km."
         )
     return distance
 
@@ -235,7 +239,13 @@ def _route_evidence(row: Any) -> tuple[str, str | None]:
     return ROUTE_TYPES.get(route_raw.casefold(), "other"), route_raw
 
 
-def _normalize_row(row: Any, artifact: dict[str, Any], row_index: int) -> dict[str, Any]:
+def _normalize_row(
+    row: Any,
+    artifact: dict[str, Any],
+    row_index: int,
+    *,
+    minimum_distance_km: float,
+) -> dict[str, Any]:
     route_type, route_type_raw = _route_evidence(row)
     return {
         "source": SOURCE_CODE,
@@ -244,7 +254,7 @@ def _normalize_row(row: Any, artifact: dict[str, Any], row_index: int) -> dict[s
         "takeoff_at_utc": _parse_takeoff_at_utc(
             _cell(row, TAKEOFF_CELL_SELECTOR, "takeoff"), artifact["season"]
         ),
-        "scored_distance_km": _parse_distance(row),
+        "scored_distance_km": _parse_distance(row, minimum_distance_km=minimum_distance_km),
         "duration_seconds": _parse_duration_seconds(row),
         "route_type": route_type,
         "route_type_raw": route_type_raw,
@@ -272,6 +282,11 @@ def parse_run(run_key: str, *, project_root: Path | None = None) -> ParsedRun:
         manifest_path, _manifest, artifacts, manifest_contract = load_manifest(run_key, root)
     except ManifestValidationError as error:
         raise ParseError(str(error)) from error
+    minimum_distance_km = (
+        STORAGE_MIN_DISTANCE_KM
+        if manifest_contract.schema_version >= 4
+        else THRESHOLD_COVERAGE_DISTANCE_KM
+    )
     candidates_by_id: dict[str, list[dict[str, Any]]] = defaultdict(list)
     rejections: list[dict[str, Any]] = []
     observations_seen = threshold_exclusions = 0
@@ -288,7 +303,12 @@ def parse_run(run_key: str, *, project_root: Path | None = None) -> ParsedRun:
             source_flight_id: str | None = None
             try:
                 source_flight_id = _source_flight_id(row)
-                candidate = _normalize_row(row, artifact, row_index)
+                candidate = _normalize_row(
+                    row,
+                    artifact,
+                    row_index,
+                    minimum_distance_km=minimum_distance_km,
+                )
             except ParseError as error:
                 if "Scored distance must be between" in str(error):
                     threshold_exclusions += 1

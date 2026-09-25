@@ -7,6 +7,7 @@ import json
 import re
 import sqlite3
 from dataclasses import dataclass
+from math import isfinite
 from pathlib import Path
 from typing import Any
 
@@ -16,7 +17,7 @@ from paragliding_forecasts_ml.storage.sqlite import (
     open_writable_database,
 )
 
-from .models import SOURCE_CODE
+from .models import MAX_DISTANCE_KM, SOURCE_CODE, STORAGE_MIN_DISTANCE_KM
 from .reconciliation import (
     ReconciliationAction,
     ReconciliationError,
@@ -162,7 +163,8 @@ def validate_record(row: dict[str, Any]) -> None:
         raise PersistenceError("Accepted flight has invalid mapping evidence.")
     if (
         type(row.get("scored_distance_km")) not in (int, float)
-        or not 100 <= float(row["scored_distance_km"]) <= 2000
+        or not isfinite(float(row["scored_distance_km"]))
+        or not STORAGE_MIN_DISTANCE_KM <= float(row["scored_distance_km"]) <= MAX_DISTANCE_KM
     ):
         raise PersistenceError("Accepted flight has invalid distance.")
     if row.get("duration_seconds") is not None and (

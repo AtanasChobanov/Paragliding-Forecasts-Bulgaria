@@ -11,9 +11,9 @@ from pathlib import Path
 from uuid import uuid4
 
 from .models import (
-    MIN_DISTANCE_KM,
     SOURCE_CODE,
     SOURCE_LIST_URL,
+    THRESHOLD_COVERAGE_DISTANCE_KM,
     ArtifactEntry,
     CollectorConfig,
     FlightListScope,
@@ -233,7 +233,9 @@ class RawArtifactStore:
             artifact_file.write(encoded_fragment)
 
         source_flight_ids = tuple(row.source_flight_id for row in page.rows)
-        qualifying_count = sum(row.distance_km >= MIN_DISTANCE_KM for row in page.rows)
+        qualifying_count = sum(
+            row.distance_km >= THRESHOLD_COVERAGE_DISTANCE_KM for row in page.rows
+        )
         entry = ArtifactEntry(
             relative_path=artifact_path.relative_to(self._project_root).as_posix(),
             sha256=hashlib.sha256(encoded_fragment).hexdigest(),
@@ -501,7 +503,7 @@ class RawArtifactStore:
                 "requested_seasons": list(requested_seasons),
                 "primary_glider_category": "FAI3",
                 "minimum_observed_scored_distance_km": 0,
-                "threshold_coverage_distance_km": MIN_DISTANCE_KM,
+                "threshold_coverage_distance_km": THRESHOLD_COVERAGE_DISTANCE_KM,
                 "completed_seasons": list(completed_seasons),
             },
             "target_statuses": [

@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .models import MIN_DISTANCE_KM, SOURCE_CODE, SOURCE_LIST_URL
+from .models import SOURCE_CODE, SOURCE_LIST_URL, THRESHOLD_COVERAGE_DISTANCE_KM
 from .selectors import DISTANCE_SELECTOR
 from .versions import RAW_MANIFEST_SCHEMA_VERSION
 
@@ -52,7 +52,7 @@ class ManifestContract:
                 raise ManifestValidationError(
                     "Raw artifact row has a non-numeric scored distance."
                 ) from error
-            qualifying_rows += distance >= MIN_DISTANCE_KM
+            qualifying_rows += distance >= THRESHOLD_COVERAGE_DISTANCE_KM
 
         if self.schema_version >= 2:
             if len(rows) != artifact["row_observation_count"]:
@@ -172,7 +172,7 @@ def _validate_v2_or_v3_scope_and_targets(
         raise ManifestValidationError("Manifest v2 country scope source must be all_sites.")
     if scope.get("primary_glider_category") != "FAI3":
         raise ManifestValidationError("Manifest v2 primary glider category must be FAI3.")
-    if scope.get("minimum_scored_distance_km") != MIN_DISTANCE_KM:
+    if scope.get("minimum_scored_distance_km") != THRESHOLD_COVERAGE_DISTANCE_KM:
         raise ManifestValidationError("Manifest v2 minimum scored distance must be 100 km.")
 
     expected_targets = {(season, country) for season in requested_seasons for country in countries}
@@ -280,7 +280,7 @@ def _validate_v4_scope_and_targets(
         scope.get("country_scope_source") != "all_sites"
         or scope.get("primary_glider_category") != "FAI3"
         or scope.get("minimum_observed_scored_distance_km") != 0
-        or scope.get("threshold_coverage_distance_km") != MIN_DISTANCE_KM
+        or scope.get("threshold_coverage_distance_km") != THRESHOLD_COVERAGE_DISTANCE_KM
     ):
         raise ManifestValidationError("Manifest v4 scope contract is invalid.")
     expected_targets = {(season, country) for season in seasons for country in countries}

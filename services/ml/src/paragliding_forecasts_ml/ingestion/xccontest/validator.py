@@ -5,10 +5,11 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
+from math import isfinite
 from pathlib import Path
 from typing import Any
 
-from .models import SOURCE_CODE
+from .models import MAX_DISTANCE_KM, SOURCE_CODE, STORAGE_MIN_DISTANCE_KM
 from .site_mapping import (
     MappingCatalog,
     SiteMappingError,
@@ -97,6 +98,15 @@ def _mapping_resolution(record: dict[str, Any], catalog: MappingCatalog) -> dict
     raise ValidationError("Approved mapping resolution did not select a matching evidence key.")
 
 
+def _has_valid_scored_distance(record: dict[str, Any]) -> bool:
+    value = record.get("scored_distance_km")
+    return (
+        type(value) in (int, float)
+        and isfinite(float(value))
+        and STORAGE_MIN_DISTANCE_KM <= float(value) <= MAX_DISTANCE_KM
+    )
+
+
 def _write_jsonl(path: Path, records: list[dict[str, Any]]) -> None:
     with path.open("x", encoding="utf-8", newline="\n") as output:
         for record in records:
@@ -134,6 +144,17 @@ def validate_run(
                     "source_flight_id": source_flight_id,
                     "validation_status": "quarantined",
                     "reason": "parser_conflicted",
+                    "candidate": record,
+                }
+            )
+            continue
+        if not _has_valid_scored_distance(record):
+            quarantined.append(
+                {
+                    "source": SOURCE_CODE,
+                    "source_flight_id": source_flight_id,
+                    "validation_status": "quarantined",
+                    "reason": "invalid_scored_distance",
                     "candidate": record,
                 }
             )

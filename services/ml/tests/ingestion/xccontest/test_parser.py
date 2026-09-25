@@ -4,8 +4,13 @@ import hashlib
 import json
 
 import pytest
+from selectolax.parser import HTMLParser
 
-from paragliding_forecasts_ml.ingestion.xccontest.parser import ParseError, parse_run
+from paragliding_forecasts_ml.ingestion.xccontest.parser import (
+    ParseError,
+    _parse_distance,
+    parse_run,
+)
 from paragliding_forecasts_ml.ingestion.xccontest.parser_cli import build_parser
 
 
@@ -108,6 +113,27 @@ def test_emits_one_conflicted_candidate_without_choosing_a_value(tmp_path) -> No
     assert records[0]["parser_status"] == "conflicted"
     assert records[0]["conflicting_fields"] == ["scored_distance_km"]
     assert {variant["scored_distance_km"] for variant in records[0]["variants"]} == {400.86, 401.0}
+
+
+@pytest.mark.parametrize("distance", [0, 78.5, 100, 2_000])
+def test_parses_the_full_v4_storage_distance_domain(distance: float) -> None:
+    row = HTMLParser(
+        f'<table><tbody><tr><td class="km"><strong>{distance}</strong> km</td></tr></tbody></table>'
+    ).css_first("tr")
+    assert row is not None
+
+    assert _parse_distance(row, minimum_distance_km=0) == distance
+
+
+@pytest.mark.parametrize("distance", ["-0.01", "2000.01"])
+def test_rejects_distances_outside_the_storage_domain(distance: str) -> None:
+    row = HTMLParser(
+        f'<table><tbody><tr><td class="km"><strong>{distance}</strong> km</td></tr></tbody></table>'
+    ).css_first("tr")
+    assert row is not None
+
+    with pytest.raises(ParseError):
+        _parse_distance(row, minimum_distance_km=0)
 
 
 def test_rejects_threshold_and_malformed_legacy_rows(tmp_path) -> None:

@@ -125,11 +125,11 @@ def test_parses_complete_multi_season_manifest_v2_and_both_detail_url_shapes(tmp
     assert parsed.report["raw_manifest_observation_counts_verified"] is True
     assert parsed.report["raw_country_codes"] == ["BG"]
     assert parsed.report["raw_seasons"] == [2025, 2026]
-    assert parsed.report["threshold_exclusions"] == 2
+
     assert parsed.report["records_rejected"] == 2
 
 
-def test_parses_versioned_v4_manifest_and_preserves_legacy_threshold_interpretation(
+def test_parses_versioned_v4_manifest_with_the_all_distance_storage_domain(
     tmp_path,
 ) -> None:
     run_key, raw_dir = write_v2_run(tmp_path)
@@ -181,8 +181,11 @@ def test_parses_versioned_v4_manifest_and_preserves_legacy_threshold_interpretat
 
     parsed = parse_run(run_key, project_root=tmp_path)
 
+    records = read_jsonl(parsed.normalized_path)
+    assert [record["source_flight_id"] for record in records] == ["100", "101", "200", "201"]
+    assert [record["scored_distance_km"] for record in records] == [150.0, 99.0, 160.0, 98.0]
+    assert parsed.report["records_rejected"] == 0
     assert parsed.report["raw_manifest_schema_version"] == 4
-    assert parsed.report["threshold_exclusions"] == 2
 
 
 def test_manifest_v2_fails_closed_for_incomplete_status_or_counter_drift(tmp_path) -> None:
