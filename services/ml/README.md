@@ -750,11 +750,17 @@ uv run --env-file .env --project services/ml xccontest-ingest fresh `
   --policy-file data/local/xccontest-import-policy.json
 ```
 
-`fresh` preserves the explicit human mapping-review gate. `propose` is automatic and
-read-only; `apply` is always a human-reviewed SQLite write. If validation finds a mapping-actionable
-quarantine without a matching reviewed rejection, it exits with `awaiting_mapping_review` (exit
-code 2) before persistence. Copy/review/apply the generated `site-mapping-v2` decisions file, then
-continue entirely offline:
+`fresh` first writes and applies an immutable automatic decision artifact, but only for a valid
+source coordinate inside exactly one configured, same-country catchment. It creates approved
+`source_point` plus any observed opaque site-token or source-takeoff-ID mappings, with the catchment
+and mapping-snapshot evidence retained in the artifact. A valid coordinate outside every configured
+catchment is recorded as an automatic rejection and never becomes a mapping or canonical flight.
+Unknown/no-coordinate evidence, overlapping catchments, country mismatch, or a coordinate that
+contradicts an approved mapping remains in the human review flow. `propose` is read-only and contains
+only those residual cases; `apply` is always a human-reviewed SQLite write. If validation finds a
+residual mapping-actionable quarantine without a matching reviewed rejection, it exits with
+`awaiting_mapping_review` (exit code 2) before persistence. Copy/review/apply the generated
+`site-mapping-v3` decisions file, then continue entirely offline:
 
 ```powershell
 uv run --env-file .env --project services/ml xccontest-ingest resume `
@@ -762,7 +768,7 @@ uv run --env-file .env --project services/ml xccontest-ingest resume `
   --policy-file data/local/xccontest-import-policy.json
 ```
 
-`resume` reuses valid parser, proposal, and current mapping-snapshot validation artifacts; it
+`resume` reuses valid parser, automatic-mapping, proposal, and current mapping-snapshot validation artifacts; it
 never opens a browser. Persistence then compares each accepted record with the canonical SQLite
 flight of the same source identity. Exact repeats revalidate, known values can be enriched, and
 conflicts stop with `awaiting_reconciliation_review` (exit code 2) before any database write.
@@ -894,25 +900,47 @@ coverage matrix. Keep fixtures small and separate from ignored live/raw runs.
 
 ## Reviewed site mapping and validation
 
-This is a deliberately human-reviewed boundary. A proposal is evidence to inspect,
+This boundary automatically handles only deterministic coordinate evidence, then sends the
+residual cases to human review. A proposal is evidence to inspect,
 not permission for the program to assign flights to a project site. No external
 geocoding is used and `propose` never changes SQLite.
 
-### 1. Create proposals
+### 1. Apply deterministic coordinate mappings
 
 Start with a completed parser-v2 run and a migrated local database. From the repository
 root, use the normal `.env` database configuration (or pass `--database-url`):
 
 ```powershell
 npm.cmd run db:migrate --workspace @paragliding-forecasts/database
+uv run --env-file .env --project services/ml xccontest-site-mappings auto-apply --run-key <uuid>
+```
+
+`auto-apply` writes `automatic-mapping-decisions.jsonl` and
+`automatic-mapping-report.json`. It writes approved mappings only when a valid source
+coordinate is inside exactly one configured catchment and the source country matches that
+site. It adds the exact `source_point` and any observed `source_site_token` and
+`source_takeoff_id` to that site. A coordinate outside all configured catchments receives
+an audit-only automatic rejection: it creates no mapping, is never persisted as a flight,
+and does not require human review. It never decodes a token, calls an external geocoder,
+or replaces an existing active mapping.
+
+### 2. Create residual review proposals
+
+Run the read-only proposal command after `auto-apply`:
+
+```powershell
 uv run --env-file .env --project services/ml xccontest-site-mappings propose --run-key <uuid>
 ```
 
-For a run key such as `f1032827-a98d-4c01-969e-e67b4885f90d`, the command writes its
-read-only output here:
+`propose` contains only evidence not resolved by the automatic policy: absent/invalid
+coordinates, overlap, country mismatch, or a valid coordinate that conflicts with an
+already approved mapping. For a run key such as
+`f1032827-a98d-4c01-969e-e67b4885f90d`, the directory contains:
 
 ```text
-data/interim/xccontest/f1032827-a98d-4c01-969e-e67b4885f90d/site-mapping-v2/
+data/interim/xccontest/f1032827-a98d-4c01-969e-e67b4885f90d/site-mapping-v3/
+  automatic-mapping-decisions.jsonl
+  automatic-mapping-report.json
   mapping-proposals.jsonl
   proposal-report.json
 ```
@@ -924,7 +952,7 @@ copy:
 
 ```powershell
 $runKey = 'f1032827-a98d-4c01-969e-e67b4885f90d'
-$mappingDir = "data/interim/xccontest/$runKey/site-mapping-v2"
+$mappingDir = "data/interim/xccontest/$runKey/site-mapping-v3"
 Copy-Item "$mappingDir/mapping-proposals.jsonl" "$mappingDir/mapping-decisions.jsonl"
 ```
 
@@ -947,11 +975,14 @@ A proposal exposes the evidence to review:
   Do not round, swap, or otherwise alter the pair.
 - `source_display_names`, `sample_source_flight_ids`, `seasons`, and
   `catchment_suggestions` are review context. They are not mapping keys. A unique
-  catchment suggestion is still only a suggestion; independently verify the location.
-- `recommendation` is `inside_unique_catchment`, `ambiguous_catchment`, or
-  `review_required`. None of these is an automatic approval.
+  catchment suggestion in a residual proposal is still only a suggestion; independently
+  verify the location.
+- `recommendation` is `inside_unique_catchment`, `ambiguous_catchment`,
+  `review_required`, or `mapping_coordinate_conflict`. `review_reasons` and
+  `matching_mapping_ids` identify a contradiction with an existing approved mapping.
+  No residual recommendation is an automatic approval.
 
-### 2. Complete each review decision
+### 3. Complete each review decision
 
 Keep one JSON object per line; do not wrap lines in `[` / `]` and do not put commas
 between lines. It is safe, and useful for traceability, to retain every field copied from
@@ -978,7 +1009,7 @@ traceable in the local file.
 active mapping. The current apply command rejects a conflicting active key and rolls back
 the entire file; correction/retirement needs an explicit follow-up workflow.
 
-### 3. Valid examples
+### 4. Valid examples
 
 The first example approves an opaque source token after manual verification. It is a
 complete, ready-to-apply JSONL line; additional copied proposal fields are allowed but
@@ -1000,7 +1031,7 @@ A rejected proposal can be minimal:
 {"proposal_id":"keep-the-proposal-id-for-local-traceability","decision":"rejected","notes":"Generic launch name has no reliable evidence linking it to a canonical site."}
 ```
 
-### 4. Apply the reviewed file
+### 5. Apply the reviewed file
 
 Review the entire file before applying it. The command validates all lines and uses one
 SQLite transaction: any invalid line, unknown `site_slug`, missing approval reference, or
@@ -1009,7 +1040,7 @@ conflicting active mapping aborts the whole file without a partial write.
 ```powershell
 $runKey = 'f1032827-a98d-4c01-969e-e67b4885f90d'
 uv run --env-file .env --project services/ml xccontest-site-mappings apply `
-  --review-file "data/interim/xccontest/$runKey/site-mapping-v2/mapping-decisions.jsonl"
+  --review-file "data/interim/xccontest/$runKey/site-mapping-v3/mapping-decisions.jsonl"
 ```
 
 The output reports `inserted`, `promoted`, `unchanged`, and `rejected` counts. `approved`
@@ -1022,17 +1053,18 @@ Validate an existing parser-v2 run against only approved mappings:
 uv run --env-file .env --project services/ml xccontest-validate --run-key <uuid>
 ```
 
-The validator writes non-overwriting `validation-v2/<mapping-snapshot-sha256>/`
+The validator writes non-overwriting `validation-v3/<mapping-snapshot-sha256>/`
 outputs: `accepted-flights.jsonl`, `site-quarantine.jsonl`, and
 `validation-report.json`. It does not call XCContest or create `flight_ingestion_runs` or
 `flight_records`; the later persistence slice owns that transaction. Re-run validation
 after mapping approvals to obtain a new mapping-snapshot output.
-The top-level `xccontest-ingest` command orchestrates the same collector, parser, mapping,
-validator, and persistence boundaries without passing ephemeral `RowObservation` values. It
-writes the same non-overwriting stage outputs in the same locations. The conditional mapping
-review gate stops before persistence, preserving the run key and all artifacts for offline
-`resume`; it never applies mappings automatically.
-
+The top-level `xccontest-ingest` command orchestrates the same collector, parser,
+automatic coordinate mapping, residual proposal, validator, and persistence boundaries
+without passing ephemeral `RowObservation` values. It writes the same non-overwriting
+stage outputs in the same locations. The conditional mapping review gate stops before
+persistence only when residual manual cases remain, preserving the run key and all
+artifacts for offline `resume`; `resume` reuses the prior automatic-mapping artifact and
+never contacts XCContest.
 Other Python modules remain planned:
 
 ```powershell
@@ -1160,7 +1192,7 @@ for an outstanding reconciliation review, and 1 for failed validation or invalid
 
 Persistence makes an already validated XCContest flight snapshot
 repeatable and auditable.  It is an **offline** boundary: it reads the existing
-`parser-v2` and `validation-v2` artifacts, verifies their hashes, and reconciles
+`parser-v2` and `validation-v3` artifacts, verifies their hashes, and reconciles
 accepted records with migrated SQLite.  It does not collect, open a browser, or
 contact XCContest.
 
@@ -1170,13 +1202,13 @@ silently inserted or overwritten.  It is classified before any database write.
 
 The system deliberately keeps the mapping-review gate introduced by DEC-029:
 
-1. `xccontest-ingest fresh` creates mapping proposals and stops with
-   `awaiting_mapping_review` if mapping-actionable quarantines are still
-   unresolved.
-2. A human applies mapping decisions, then runs `xccontest-ingest resume`.
-   `resume` is offline and revalidates against the current approved mapping
-   snapshot.
-3. Only then does persistence reconcile the accepted flights.  A reconciliation
+1. `xccontest-ingest fresh` automatically applies only unique same-country coordinate
+   mappings, records outside-catchment candidates as audit-only automatic rejections,
+   then creates proposals for residual cases and stops with `awaiting_mapping_review`
+   only if a residual mapping-actionable quarantine is unresolved.
+2. A human applies residual mapping decisions, then runs `xccontest-ingest resume`.
+   `resume` is offline and revalidates against the current approved mapping snapshot.
+3. Only then does persistence reconcile the accepted flights. A reconciliation
    conflict creates another explicit review pause rather than a partial write.
 
 `--persist-approved-only` remains an explicit, exceptional path.  It may persist
@@ -1522,7 +1554,7 @@ run, or event counts.
 The 2025/2026 run `f1032827-a98d-4c01-969e-e67b4885f90d` is an optional
 follow-up, not the deterministic smoke check. Its existing validation artifacts
 use an older mapping snapshot, so `resume` will create/verify a new local
-`validation-v2/<current-snapshot>/` directory before reconciliation. It can
+`validation-v3/<current-snapshot>/` directory before reconciliation. It can
 revalidate its 267 existing records and may add records now eligible through
 newer approved mappings. Review the JSON output and backup first; do not assume
 its counts equal the old 267-record snapshot.

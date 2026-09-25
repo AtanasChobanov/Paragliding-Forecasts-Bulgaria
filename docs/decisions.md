@@ -71,6 +71,7 @@ consequences. Temporary progress and Git state belong in
 | DEC-056     | Build nested XC labels from confirmed flights and explicit activity evidence    | Accepted   | 2026-09-23 |
 | DEC-057     | Use a configurable hybrid rule-and-score overdevelopment baseline               | Accepted   | 2026-09-23 |
 | DEC-058     | Evaluate a GFS model-sounding cloudbase baseline with a blue-day state           | Proposed   | 2026-09-24 |
+| DEC-059     | Automate deterministic XCContest coordinate mapping dispositions                 | Accepted   | 2026-09-25 |
 
 ## Individual decisions
 
@@ -2528,6 +2529,57 @@ review; its upstream license is BSD-3-Clause.
 
 **Related files:** [`T-022-sounding-cloudbase-research-note.md`](T-022-sounding-cloudbase-research-note.md),
 [`architecture.md`](architecture.md), and [`handoff.md`](handoff.md).
+
+### DEC-059 - Automate deterministic XCContest coordinate mapping dispositions
+
+**Status:** Accepted
+
+**Date:** 2026-09-25
+
+**Supersedes:** The no-automatic-write portions of DEC-026 and DEC-027, and the
+proposal-only portion of DEC-029. Their catchment geometry, approved-mapping
+requirement, immutable artifacts, and residual human-review gate remain accepted.
+
+**Context:** The all-distance T-020 collector will encounter many source launch
+coordinates. Requiring manual rejection for points clearly outside every one of
+the seven project catchments creates recurring review work without improving
+mapping accuracy. Conversely, the project already maintains configured radii and
+needs repeatable source token/takeoff-ID mappings for coordinate-confirmed
+launches. New opaque tokens and IDs may still represent nearby or regional
+launches such as Rogachevo, so absence of coordinates must not become an automatic
+rejection.
+
+**Decision:** Before residual proposal generation, `xccontest-ingest fresh` and
+offline `resume` invoke `xccontest-site-mappings auto-apply`. It retains immutable
+v3 automatic decision/report artifacts and writes approved `source_point` plus
+observed `source_site_token` and `source_takeoff_id` mappings only when a valid
+source coordinate is inside exactly one configured catchment and the source
+country matches the target site. The catchment comparison is inclusive at the
+radius boundary and never decodes opaque source tokens or calls a geocoder.
+
+A valid coordinate outside all configured catchments is an audit-only automatic
+rejection. It creates no source-site mapping and no canonical flight, but does
+not block persistence of other approved records. Unknown evidence without valid
+coordinates, overlapping catchments, country mismatch, and an approved mapping
+whose valid coordinate conflicts with its mapped site remain quarantined for
+human review. The automatic stage never alters or silently supersedes an active
+mapping; it does not create a global token/ID blacklist or a new exclusion table.
+
+**Consequences:** `site-mapping-v3` contains the automatic decision/report and
+residual proposal artifacts; `validation-v3/<mapping-snapshot>/` records an
+explicit `mapping_disposition` and auto-rejection count. Pipeline persistence
+pauses only for residual `review_required` mapping quarantines. Existing approved
+source mappings still accept records without coordinates, unless valid
+coordinates show a direct contradiction. Unit coverage must prove unique
+in-country approval, no-coordinate/manual residual behavior, outside-catchment
+nonblocking rejection, and known-mapping coordinate conflict. Live source
+collection remains separately owner-authorized.
+
+**Related files:** [`T-020-xccontest-activity-ingestion-plan.md`](T-020-xccontest-activity-ingestion-plan.md),
+[`../services/ml/README.md`](../services/ml/README.md),
+[`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/site_mapping.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/site_mapping.py),
+[`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/pipeline.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/pipeline.py), and
+[`handoff.md`](handoff.md).
 
 ## Open decisions
 

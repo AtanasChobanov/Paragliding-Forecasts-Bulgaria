@@ -9,7 +9,7 @@
    for the flight-ingestion prerequisite only.
 5. [`T-022-sounding-cloudbase-research-note.md`](T-022-sounding-cloudbase-research-note.md)
    for the cloudbase/sounding investigation.
-6. DEC-055 through DEC-058 in `docs/decisions.md`, plus DEC-023 through
+6. DEC-055 through DEC-059 in `docs/decisions.md`, plus DEC-023 through
    DEC-030 for the existing XCContest boundary.
 7. The relevant sections of `docs/project-brief.md` and
    `docs/architecture.md` for product/system constraints.
@@ -17,21 +17,24 @@
 Keep durable decisions in `docs/decisions.md`, ticket lifecycle in
 `docs/tasks.md`, and only current actionable state here.
 
-## Current state - 2026-09-24
+## Current state - 2026-09-25
 
 | Field | Value |
 | --- | --- |
 | Branch | `feature/T-020-joined-weather-dataset` |
-| Ticket | T-020 remains **In Progress** and has no joined-dataset implementation yet. Its first implementation step is the sub-100 XCContest ingestion prerequisite documented in the focused plan. T-018 and T-019 remain in Review; ERA5 remains deferred to T-038. |
+| Ticket | T-020 remains **In Progress**: the focused XCContest 0--2000 km ingestion prerequisite is implemented and locally verified, but the joined flight/weather dataset is still not implemented. The bounded headed live acceptance was deliberately not run in this session at the owner request. T-018 and T-019 remain in Review; ERA5 remains deferred to T-038. |
 | Product decisions | The Project Owner accepted the prior-evening forecast cutoff, tri-state flight labels based on recorded activity, and the configurable hybrid overdevelopment baseline. The owner also confirmed that blue days may still be flyable and asked that sounding-derived cloudbase, thermal-top, inversion, and overdevelopment diagnostics be evaluated. |
-| XCContest gap | The current collector is optimized for complete 100+ coverage, parser-v2 rejects sub-100 rows, and SQLite enforces 100--2000 km. That cannot produce activity-backed negative examples. |
-| Approved ingestion design | Keep the user-facing `--season` scope. Capture the parent season view in source-default order first, run the existing threshold-first phase, then internally traverse source-offered dates. For each activity scope capture source-default order before distance/pilot/points/duration sorts, and partition saturated dates by exact glider class. Persist observed 0..2000 km records, while only positive-distance rows may later prove activity. |
-| Database scope | Change only the `flight_records.scored_distance_km` check from 100..2000 to 0..2000 and matching parser/validator contracts. Add no table, column, or index. Existing mapping review/quarantine remains. |
-| Implementation plan | [`T-020-xccontest-activity-ingestion-plan.md`](T-020-xccontest-activity-ingestion-plan.md) contains only flight-ingestion changes, tests, migration, recovery, and bounded live acceptance. It does not implement the joined dataset. |
+| XCContest state | The collector now captures source-default season evidence, preserves threshold-first 100+ coverage, and then scans source-offered dates for all-distance activity. Manifest-v4/parser/validator/persistence and SQLite accept finite 0--2000 km rows. Partial/saturated coverage is carried as lineage; it is not a known-negative result. |
+| Implemented ingestion design | The user-facing scope remains repeated `--season`. The collector captures source-default parent evidence before threshold sorts, completes the threshold-first phase, then internally traverses source-offered dates. Every activity scope captures source-default before distance/pilot/points/duration sorts; saturated daily parents fall back to exact glider classes. Observed 0..2000 km records can persist, while later labels must require positive distance for activity evidence. |
+| Database scope | Migration `20260925150010_widen_flight_distance_constraint` changes only `flight_records.scored_distance_km` from 100..2000 to 0..2000. It preserves `STRICT`, FKs, unique identity, and existing indexes; no table, column, or index was added. |
+| Site-mapping policy | `fresh` and offline `resume` now apply immutable `site-mapping-v3` automatic decisions before residual proposals. Only a valid, same-country coordinate inside one catchment creates approved point/token/takeoff-ID mappings. A valid point outside every catchment is audit-only, rejected without a human-review pause or canonical persistence. No-coordinate, ambiguous, country-mismatched, and contradictory existing mappings remain human review. |
+| Implementation plan | [`T-020-xccontest-activity-ingestion-plan.md`](T-020-xccontest-activity-ingestion-plan.md) includes activity ingestion, recovery, bounded live acceptance, and the deterministic automatic coordinate mapping disposition. It does not implement the joined dataset. |
 | Sounding finding | IGRA is real balloon observation data and the current pipeline covers Sofia only. A forecast/model sounding from existing GFS profiles works at all seven locations. NOAA READY is a GFS sounding interface, not independent observations, and is not recommended as a production dependency. |
 | Historical GFS evidence | The owner collected 2025-08-02 successfully. The 2023-10-03 run initially rolled back on numerical shortwave noise; weather-spatial/7 now clamps only absolute values at most `1e-12` and the retained run resumed offline and inserted seven site snapshots. |
-| Next work | Implement the T-020 flight-ingestion prerequisite in the documented order: fixtures, collector contracts/strategy, manifest/checkpoint version, parser/validator widening, the single Drizzle constraint migration, offline replay, then one bounded headed acceptance. The joined dataset follows after this prerequisite. |
-| Live-source gate | Before a multi-date all-distance backfill, confirm the retained XCContest authority covers that larger rendered-UI workload. Keep sequential 30-second pacing; do not parallelize years or countries. |
+| Next work | The owner may run one bounded headed `xccontest-collect --season <recent-year>` acceptance under the normal 30-second pace and an explicit view cap, then inspect source-default evidence, sub-100 parsing, persistence, and honest complete/partial scope status. Do not start a multi-season backfill. After genuine acceptance, record its exact evidence and continue the joined-dataset work separately. |
+| Live-source gate | No real XCContest collection, browser pipeline, or ingestion command was run in this session at the owner request. Before any bounded headed acceptance or larger all-distance backfill, confirm the retained XCContest authority covers the rendered-UI workload. Keep sequential 30-second pacing; do not parallelize years or countries. |
+| Local verification | `uv run --project services/ml ruff check services/ml/src services/ml/tests`, `ruff format --check`, and `pytest services/ml/tests` passed (326 tests). `npm.cmd run format:check`, `typecheck`, `test` (249 tests), `build`, `repo:check`, and database `db:check` passed. `npm.cmd run lint` fails in the unmodified `packages/database/test/migration-foundation.test.ts` at lines 450 and 457 (array-type/restrict-template-expressions); it was not changed by this task. The Vite build retains its existing >500 kB chunk warning. |
+| T-020 commits | `fe1a39f`, `b67f594`, `2806e78`, `2e6096f`, `da5b619`, `628929d`, `0b49132`, and `d8bd2ef` implement the verified local code slices; `d8bd2ef` adds deterministic automatic coordinate mapping. The bounded headed acceptance-record commit remains intentionally unmade because no live acceptance was run. |
 | Storage risk | Current retained GFS derived artifacts are too large for an unbounded negative-day backfill. Before broader GFS acquisition, use the compact site-footprint design or an explicitly bounded sample. |
 
 ## Accepted T-020 business logic

@@ -282,6 +282,32 @@ Persistence remains atomic for canonical database changes. Valid records from
 a collector run with partial saturated coverage may be inserted, while the run
 and manifest must preserve that partial state.
 
+### 7.4 Automatic coordinate site-mapping disposition
+
+Before writing human mapping proposals, `xccontest-ingest fresh` and the offline
+`xccontest-ingest resume` stage run `xccontest-site-mappings auto-apply` against
+parser staging and the current local mapping catalogue. It writes immutable
+`site-mapping-v3/automatic-mapping-decisions.jsonl` and
+`automatic-mapping-report.json` evidence and applies only this closed policy:
+
+- a valid source coordinate within exactly one configured catchment and with a
+  matching source-country code automatically creates approved `source_point`
+  evidence plus any observed `source_site_token` and `source_takeoff_id` for
+  that same canonical site;
+- a valid coordinate outside every configured project catchment is an audit-only
+  automatic rejection: it creates neither a source-site mapping nor a canonical
+  flight and does not require human review;
+- unknown token/ID evidence without valid coordinates, overlapping catchments,
+  country mismatch, or an approved token/ID whose valid coordinate conflicts
+  with its mapped site remains quarantined for human review.
+
+The auto stage cannot decode tokens, use external geocoding, alter a pre-existing
+active mapping, create a blacklist/exclusion table, or silently resolve a
+contradiction. Residual human proposals retain the existing reviewed
+`approved`/`provisional`/`rejected` workflow. Persistence waits only for residual
+mapping-actionable quarantine records; automatic rejections remain excluded from
+canonical persistence but do not pause an otherwise approved run.
+
 ## 8. Test plan
 
 ### 8.1 Collector fixtures
@@ -324,7 +350,11 @@ Prove:
 - existing approved mappings work unchanged for sub-100 records;
 - rejected/ambiguous mappings remain outside canonical persistence;
 - offline replay performs zero network/browser operations;
-- old manifest versions retain their old interpretation.
+- old manifest versions retain their old interpretation;
+- unique in-country coordinate evidence creates approved point/token/takeoff-ID mappings;
+- outside-catchment candidates are audit-only automatic rejections that do not pause persistence;
+- unknown/no-coordinate, ambiguous, country-mismatched, and contradictory approved mapping
+  evidence remains a human-review pause;
 
 ### 8.4 Database tests
 
@@ -357,18 +387,63 @@ Do not start a multi-season backfill as part of acceptance.
    phase, followed by category fallback.
 6. Version the artifacts, manifest, checkpoints, and completeness reports.
 7. Widen parser and validator distance checks.
-8. Update reconciliation and mapping fixtures without changing their business
+8. Add the deterministic automatic coordinate mapping disposition before residual
+   human proposals.
+9. Update reconciliation and mapping fixtures without changing their business
    rules.
-9. Add the single Drizzle check-constraint migration and schema/test updates.
-10. Update offline readers and persistence for the new manifest version.
-11. Document the unchanged season-based command and recovery behavior in the
-    ML README.
-12. Run focused Python tests, database tests, repository checks, and then the
-    bounded headed acceptance.
-13. Record the verified result and any remaining saturated scopes in the
-    handoff.
+10. Add the single Drizzle check-constraint migration and schema/test updates.
+11. Update offline readers and persistence for the new manifest version.
+12. Document the unchanged season-based command, recovery behavior, and mapping
+   disposition in the ML README.
+13. Run focused Python tests, database tests, repository checks, and then the
+   bounded headed acceptance.
+14. Record the verified result and any remaining saturated scopes in the
+   handoff.
 
-## 10. Definition of done
+## 10. Planned commits
+
+Keep the implementation on the focused T-020 branch and commit each coherent,
+reviewable slice after its relevant checks pass. Use imperative summaries with
+the ticket prefix, as required by `CONTRIBUTING.md`. The intended sequence is:
+
+1. `T-020 add activity collector fixtures and contracts` — source-default
+   scope representation, browser reset/navigation behavior, deterministic
+   fixtures, and focused collector contract tests.
+2. `T-020 collect all-distance activity by source date` — preserve the
+   threshold-first phase, add internal date traversal, default-then-sorted
+   activity collection, exact-class fallback, pacing/cap behavior, and
+   collector tests.
+3. `T-020 version activity manifests and recovery checkpoints` — manifest and
+   checkpoint versions, scope completeness evidence, offline compatibility,
+   and verified resume behavior with focused tests.
+4. `T-020 accept sub-100 flight records` — separate the storage minimum from
+   the 100 km coverage threshold, widen parser/validator contracts, and cover
+   reconciliation/mapping behavior and distance boundaries.
+5. `T-020 widen flight distance database constraint` — commit the Drizzle
+   schema declaration, generated SQL migration, Drizzle metadata, and matching
+   migration tests together as one reviewable migration unit.
+6. `T-020 persist activity flights from versioned manifests` — update offline
+   stages and persistence for the new manifest and distance domain, including
+   lineage and partial-coverage behavior.
+7. `T-020 document activity collection and recovery` — document the unchanged
+   season-based command, internal scan, and recovery behavior in the owning ML
+   README.
+8. `T-020 record activity ingestion acceptance` — after all implementation
+   commits and checks, record bounded headed acceptance evidence and any
+   remaining partial/saturated scopes in the handoff.
+
+9. `T-020 automate deterministic coordinate site mappings` — write immutable automatic
+   decisions, accept unique in-country coordinate evidence, retain outside-catchment
+   audit rejections, and preserve only residual human review.
+10. `T-020 document automatic mapping dispositions` — update the operator workflow,
+    durable decision, plan, and handoff with the v3 artifact contract.
+
+These are planned commit boundaries, not permission to commit during this
+planning update. Adjust a boundary only if the implementation reveals that two
+listed slices cannot be reviewed or validated independently; keep the database
+migration files together and do not combine unrelated changes.
+
+## 11. Definition of done
 
 This ingestion prerequisite is complete when:
 
@@ -378,6 +453,9 @@ This ingestion prerequisite is complete when:
 - every source-offered season date is scanned internally for activity;
 - source-default order is captured before explicit sorts;
 - valid 0..2000 km rows pass every stage and can be stored;
+- deterministic unique coordinate matches are automatically mapped with retained decision evidence;
+- outside-catchment candidates are automatically rejected without blocking persistence, while
+  uncertain/contradictory evidence remains reviewable;
 - no new database table is introduced;
 - saturated or failed scopes remain explicit;
 - offline replay remains network-free and deterministic;
@@ -386,7 +464,7 @@ This ingestion prerequisite is complete when:
 - documentation states that stored zero-distance rows are not sufficient
   activity evidence for later labels.
 
-## 11. Out of scope for this plan
+## 12. Out of scope for this plan
 
 - building the T-020 joined flight/weather dataset;
 - calculating positive, negative, or unknown site-day labels;
