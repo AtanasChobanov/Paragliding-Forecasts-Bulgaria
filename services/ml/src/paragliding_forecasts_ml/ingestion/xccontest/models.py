@@ -95,6 +95,12 @@ RESCUE_SORTS = tuple(
     for direction in ("descending", "ascending")
 )
 
+ALL_DISTANCE_ACTIVITY_SORTS = (
+    FlightListScope(PRIMARY_GLIDER_CATEGORY, sort_key="distance", sort_direction="descending"),
+    FlightListScope(PRIMARY_GLIDER_CATEGORY, sort_key="distance", sort_direction="ascending"),
+    *RESCUE_SORTS,
+)
+
 
 @dataclass(frozen=True)
 class CollectorConfig:
@@ -194,6 +200,17 @@ class PageObservation:
             and self.has_next_page
             and self.last_distance_km is not None
             and self.last_distance_km >= MIN_DISTANCE_KM
+        )
+
+    @property
+    def is_all_distance_saturated(self) -> bool:
+        """True when an all-distance descending first page still has a next page."""
+
+        return bool(
+            self.scope.sort_mode == "explicit"
+            and self.scope.sort_key == "distance"
+            and self.scope.sort_direction == "descending"
+            and self.has_next_page
         )
 
 

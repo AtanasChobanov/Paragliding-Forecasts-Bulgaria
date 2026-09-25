@@ -91,3 +91,7 @@ def test_cli_parser_accepts_database_url_but_not_permission_reference_or_legacy_
         build_parser().parse_args(["--season", "2025", "--permission-reference", "not-used"])
     with pytest.raises(SystemExit):
         build_parser().parse_args(["--season", "2025", "--max-pages", "5"])
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["--season", "2025", "--date", "2025-07-01"])
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["--season", "2025", "--date-from", "2025-07-01"])

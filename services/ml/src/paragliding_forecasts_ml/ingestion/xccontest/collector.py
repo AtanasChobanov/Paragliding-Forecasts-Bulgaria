@@ -9,6 +9,7 @@ from typing import Protocol
 
 from .artifacts import RawArtifactStore, safe_failure_summary
 from .models import (
+    ALL_DISTANCE_ACTIVITY_SORTS,
     EXACT_GLIDER_CATEGORIES,
     PRIMARY_GLIDER_CATEGORY,
     RESCUE_SORTS,
@@ -17,6 +18,7 @@ from .models import (
     FlightListScope,
     PageObservation,
     TargetCollectionStatus,
+    source_default_scope,
 )
 
 
@@ -115,16 +117,39 @@ class FlightListCollector:
             raise
 
     def _collect_target(self, season: int, country_code: str) -> TargetCollectionStatus:
+        """Keep threshold evidence first, then collect date-scoped activity evidence."""
+
+        default_scope = source_default_scope(PRIMARY_GLIDER_CATEGORY)
+        self._capture_scope(
+            season,
+            country_code,
+            default_scope,
+            require_rows=True,
+        )
+        threshold_status, threshold_unresolved = self._collect_threshold_target(
+            season, country_code
+        )
+        activity_unresolved = self._collect_activity_target(season, country_code)
+        unresolved_scopes = (*threshold_unresolved, *activity_unresolved)
+        status = "saturated_unresolved" if unresolved_scopes else threshold_status
+        self._artifacts.write_checkpoint(
+            season=season,
+            country_code=country_code,
+            status=status,
+            scope=default_scope,
+            unresolved_scopes=unresolved_scopes,
+        )
+        return TargetCollectionStatus(season, country_code, status, unresolved_scopes)
+
+    def _collect_threshold_target(
+        self, season: int, country_code: str
+    ) -> tuple[str, tuple[FlightListScope, ...]]:
+        """Preserve the existing distance-threshold coverage strategy unchanged."""
+
         primary_scope = FlightListScope(category=PRIMARY_GLIDER_CATEGORY)
         primary_page = self._capture_scope(season, country_code, primary_scope, require_rows=True)
         if not primary_page.is_distance_saturated:
-            self._artifacts.write_checkpoint(
-                season=season,
-                country_code=country_code,
-                status="complete_primary",
-                scope=primary_scope,
-            )
-            return TargetCollectionStatus(season, country_code, "complete_primary", ())
+            return "complete_primary", ()
 
         dates = self._driver.available_dates(season)
         if not dates:
@@ -163,14 +188,69 @@ class FlightListCollector:
                     )
 
         status = "complete_partitioned" if not unresolved_scopes else "saturated_unresolved"
-        self._artifacts.write_checkpoint(
-            season=season,
-            country_code=country_code,
-            status=status,
-            scope=primary_scope,
-            unresolved_scopes=tuple(unresolved_scopes),
+        return status, tuple(unresolved_scopes)
+
+    def _collect_activity_target(
+        self, season: int, country_code: str
+    ) -> tuple[FlightListScope, ...]:
+        """Collect source-offered dates after threshold coverage without adding CLI dates."""
+
+        unresolved_scopes: list[FlightListScope] = []
+        for date_filter in sorted(self._driver.available_dates(season)):
+            primary_distance_page = self._capture_activity_scope(
+                season,
+                country_code,
+                category=PRIMARY_GLIDER_CATEGORY,
+                date_filter=date_filter,
+            )
+            if not primary_distance_page.is_all_distance_saturated:
+                continue
+            for category in EXACT_GLIDER_CATEGORIES:
+                category_distance_page = self._capture_activity_scope(
+                    season,
+                    country_code,
+                    category=category,
+                    date_filter=date_filter,
+                )
+                if category_distance_page.is_all_distance_saturated:
+                    unresolved_scopes.append(
+                        FlightListScope(category=category, date_filter=date_filter)
+                    )
+        return tuple(unresolved_scopes)
+
+    def _capture_activity_scope(
+        self,
+        season: int,
+        country_code: str,
+        *,
+        category,
+        date_filter: str,
+    ) -> PageObservation:
+        """Capture unsorted evidence before every all-distance rescue order."""
+
+        self._capture_scope(
+            season,
+            country_code,
+            source_default_scope(category, date_filter=date_filter),
+            require_rows=False,
+            write_empty=True,
         )
-        return TargetCollectionStatus(season, country_code, status, tuple(unresolved_scopes))
+        distance_page: PageObservation | None = None
+        for sort_scope in ALL_DISTANCE_ACTIVITY_SORTS:
+            page = self._capture_scope(
+                season,
+                country_code,
+                replace(sort_scope, category=category, date_filter=date_filter),
+                require_rows=False,
+                write_empty=True,
+            )
+            if page.scope.sort_key == "distance" and page.scope.sort_direction == "descending":
+                distance_page = page
+        if distance_page is None:
+            raise CollectionError(
+                "XCContest activity strategy did not collect distance descending."
+            )
+        return distance_page
 
     def _capture_scope(
         self,
@@ -179,6 +259,7 @@ class FlightListCollector:
         scope: FlightListScope,
         *,
         require_rows: bool,
+        write_empty: bool = False,
     ) -> PageObservation:
         if self._view_count >= self._config.max_views:
             raise CollectionError(
@@ -195,7 +276,7 @@ class FlightListCollector:
             expected_scope=scope,
             require_rows=require_rows,
         )
-        if page.rows:
+        if page.rows or write_empty:
             self._artifacts.write_page(page)
         return page
 
