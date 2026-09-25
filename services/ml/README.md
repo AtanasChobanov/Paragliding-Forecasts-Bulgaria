@@ -822,13 +822,16 @@ pager or constructs an offset URL.
 Only after that threshold phase, the collector reads the dates offered by XCContest's
 visible date control in chronological order. Its all-distance activity scan collects only
 15 February through 15 October inclusive and records every skipped 16 October--14 February
-source date in the immutable target audit. For each in-window date it captures the
-all-distance source-default view before the explicit distance, pilot, points, and airtime
-orderings in both directions. A verified empty default view stops there: reordering an empty
-result cannot reveal a flight. A saturated daily parent view falls back to the same exact
-classes, each with its own default-then-sorted sequence. This activity phase finds 0--2000 km
-source rows; it supplements rather than weakens the 100+ coverage process. Date traversal is
-internal: the public CLI remains season-only and has no user-selected date or date-range option.
+source date in the immutable target audit. For each in-window date it captures the all-distance source-default view. When that view has
+no active next page, it is complete as captured—even at exactly 100 rows—and no category or
+sort views are requested. A paginated daily parent is partitioned through the exact classes;
+only an exact-category default view that is itself paginated triggers the explicit distance,
+pilot, points, and airtime orderings in both directions. Date and category changes use the
+rendered selectors on the current season page, so archived season URLs retain their year path
+and the collector does not revisit the root page between dates. This activity phase finds
+0--2000 km source rows; it supplements rather than weakens the 100+ coverage process. Date
+traversal is internal: the public CLI remains season-only and has no user-selected date or
+date-range option.
 
 Every navigation and rendered-control transition is sequential and source-paced; this
 collector intentionally does not open parallel tabs or retry a failed source operation. A

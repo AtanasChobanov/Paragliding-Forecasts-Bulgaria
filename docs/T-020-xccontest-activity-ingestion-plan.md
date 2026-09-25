@@ -88,8 +88,10 @@ stable flight IDs that are absent from the first page of another ordering.
 
 "Default" has a strict technical meaning:
 
-- navigate to a canonical list URL or reset the visible controls so no sort
-  parameter or previous sort state is carried into the view;
+- establish the initial target through the season/country controls, then move
+  between activity scopes through a changed rendered date or category selector;
+  these source transitions clear the prior table order without reconstructing a
+  current-season or archived-season URL;
 - do not click a sortable column before capturing it;
 - record the scope as `sort_mode = source_default`, with no invented sort key
   or direction;
@@ -98,9 +100,14 @@ stable flight IDs that are absent from the first page of another ordering.
 The source-default order is a discovery aid. Because its order is not a stable
 contract, it never proves that a saturated scope is complete.
 
-### 3.4 Sorted views after the default view
+### 3.4 Conditional sorted views after the default view
 
-After the source-default capture, collect explicit sort views in this order:
+Treat the rendered next-page control as the activity completeness boundary. A
+source-default date view with no active next page is complete as captured,
+including when it contains exactly 100 rows, and does not trigger category or
+sort views. When the parent solo-PG date view has a next page, partition it by
+the exact glider categories first. For an exact category whose source-default
+view still has a next page, collect explicit rescue sorts in this order:
 
 1. distance descending;
 2. distance ascending;
@@ -108,12 +115,9 @@ After the source-default capture, collect explicit sort views in this order:
 4. points descending and ascending;
 5. duration descending and ascending.
 
-Distance descending remains the authoritative saturation check. The other
-sorts are rescue views that improve discovery when only page one is visible.
-When the verified source-default view has no rows, its date/category scope is
-recorded as `empty` and the eight explicit sort views are skipped: reordering an
-empty source result cannot discover a flight. Repeated IDs are expected and are
-reconciled by the existing source-flight identity rules.
+Distance descending remains the authoritative post-sort saturation check. The
+other sorts improve discovery when only page one is visible. Repeated IDs are
+expected and are reconciled by the existing source-flight identity rules.
 
 ### 3.5 Internal date traversal, unchanged CLI
 
@@ -141,11 +145,12 @@ options.
 For one date:
 
 1. capture solo-PG (`FAI3`) in source-default order;
-2. capture its explicit sort sequence;
-3. if distance-descending still has a next page, repeat the same
-   default-then-sorted sequence for `CCC`, `EN-D`, `EN-C`, `EN-B`, and
-   `EN-A`;
-4. union all stable source-flight IDs.
+2. if it has no active next page, accept that page as the complete daily view;
+3. if it has a next page, capture source-default views for `CCC`, `EN-D`,
+   `EN-C`, `EN-B`, and `EN-A`;
+4. run the explicit sort sequence only for an exact category whose default view
+   also has a next page;
+5. union all stable source-flight IDs.
 
 Exact classes are a partitioning fallback. They do not change the accepted
 product scope, which remains solo paraglider flights. If XCContest exposes an
@@ -460,6 +465,9 @@ the ticket prefix, as required by `CONTRIBUTING.md`. The intended sequence is:
 11. `T-020 skip out-of-season empty activity views` — bound the daily activity
     scan to 15 February--15 October, retain skipped-date audit evidence, and
     avoid explicit sorts after a verified empty source-default view.
+12. `T-020 avoid unnecessary activity transitions` — accept every daily default
+    view without an active next page, partition paginated parents before sorting,
+    and move between dates through the current season's rendered selectors.
 
 These are planned commit boundaries, not permission to commit during this
 planning update. Adjust a boundary only if the implementation reveals that two

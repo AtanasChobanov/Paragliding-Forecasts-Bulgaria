@@ -2610,18 +2610,22 @@ still occur, so skipped dates cannot be relabelled as no-flight or zero-probabil
 **Decision:** Keep the public XCContest command season-only. Internally, collect daily
 all-distance activity and date-partition fallback views only from 15 February through
 15 October inclusive; record every source-offered date outside that window in manifest v5's
-per-target `skipped_activity_dates` audit. For an in-window date/category, retain the
-source-default view first, but when its verified row set is empty, record the `empty` scope
-and skip the eight explicit re-sort views. The untouched season parent and threshold-first
-entry views retain their existing behavior.
+per-target `skipped_activity_dates` audit. For an in-window date, retain the source-default parent view first. When it has no active
+next page, accept it as complete without category or sort requests, including an exactly
+100-row page. Partition only a paginated parent into exact categories, and run the eight
+explicit re-sort views only for an exact-category default view that is also paginated.
+Move between dates and categories through the current page's rendered selectors instead of
+reopening the root and reconstructing season/country state. The untouched season parent and
+threshold-first entry views retain their existing behavior.
 
 **Consequences:** The policy reduces paced source views without manufacturing negative
 examples. Out-of-window absence remains an explicit coverage limitation; a future product
 season state must say that the XC forecast is outside its supported season rather than show
 `0%`. Old v1--v4 manifests remain readable under their original scope. New v5 manifests
 must validate the fixed policy, skipped dates, and the absence of date-scoped artifacts
-outside the policy window. No date CLI option, parallel collection, pager use, or source
-API bypass is added.
+outside the policy window. No date CLI option, parallel collection, pager use, or source API bypass is added. Because
+no canonical URL is reconstructed between dates, both current-season and archived year-prefixed
+URLs remain owned by XCContest's visible controls.
 
 **Sources:** [Bulgarian XC League rules](https://www.xcontest.org/bulgaria/rules/),
 [Bulgaria tourism paragliding guide](https://www.tourism.government.bg/sites/tourism.government.bg/files/uploads/info_materials/eng/sport.pdf),

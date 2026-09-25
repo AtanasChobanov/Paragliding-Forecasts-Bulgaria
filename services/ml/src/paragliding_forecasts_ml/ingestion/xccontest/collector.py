@@ -209,16 +209,24 @@ class FlightListCollector:
 
         unresolved_scopes: list[FlightListScope] = []
         for date_filter in activity_dates:
-            primary_distance_page = self._capture_activity_scope(
+            primary_default_page = self._capture_activity_default(
                 season,
                 country_code,
                 category=PRIMARY_GLIDER_CATEGORY,
                 date_filter=date_filter,
             )
-            if not primary_distance_page.is_all_distance_saturated:
+            if not primary_default_page.has_next_page:
                 continue
             for category in EXACT_GLIDER_CATEGORIES:
-                category_distance_page = self._capture_activity_scope(
+                category_default_page = self._capture_activity_default(
+                    season,
+                    country_code,
+                    category=category,
+                    date_filter=date_filter,
+                )
+                if not category_default_page.has_next_page:
+                    continue
+                category_distance_page = self._capture_activity_sorts(
                     season,
                     country_code,
                     category=category,
@@ -230,7 +238,7 @@ class FlightListCollector:
                     )
         return tuple(unresolved_scopes)
 
-    def _capture_activity_scope(
+    def _capture_activity_default(
         self,
         season: int,
         country_code: str,
@@ -238,9 +246,9 @@ class FlightListCollector:
         category,
         date_filter: str,
     ) -> PageObservation:
-        """Capture unsorted evidence before every all-distance rescue order."""
+        """Capture one unsorted activity view before deciding whether to partition."""
 
-        default_page = self._capture_scope(
+        return self._capture_scope(
             season,
             country_code,
             source_default_scope(category, date_filter=date_filter),
@@ -248,8 +256,17 @@ class FlightListCollector:
             write_empty=True,
             acquisition_purpose="all_distance_activity",
         )
-        if not default_page.rows:
-            return default_page
+
+    def _capture_activity_sorts(
+        self,
+        season: int,
+        country_code: str,
+        *,
+        category,
+        date_filter: str,
+    ) -> PageObservation:
+        """Use explicit rescue orders only after a category default view is full."""
+
         distance_page: PageObservation | None = None
         for sort_scope in ALL_DISTANCE_ACTIVITY_SORTS:
             page = self._capture_scope(

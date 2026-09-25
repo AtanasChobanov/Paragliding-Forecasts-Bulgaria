@@ -91,14 +91,11 @@ def test_select_country_uses_the_rendered_country_control(monkeypatch) -> None:
     assert selected == [(COUNTRY_SELECTOR, "RS")]
 
 
-def test_source_default_scope_resets_the_canonical_view_without_sorting(monkeypatch) -> None:
+def test_source_default_scope_changes_filters_in_place_without_sorting(monkeypatch) -> None:
     driver = PlaywrightFlightListDriver(
         CollectorConfig(seasons=(2025,), country_codes=("BG",)), sleeper=lambda _: None
     )
-    driver._selected_season = 2025
-    driver._selected_country = "BG"
     calls: list[tuple[str, ...]] = []
-    monkeypatch.setattr(driver, "_reset_to_source_default", lambda: calls.append(("reset",)))
     monkeypatch.setattr(
         driver,
         "_select_option",
@@ -113,7 +110,6 @@ def test_source_default_scope_resets_the_canonical_view_without_sorting(monkeypa
     driver.select_scope(source_default_scope(PRIMARY_GLIDER_CATEGORY, date_filter="2025-07-01"))
 
     assert calls == [
-        ("reset",),
         ("select", 'select[name="filter[detail_glider_catg]"]', "FAI3"),
         ("select", 'select[name="filter[date]"]', "2025-07-01"),
     ]
@@ -124,7 +120,6 @@ def test_explicit_scope_does_not_reset_and_applies_its_sort(monkeypatch) -> None
         CollectorConfig(seasons=(2025,), country_codes=("BG",)), sleeper=lambda _: None
     )
     calls: list[tuple[str, ...]] = []
-    monkeypatch.setattr(driver, "_reset_to_source_default", lambda: calls.append(("reset",)))
     monkeypatch.setattr(
         driver,
         "_select_option",
@@ -139,7 +134,6 @@ def test_explicit_scope_does_not_reset_and_applies_its_sort(monkeypatch) -> None
     driver.select_scope(FlightListScope(PRIMARY_GLIDER_CATEGORY))
 
     assert calls[-1] == ("sort", "distance", "descending")
-    assert ("reset",) not in calls
 
 
 class FakeResponse:

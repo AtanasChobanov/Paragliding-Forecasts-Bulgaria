@@ -431,6 +431,10 @@ class RawArtifactStore:
                 state, reason = "empty", None
             elif distance_descending is not None and distance_descending.has_next_page:
                 state, reason = "partial_saturated", "distance_descending_has_next_page"
+            elif distance_descending is None and any(
+                entry.sort_mode == "source_default" and entry.has_next_page for entry in entries
+            ):
+                state, reason = "partial_saturated", "source_default_has_next_page"
             else:
                 state, reason = "complete", None
             statuses.append(

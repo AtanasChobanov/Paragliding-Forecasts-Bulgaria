@@ -163,25 +163,43 @@ def test_collects_activity_dates_in_order_after_threshold_with_category_fallback
     first_date = "2025-07-01"
     busy_date = "2025-07-02"
     first_default = source_default_scope(PRIMARY_GLIDER_CATEGORY, date_filter=first_date)
-    first_distance = scope(date_filter=first_date)
     busy_default = source_default_scope(PRIMARY_GLIDER_CATEGORY, date_filter=busy_date)
-    busy_distance = scope(date_filter=busy_date)
-    busy_ccc_distance = scope(EXACT_GLIDER_CATEGORIES[0], date_filter=busy_date)
+    category_defaults = tuple(
+        source_default_scope(category, date_filter=busy_date)
+        for category in EXACT_GLIDER_CATEGORIES
+    )
+    ccc_sorts = tuple(
+        FlightListScope(
+            EXACT_GLIDER_CATEGORIES[0],
+            busy_date,
+            item.sort_key,
+            item.sort_direction,
+        )
+        for item in ALL_DISTANCE_ACTIVITY_SORTS
+    )
     pages = {
         ("BG", primary): observation(primary, (120.0,)),
         ("BG", first_default): observation(first_default, (78.0, 0.0)),
-        ("BG", first_distance): observation(first_distance, (78.0, 0.0)),
-        ("BG", busy_default): observation(busy_default, (80.0, 0.0)),
-        ("BG", busy_distance): observation(busy_distance, (80.0, 0.0), has_next_page=True),
-        ("BG", busy_ccc_distance): observation(busy_ccc_distance, (70.0, 0.0), has_next_page=True),
+        ("BG", busy_default): observation(busy_default, (80.0, 0.0), has_next_page=True),
+        ("BG", category_defaults[0]): observation(
+            category_defaults[0], (70.0, 0.0), has_next_page=True
+        ),
         **{
-            ("BG", source_default_scope(category, date_filter=busy_date)): observation(
-                source_default_scope(category, date_filter=busy_date), (70.0, 0.0)
+            ("BG", category_default): observation(category_default, (70.0, 0.0))
+            for category_default in category_defaults[1:]
+        },
+        **{
+            ("BG", sort_scope): observation(
+                sort_scope,
+                (70.0, 0.0),
+                has_next_page=(
+                    sort_scope.sort_key == "distance" and sort_scope.sort_direction == "descending"
+                ),
             )
-            for category in EXACT_GLIDER_CATEGORIES
+            for sort_scope in ccc_sorts
         },
     }
-    driver, _artifacts, instance = collector(
+    driver, artifacts, instance = collector(
         tmp_path,
         pages,
         dates=(busy_date, first_date),
@@ -189,42 +207,50 @@ def test_collects_activity_dates_in_order_after_threshold_with_category_fallback
 
     report = instance.collect()
 
-    def activity_scopes(category, date_filter: str) -> tuple[FlightListScope, ...]:
-        return (
-            source_default_scope(category, date_filter=date_filter),
-            *(
-                FlightListScope(
-                    category,
-                    date_filter,
-                    item.sort_key,
-                    item.sort_direction,
-                )
-                for item in ALL_DISTANCE_ACTIVITY_SORTS
-            ),
-        )
-
-    expected = [
+    assert [scope for _country, scope in driver.selected_scopes] == [
         source_default_scope(PRIMARY_GLIDER_CATEGORY),
         primary,
-        *activity_scopes(PRIMARY_GLIDER_CATEGORY, first_date),
-        *activity_scopes(PRIMARY_GLIDER_CATEGORY, busy_date),
-        *(activity_scopes(category, busy_date) for category in EXACT_GLIDER_CATEGORIES),
+        first_default,
+        busy_default,
+        category_defaults[0],
+        *ccc_sorts,
+        *category_defaults[1:],
     ]
-    flattened_expected = [
-        item
-        for scope_group in expected
-        for item in (scope_group if isinstance(scope_group, tuple) else (scope_group,))
-    ]
-    assert [scope for _country, scope in driver.selected_scopes] == flattened_expected
     assert report.status == "incomplete"
     assert report.unresolved_scope_count == 1
-    assert report.artifact_count == len(flattened_expected)
-    assert report.row_observations_seen > 0
-    assert {row.source_flight_id for row in pages[("BG", first_default)].rows}.isdisjoint(
-        row.source_flight_id
-        for scope_item in activity_scopes(PRIMARY_GLIDER_CATEGORY, first_date)[1:]
-        for row in pages.get(("BG", scope_item), observation(scope_item, ())).rows
+    assert report.artifact_count == len(driver.selected_scopes)
+    manifest = json.loads((artifacts.raw_dir / "manifest.json").read_text())
+    statuses = {
+        (item["category"], item["date_filter"]): item
+        for item in manifest["activity_scope_statuses"]
+    }
+    assert statuses[("pg", busy_date)]["reason"] == "source_default_has_next_page"
+    assert statuses[("ccc", busy_date)]["reason"] == "distance_descending_has_next_page"
+
+
+def test_full_100_row_activity_page_without_next_page_skips_fallbacks(tmp_path) -> None:
+    primary = scope()
+    activity_date = "2025-07-01"
+    activity_default = source_default_scope(PRIMARY_GLIDER_CATEGORY, date_filter=activity_date)
+    driver, _artifacts, instance = collector(
+        tmp_path,
+        {
+            ("BG", primary): observation(primary, (120.0,)),
+            ("BG", activity_default): observation(
+                activity_default, range(100), has_next_page=False
+            ),
+        },
+        dates=(activity_date,),
     )
+
+    report = instance.collect()
+
+    assert [scope for _country, scope in driver.selected_scopes] == [
+        source_default_scope(PRIMARY_GLIDER_CATEGORY),
+        primary,
+        activity_default,
+    ]
+    assert report.status == "complete"
 
 
 def test_skips_outside_supported_activity_dates_and_records_them(tmp_path) -> None:
