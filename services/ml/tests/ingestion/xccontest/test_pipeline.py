@@ -237,9 +237,7 @@ def test_resume_stops_when_no_records_are_accepted(monkeypatch, tmp_path) -> Non
     assert result["status"] == "no_accepted_records"
 
 
-def test_fresh_stops_after_incomplete_collection_without_offline_stages(
-    monkeypatch, tmp_path
-) -> None:
+def test_fresh_continues_offline_for_incomplete_collection(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(pipeline, "_preflight", lambda *_: ("file:./data/local/test.db", ("BG",)))
     collection = SimpleNamespace(
         run_key=RUN_KEY,
@@ -248,17 +246,20 @@ def test_fresh_stops_after_incomplete_collection_without_offline_stages(
         manifest_sha256="b" * 64,
         country_codes=("BG",),
         completed_seasons=(2024,),
+        completed_target_count=1,
+        unresolved_scope_count=1,
         artifact_count=1,
         row_observations_seen=10,
         distinct_source_flights_seen=10,
         repeated_source_flight_observations=0,
     )
     monkeypatch.setattr(pipeline, "collect_run", lambda _: collection)
+    calls = []
     monkeypatch.setattr(
         pipeline,
         "resume_run",
-        lambda *_args, **_kwargs: pytest.fail(
-            "incomplete collection must not resume automatically"
+        lambda *args, **kwargs: (
+            calls.append((args, kwargs)) or {"status": "succeeded", "run_key": RUN_KEY}
         ),
     )
 
@@ -266,8 +267,16 @@ def test_fresh_stops_after_incomplete_collection_without_offline_stages(
         CollectorConfig(seasons=(2024,), country_codes=("BG",)), tmp_path / "policy.json"
     )
 
-    assert result["status"] == "incomplete_coverage"
+    assert result["status"] == "succeeded"
     assert result["run_key"] == RUN_KEY
+    assert result["collector"]["status"] == "incomplete"
+    assert result["collector"]["unresolved_scope_count"] == 1
+    assert calls == [
+        (
+            (RUN_KEY, tmp_path / "policy.json"),
+            {"database_url": "file:./data/local/test.db", "persist_approved_only": False},
+        )
+    ]
 
 
 def test_fresh_preflight_failure_precedes_collection(monkeypatch, tmp_path) -> None:

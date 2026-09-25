@@ -340,13 +340,8 @@ def fresh_run(
         collection_report = collect_run(config)
     except CollectionExecutionError as error:
         raise PipelineError(str(error)) from error
-    if collection_report.status != "complete":
-        return {
-            "status": "incomplete_coverage",
-            "run_key": collection_report.run_key,
-            "collector": _collection_summary(collection_report),
-            "next_step": "Review the immutable manifest coverage before running offline stages.",
-        }
+    if collection_report.status not in {"complete", "incomplete"}:
+        raise PipelineError("XCContest collector returned an unsupported coverage status.")
     result = resume_run(
         collection_report.run_key,
         policy_path,
@@ -363,6 +358,8 @@ def _collection_summary(report: CollectionReport) -> dict[str, Any]:
         "manifest_sha256": report.manifest_sha256,
         "country_codes": list(report.country_codes),
         "completed_seasons": list(report.completed_seasons),
+        "completed_target_count": report.completed_target_count,
+        "unresolved_scope_count": report.unresolved_scope_count,
         "artifact_count": report.artifact_count,
         "row_observations_seen": report.row_observations_seen,
         "distinct_source_flights_seen": report.distinct_source_flights_seen,

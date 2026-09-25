@@ -142,6 +142,39 @@ def load_policy(path: Path) -> tuple[str, str, bool, bool]:
     return basis, ref.strip(), training, operational
 
 
+def _collection_coverage(manifest: dict[str, Any]) -> dict[str, int | str]:
+    """Summarize immutable raw coverage without treating absent flights as negative evidence."""
+
+    schema_version = manifest.get("manifest_schema_version", 1)
+    if type(schema_version) is not int:
+        schema_version = 1
+    target_statuses = manifest.get("target_statuses")
+    unresolved_scope_count = (
+        sum(
+            len(target.get("unresolved_scopes", []))
+            for target in target_statuses
+            if isinstance(target, dict) and isinstance(target.get("unresolved_scopes"), list)
+        )
+        if isinstance(target_statuses, list)
+        else 0
+    )
+    activity_scope_statuses = manifest.get("activity_scope_statuses")
+    activity_states = (
+        [item.get("status") for item in activity_scope_statuses if isinstance(item, dict)]
+        if isinstance(activity_scope_statuses, list)
+        else []
+    )
+    status = str(manifest["status"])
+    return {
+        "raw_manifest_schema_version": schema_version,
+        "collection_status": status,
+        "coverage_status": "partial" if status == "incomplete" else "complete",
+        "unresolved_scope_count": unresolved_scope_count,
+        "partial_saturated_activity_scope_count": activity_states.count("partial_saturated"),
+        "failed_activity_scope_count": activity_states.count("failed"),
+    }
+
+
 def validate_record(row: dict[str, Any]) -> None:
     if (
         row.get("source") != SOURCE_CODE
@@ -363,6 +396,7 @@ def _run_event(
     mapping_review_complete: bool,
     decisions_digest: str | None,
     counts: dict[str, int],
+    collection_coverage: dict[str, int | str],
     now: str,
 ) -> dict[str, Any]:
     return {
@@ -377,6 +411,7 @@ def _run_event(
         "reconciliation_plan_sha256": plan,
         "reconciliation_decisions_sha256": decisions_digest,
         "mapping_review_complete": mapping_review_complete,
+        "collection_coverage": collection_coverage,
         "counts": counts,
     }
 
@@ -420,6 +455,7 @@ def persist_import(
 
     root = (project_root or repository_root()).resolve()
     prepared = prepare(run_key, validation_snapshot, root)
+    collection_coverage = _collection_coverage(prepared.manifest)
     basis, ref, training, operational = load_policy(policy_path)
     try:
         connection = open_writable_database(configured_database_url(database_url), root)
@@ -501,6 +537,7 @@ def persist_import(
                     "validation_snapshot_sha256": validation_snapshot,
                     "accepted_flights_sha256": prepared.accepted_sha,
                     "pipeline_version": pipeline,
+                    "collection_coverage": collection_coverage,
                     "reconciliation": {
                         "status": "no_op",
                         "event_sha256": event_sha,
@@ -550,6 +587,7 @@ def persist_import(
                     "records_accepted": prepared.report["records_accepted"],
                     "validation_snapshot_sha256": validation_snapshot,
                     "accepted_flights_sha256": prepared.accepted_sha,
+                    "collection_coverage": collection_coverage,
                     "reconciliation": {
                         "plan_sha256": artifacts.plan_sha256,
                         "proposal_count": len(artifacts.proposals),
@@ -639,6 +677,7 @@ def persist_import(
             mapping_review_complete=mapping_review_complete,
             decisions_digest=decisions_digest,
             counts=counts,
+            collection_coverage=collection_coverage,
             now=now,
         )
         existing_run_notes["persistence_events"].append(event)
@@ -782,6 +821,7 @@ def persist_import(
         "validation_snapshot_sha256": validation_snapshot,
         "accepted_flights_sha256": prepared.accepted_sha,
         "pipeline_version": pipeline,
+        "collection_coverage": collection_coverage,
         "reconciliation": {
             "status": "applied",
             "event_sha256": event_sha,
