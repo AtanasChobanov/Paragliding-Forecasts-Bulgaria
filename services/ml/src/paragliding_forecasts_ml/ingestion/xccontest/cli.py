@@ -12,7 +12,7 @@ from ...storage.sqlite import (
     configured_database_url,
     load_site_country_codes,
 )
-from .collection_runner import CollectionExecutionError, collect_run
+from .collection_runner import CollectionExecutionError, collect_run, resume_collect_run
 from .models import CollectorConfig
 
 
@@ -83,6 +83,42 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_resume_parser() -> argparse.ArgumentParser:
+    """Build the recovery-only CLI without expanding the public collection scope."""
+
+    parser = argparse.ArgumentParser(
+        prog="xccontest-collect resume",
+        description="Resume one interrupted XCContest run from verified local artifacts.",
+    )
+    parser.add_argument("--run-key", required=True, metavar="UUID")
+    return parser
+
+
+def _emit_report(report) -> int:
+    print(
+        json.dumps(
+            {
+                "run_key": report.run_key,
+                "status": report.status,
+                "manifest_relative_path": report.manifest_relative_path,
+                "manifest_sha256": report.manifest_sha256,
+                "started_at_utc": report.started_at_utc.isoformat().replace("+00:00", "Z"),
+                "completed_at_utc": report.completed_at_utc.isoformat().replace("+00:00", "Z"),
+                "country_codes": list(report.country_codes),
+                "completed_seasons": list(report.completed_seasons),
+                "completed_target_count": report.completed_target_count,
+                "unresolved_scope_count": report.unresolved_scope_count,
+                "artifact_count": report.artifact_count,
+                "row_observations_seen": report.row_observations_seen,
+                "distinct_source_flights_seen": report.distinct_source_flights_seen,
+                "repeated_source_flight_observations": report.repeated_source_flight_observations,
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
 def _collector_config(
     namespace: argparse.Namespace, country_codes: tuple[str, ...]
 ) -> CollectorConfig:
@@ -101,10 +137,19 @@ def _collector_config(
 
 
 def main(arguments: Sequence[str] | None = None) -> int:
-    """Run a collection and report artifact locations without exposing source data."""
+    """Run a fresh collection or resume only verified local artifact state."""
+
+    supplied = list(arguments) if arguments is not None else sys.argv[1:]
+    if supplied[:1] == ["resume"]:
+        namespace = build_resume_parser().parse_args(supplied[1:])
+        try:
+            return _emit_report(resume_collect_run(namespace.run_key))
+        except CollectionExecutionError as error:
+            print(str(error), file=sys.stderr)
+            return 1
 
     parser = build_parser()
-    namespace = parser.parse_args(arguments)
+    namespace = parser.parse_args(supplied)
     database_url = configured_database_url(namespace.database_url)
     try:
         country_codes = load_site_country_codes(database_url)
@@ -117,33 +162,10 @@ def main(arguments: Sequence[str] | None = None) -> int:
         return 1
 
     try:
-        report = collect_run(config)
+        return _emit_report(collect_run(config))
     except CollectionExecutionError as error:
         print(str(error), file=sys.stderr)
         return 1
-
-    print(
-        json.dumps(
-            {
-                "run_key": report.run_key,
-                "status": report.status,
-                "manifest_relative_path": report.manifest_relative_path,
-                "manifest_sha256": report.manifest_sha256,
-                "started_at_utc": report.started_at_utc.isoformat().replace("+00:00", "Z"),
-                "completed_at_utc": report.completed_at_utc.isoformat().replace("+00:00", "Z"),
-                "country_codes": list(report.country_codes),
-                "completed_seasons": list(report.completed_seasons),
-                "completed_target_count": report.completed_target_count,
-                "unresolved_scope_count": report.unresolved_scope_count,
-                "artifact_count": report.artifact_count,
-                "row_observations_seen": report.row_observations_seen,
-                "distinct_source_flights_seen": report.distinct_source_flights_seen,
-                "repeated_source_flight_observations": (report.repeated_source_flight_observations),
-            },
-            indent=2,
-        )
-    )
-    return 0
 
 
 if __name__ == "__main__":

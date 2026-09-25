@@ -219,6 +219,31 @@ def test_collects_activity_dates_in_order_after_threshold_with_category_fallback
     )
 
 
+def test_checkpoint_resume_reuses_verified_default_view_without_refetching(tmp_path) -> None:
+    default_scope = source_default_scope(PRIMARY_GLIDER_CATEGORY)
+    primary = scope()
+    store = RawArtifactStore(project_root=tmp_path, run_key="resume-run")
+    config = CollectorConfig(seasons=(2025,), country_codes=("BG",))
+    store.set_collection_context(config)
+    captured_default = observation(default_scope, (150.0,))
+    store.write_page(captured_default, acquisition_purpose="threshold_100")
+    store.write_checkpoint(
+        season=2025,
+        country_code="BG",
+        status="in_progress",
+        scope=default_scope,
+        acquisition_purpose="threshold_100",
+    )
+
+    driver = FakeDriver({("BG", primary): observation(primary, (120.0,))})
+    resumed = RawArtifactStore.resume("resume-run", project_root=tmp_path)
+    report = FlightListCollector(config=config, driver=driver, artifacts=resumed).collect()
+
+    assert report.status == "complete"
+    assert driver.selected_scopes == [("BG", primary)]
+    assert report.artifact_count == 2
+
+
 def test_saturated_primary_partitions_the_exact_solo_pg_categories(tmp_path) -> None:
     primary = scope()
     category_scopes = tuple(scope(category) for category in EXACT_GLIDER_CATEGORIES)
@@ -244,7 +269,7 @@ def test_saturated_primary_partitions_the_exact_solo_pg_categories(tmp_path) -> 
     assert report.artifact_count > 5
     manifest = json.loads((artifacts.raw_dir / "manifest.json").read_text())
     assert manifest["target_statuses"][0]["status"] == "complete_partitioned"
-    assert not any("category-en-a" in entry["path"] for entry in manifest["artifacts"])
+    assert any("category-en-a" in entry["path"] for entry in manifest["artifacts"])
 
 
 def test_saturated_category_date_runs_every_rescue_sort_and_marks_coverage_unresolved(
@@ -305,6 +330,7 @@ def test_saturated_category_date_runs_every_rescue_sort_and_marks_coverage_unres
             "category": "ccc",
             "category_filter": "FAI3-41|50",
             "date_filter": "2025-07-01",
+            "sort_mode": "explicit",
             "sort_key": "distance",
             "sort_direction": "descending",
         }

@@ -65,6 +65,8 @@ class FlightListCollector:
 
         completed_seasons: list[int] = []
         target_statuses: list[TargetCollectionStatus] = []
+        self._artifacts.set_collection_context(self._config)
+        self._view_count = self._artifacts.view_count
         try:
             for season in self._config.seasons:
                 self._driver.prepare_season(season)
@@ -125,6 +127,7 @@ class FlightListCollector:
             country_code,
             default_scope,
             require_rows=True,
+            acquisition_purpose="threshold_100",
         )
         threshold_status, threshold_unresolved = self._collect_threshold_target(
             season, country_code
@@ -136,7 +139,7 @@ class FlightListCollector:
             season=season,
             country_code=country_code,
             status=status,
-            scope=default_scope,
+            scope=None,
             unresolved_scopes=unresolved_scopes,
         )
         return TargetCollectionStatus(season, country_code, status, unresolved_scopes)
@@ -234,6 +237,7 @@ class FlightListCollector:
             source_default_scope(category, date_filter=date_filter),
             require_rows=False,
             write_empty=True,
+            acquisition_purpose="all_distance_activity",
         )
         distance_page: PageObservation | None = None
         for sort_scope in ALL_DISTANCE_ACTIVITY_SORTS:
@@ -243,6 +247,7 @@ class FlightListCollector:
                 replace(sort_scope, category=category, date_filter=date_filter),
                 require_rows=False,
                 write_empty=True,
+                acquisition_purpose="all_distance_activity",
             )
             if page.scope.sort_key == "distance" and page.scope.sort_direction == "descending":
                 distance_page = page
@@ -259,8 +264,17 @@ class FlightListCollector:
         scope: FlightListScope,
         *,
         require_rows: bool,
-        write_empty: bool = False,
+        write_empty: bool = True,
+        acquisition_purpose: str = "threshold_100",
     ) -> PageObservation:
+        recovered = self._artifacts.recovered_page(
+            season=season,
+            country_code=country_code,
+            scope=scope,
+            acquisition_purpose=acquisition_purpose,
+        )
+        if recovered is not None:
+            return recovered
         if self._view_count >= self._config.max_views:
             raise CollectionError(
                 "The configured view cap was reached before XCContest collection completed. "
@@ -277,7 +291,14 @@ class FlightListCollector:
             require_rows=require_rows,
         )
         if page.rows or write_empty:
-            self._artifacts.write_page(page)
+            self._artifacts.write_page(page, acquisition_purpose=acquisition_purpose)
+            self._artifacts.write_checkpoint(
+                season=season,
+                country_code=country_code,
+                status="in_progress",
+                scope=scope,
+                acquisition_purpose=acquisition_purpose,
+            )
         return page
 
     @staticmethod

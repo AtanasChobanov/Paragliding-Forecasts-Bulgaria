@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
 
 import pytest
 
@@ -126,6 +127,62 @@ def test_parses_complete_multi_season_manifest_v2_and_both_detail_url_shapes(tmp
     assert parsed.report["raw_seasons"] == [2025, 2026]
     assert parsed.report["threshold_exclusions"] == 2
     assert parsed.report["records_rejected"] == 2
+
+
+def test_parses_versioned_v4_manifest_and_preserves_legacy_threshold_interpretation(
+    tmp_path,
+) -> None:
+    run_key, raw_dir = write_v2_run(tmp_path)
+    manifest_path = raw_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["manifest_schema_version"] = 4
+    manifest["collector_version"] = "xccontest-collector/4"
+    manifest["source_pacing"] = {
+        "delay_seconds": 30,
+        "recommended_delay_seconds": 30,
+        "below_recommended_delay_acknowledged": False,
+    }
+    manifest["scope"] = {
+        "country_codes": ["BG"],
+        "country_scope_source": "all_sites",
+        "requested_seasons": [2025, 2026],
+        "primary_glider_category": "FAI3",
+        "minimum_observed_scored_distance_km": 0,
+        "threshold_coverage_distance_km": 100.0,
+        "completed_seasons": [2025, 2026],
+    }
+    for artifact in manifest["artifacts"]:
+        source_ids = [
+            value.split('id="flight-', 1)[1].split('"', 1)[0]
+            for value in (raw_dir / Path(artifact["path"]).name)
+            .read_text(encoding="utf-8")
+            .split("<tr ")
+            if 'id="flight-' in value
+        ]
+        artifact.update(
+            {
+                "acquisition_purpose": "threshold_100",
+                "sort_mode": "explicit",
+                "has_next_page": False,
+                "source_flight_ids": source_ids,
+                "below_100km_row_observation_count": 1,
+                "at_or_above_100km_row_observation_count": 1,
+            }
+        )
+        artifact.pop("qualifying_row_observation_count")
+    manifest["observation_counts"].update(
+        {
+            "below_100km_row_observations": 2,
+            "at_or_above_100km_row_observations": 2,
+        }
+    )
+    manifest["activity_scope_statuses"] = []
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    parsed = parse_run(run_key, project_root=tmp_path)
+
+    assert parsed.report["raw_manifest_schema_version"] == 4
+    assert parsed.report["threshold_exclusions"] == 2
 
 
 def test_manifest_v2_fails_closed_for_incomplete_status_or_counter_drift(tmp_path) -> None:

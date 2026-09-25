@@ -224,15 +224,20 @@ class ArtifactEntry:
     country_code: str
     category: str
     date_filter: str | None
-    sort_key: str
-    sort_direction: str
+    acquisition_purpose: str
+    sort_mode: str
+    sort_key: str | None
+    sort_direction: str | None
     retrieved_at_utc: datetime
     first_flight_id: str | None
     last_flight_id: str | None
     first_distance_km: float | None
     last_distance_km: float | None
+    has_next_page: bool
+    source_flight_ids: tuple[str, ...]
     row_observation_count: int
     qualifying_row_observation_count: int
+    below_threshold_row_observation_count: int
 
 
 @dataclass(frozen=True)
