@@ -228,6 +228,63 @@ def test_collects_activity_dates_in_order_after_threshold_with_category_fallback
     assert statuses[("ccc", busy_date)]["reason"] == "distance_descending_has_next_page"
 
 
+@pytest.mark.parametrize("distances", [(), (72.0, 18.0)])
+def test_threshold_date_partition_skips_distance_sort_when_default_page_is_complete(
+    tmp_path, distances
+) -> None:
+    primary = scope()
+    ccc = scope(EXACT_GLIDER_CATEGORIES[0])
+    activity_date = "2025-07-01"
+    ccc_default_date = source_default_scope(EXACT_GLIDER_CATEGORIES[0], date_filter=activity_date)
+    ccc_sorted_date = scope(EXACT_GLIDER_CATEGORIES[0], date_filter=activity_date)
+    pg_activity_date = source_default_scope(PRIMARY_GLIDER_CATEGORY, date_filter=activity_date)
+    driver, _artifacts, instance = collector(
+        tmp_path,
+        {
+            ("BG", primary): observation(primary, (200.0,), has_next_page=True),
+            ("BG", ccc): observation(ccc, (200.0,), has_next_page=True),
+            ("BG", ccc_default_date): observation(ccc_default_date, distances),
+            ("BG", pg_activity_date): observation(pg_activity_date, (40.0,)),
+        },
+        dates=(activity_date,),
+    )
+
+    report = instance.collect()
+
+    selected_scopes = [selected_scope for _country, selected_scope in driver.selected_scopes]
+    assert ccc_default_date in selected_scopes
+    assert ccc_sorted_date not in selected_scopes
+    assert report.status == "complete"
+
+
+def test_threshold_date_partition_sorts_only_after_paginated_default_view(tmp_path) -> None:
+    primary = scope()
+    ccc = scope(EXACT_GLIDER_CATEGORIES[0])
+    activity_date = "2025-07-01"
+    ccc_default_date = source_default_scope(EXACT_GLIDER_CATEGORIES[0], date_filter=activity_date)
+    ccc_sorted_date = scope(EXACT_GLIDER_CATEGORIES[0], date_filter=activity_date)
+    pg_activity_date = source_default_scope(PRIMARY_GLIDER_CATEGORY, date_filter=activity_date)
+    driver, _artifacts, instance = collector(
+        tmp_path,
+        {
+            ("BG", primary): observation(primary, (200.0,), has_next_page=True),
+            ("BG", ccc): observation(ccc, (200.0,), has_next_page=True),
+            ("BG", ccc_default_date): observation(ccc_default_date, (85.0,), has_next_page=True),
+            ("BG", ccc_sorted_date): observation(
+                ccc_sorted_date, (200.0, 100.0), has_next_page=True
+            ),
+            ("BG", pg_activity_date): observation(pg_activity_date, (40.0,)),
+        },
+        dates=(activity_date,),
+    )
+
+    report = instance.collect()
+
+    selected_scopes = [selected_scope for _country, selected_scope in driver.selected_scopes]
+    assert selected_scopes.index(ccc_default_date) < selected_scopes.index(ccc_sorted_date)
+    assert report.status == "incomplete"
+
+
 def test_full_100_row_activity_page_without_next_page_skips_fallbacks(tmp_path) -> None:
     primary = scope()
     activity_date = "2025-07-01"
@@ -379,7 +436,9 @@ def test_saturated_category_date_runs_every_rescue_sort_and_marks_coverage_unres
 ) -> None:
     primary = scope()
     ccc = scope(EXACT_GLIDER_CATEGORIES[0])
+    overflowing_default = source_default_scope(EXACT_GLIDER_CATEGORIES[0], date_filter="2025-07-01")
     overflowing_date = scope(EXACT_GLIDER_CATEGORIES[0], date_filter="2025-07-01")
+    quiet_default = source_default_scope(EXACT_GLIDER_CATEGORIES[0], date_filter="2025-07-02")
     quiet_date = scope(EXACT_GLIDER_CATEGORIES[0], date_filter="2025-07-02")
     rescue_scopes = tuple(
         scope(
@@ -394,7 +453,9 @@ def test_saturated_category_date_runs_every_rescue_sort_and_marks_coverage_unres
     pages = {
         ("BG", primary): observation(primary, (151.0, 100.0), has_next_page=True),
         ("BG", ccc): observation(ccc, (150.0, 100.0), has_next_page=True),
+        ("BG", overflowing_default): observation(overflowing_default, (90.0,), has_next_page=True),
         ("BG", overflowing_date): observation(overflowing_date, (140.0, 100.0), has_next_page=True),
+        ("BG", quiet_default): observation(quiet_default, (90.0,), has_next_page=True),
         ("BG", quiet_date): observation(quiet_date, (130.0, 99.0), has_next_page=True),
         **{
             ("BG", rescue_scope): observation(rescue_scope, (125.0, 101.0), has_next_page=True)
@@ -413,12 +474,14 @@ def test_saturated_category_date_runs_every_rescue_sort_and_marks_coverage_unres
 
     report = instance.collect()
 
-    assert driver.selected_scopes[:15] == [
+    assert driver.selected_scopes[:17] == [
         ("BG", source_default_scope(PRIMARY_GLIDER_CATEGORY)),
         ("BG", primary),
         ("BG", ccc),
+        ("BG", overflowing_default),
         ("BG", overflowing_date),
         *(("BG", item) for item in rescue_scopes),
+        ("BG", quiet_default),
         ("BG", quiet_date),
         *(("BG", item) for item in other_category_scopes),
     ]

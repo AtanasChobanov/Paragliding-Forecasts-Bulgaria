@@ -179,6 +179,16 @@ class FlightListCollector:
                 continue
 
             for date_filter in activity_dates:
+                default_date_scope = source_default_scope(category, date_filter=date_filter)
+                default_date_page = self._capture_scope(
+                    season,
+                    country_code,
+                    default_date_scope,
+                    require_rows=False,
+                )
+                if not default_date_page.has_next_page:
+                    continue
+
                 date_scope = FlightListScope(category=category, date_filter=date_filter)
                 date_page = self._capture_scope(
                     season, country_code, date_scope, require_rows=False
