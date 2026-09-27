@@ -237,9 +237,11 @@ claimed to contain sub-100 flights.
 - Validator: apply the same range and continue quarantining malformed records.
 - Reconciliation: keep stable source-flight deduplication and conflict rules;
   the same flight seen in several views remains one canonical record.
-- Mapping: keep the existing approved/provisional/rejected review workflow and
-  seven configured site catchments. More short flights may produce more
-  proposals or run-local rejections; no new mapping-exclusion table is added.
+- Mapping: the base all-distance ingestion slice keeps the existing
+  approved/provisional/rejected review workflow and seven configured site
+  catchments. The separately proposed durable stable-key rejection optimization
+  is specified in
+  [`T-020-persistent-site-exclusions-plan.md`](T-020-persistent-site-exclusions-plan.md).
 - Persistence: accept the wider distance domain without changing source IDs,
   mapping foreign keys, ingestion-run lineage, or transaction rules.
 
@@ -252,14 +254,15 @@ CHECK (scored_distance_km BETWEEN 0 AND 2000)
 ```
 
 Update the matching Drizzle schema declaration and migration tests. No new
-table, column, or index is required for this ingestion change. The existing
-`source_site_mappings`, `flight_ingestion_runs`, and artifact/run reports retain
-their current responsibilities.
+table, column, or index is required for the distance-domain ingestion change
+itself. The existing `source_site_mappings`, `flight_ingestion_runs`, and
+artifact/run reports retain their current responsibilities in this base slice.
 
-Why no exclusion table: a durable exclusion registry could avoid repeatedly
-reviewing known out-of-scope launches, but it is an optimization for mapping
-operations rather than a requirement for collecting and storing sub-100
-flights. The existing review and quarantine outputs are sufficient for T-020.
+A durable exclusion registry is an independent mapping-operations optimization,
+not a requirement for collecting and storing sub-100 flights. Its proposed
+schema, safety boundary, artifact upgrade, and implementation sequence are now
+owned by the companion persistent-site-exclusions plan. Until that proposal is
+implemented, rejections remain run-local under the v3 behavior described here.
 
 The migration must prove:
 
@@ -322,9 +325,11 @@ parser staging and the current local mapping catalogue. It writes immutable
   country mismatch, or an approved token/ID whose valid coordinate conflicts
   with its mapped site remains quarantined for human review.
 
-The auto stage cannot decode tokens, use external geocoding, alter a pre-existing
-active mapping, create a blacklist/exclusion table, or silently resolve a
-contradiction. Residual human proposals retain the existing reviewed
+The implemented v3 auto stage cannot decode tokens, use external geocoding,
+alter a pre-existing active mapping, create a blacklist/exclusion table, or
+silently resolve a contradiction. The companion plan proposes a narrower v4
+path for persisting only explicitly reviewed exact tokens and takeoff IDs;
+until it is implemented, residual human proposals retain the existing reviewed
 `approved`/`provisional`/`rejected` workflow. Persistence waits only for residual
 mapping-actionable quarantine records; automatic rejections remain excluded from
 canonical persistence but do not pause an otherwise approved run.
@@ -490,7 +495,9 @@ This ingestion prerequisite is complete when:
 - deterministic unique coordinate matches are automatically mapped with retained decision evidence;
 - outside-catchment candidates are automatically rejected without blocking persistence, while
   uncertain/contradictory evidence remains reviewable;
-- no new database table is introduced;
+- the base distance-domain slice introduces no new database table; the optional
+  persistent stable-key exclusion slice has its own proposed migration and
+  definition of done;
 - saturated or failed scopes remain explicit;
 - offline replay remains network-free and deterministic;
 - old manifest meaning is preserved;
@@ -505,7 +512,9 @@ This ingestion prerequisite is complete when:
 - fetching GFS for newly discovered dates;
 - training the T-023 XC model;
 - implementing cloudbase or overdevelopment calculations;
-- adding a source-site exclusion table;
+- adding a source-site exclusion table within this base ingestion slice; the
+  separately proposed implementation belongs to
+  [`T-020-persistent-site-exclusions-plan.md`](T-020-persistent-site-exclusions-plan.md);
 - changing the seven sites or their catchments;
 - parallel collection, direct/private APIs, page-two bypasses, or automated
   evasion of XCContest controls.

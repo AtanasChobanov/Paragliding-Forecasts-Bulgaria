@@ -72,6 +72,8 @@ consequences. Temporary progress and Git state belong in
 | DEC-057     | Use a configurable hybrid rule-and-score overdevelopment baseline               | Accepted   | 2026-09-23 |
 | DEC-058     | Evaluate a GFS model-sounding cloudbase baseline with a blue-day state           | Proposed   | 2026-09-24 |
 | DEC-059     | Automate deterministic XCContest coordinate mapping dispositions                 | Accepted   | 2026-09-25 |
+| DEC-060     | Bound XCContest activity scans to the Bulgarian XC season                        | Accepted   | 2026-09-25 |
+| DEC-061     | Persist reviewed XCContest stable-key exclusions                                 | Accepted   | 2026-09-26 |
 
 ## Individual decisions
 
@@ -1120,12 +1122,13 @@ cannot safely be amended before T-014's cross-run idempotency policy.
 
 **Decision:** `xccontest-ingest fresh` performs preflight, collection, parsing, proposal, and
 validation sequentially. It automatically creates the read-only mapping proposal artifact, but
-never calls mapping `apply`. It persists immediately only when validation has no mapping-actionable
-quarantines and at least one approved record. Otherwise it exits with the explicit
-`awaiting_mapping_review` status before writing canonical flights. After a human applies reviewed
-mapping decisions, `xccontest-ingest resume --run-key <uuid>` performs only offline reusable stages,
-creates or verifies the validation output for the current mapping snapshot, and persists exactly
-once. A rejection in the standard sibling review file resolves only the matching proposal evidence:
+never auto-approves mapping evidence. It persists immediately only when validation has no
+mapping-actionable quarantines and at least one approved record. Otherwise it exits with the
+explicit `awaiting_mapping_review` status before writing canonical flights. After a human completes
+the standard sibling reviewed mapping-decision file, `xccontest-ingest resume --run-key <uuid>`
+performs only offline reusable stages, transactionally applies that file when present, reloads the
+mapping snapshot, creates or verifies validation output, and persists exactly once. A rejection in
+the standard sibling review file resolves only the matching proposal evidence:
 it remains quarantined and is excluded from persistence, but does not block the approved subset. New,
 unresolved, ambiguous, provisional, or country-mismatched mapping evidence still blocks the run. An
 explicit `--persist-approved-only` permits a reviewer to retain mapping-actionable
@@ -2634,3 +2637,56 @@ and [Sopot XC conditions](https://airtribune.com/bpcup-2025-sopot-round/info).
 **Related files:** [`T-020-xccontest-activity-ingestion-plan.md`](T-020-xccontest-activity-ingestion-plan.md),
 [`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/collector.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/collector.py),
 and [`../services/ml/README.md`](../services/ml/README.md).
+
+### DEC-061 - Persist reviewed XCContest stable-key exclusions
+
+**Status:** Accepted
+
+**Date:** 2026-09-26
+
+**Would supersede if accepted:** Only DEC-059's statement that the automatic
+mapping workflow creates no exclusion table. DEC-059's coordinate rules,
+positive-mapping precedence, immutable evidence, and residual human-review gate
+remain unchanged.
+
+**Context:** A human-rejected mapping proposal is currently only run-local. The
+same opaque source site token or takeoff ID can therefore create the same
+proposal on every later run, even after a reviewer has verified that the exact
+source identity belongs outside all supported canonical sites. This repeated
+review will become costly when more seasons and locations are ingested. Weak or
+changing evidence cannot safely use the same shortcut: names may be reused,
+catchment geometry can change, and ambiguous or contradictory coordinates need
+fresh human judgment.
+
+**Proposed decision:** Add an audited `source_site_exclusions` table and reuse
+only exact, manually reviewed `source_site_token` and `source_takeoff_id`
+rejections. The existing minimal review input remains sufficient: the immutable
+proposal identity plus `decision = rejected`; optional notes may provide extra
+context. Do not require a reference, reviewer identity, review timestamp, or a
+new hash field solely for this table. Do not persist name-only, source-point,
+ambiguity, country-mismatch, or positive-mapping coordinate-conflict rejections
+as reusable exclusions.
+
+Positive mappings and fresh valid coordinates retain precedence. An exclusion
+with a new in-scope coordinate, an ambiguous point, or another positively mapped
+stable identifier becomes explicit human-review conflict evidence; it must never
+silently reject the record. Applying a reviewed
+decision stores proposal/run lineage and its technical insertion timestamp.
+Extend the pipeline's existing mapping snapshot—rather than adding database hash
+columns—so it covers sites, catchments, positive mappings, and exclusions for
+safe validation reuse. Retirement is explicit and audited rather than deletion
+or direct database editing.
+
+**Consequences:** The mapping artifact and validation snapshot contracts require
+new versions. Known applicable exclusions no longer create residual proposals or
+block otherwise approved records, but still create traceable quarantine evidence
+and no canonical flight. The current 26 reviewed token rejections are eligible
+by key type and can use their existing minimal rejected decisions. Any future
+site/catchment configuration change requires an explicit audit of active
+exclusions; existing historical rejections are not inferred or backfilled.
+
+**Related files:**
+[`T-020-persistent-site-exclusions-plan.md`](T-020-persistent-site-exclusions-plan.md),
+[`T-020-xccontest-activity-ingestion-plan.md`](T-020-xccontest-activity-ingestion-plan.md),
+[`../packages/database/src/schema.ts`](../packages/database/src/schema.ts), and
+[`handoff.md`](handoff.md).

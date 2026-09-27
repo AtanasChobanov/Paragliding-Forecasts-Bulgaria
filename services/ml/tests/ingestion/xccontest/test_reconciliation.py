@@ -1097,6 +1097,9 @@ def test_component_partial_mapping_review_resume_and_no_op(migrated_database, mo
         "promoted": 0,
         "unchanged": 0,
         "rejected": 0,
+        "exclusions_inserted": 0,
+        "exclusions_unchanged": 0,
+        "rejected_not_persisted": 0,
     }
     newly_mapped_records = [
         {**record, "source_site_mapping_id": reviewed_mapping_id}
@@ -1168,11 +1171,32 @@ def test_component_rejected_mappings_revalidate_without_business_field_change(
         "promoted": 0,
         "unchanged": 0,
         "rejected": 2,
+        "exclusions_inserted": 2,
+        "exclusions_unchanged": 0,
+        "rejected_not_persisted": 0,
     }
+
+    connection = _database(root, database_url)
+    try:
+        source_id = int(
+            connection.execute("SELECT id FROM flight_sources WHERE code = 'xccontest'").fetchone()[
+                0
+            ]
+        )
+        refreshed_snapshot = mapping_hash(connection, source_id)
+    finally:
+        connection.close()
+    _write_run(
+        root,
+        run_key=run_key,
+        snapshot=refreshed_snapshot,
+        mapping_id=mapping_id,
+        records=records,
+    )
 
     resumed = pipeline.resume_run(run_key, policy, database_url=database_url)
     assert resumed["status"] == "succeeded"
-    assert resumed["reviewed_rejected_mapping_quarantine_count"] == 2
+    assert resumed["reviewed_rejected_mapping_quarantine_count"] == 0
     assert resumed["persistence"]["reconciliation"]["counts"]["revalidated_unchanged"] == 2
     connection = _database(root, database_url)
     try:

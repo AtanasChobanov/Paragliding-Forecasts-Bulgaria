@@ -38,6 +38,7 @@ class Site:
     latitude_deg: float
     longitude_deg: float
     catchment_radius_km: float | None
+    is_active: bool
 
 
 @dataclass(frozen=True)
@@ -57,10 +58,26 @@ class SourceSiteMapping:
 
 
 @dataclass(frozen=True)
+class SourceSiteExclusion:
+    id: int
+    source_id: int
+    key_type: str
+    key_value: str
+    origin_run_key: str
+    origin_proposal_id: str
+    notes: str | None
+    status: str
+    created_at_utc: str
+    retired_at_utc: str | None
+    retirement_reason: str | None
+
+
+@dataclass(frozen=True)
 class MappingCatalog:
     source_id: int
     sites: tuple[Site, ...]
     mappings: tuple[SourceSiteMapping, ...]
+    exclusions: tuple[SourceSiteExclusion, ...]
 
     @property
     def sites_by_id(self) -> dict[int, Site]:
@@ -333,7 +350,7 @@ def load_mapping_catalog(
             raise SiteMappingError("Migrated database does not contain the XCContest source.")
         site_rows = connection.execute(
             """SELECT id, slug, name, country_code_iso2, site_type, latitude_deg, longitude_deg,
-                      catchment_radius_km
+                      catchment_radius_km, is_active
                  FROM sites ORDER BY id"""
         ).fetchall()
         mapping_rows = connection.execute(
@@ -341,6 +358,13 @@ def load_mapping_catalog(
                       point_latitude_deg, point_longitude_deg, status, verification_reference,
                       verified_at_utc, notes
                  FROM source_site_mappings
+                WHERE source_id = ? ORDER BY id""",
+            (source[0],),
+        ).fetchall()
+        exclusion_rows = connection.execute(
+            """SELECT id, source_id, key_type, key_value, origin_run_key, origin_proposal_id,
+                      notes, status, created_at_utc, retired_at_utc, retirement_reason
+                 FROM source_site_exclusions
                 WHERE source_id = ? ORDER BY id""",
             (source[0],),
         ).fetchall()
@@ -362,6 +386,7 @@ def load_mapping_catalog(
                 latitude_deg=float(row[5]),
                 longitude_deg=float(row[6]),
                 catchment_radius_km=None if row[7] is None else float(row[7]),
+                is_active=bool(row[8]),
             )
             for row in site_rows
         ),
@@ -381,6 +406,22 @@ def load_mapping_catalog(
                 notes=None if row[11] is None else str(row[11]),
             )
             for row in mapping_rows
+        ),
+        exclusions=tuple(
+            SourceSiteExclusion(
+                id=int(row[0]),
+                source_id=int(row[1]),
+                key_type=str(row[2]),
+                key_value=str(row[3]),
+                origin_run_key=str(row[4]),
+                origin_proposal_id=str(row[5]),
+                notes=None if row[6] is None else str(row[6]),
+                status=str(row[7]),
+                created_at_utc=str(row[8]),
+                retired_at_utc=None if row[9] is None else str(row[9]),
+                retirement_reason=None if row[10] is None else str(row[10]),
+            )
+            for row in exclusion_rows
         ),
     )
 
@@ -405,23 +446,89 @@ def matching_mappings(record: dict[str, Any], catalog: MappingCatalog) -> list[S
 
 
 def mapping_snapshot_sha256(catalog: MappingCatalog) -> str:
-    payload = [
-        {
-            "id": mapping.id,
-            "site_id": mapping.site_id,
-            "key_type": mapping.key_type,
-            "key_value": mapping.key_value,
-            "point_latitude_deg": mapping.point_latitude_deg,
-            "point_longitude_deg": mapping.point_longitude_deg,
-            "status": mapping.status,
-            "verification_reference": mapping.verification_reference,
-            "verified_at_utc": mapping.verified_at_utc,
-        }
-        for mapping in catalog.mappings
-    ]
+    """Hash active mapping state, exclusions, and catchment scope for output reuse."""
+
+    payload = {
+        "source_id": catalog.source_id,
+        "sites": [
+            {
+                "id": site.id,
+                "slug": site.slug,
+                "country_code_iso2": site.country_code_iso2,
+                "latitude_deg": site.latitude_deg,
+                "longitude_deg": site.longitude_deg,
+                "catchment_radius_km": site.catchment_radius_km,
+                "is_active": site.is_active,
+            }
+            for site in catalog.sites
+        ],
+        "mappings": [
+            {
+                "id": mapping.id,
+                "site_id": mapping.site_id,
+                "key_type": mapping.key_type,
+                "key_value": mapping.key_value,
+                "point_latitude_deg": mapping.point_latitude_deg,
+                "point_longitude_deg": mapping.point_longitude_deg,
+                "status": mapping.status,
+                "verification_reference": mapping.verification_reference,
+                "verified_at_utc": mapping.verified_at_utc,
+            }
+            for mapping in catalog.mappings
+        ],
+        "active_exclusions": [
+            {
+                "id": exclusion.id,
+                "key_type": exclusion.key_type,
+                "key_value": exclusion.key_value,
+                "origin_run_key": exclusion.origin_run_key,
+                "origin_proposal_id": exclusion.origin_proposal_id,
+                "created_at_utc": exclusion.created_at_utc,
+            }
+            for exclusion in catalog.exclusions
+            if exclusion.status == "active"
+        ],
+    }
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
+
+
+def matching_exclusions(
+    record: dict[str, Any], catalog: MappingCatalog
+) -> list[SourceSiteExclusion]:
+    """Return exact active stable-key exclusions; names and points never match."""
+
+    evidence = candidate_evidence(record)
+    return [
+        exclusion
+        for exclusion in catalog.exclusions
+        if exclusion.status == "active"
+        and isinstance(evidence.get(exclusion.key_type), str)
+        and evidence[exclusion.key_type] == exclusion.key_value
+    ]
+
+
+def exclusion_resolution(
+    record: dict[str, Any], catalog: MappingCatalog
+) -> tuple[SourceSiteExclusion | None, bool]:
+    """Return a safely reusable exclusion or whether fresh evidence conflicts with one."""
+
+    exclusions = matching_exclusions(record, catalog)
+    if not exclusions:
+        return None, False
+    active_mappings = [
+        mapping
+        for mapping in matching_mappings(record, catalog)
+        if mapping.status in {"approved", "provisional"}
+    ]
+    geographic = catchment_resolution(record, catalog.sites)
+    if active_mappings or geographic.disposition in {
+        "inside_unique_catchment",
+        "ambiguous_catchment",
+    }:
+        return None, True
+    return min(exclusions, key=lambda item: item.id), False
 
 
 def _proposal_key(record: dict[str, Any]) -> tuple[str, object]:
@@ -446,82 +553,115 @@ def write_mapping_proposals(
     database_url: str | None = None,
     project_root: Path | None = None,
 ) -> dict[str, Any]:
-    """Create grouped, human-reviewable proposals without changing SQLite."""
+    """Create v4 human-review proposals without modifying SQLite."""
 
     root = (project_root or repository_root()).resolve()
     records, parser_report, normalized_path, parser_report_path = load_parser_records(run_key, root)
     catalog = load_mapping_catalog(database_url, project_root=root)
     groups: dict[tuple[str, str], dict[str, Any]] = {}
     automatically_rejected_candidate_count = 0
+    persisted_exclusion_candidate_count = 0
     for record in records:
         if record.get("parser_status") != "normalized":
             continue
         try:
-            approved = [
+            evidence = candidate_evidence(record)
+            active = [
                 mapping
                 for mapping in matching_mappings(record, catalog)
-                if mapping.status == "approved"
+                if mapping.status in {"approved", "provisional"}
             ]
             geographic = catchment_resolution(record, catalog.sites)
-            review_reason: str | None = None
-            if approved:
-                target_site_ids = {mapping.site_id for mapping in approved}
-                geographic_site_id = (
-                    int(geographic.matches[0]["site_id"])
-                    if geographic.disposition == "inside_unique_catchment"
-                    else None
-                )
-                if len(target_site_ids) != 1 or not (
-                    geographic.disposition == "outside_configured_catchments"
-                    or (
-                        geographic_site_id is not None and geographic_site_id not in target_site_ids
-                    )
-                ):
-                    continue
-                key_type, key_value = _proposal_key(record)
-                review_reason = "mapping_coordinate_conflict"
-            else:
-                if geographic.disposition == "outside_configured_catchments":
-                    automatically_rejected_candidate_count += 1
-                    continue
-                key_type, key_value = _proposal_key(record)
+            exclusion, exclusion_conflict = exclusion_resolution(record, catalog)
         except SiteMappingError:
             continue
-        key_json = json.dumps(key_value, sort_keys=True)
-        group = groups.setdefault(
-            (key_type, key_json),
-            {
-                "proposal_id": _proposal_id(key_type, key_value),
-                "source": SOURCE_CODE,
-                "key_type": key_type,
-                "key_value": key_value if isinstance(key_value, str) else None,
-                "point_latitude_deg": key_value[0] if isinstance(key_value, tuple) else None,
-                "point_longitude_deg": key_value[1] if isinstance(key_value, tuple) else None,
-                "source_display_names": set(),
-                "candidate_count": 0,
-                "sample_source_flight_ids": [],
-                "seasons": set(),
-                "catchment_suggestions": [],
-                "review_reasons": set(),
-                "matching_mapping_ids": set(),
-            },
-        )
-        group["candidate_count"] += 1
-        if review_reason is not None:
-            group["review_reasons"].add(review_reason)
-            group["matching_mapping_ids"].update(mapping.id for mapping in approved)
-        display_name = _clean_text(record.get("launch_name_raw"))
-        if display_name is not None:
-            group["source_display_names"].add(display_name)
-        flight_id = _clean_text(record.get("source_flight_id"))
-        if flight_id is not None and len(group["sample_source_flight_ids"]) < 10:
-            group["sample_source_flight_ids"].append(flight_id)
-        for reference in record.get("artifact_references", []):
-            if isinstance(reference, dict) and isinstance(reference.get("season"), int):
-                group["seasons"].add(reference["season"])
-        for suggestion in catchment_suggestions(record, catalog.sites):
-            if suggestion not in group["catchment_suggestions"]:
-                group["catchment_suggestions"].append(suggestion)
+        if active and not exclusion_conflict:
+            target_site_ids = {mapping.site_id for mapping in active}
+            geographic_site_id = (
+                int(geographic.matches[0]["site_id"])
+                if geographic.disposition == "inside_unique_catchment"
+                else None
+            )
+            if len(target_site_ids) == 1 and not (
+                geographic.disposition == "outside_configured_catchments"
+                or (geographic_site_id is not None and geographic_site_id not in target_site_ids)
+            ):
+                continue
+        if (
+            geographic.disposition == "outside_configured_catchments"
+            and not active
+            and not exclusion_conflict
+        ):
+            if exclusion is not None:
+                persisted_exclusion_candidate_count += 1
+            else:
+                automatically_rejected_candidate_count += 1
+            continue
+        proposal_keys = [
+            (key_type, evidence[key_type])
+            for key_type in ("source_takeoff_id", "source_site_token")
+            if key_type in evidence
+        ]
+        if not proposal_keys:
+            proposal_keys = [_proposal_key(record)]
+        for key_type, key_value in proposal_keys:
+            exact_exclusion = next(
+                (
+                    item
+                    for item in matching_exclusions(record, catalog)
+                    if item.key_type == key_type and item.key_value == key_value
+                ),
+                None,
+            )
+            if exact_exclusion is not None and not exclusion_conflict:
+                persisted_exclusion_candidate_count += 1
+                continue
+            review_reason = (
+                "mapping_exclusion_conflict"
+                if exclusion_conflict
+                else "mapping_coordinate_conflict"
+                if active
+                else None
+            )
+            key_json = json.dumps(key_value, sort_keys=True)
+            group = groups.setdefault(
+                (key_type, key_json),
+                {
+                    "proposal_id": _proposal_id(key_type, key_value),
+                    "source": SOURCE_CODE,
+                    "key_type": key_type,
+                    "key_value": key_value if isinstance(key_value, str) else None,
+                    "point_latitude_deg": key_value[0] if isinstance(key_value, tuple) else None,
+                    "point_longitude_deg": key_value[1] if isinstance(key_value, tuple) else None,
+                    "source_display_names": set(),
+                    "candidate_count": 0,
+                    "sample_source_flight_ids": [],
+                    "seasons": set(),
+                    "catchment_suggestions": [],
+                    "review_reasons": set(),
+                    "matching_mapping_ids": set(),
+                    "matching_exclusion_ids": set(),
+                },
+            )
+            group["candidate_count"] += 1
+            if review_reason is not None:
+                group["review_reasons"].add(review_reason)
+                group["matching_mapping_ids"].update(mapping.id for mapping in active)
+                group["matching_exclusion_ids"].update(
+                    item.id for item in matching_exclusions(record, catalog)
+                )
+            display_name = _clean_text(record.get("launch_name_raw"))
+            if display_name is not None:
+                group["source_display_names"].add(display_name)
+            flight_id = _clean_text(record.get("source_flight_id"))
+            if flight_id is not None and len(group["sample_source_flight_ids"]) < 10:
+                group["sample_source_flight_ids"].append(flight_id)
+            for reference in record.get("artifact_references", []):
+                if isinstance(reference, dict) and isinstance(reference.get("season"), int):
+                    group["seasons"].add(reference["season"])
+            for suggestion in catchment_suggestions(record, catalog.sites):
+                if suggestion not in group["catchment_suggestions"]:
+                    group["catchment_suggestions"].append(suggestion)
     output_directory = _safe_run_directory(run_key, root) / MAPPING_OUTPUT_DIRECTORY
     proposals_path = output_directory / "mapping-proposals.jsonl"
     report_path = output_directory / "proposal-report.json"
@@ -549,24 +689,25 @@ def write_mapping_proposals(
                         "seasons",
                         "review_reasons",
                         "matching_mapping_ids",
+                        "matching_exclusion_ids",
                     }
                 },
                 "source_display_names": sorted(group["source_display_names"]),
                 "seasons": sorted(group["seasons"]),
                 "review_reasons": sorted(group["review_reasons"]),
                 "matching_mapping_ids": sorted(group["matching_mapping_ids"]),
+                "matching_exclusion_ids": sorted(group["matching_exclusion_ids"]),
                 "recommendation": (
-                    "mapping_coordinate_conflict"
+                    "mapping_exclusion_conflict"
+                    if "mapping_exclusion_conflict" in group["review_reasons"]
+                    else "mapping_coordinate_conflict"
                     if "mapping_coordinate_conflict" in group["review_reasons"]
                     else reason
                 ),
             }
         )
     proposal_records.sort(key=lambda item: (item["key_type"], str(item["key_value"])))
-    with proposals_path.open("x", encoding="utf-8", newline="\n") as output:
-        for proposal in proposal_records:
-            output.write(json.dumps(proposal, ensure_ascii=False, sort_keys=True))
-            output.write("\n")
+    _write_jsonl(proposals_path, proposal_records)
     report_payload = {
         "mapping_version": MAPPING_VERSION,
         "run_key": run_key,
@@ -576,6 +717,7 @@ def write_mapping_proposals(
         "parser_normalized_candidates": parser_report["normalized_candidates"],
         "proposal_count": len(proposal_records),
         "automatically_rejected_candidate_count": automatically_rejected_candidate_count,
+        "persisted_exclusion_candidate_count": persisted_exclusion_candidate_count,
         "mapping_snapshot_sha256": mapping_snapshot_sha256(catalog),
     }
     report_path.write_text(
@@ -750,21 +892,82 @@ def auto_apply_coordinate_mappings(
     return report
 
 
+def _reviewed_proposals(review_path: Path) -> tuple[str, dict[str, dict[str, Any]]] | None:
+    """Load the immutable v4 proposal artifact beside a human decision file."""
+
+    proposals_path = review_path.parent / "mapping-proposals.jsonl"
+    report_path = review_path.parent / "proposal-report.json"
+    if not proposals_path.is_file() or not report_path.is_file():
+        return None
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    run_key = report.get("run_key") if isinstance(report, dict) else None
+    if not isinstance(run_key, str) or not run_key:
+        raise SiteMappingError("Mapping proposal report does not contain its run key.")
+    proposals: dict[str, dict[str, Any]] = {}
+    for proposal in read_jsonl(proposals_path):
+        proposal_id = proposal.get("proposal_id")
+        if not isinstance(proposal_id, str) or not proposal_id or proposal_id in proposals:
+            raise SiteMappingError(
+                "Mapping proposal artifact contains an invalid or duplicate proposal_id."
+            )
+        proposals[proposal_id] = proposal
+    return run_key, proposals
+
+
+def _eligible_rejection(
+    decision: dict[str, Any], context: tuple[str, dict[str, dict[str, Any]]] | None
+) -> tuple[str, dict[str, Any]] | None:
+    """Validate a minimal human rejection against its immutable proposal."""
+
+    if context is None:
+        raise SiteMappingError("Rejected mapping decisions require sibling v4 proposal artifacts.")
+    run_key, proposals = context
+    proposal_id = decision.get("proposal_id")
+    if not isinstance(proposal_id, str) or proposal_id not in proposals:
+        raise SiteMappingError(
+            "Rejected mapping decision does not belong to its proposal artifact."
+        )
+    proposal = proposals[proposal_id]
+    for field in ("source", "key_type", "key_value", "point_latitude_deg", "point_longitude_deg"):
+        if decision.get(field) != proposal.get(field):
+            raise SiteMappingError(
+                "Rejected mapping decision evidence does not match its immutable proposal."
+            )
+    if proposal.get("source") != SOURCE_CODE:
+        raise SiteMappingError("Rejected mapping proposal has the wrong source.")
+    if proposal.get("key_type") not in {"source_site_token", "source_takeoff_id"}:
+        return None
+    key_value = proposal.get("key_value")
+    if not isinstance(key_value, str) or _clean_text(key_value) is None:
+        raise SiteMappingError("Rejected stable-key proposal has no exact key value.")
+    return run_key, proposal
+
+
 def apply_mapping_decisions(
     review_path: Path,
     *,
     database_url: str | None = None,
     project_root: Path | None = None,
 ) -> dict[str, int]:
-    """Apply a fully reviewed local JSONL file in one SQLite transaction."""
+    """Apply reviewed decisions atomically, persisting only eligible rejections."""
 
     decisions = _load_decisions(review_path)
+    context = _reviewed_proposals(review_path)
+    parsed_rejections: list[tuple[str, dict[str, Any]] | None] = []
+    for decision in decisions:
+        action = _decision_value(decision, "decision")
+        if action not in {"provisional", "approved", "rejected"}:
+            raise SiteMappingError("Mapping decision must be approved, provisional, or rejected.")
+        parsed_rejections.append(
+            _eligible_rejection(decision, context) if action == "rejected" else None
+        )
     root = project_root or repository_root()
     try:
         connection = open_writable_database(configured_database_url(database_url), root)
     except DatabaseConfigurationError as error:
         raise SiteMappingError("Could not open the configured mapping database.") from error
-    inserted = promoted = unchanged = rejected = 0
+    inserted = promoted = unchanged = rejected = exclusions_inserted = exclusions_unchanged = 0
+    rejected_not_persisted = 0
     try:
         connection.execute("BEGIN IMMEDIATE")
         source_row = connection.execute(
@@ -773,15 +976,51 @@ def apply_mapping_decisions(
         if source_row is None:
             raise SiteMappingError("Migrated database does not contain the XCContest source.")
         source_id = int(source_row[0])
-        for decision in decisions:
+        for decision, rejection in zip(decisions, parsed_rejections, strict=True):
             action = _decision_value(decision, "decision")
             if action == "rejected":
                 rejected += 1
-                continue
-            if action not in {"provisional", "approved"}:
-                raise SiteMappingError(
-                    "Mapping decision must be approved, provisional, or rejected."
+                if rejection is None:
+                    rejected_not_persisted += 1
+                    continue
+                origin_run_key, proposal = rejection
+                key_type = str(proposal["key_type"])
+                key_value = str(proposal["key_value"])
+                positive = connection.execute(
+                    """SELECT id FROM source_site_mappings
+                       WHERE source_id = ? AND key_type = ? AND key_value = ?
+                         AND status IN ('approved', 'provisional')""",
+                    (source_id, key_type, key_value),
+                ).fetchone()
+                if positive is not None:
+                    raise SiteMappingError(
+                        "Active positive mapping conflicts with rejected stable key."
+                    )
+                existing_exclusion = connection.execute(
+                    """SELECT id FROM source_site_exclusions
+                       WHERE source_id = ? AND key_type = ? AND key_value = ? AND status = 'active'""",
+                    (source_id, key_type, key_value),
+                ).fetchone()
+                if existing_exclusion is not None:
+                    exclusions_unchanged += 1
+                    continue
+                connection.execute(
+                    """INSERT INTO source_site_exclusions (
+                           source_id, key_type, key_value, origin_run_key, origin_proposal_id,
+                           notes, status, created_at_utc, retired_at_utc, retirement_reason
+                       ) VALUES (?, ?, ?, ?, ?, ?, 'active', ?, NULL, NULL)""",
+                    (
+                        source_id,
+                        key_type,
+                        key_value,
+                        origin_run_key,
+                        str(proposal["proposal_id"]),
+                        _clean_text(decision.get("notes")),
+                        utc_now(),
+                    ),
                 )
+                exclusions_inserted += 1
+                continue
             key_type = _decision_value(decision, "key_type")
             if key_type not in {
                 "source_takeoff_id",
@@ -809,18 +1048,25 @@ def apply_mapping_decisions(
                 latitude, longitude = _decision_point(decision)
                 existing = connection.execute(
                     """SELECT id, site_id, status FROM source_site_mappings
-                         WHERE source_id = ? AND key_type = 'source_point'
-                           AND point_latitude_deg = ? AND point_longitude_deg = ?
-                           AND status <> 'retired'""",
+                       WHERE source_id = ? AND key_type = 'source_point'
+                         AND point_latitude_deg = ? AND point_longitude_deg = ? AND status <> 'retired'""",
                     (source_id, latitude, longitude),
                 ).fetchone()
                 key_value = None
             else:
                 key_value = _decision_value(decision, "key_value")
+                exclusion = connection.execute(
+                    """SELECT id FROM source_site_exclusions
+                       WHERE source_id = ? AND key_type = ? AND key_value = ? AND status = 'active'""",
+                    (source_id, key_type, key_value),
+                ).fetchone()
+                if exclusion is not None:
+                    raise SiteMappingError(
+                        "Active rejected stable key conflicts with positive mapping."
+                    )
                 existing = connection.execute(
                     """SELECT id, site_id, status FROM source_site_mappings
-                         WHERE source_id = ? AND key_type = ? AND key_value = ?
-                           AND status <> 'retired'""",
+                       WHERE source_id = ? AND key_type = ? AND key_value = ? AND status <> 'retired'""",
                     (source_id, key_type, key_value),
                 ).fetchone()
                 latitude = longitude = None
@@ -832,9 +1078,8 @@ def apply_mapping_decisions(
                 if str(existing[2]) == "provisional" and action == "approved":
                     connection.execute(
                         """UPDATE source_site_mappings
-                              SET status = 'approved', verification_reference = ?, verified_at_utc = ?,
-                                  notes = COALESCE(?, notes)
-                            WHERE id = ?""",
+                           SET status = 'approved', verification_reference = ?, verified_at_utc = ?,
+                               notes = COALESCE(?, notes) WHERE id = ?""",
                         (verification_reference, verified_at, notes, int(existing[0])),
                     )
                     promoted += 1
@@ -877,4 +1122,51 @@ def apply_mapping_decisions(
         "promoted": promoted,
         "unchanged": unchanged,
         "rejected": rejected,
+        "exclusions_inserted": exclusions_inserted,
+        "exclusions_unchanged": exclusions_unchanged,
+        "rejected_not_persisted": rejected_not_persisted,
     }
+
+
+def retire_site_exclusion(
+    exclusion_id: int,
+    retirement_reason: str,
+    *,
+    database_url: str | None = None,
+    project_root: Path | None = None,
+) -> dict[str, Any]:
+    """Explicitly retire one active stable-key exclusion without deleting its audit trail."""
+
+    reason = _clean_text(retirement_reason)
+    if exclusion_id <= 0 or reason is None:
+        raise SiteMappingError("Exclusion retirement requires a positive id and non-empty reason.")
+    root = project_root or repository_root()
+    try:
+        connection = open_writable_database(configured_database_url(database_url), root)
+    except DatabaseConfigurationError as error:
+        raise SiteMappingError("Could not open the configured mapping database.") from error
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+        row = connection.execute(
+            "SELECT id, status FROM source_site_exclusions WHERE id = ?", (exclusion_id,)
+        ).fetchone()
+        if row is None:
+            raise SiteMappingError("Source-site exclusion does not exist.")
+        if str(row[1]) != "active":
+            raise SiteMappingError("Source-site exclusion is already retired.")
+        retired_at = utc_now()
+        connection.execute(
+            """UPDATE source_site_exclusions
+               SET status = 'retired', retired_at_utc = ?, retirement_reason = ? WHERE id = ?""",
+            (retired_at, reason, exclusion_id),
+        )
+        connection.commit()
+    except sqlite3.Error as error:
+        connection.rollback()
+        raise SiteMappingError("Could not retire source-site exclusion.") from error
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+    return {"exclusion_id": exclusion_id, "status": "retired", "retired_at_utc": retired_at}

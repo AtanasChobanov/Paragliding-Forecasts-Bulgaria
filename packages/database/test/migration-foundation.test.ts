@@ -259,7 +259,7 @@ describe("database foundation migrations", () => {
 
     expect(sqlite.prepare("PRAGMA foreign_keys").get()).toEqual({ foreign_keys: 1 });
     expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({
-      count: 16,
+      count: 17,
     });
 
     if (databaseUrl === undefined) {
@@ -269,7 +269,7 @@ describe("database foundation migrations", () => {
     runMigrations(databaseUrl);
 
     expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({
-      count: 16,
+      count: 17,
     });
     expect(
       sqlite
@@ -389,7 +389,7 @@ describe("database foundation migrations", () => {
         .prepare(
           `SELECT name, strict FROM pragma_table_list
            WHERE name IN (
-             'flight_sources', 'sites', 'source_site_mappings', 'flight_ingestion_runs', 'flight_records'
+             'flight_sources', 'sites', 'source_site_mappings', 'source_site_exclusions', 'flight_ingestion_runs', 'flight_records'
            )
            ORDER BY name`,
         )
@@ -399,6 +399,7 @@ describe("database foundation migrations", () => {
       { name: "flight_records", strict: 1 },
       { name: "flight_sources", strict: 1 },
       { name: "sites", strict: 1 },
+      { name: "source_site_exclusions", strict: 1 },
       { name: "source_site_mappings", strict: 1 },
     ]);
     expect(
@@ -410,6 +411,9 @@ describe("database foundation migrations", () => {
              'flight_records_mapping_takeoff_at_index',
              'flight_records_takeoff_distance_index',
              'ingestion_runs_source_started_at_index',
+             'source_site_exclusions_active_key_unique',
+             'source_site_exclusions_lookup_index',
+             'source_site_exclusions_origin_audit_index',
              'source_site_mappings_active_key_unique',
              'source_site_mappings_active_point_unique',
              'source_site_mappings_site_source_status_index'
@@ -422,6 +426,9 @@ describe("database foundation migrations", () => {
       { name: "flight_records_mapping_takeoff_at_index" },
       { name: "flight_records_takeoff_distance_index" },
       { name: "ingestion_runs_source_started_at_index" },
+      { name: "source_site_exclusions_active_key_unique" },
+      { name: "source_site_exclusions_lookup_index" },
+      { name: "source_site_exclusions_origin_audit_index" },
       { name: "source_site_mappings_active_key_unique" },
       { name: "source_site_mappings_active_point_unique" },
       { name: "source_site_mappings_site_source_status_index" },

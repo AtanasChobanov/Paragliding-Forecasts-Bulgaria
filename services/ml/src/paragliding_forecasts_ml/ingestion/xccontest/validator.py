@@ -18,6 +18,7 @@ from .site_mapping import (
     candidate_evidence,
     catchment_resolution,
     catchment_suggestions,
+    exclusion_resolution,
     load_mapping_catalog,
     load_parser_records,
     mapping_snapshot_sha256,
@@ -46,12 +47,13 @@ def _sha256(path: Path) -> str:
 
 
 def _mapping_resolution(record: dict[str, Any], catalog: MappingCatalog) -> dict[str, Any]:
-    """Resolve approved source evidence while preserving geographic contradictions for review."""
+    """Resolve approved evidence, preserving exclusions and contradictions for review."""
 
     try:
         evidence = candidate_evidence(record)
         mappings = matching_mappings(record, catalog)
         geographic = catchment_resolution(record, catalog.sites)
+        exclusion, exclusion_conflict = exclusion_resolution(record, catalog)
     except SiteMappingError as error:
         return {
             "outcome": "quarantined",
@@ -61,7 +63,24 @@ def _mapping_resolution(record: dict[str, Any], catalog: MappingCatalog) -> dict
         }
     approved = [mapping for mapping in mappings if mapping.status == "approved"]
     provisional = [mapping for mapping in mappings if mapping.status == "provisional"]
+    if exclusion_conflict:
+        return {
+            "outcome": "quarantined",
+            "reason": "mapping_exclusion_conflict",
+            "mapping_ids": [mapping.id for mapping in mappings],
+            "mapping_disposition": "review_required",
+            "geographic_disposition": geographic.disposition,
+        }
     if not approved:
+        if exclusion is not None:
+            return {
+                "outcome": "quarantined",
+                "reason": "known_source_site_exclusion",
+                "mapping_ids": [mapping.id for mapping in mappings],
+                "mapping_disposition": "persisted_rejection",
+                "source_site_exclusion_id": exclusion.id,
+                "geographic_disposition": geographic.disposition,
+            }
         if geographic.disposition == "outside_configured_catchments":
             return {
                 "outcome": "quarantined",
@@ -111,12 +130,7 @@ def _mapping_resolution(record: dict[str, Any], catalog: MappingCatalog) -> dict
             "mapping_disposition": "review_required",
             "geographic_disposition": geographic.disposition,
         }
-    for key_type in (
-        "source_takeoff_id",
-        "source_site_token",
-        "normalized_name",
-        "source_point",
-    ):
+    for key_type in ("source_takeoff_id", "source_site_token", "normalized_name", "source_point"):
         if key_type not in evidence:
             continue
         matching = [
@@ -222,6 +236,7 @@ def validate_run(
                 "mapping_disposition": resolution["mapping_disposition"],
                 "geographic_disposition": resolution.get("geographic_disposition"),
                 "matching_mapping_ids": resolution["mapping_ids"],
+                "source_site_exclusion_id": resolution.get("source_site_exclusion_id"),
                 "catchment_suggestions": suggestions,
                 "candidate": record,
             }
@@ -272,6 +287,9 @@ def validate_run(
         "records_quarantined": len(quarantined),
         "records_auto_rejected": sum(
             record.get("mapping_disposition") == "auto_rejected" for record in quarantined
+        ),
+        "records_persisted_exclusions": sum(
+            record.get("mapping_disposition") == "persisted_rejection" for record in quarantined
         ),
         "records_deduplicated": deduplicated,
     }

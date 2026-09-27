@@ -3,192 +3,153 @@
 ## Read first
 
 1. `AGENTS.md` for repository rules.
-2. `docs/tasks.md` for ticket status and scope.
-3. This handoff for the active T-020 state.
-4. [`T-020-xccontest-activity-ingestion-plan.md`](T-020-xccontest-activity-ingestion-plan.md)
-   for the flight-ingestion prerequisite only.
-5. [`T-022-sounding-cloudbase-research-note.md`](T-022-sounding-cloudbase-research-note.md)
-   for the cloudbase/sounding investigation.
-6. DEC-055 through DEC-060 in `docs/decisions.md`, plus DEC-023 through
-   DEC-030 for the existing XCContest boundary.
-7. The relevant sections of `docs/project-brief.md` and
-   `docs/architecture.md` for product/system constraints.
+2. This handoff for the active state.
+3. T-020 in `docs/tasks.md` for ticket scope and acceptance criteria.
+4. [`T-020-xccontest-activity-ingestion-plan.md`](T-020-xccontest-activity-ingestion-plan.md) for the completed flight-ingestion prerequisite.
+5. [`T-020-persistent-site-exclusions-plan.md`](T-020-persistent-site-exclusions-plan.md) for durable reviewed source-site exclusions.
+6. DEC-055 through DEC-061 in `docs/decisions.md`; DEC-023 through DEC-030 define the pre-existing XCContest boundary.
+7. Only the relevant sections of `docs/project-brief.md` and `docs/architecture.md`.
 
-Keep durable decisions in `docs/decisions.md`, ticket lifecycle in
-`docs/tasks.md`, and only current actionable state here.
+Keep durable decisions in `docs/decisions.md`, ticket lifecycle in `docs/tasks.md`, and current operational state here.
 
-## Current state - 2026-09-25
+## Current state — 2026-09-27
 
-| Field | Value |
+| Field | Current state |
 | --- | --- |
 | Branch | `feature/T-020-joined-weather-dataset` |
-| Ticket | T-020 remains **In Progress**: the focused XCContest 0--2000 km ingestion prerequisite is implemented and locally verified, but the joined flight/weather dataset is still not implemented. The bounded headed live acceptance was deliberately not run in this session at the owner request. T-018 and T-019 remain in Review; ERA5 remains deferred to T-038. |
-| Product decisions | The Project Owner accepted the prior-evening forecast cutoff, tri-state flight labels based on recorded activity, and the configurable hybrid overdevelopment baseline. The owner also confirmed that blue days may still be flyable and asked that sounding-derived cloudbase, thermal-top, inversion, and overdevelopment diagnostics be evaluated. |
-| XCContest state | The collector now captures source-default season evidence, preserves threshold-first 100+ coverage, and then scans 15 February--15 October source-offered dates for all-distance activity. Manifest-v5/parser/validator/persistence and SQLite accept finite 0--2000 km rows. Exact skipped out-of-window dates are retained as coverage evidence; partial/saturated coverage is not a known-negative result. |
-| Implemented ingestion design | The user-facing scope remains repeated `--season`. After threshold-first coverage, each supported activity date captures one source-default parent view. Any parent without an active next page is complete as captured, including exactly 100 rows. Only paginated parents fall back to exact glider classes, and only a paginated exact class runs the eight explicit rescue sorts. Date/category controls change in place on the current season page, preserving XCContest current and archived year-prefixed URLs without root/season/country reconstruction. Observed 0..2000 km records can persist, while later labels must require positive distance for activity evidence. |
-| Database scope | Migration `20260925150010_widen_flight_distance_constraint` changes only `flight_records.scored_distance_km` from 100..2000 to 0..2000. It preserves `STRICT`, FKs, unique identity, and existing indexes; no table, column, or index was added. |
-| Site-mapping policy | `fresh` and offline `resume` now apply immutable `site-mapping-v3` automatic decisions before residual proposals. Only a valid, same-country coordinate inside one catchment creates approved point/token/takeoff-ID mappings. A valid point outside every catchment is audit-only, rejected without a human-review pause or canonical persistence. No-coordinate, ambiguous, country-mismatched, and contradictory existing mappings remain human review. |
-| Implementation plan | [`T-020-xccontest-activity-ingestion-plan.md`](T-020-xccontest-activity-ingestion-plan.md) includes activity ingestion, recovery, bounded live acceptance, and the deterministic automatic coordinate mapping disposition. It does not implement the joined dataset. |
-| Sounding finding | IGRA is real balloon observation data and the current pipeline covers Sofia only. A forecast/model sounding from existing GFS profiles works at all seven locations. NOAA READY is a GFS sounding interface, not independent observations, and is not recommended as a production dependency. |
-| Historical GFS evidence | The owner collected 2025-08-02 successfully. The 2023-10-03 run initially rolled back on numerical shortwave noise; weather-spatial/7 now clamps only absolute values at most `1e-12` and the retained run resumed offline and inserted seven site snapshots. |
-| Next work | The owner may run one bounded headed `xccontest-collect --season <recent-year>` acceptance under the normal 30-second pace and a reviewed explicit view cap; the default 2,000 views remains fail-closed rather than a full-season guarantee. Inspect the manifest-v5 skipped-date audit, source-default evidence, sub-100 parsing, persistence, and honest complete/partial scope status. Do not start a multi-season backfill. After genuine acceptance, record its exact evidence and continue the joined-dataset work separately. |
-| Live-source gate | The owner ran headed 2025 ingestion with 30-second pacing and a 90-second browser timeout. Run `d577156f-7f73-4e62-81ad-eb6881715739` retained 51 artifacts and checkpointed through the 2025-03-15 default view, then timed out changing to the next date because two valid results could render byte-identical `#flights` HTML. The corrected wait accepts the expected selected value only with a changed URL, document, or fragment. No additional live command was run while implementing the fix; resume the verified collection checkpoint before any new fresh run. |
-| Local verification | After the pagination-first/in-place-navigation correction, the full XCContest suite passed (96 tests) and the full ML suite passed (330 tests). The identical-empty-result transition fix adds focused new-document and diagnostic-timeout coverage; the XCContest suite passed (98 tests), the full ML suite passed (332 tests), and Ruff check, Ruff format check, and `npm.cmd run format:check` passed. No live ingestion command was run while implementing either correction. The earlier `typecheck`, `test` (249 tests), `build`, `repo:check`, and database `db:check` results remain valid for their unchanged areas. `npm.cmd run lint` fails in the unmodified `packages/database/test/migration-foundation.test.ts` at lines 450 and 457 (array-type/restrict-template-expressions); it was not changed by this task. The Vite build retains its existing >500 kB chunk warning. |
-| T-020 commits | `fe1a39f`, `b67f594`, `2806e78`, `2e6096f`, `da5b619`, `628929d`, `0b49132`, `d8bd2ef`, `7d78b75`, and `1408fa1` implement the verified local slices through the activity-window optimization. The latest T-020 commit removes redundant daily sort/root-reset transitions. The bounded headed acceptance-record commit remains unmade because the owner run failed before collecting evidence. |
-| Storage risk | Current retained GFS derived artifacts are too large for an unbounded negative-day backfill. Before broader GFS acquisition, use the compact site-footprint design or an explicitly bounded sample. |
+| Ticket | T-020 is **In Progress**. Its 0–2000 km flight-ingestion prerequisite and persistent reviewed-exclusion support are implemented in the working tree. No joined historical flight/weather dataset, model, or prediction command exists yet. |
+| Active owner operation | XCContest raw collection is currently running for source seasons 2024, 2023, and 2022 under run key `724845c1-7b75-4900-a74c-d61e9de83157`. Do not modify collector/business code, stop the run, launch another live collection, or run destructive database commands while it is active. |
+| Previous accepted run | 2025 run `d577156f-7f73-4e62-81ad-eb6881715739` completed collection and persistence. It is the first season with all-distance activity coverage under the new collector policy. |
+| Local database | `data/local/paragliding.db` already contains `source_site_exclusions`; migration `20260926102539_add_source_site_exclusions` is present in the local migration history. Do not assume a different owner database has been migrated: check it before applying or resuming persistent-exclusion work there. |
+| Live-source boundary | XCContest remains rendered-UI collection with conservative pacing. `fresh` is the only live operation. `resume` is offline and must not open a browser or create source transport. |
+| Weather boundary | T-018 GFS pipeline is implemented and historical 2025/2023 acceptance evidence exists. Do not start broad GFS historical acquisition until the flight-label audit has fixed the eligible site-day cohort and a bounded storage plan is approved. |
 
 ## Accepted T-020 business logic
 
-### Forecast issue policy
+### Forecast issue policy (DEC-055)
 
-- The main daily issue covers D+1, D+2, and D+3.
-- The reproducible MVP cutoff is `20:00 Europe/Sofia` on the issue date.
-- Historical rows use only the newest complete GFS cycle available by that
-  cutoff and the matching forecast horizon.
-- A later or same-day run may not replace missing pre-cutoff evidence.
-- A morning refresh is optional after MVP and is a separate issue-time cohort.
+- The primary daily issue covers D+1, D+2, and D+3.
+- The reproducible cutoff is `20:00 Europe/Sofia` on the issue date.
+- Each historical row must use the newest **complete** GFS cycle available by that cutoff and the exact corresponding forecast horizon.
+- No later GFS run, same-day evidence, observation, or reanalysis may replace missing pre-cutoff data.
+- A future morning refresh is a distinct issue-time cohort; it must not be mixed into the MVP evening cohort.
 
-### XC distance labels
+### Flight labels (DEC-056)
 
-- `100+`, `200+`, and `300+` are inclusive thresholds.
-- A confirmed accepted flight at/above a threshold is positive.
-- A negative requires accepted positive-distance activity plus mature, complete
-  threshold and mapping evidence showing no flight reached the threshold.
-- No accepted flight is unknown, not negative.
-- One accepted short flight is the MVP activity minimum; counts and distances
-  remain in the audit so stricter sensitivity checks need no new collection.
-- Known labels are nested: `label_300 <= label_200 <= label_100`. T-023 must
-  preserve the equivalent probability order.
+For every canonical site and local flying date, build three nested labels:
 
-### Overdevelopment baseline
+- `100+`, `200+`, and `300+` are inclusive confirmed-flight thresholds.
+- A threshold is positive when at least one accepted mapped flight reaches it.
+- A threshold is negative only when accepted **positive-distance** flight activity exists and threshold/mapping coverage is complete and mature, yet no accepted flight reaches that threshold.
+- A day with no accepted activity, partial/saturated coverage, unresolved mapping, or incomplete evidence is `unknown`; it is never silently treated as negative.
+- One accepted positive-distance short flight is the MVP activity minimum. Preserve flight count, maximum distance, coverage, and reason fields so a later stricter activity threshold can be audited without recollection.
+- Labels must obey `label_300 <= label_200 <= label_100`; later T-023 outputs must preserve the equivalent probability order.
 
-T-024 uses the DEC-057 configurable decision tree plus smooth score. It includes
-precipitation, instability/convective evidence, cloud/base combinations,
-duration/window effects, and a critical `High` override for configured severe
-precipitation/overdevelopment evidence or wind over `10 m/s` in the named
-policy field/window. API/UI output must include main reasons. Missing critical
-inputs cannot silently return `Low`. The result is informational and does not
-replace pilot judgement.
+### Overdevelopment and cloudbase context
 
-### Sounding and cloudbase direction
+- T-024 uses the accepted configurable hybrid decision-tree plus smooth-score baseline (DEC-057), including critical high-risk overrides, reasons, configurable thresholds, and explicit missing-input behavior. It is not part of the T-020 training dataset implementation.
+- Cloudbase is deferred. T-022 evaluates deterministic cloudbase/thermal-top/inversion diagnostics from existing GFS forecast-model profiles and must retain a `blue` day state. IGRA is real observed balloon evidence for Sofia and remains validation evidence, not a required training join (DEC-054/058).
 
-"Sounding" may mean a real balloon profile or a virtual forecast-model profile.
-T-019 already supplies the real NOAA IGRA Sofia observations, but they arrive
-after the event and do not cover all seven sites. They remain validation
-evidence under T-039.
+## T-020 flight-ingestion prerequisite
 
-T-022 should evaluate a deterministic sounding calculation from the existing
-GFS profiles at every site. The current pipeline already produces mixed-layer
-LCL and PBL-minus-LCL features. The output must preserve a distinct `blue`
-state because a dry thermic day may be flyable without a visible cloud base.
-Exact parcel policy, inversion threshold, usable-thermal-top rule, display time,
-and MSL/AGL presentation remain open. See
-[`T-022-sounding-cloudbase-research-note.md`](T-022-sounding-cloudbase-research-note.md).
+### Implemented collection policy
 
-## T-019 implementation and operational boundary
+- The public command still selects repeated `--season`; users do not need date-range flags.
+- The collector preserves threshold-first discovery of 100+ flights, then performs all-distance activity collection for the source-offered Bulgarian XC season (15 February–15 October).
+- It captures the source-default parent view first. A non-paginated parent view is complete as captured, including exactly 100 rows.
+- Only a paginated parent falls back to exact glider-category views. Only a paginated exact category receives the explicit rescue sorts.
+- The threshold collector first observes the unsorted date view; it skips a distance sort when that full view has no next page. This preserves 100+ discovery while avoiding needless slow sorts on empty/small dates.
+- Finite observed distances from 0 through 2000 km can persist. Later label construction must use only positive distance as activity evidence.
+- The collector’s source-default all-distance mode must remain `PG*` (not a leftover threshold category such as `CCC`). This was corrected before the current multi-season run.
 
-The accepted T-019 boundary is recorded in DEC-054. The operational
-implementation documentation and commands are in
-[`../services/ml/README.md`](../services/ml/README.md). The task is now in
-**Review**, not Done: its scoped implementation and evidence are ready for
-review, while follow-on work remains deliberately separate.
+### Persistent reviewed source-site exclusions (DEC-061)
 
-- Source: official NOAA/NCEI IGRA v2.2 raw and provider-derived station ZIPs
-  for Sofia `BUM00015614`; station snapshots update daily and observations are
-  normally published with roughly two days of delay.
-- Command boundary: live HEAD-only `igra-ingest inventory`, bounded live
-  `fresh`, then hash-verified offline `resume`, for explicit UTC dates.
-- Storage: immutable raw station snapshots plus selected, normalized, and
-  validated JSONL/report artifacts only. No SQLite or Drizzle work belongs in
-  T-019.
-- Time policy: every actual sounding on the requested UTC dates is retained.
-  The Sofia 10:00–20:00 flying window is classified later, not filtered here.
-- ML boundary: T-020 joins flight labels only to pre-flight exact GFS features.
-  IGRA observations are not predictors and are not a required join.
-- Comparison boundary: T-039 may consume the effective validated manifest to
-  compare GFS at the exact IGRA station and nominal time, then quantify
-  profile error and calibration/bias evidence.
+- `source_site_exclusions` stores only reviewed exact XCContest `source_site_token` or `source_takeoff_id` identities that are confirmed outside the supported seven-site scope.
+- A durable exclusion never maps a flight to a canonical site and never creates a negative flight label.
+- In `fresh` and offline `resume`, the v4 mapping stage reads active exclusions with the mapping catalog. Exact stable-key evidence is automatically rejected only when fresh coordinate/mapping evidence does not conflict.
+- Name-only rejections, geometry ambiguity, country conflicts, and coordinate-only outside-catchment cases are not reusable durable exclusions. A new in-scope/ambiguous coordinate or conflicting active mapping produces explicit review instead of silently applying an old exclusion.
+- A normal offline `xccontest-ingest resume` applies the sibling reviewed mapping file transactionally before revalidation. The focused manual command and explicit retirement command are documented in `services/ml/README.md`.
 
-### Verified pipeline evidence
+### Safe action after the live run
 
-The successful fresh command was:
+1. Let run `724845c1-7b75-4900-a74c-d61e9de83157` finish or reach its documented pause. Inspect its terminal JSON, raw manifest, checkpoint, and collection report; do not infer completion from a partial artifact count.
+2. Run the usual offline `xccontest-ingest resume --run-key <run-key> --policy-file ...`. It reuses collected raw artifacts and advances parser, mapping, validation, and persistence only where each stage is valid.
+3. If it returns `awaiting_mapping_review`, inspect the generated immutable proposals, create the complete sibling decisions JSONL, then rerun the same offline `resume`. Rejections of eligible stable keys become durable exclusions through that normal workflow.
+4. Review the persistence/reconciliation result before treating a season as usable. A mapping or reconciliation pause means the affected evidence is not yet label-ready.
+5. Do not launch GFS collection solely because a raw XCContest run ends. First produce the offline flight-label audit below.
+
+## T-020 joined-dataset plan
+
+T-020 is a reproducible dataset-building task, not a model-training task. Its output must be a versioned, auditable local dataset and manifest, never a manually curated spreadsheet or a database table with unstated provenance.
+
+### Phase 1 — complete flight evidence
+
+1. Complete the currently running 2024/2023/2022 collection through offline mapping, validation, and persistence.
+2. Start with 2024 and 2023 for the first audit; include 2022 only if the audit shows that 300+ site-days remain too sparse.
+3. Preserve 2025 as the known all-distance reference season. Earlier legacy collection without complete short-flight coverage may contribute positive threshold evidence, but cannot manufacture reliable negatives until re-collected under the activity policy.
+
+### Phase 2 — offline label audit (no GFS download)
+
+For every site-day in the candidate seasons, emit a deterministic `site_day_label_audit.jsonl` record with:
+
+- canonical site/date/season identity;
+- accepted positive-distance flight count, maximum distance, and threshold-positive evidence;
+- threshold/mapping/activity coverage state and reasons;
+- each tri-state label (`positive`, `negative`, `unknown`) plus its reason;
+- source run/manifests, mapping snapshot, query/collector revisions, and hashes needed to reproduce the conclusion.
+
+Exclude `unknown` rows from supervised training. Keep them in a separate audited output because later coverage repair may make them usable.
+
+Planning checkpoints after the audit: target roughly 100 positive and 100 negative known site-days for 100+, roughly 50 positives for 200+, and at least 30 independent 300+ positive site-days across seasons/sites before interpreting a 300+ result as more than exploratory. These are planning thresholds, not proof of model quality. Season 2025 alone had approximately 80/23/5 positive site-days for 100+/200+/300+, so multi-season evidence is needed, especially for 300+.
+
+### Phase 3 — freeze the weather cohort and acquisition plan
+
+1. Select only known-label site-days for the MVP weather cohort. Retain every scarce 300+ positive day; sample abundant 100+ negatives/positives reproducibly, stratified by site, season/month, and threshold status rather than hand-picking weather.
+2. Generate a dry-run acquisition manifest that maps every selected site-day and D+1/D+2/D+3 issue to its required GFS cycle, valid-time windows, and exact issue cutoff under DEC-055.
+3. Verify a small bounded multi-season technical sample end-to-end before requesting broad downloads. The sample must include at least one positive and one negative, every supported forecast horizon, every site footprint, and scarce 300+ examples if present.
+4. Estimate retained raw and derived storage from the actual compact-artifact implementation and approve a bounded batch. Historic GFS artifacts must be recoverable from the provider for each planned issue date before the main run starts.
+
+### Phase 4 — build and validate the joined dataset
+
+1. Run the approved GFS collection/persistence batch from the frozen manifest, preserving run identity, product validity, feature version, units, missingness, source/provider provenance, and cutoff evidence.
+2. Join labels only to weather features with matching site/date/issue/horizon identity. Reject duplicate, later-than-cutoff, missing, or ambiguous weather evidence instead of choosing a convenient row.
+3. Emit local versioned outputs such as `training_examples.jsonl`, `excluded_examples.jsonl`, and `manifest.json`. Each training row contains feature values plus units/missingness/provenance, the three labels, and pointers/hashes to its label and weather evidence.
+4. Validate schema, row uniqueness, complete provenance, tri-state exclusion, nested labels, and deterministic replay. Split future model evaluation chronologically and by season to avoid training on evidence from the future.
+
+### Explicit non-goals for T-020
+
+- No classifier, calibrated probability, alert, T-023 cloudbase prediction, or T-024 overdevelopment ML model is built here.
+- No rule may call a no-flight day a negative merely because XCContest has no visible row.
+- No GFS data is collected at a later run merely to fill an earlier cutoff gap.
+
+## Relevant weather and sounding state
+
+### T-018 GFS
+
+The weather pipeline has historic acceptance evidence:
 
 ```powershell
-uv run --project services/ml igra-ingest fresh `
-  --station-id BUM00015614 `
-  --date 2025-08-02 `
-  --date 2025-08-11 `
-  --archive period-of-record `
-  --maximum-total-mib 80 `
+uv run --project services/ml weather-ingest fresh `
+  --purpose historical_forecast `
+  --local-date 2025-08-02 `
+  --explicit-run-at 2025-08-01T00:00:00Z `
+  --maximum-total-mib 1113 `
+  --policy-file data/local/gfs-usage-policy.json `
   --allow-live-network
 ```
 
-It published run `5ae72afe-e71e-4c32-ade8-cd57426533e8` and its effective
-validator manifest at:
+The 2023-10-03 retry succeeded after a bounded shortwave numerical-noise fix. Current raw/derived retention remains a storage risk; the compact site-footprint design must be used and broad backfill remains gated by Phase 3.
 
-```text
-data/interim/soundings/5ae72afe-e71e-4c32-ade8-cd57426533e8/validator-v1/af4e1b3b9a8a2aa11de719ae11fd8ec51dafe179d3dea12675b4ddc872b72300/stage-manifest.json
-```
+### T-019 IGRA
 
-`fresh` first checks all five remote objects with HEAD, enforces the compressed
-byte cap before any GET, then stores/reuses hash-verified source evidence. It
-streams the selected ZIP members, parses fixed-width raw and derived records,
-normalizes units/provenance, validates them, partitions accepted/quarantined/
-missing evidence, and writes the effective `stage-manifest.json`. Its terminal
-JSON is sorted and pretty-printed; `validated_manifest` is the trustworthy
-handoff reference for T-039.
+T-019 is in Review. It collects official NOAA/NCEI IGRA v2.2 observations for Sofia `BUM00015614`, preserves immutable raw/normalized/validated artifacts, and has no SQLite or training-join role. It may support later GFS validation (T-039), but it is not a predictor for T-020.
 
-The offline replay was:
+## Verification and commit context
 
-```powershell
-uv run --project services/ml igra-ingest resume `
-  --run-key 5ae72afe-e71e-4c32-ade8-cd57426533e8
-```
-
-It performed no live transport, verified the artifact chain, and returned the
-same outcome and manifest identity. This is the command to use for safe local
-inspection or recovery of an interrupted offline stage. New fresh runs use the
-explicit `source-snapshot-reference.json` source-stage reference; the old
-extensionless `snapshot` reference is intentionally unsupported and old runs
-must be re-collected.
-
-Prior local verification passed Ruff and the full ML suite (293 tests). The
-current JSON presentation change also passed its formatter, focused Ruff check,
-and three focused CLI tests. These local checks use fixtures/fake transport;
-the owner commands above are the recorded real NOAA acceptance.
-### Storage scaling
-
-The retained GFS run is dominated by derived global arrays, not SQLite rows:
-raw payloads are about 1.09 GiB, active parser v5 artifacts about 10.92 GiB,
-and active normalizer v7 artifacts about 12.01 GiB; spatial/validator/features
-total only about 18 MiB. With superseded history, one retained day is about
-47 GiB, so naive 100-day retention is not viable.
-
-The compact design is locked:
-
-- Decode and validate the full GRIB message in memory, preserving bitmap and
-  sentinel semantics; persist only the deterministic rectangular crop required
-  by configured site footprints.
-- The current seven sites need 77 unique nodes inside an 8 × 24 (192-cell)
-  crop, versus the provider's 1440 × 721 global grid. Derive this crop from the
-  immutable site snapshot and sampling policy; do not hard-code it.
-- A rectangle, rather than sparse nodes, preserves current bilinear/radius
-  sampling. Preserve float64 values, packed masks, global-to-local node
-  translation, and `gfs_0p25_global` SQLite identity.
-- Bind site-config SHA, sampling-policy SHA, and crop-selection version into
-  acquisition/artifact identity. Changed footprint inputs may not silently
-  reuse a compact or persisted graph.
-- Keep raw source evidence and existing completed artifacts. Do not introduce
-  raw pruning, new dependencies, or SQLite columns.
-
-Given identical raw GRIB, site snapshot, and policy, selected-node canonical
-and SQLite business values must be unchanged. Only derived on-disk representation
-and repeated verification work may change.
+- Commit `1234419` (`T-020 skip complete threshold date sorts`) added the non-paginated threshold sort avoidance. Focused collector tests (15), Ruff check, and format check passed.
+- The uncommitted persistent-exclusion implementation has focused XCContest tests, database migration tests, and documentation updates pending final verification/commit. Do not claim a run has used that implementation until its actual local artifacts and terminal result are reviewed.
+- A Vite build retains its existing >500 kB chunk warning; it is not a T-020 failure.
 
 ## Commands and safety
 
-Use `uv run --project services/ml ...` for ML commands. Do not make a live
-network request unless the current phase explicitly calls for the owner-
-authorized bounded fresh operation. Resume must not construct or call a source
-transport. Do not mark S09, S10, or T-018 complete without the documented
-operational evidence.
+Use `uv run --project services/ml ...` for ML commands. Only `fresh` performs owner-authorized live collection. `resume` must remain offline. Do not store raw downloads, databases, model artifacts, or generated datasets in Git. Do not change business logic while the owner’s multi-season run is active.

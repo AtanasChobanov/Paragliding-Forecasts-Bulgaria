@@ -30,7 +30,8 @@ def create_database(tmp_path: Path) -> None:
           id INTEGER PRIMARY KEY, slug TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
           country_code_iso2 TEXT NOT NULL, site_type TEXT NOT NULL,
           latitude_deg REAL NOT NULL, longitude_deg REAL NOT NULL,
-          catchment_radius_km REAL
+          catchment_radius_km REAL,
+          is_active INTEGER NOT NULL DEFAULT 1
         );
         CREATE TABLE source_site_mappings (
           id INTEGER PRIMARY KEY, source_id INTEGER NOT NULL, site_id INTEGER NOT NULL,
@@ -38,8 +39,14 @@ def create_database(tmp_path: Path) -> None:
           point_latitude_deg REAL, point_longitude_deg REAL, status TEXT NOT NULL,
           verification_reference TEXT, verified_at_utc TEXT, notes TEXT
         );
+        CREATE TABLE source_site_exclusions (
+          id INTEGER PRIMARY KEY, source_id INTEGER NOT NULL, key_type TEXT NOT NULL,
+          key_value TEXT NOT NULL, origin_run_key TEXT NOT NULL, origin_proposal_id TEXT NOT NULL,
+          notes TEXT, status TEXT NOT NULL, created_at_utc TEXT NOT NULL,
+          retired_at_utc TEXT, retirement_reason TEXT
+        );
         INSERT INTO flight_sources VALUES (1, 'xccontest');
-        INSERT INTO sites VALUES
+        INSERT INTO sites (id, slug, name, country_code_iso2, site_type, latitude_deg, longitude_deg, catchment_radius_km) VALUES
           (1, 'sopot', 'Sopot', 'BG', 'launch_area', 42.68733, 24.749962, 5),
           (2, 'zlatitsa', 'Zlatitsa', 'BG', 'launch_area', 42.7302, 24.0923, 5);
         INSERT INTO source_site_mappings VALUES
@@ -237,3 +244,24 @@ def test_quarantines_known_mapping_with_conflicting_coordinate(tmp_path: Path) -
     quarantined = read_jsonl(validated.quarantine_path)
     assert quarantined[0]["reason"] == "mapping_coordinate_conflict"
     assert quarantined[0]["mapping_disposition"] == "review_required"
+
+
+def test_persisted_exclusion_is_nonblocking_but_fresh_coordinate_conflicts(tmp_path: Path) -> None:
+    create_database(tmp_path)
+    connection = sqlite3.connect(tmp_path / "data" / "local" / "validator.db")
+    connection.execute(
+        "INSERT INTO source_site_exclusions VALUES (1, 1, 'source_site_token', 'excluded-token', 'review-run', 'proposal', NULL, 'active', '2026-09-26T12:00:00Z', NULL, NULL)"
+    )
+    connection.commit()
+    connection.close()
+    excluded = candidate("100", token="excluded-token")
+    excluded.pop("launch_latitude_deg")
+    excluded.pop("launch_longitude_deg")
+    write_parser_output(tmp_path, [excluded])
+
+    validated = validate_run("test-run", database_url=database_url(), project_root=tmp_path)
+    quarantined = read_jsonl(validated.quarantine_path)
+    assert quarantined[0]["reason"] == "known_source_site_exclusion"
+    assert quarantined[0]["mapping_disposition"] == "persisted_rejection"
+    assert quarantined[0]["source_site_exclusion_id"] == 1
+    assert validated.report["records_persisted_exclusions"] == 1

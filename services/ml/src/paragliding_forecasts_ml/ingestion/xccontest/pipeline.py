@@ -21,6 +21,7 @@ from .site_mapping import (
     _proposal_id,
     _proposal_key,
     _safe_run_directory,
+    apply_mapping_decisions,
     auto_apply_coordinate_mappings,
     load_mapping_catalog,
     load_parser_records,
@@ -80,6 +81,7 @@ def _preflight(policy_path: Path, database_url: str | None) -> tuple[str, tuple[
             "flight_sources",
             "sites",
             "source_site_mappings",
+            "source_site_exclusions",
             "flight_ingestion_runs",
             "flight_records",
         }
@@ -151,6 +153,35 @@ def _existing_or_proposed(run_key: str, root: Path, database_url: str | None) ->
         return write_mapping_proposals(run_key, database_url=database_url, project_root=root)
     except (SiteMappingError, FileExistsError) as error:
         raise PipelineError(f"XCContest mapping proposal did not complete: {error}") from error
+
+
+def _apply_reviewed_mapping_decisions_if_present(
+    run_key: str,
+    root: Path,
+    database_url: str | None,
+) -> dict[str, int] | None:
+    """Apply the sibling human-review file before rebuilding validation.
+
+    A new run has no review file and must pause normally. On a later offline
+    resume, the exact reviewed file is the operator's authorization to write
+    durable mappings or stable-key exclusions. The underlying apply command is
+    transactional and idempotent, so a replay safely reports unchanged rows.
+    """
+
+    mapping_directory = _safe_run_directory(run_key, root) / MAPPING_OUTPUT_DIRECTORY
+    decisions_path = mapping_directory / "mapping-decisions.jsonl"
+    if not decisions_path.is_file():
+        return None
+    try:
+        return apply_mapping_decisions(
+            decisions_path,
+            database_url=database_url,
+            project_root=root,
+        )
+    except SiteMappingError as error:
+        raise PipelineError(
+            f"XCContest reviewed mapping apply did not complete: {error}"
+        ) from error
 
 
 def _existing_or_validated(run_key: str, root: Path, database_url: str | None) -> dict[str, Any]:
@@ -243,7 +274,7 @@ def _actionable_quarantines(report: dict[str, Any], run_key: str, root: Path) ->
     unresolved = reviewed_rejected = 0
     for record in records:
         disposition = record.get("mapping_disposition")
-        if disposition == "auto_rejected":
+        if disposition in {"auto_rejected", "persisted_rejection"}:
             continue
         if disposition != "review_required" and record.get("reason") not in MAPPING_REVIEW_REASONS:
             continue
@@ -271,6 +302,7 @@ def _paused_result(
     parser_report: dict[str, Any],
     automatic_mapping_report: dict[str, Any],
     proposal_report: dict[str, Any],
+    reviewed_mapping_decisions: dict[str, int] | None,
     validation_report: dict[str, Any],
     actionable_quarantine_count: int,
     reviewed_rejected_mapping_quarantine_count: int = 0,
@@ -281,6 +313,7 @@ def _paused_result(
         "parser": parser_report,
         "automatic_mappings": automatic_mapping_report,
         "mapping_proposals": proposal_report,
+        "reviewed_mapping_decisions": reviewed_mapping_decisions,
         "validation": validation_report,
         "actionable_mapping_quarantine_count": actionable_quarantine_count,
         "reviewed_rejected_mapping_quarantine_count": reviewed_rejected_mapping_quarantine_count,
@@ -302,6 +335,9 @@ def resume_run(
     parser_report = _existing_or_parsed(run_key, root)
     automatic_mapping_report = _existing_or_auto_mapped(run_key, root, resolved_url)
     proposal_report = _existing_or_proposed(run_key, root, resolved_url)
+    reviewed_mapping_decisions = _apply_reviewed_mapping_decisions_if_present(
+        run_key, root, resolved_url
+    )
     validation_report = _existing_or_validated(run_key, root, resolved_url)
     actionable, reviewed_rejected = _actionable_quarantines(validation_report, run_key, root)
     if actionable and not persist_approved_only:
@@ -311,6 +347,7 @@ def resume_run(
             parser_report=parser_report,
             automatic_mapping_report=automatic_mapping_report,
             proposal_report=proposal_report,
+            reviewed_mapping_decisions=reviewed_mapping_decisions,
             validation_report=validation_report,
             actionable_quarantine_count=actionable,
             reviewed_rejected_mapping_quarantine_count=reviewed_rejected,
@@ -322,6 +359,7 @@ def resume_run(
             parser_report=parser_report,
             automatic_mapping_report=automatic_mapping_report,
             proposal_report=proposal_report,
+            reviewed_mapping_decisions=reviewed_mapping_decisions,
             validation_report=validation_report,
             actionable_quarantine_count=actionable,
             reviewed_rejected_mapping_quarantine_count=reviewed_rejected,
@@ -348,6 +386,7 @@ def resume_run(
         "parser": parser_report,
         "automatic_mappings": automatic_mapping_report,
         "mapping_proposals": proposal_report,
+        "reviewed_mapping_decisions": reviewed_mapping_decisions,
         "validation": validation_report,
         "actionable_mapping_quarantine_count": actionable,
         "reviewed_rejected_mapping_quarantine_count": reviewed_rejected,

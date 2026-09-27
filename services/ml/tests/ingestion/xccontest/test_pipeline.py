@@ -76,10 +76,87 @@ def _stub_offline_stages(monkeypatch, root: Path, report: dict) -> list[str]:
     )
     monkeypatch.setattr(
         pipeline,
+        "_apply_reviewed_mapping_decisions_if_present",
+        lambda *_: calls.append("apply") or None,
+    )
+    monkeypatch.setattr(
+        pipeline,
         "_existing_or_validated",
         lambda *_: calls.append("validate") or report,
     )
     return calls
+
+
+def test_reviewed_mapping_apply_is_skipped_without_sibling_decision_file(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        pipeline,
+        "apply_mapping_decisions",
+        lambda *_args, **_kwargs: pytest.fail("missing decisions file must not write SQLite"),
+    )
+
+    result = pipeline._apply_reviewed_mapping_decisions_if_present(
+        RUN_KEY,
+        tmp_path,
+        "file:./data/local/test.db",
+    )
+
+    assert result is None
+
+
+def test_reviewed_mapping_apply_uses_sibling_decision_file(monkeypatch, tmp_path: Path) -> None:
+    mapping_directory = (
+        tmp_path / "data" / "interim" / "xccontest" / RUN_KEY / MAPPING_OUTPUT_DIRECTORY
+    )
+    mapping_directory.mkdir(parents=True)
+    decisions_path = mapping_directory / "mapping-decisions.jsonl"
+    decisions_path.write_text('{"decision":"rejected"}\n', encoding="utf-8")
+    expected = {
+        "records_seen": 1,
+        "exclusions_inserted": 1,
+        "exclusions_unchanged": 0,
+        "rejected_not_persisted": 0,
+    }
+    calls: list[tuple[Path, str | None, Path | None]] = []
+    monkeypatch.setattr(
+        pipeline,
+        "apply_mapping_decisions",
+        lambda path, *, database_url, project_root: (
+            calls.append((path, database_url, project_root)) or expected
+        ),
+    )
+
+    result = pipeline._apply_reviewed_mapping_decisions_if_present(
+        RUN_KEY,
+        tmp_path,
+        "file:./data/local/test.db",
+    )
+
+    assert result == expected
+    assert calls == [(decisions_path, "file:./data/local/test.db", tmp_path)]
+
+
+def test_resume_reports_reviewed_mapping_apply_before_validation(
+    monkeypatch, tmp_path: Path
+) -> None:
+    report = _validation_report(tmp_path, reason=None)
+    calls = _stub_offline_stages(monkeypatch, tmp_path, report)
+    applied = {"records_seen": 1, "exclusions_inserted": 1, "exclusions_unchanged": 0}
+    monkeypatch.setattr(
+        pipeline,
+        "_apply_reviewed_mapping_decisions_if_present",
+        lambda *_: calls.append("apply-reviewed") or applied,
+    )
+    monkeypatch.setattr(
+        pipeline, "persist_import", lambda *_args, **_kwargs: {"status": "succeeded"}
+    )
+
+    result = pipeline.resume_run(RUN_KEY, tmp_path / "policy.json")
+
+    assert result["status"] == "succeeded"
+    assert result["reviewed_mapping_decisions"] == applied
+    assert calls == ["parse", "auto", "propose", "apply-reviewed", "validate"]
 
 
 def test_resume_pauses_for_actionable_mapping_quarantine_without_persistence(
@@ -97,7 +174,7 @@ def test_resume_pauses_for_actionable_mapping_quarantine_without_persistence(
 
     assert result["status"] == "awaiting_mapping_review"
     assert result["actionable_mapping_quarantine_count"] == 1
-    assert calls == ["parse", "auto", "propose", "validate"]
+    assert calls == ["parse", "auto", "propose", "apply", "validate"]
 
 
 def test_resume_persists_when_rejected_decision_covers_mapping_quarantine(
@@ -144,7 +221,7 @@ def test_resume_persists_when_rejected_decision_covers_mapping_quarantine(
     assert result["status"] == "succeeded"
     assert result["actionable_mapping_quarantine_count"] == 0
     assert result["reviewed_rejected_mapping_quarantine_count"] == 1
-    assert calls == ["parse", "auto", "propose", "validate"]
+    assert calls == ["parse", "auto", "propose", "apply", "validate"]
     assert persisted == [(RUN_KEY, SNAPSHOT)]
 
 
@@ -211,7 +288,7 @@ def test_resume_persists_approved_records_after_review_or_explicit_override(
     )
 
     assert result["status"] == "succeeded"
-    assert calls == ["parse", "auto", "propose", "validate"]
+    assert calls == ["parse", "auto", "propose", "apply", "validate"]
     assert persisted == [(RUN_KEY, SNAPSHOT)]
 
 
@@ -233,7 +310,7 @@ def test_resume_surfaces_reconciliation_review_without_restarting_stages(
 
     assert result["status"] == "awaiting_reconciliation_review"
     assert "Review reconciliation decisions" in result["next_step"]
-    assert calls == ["parse", "auto", "propose", "validate"]
+    assert calls == ["parse", "auto", "propose", "apply", "validate"]
 
 
 def test_resume_stops_when_no_records_are_accepted(monkeypatch, tmp_path) -> None:
@@ -346,5 +423,5 @@ def test_resume_persists_when_only_auto_rejected_records_remain(monkeypatch, tmp
 
     assert result["status"] == "succeeded"
     assert result["actionable_mapping_quarantine_count"] == 0
-    assert calls == ["parse", "auto", "propose", "validate"]
+    assert calls == ["parse", "auto", "propose", "apply", "validate"]
     assert persisted == [(RUN_KEY, SNAPSHOT)]

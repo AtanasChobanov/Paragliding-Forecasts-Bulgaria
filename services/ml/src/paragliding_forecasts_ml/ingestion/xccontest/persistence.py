@@ -289,24 +289,59 @@ def prepare(run_key: str, snapshot: str, root: Path) -> Prepared:
 
 
 def mapping_hash(connection: sqlite3.Connection, source_id: int) -> str:
-    rows = connection.execute(
+    """Match the v4 mapping catalog snapshot used by validation."""
+
+    mappings = connection.execute(
         "SELECT id, site_id, key_type, key_value, point_latitude_deg, point_longitude_deg, status, verification_reference, verified_at_utc FROM source_site_mappings WHERE source_id = ? ORDER BY id",
         (source_id,),
     ).fetchall()
-    payload = [
-        {
-            "id": int(r[0]),
-            "site_id": int(r[1]),
-            "key_type": str(r[2]),
-            "key_value": r[3],
-            "point_latitude_deg": r[4],
-            "point_longitude_deg": r[5],
-            "status": str(r[6]),
-            "verification_reference": r[7],
-            "verified_at_utc": r[8],
-        }
-        for r in rows
-    ]
+    sites = connection.execute(
+        "SELECT id, slug, country_code_iso2, latitude_deg, longitude_deg, catchment_radius_km, is_active FROM sites ORDER BY id"
+    ).fetchall()
+    exclusions = connection.execute(
+        "SELECT id, key_type, key_value, origin_run_key, origin_proposal_id, created_at_utc FROM source_site_exclusions WHERE source_id = ? AND status = 'active' ORDER BY id",
+        (source_id,),
+    ).fetchall()
+    payload = {
+        "source_id": source_id,
+        "sites": [
+            {
+                "id": int(row[0]),
+                "slug": str(row[1]),
+                "country_code_iso2": str(row[2]),
+                "latitude_deg": float(row[3]),
+                "longitude_deg": float(row[4]),
+                "catchment_radius_km": None if row[5] is None else float(row[5]),
+                "is_active": bool(row[6]),
+            }
+            for row in sites
+        ],
+        "mappings": [
+            {
+                "id": int(row[0]),
+                "site_id": int(row[1]),
+                "key_type": str(row[2]),
+                "key_value": row[3],
+                "point_latitude_deg": row[4],
+                "point_longitude_deg": row[5],
+                "status": str(row[6]),
+                "verification_reference": row[7],
+                "verified_at_utc": row[8],
+            }
+            for row in mappings
+        ],
+        "active_exclusions": [
+            {
+                "id": int(row[0]),
+                "key_type": str(row[1]),
+                "key_value": str(row[2]),
+                "origin_run_key": str(row[3]),
+                "origin_proposal_id": str(row[4]),
+                "created_at_utc": str(row[5]),
+            }
+            for row in exclusions
+        ],
+    }
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()

@@ -170,6 +170,78 @@ export const sourceSiteMappings = sqliteTable(
   ],
 );
 
+/**
+ * Reviewed negative source identities. Unlike sourceSiteMappings, an exclusion
+ * deliberately has no canonical site: it records that one exact XCContest key
+ * was checked and is outside the currently supported site scope.
+ */
+export const sourceSiteExclusions = sqliteTable(
+  "source_site_exclusions",
+  {
+    id: integer("id").primaryKey(),
+    sourceId: integer("source_id")
+      .notNull()
+      .references(() => flightSources.id, { onDelete: "restrict" }),
+    keyType: text("key_type").notNull(),
+    keyValue: text("key_value").notNull(),
+    originRunKey: text("origin_run_key").notNull(),
+    originProposalId: text("origin_proposal_id").notNull(),
+    notes: text("notes"),
+    status: text("status").notNull().default("active"),
+    createdAtUtc: text("created_at_utc").notNull(),
+    retiredAtUtc: text("retired_at_utc"),
+    retirementReason: text("retirement_reason"),
+  },
+  (table) => [
+    uniqueIndex("source_site_exclusions_active_key_unique")
+      .on(table.sourceId, table.keyType, table.keyValue)
+      .where(sql`${table.status} = 'active'`),
+    index("source_site_exclusions_lookup_index").on(
+      table.sourceId,
+      table.keyType,
+      table.keyValue,
+      table.status,
+    ),
+    index("source_site_exclusions_origin_audit_index").on(
+      table.originRunKey,
+      table.originProposalId,
+    ),
+    check(
+      "source_site_exclusions_key_type_check",
+      sql`${table.keyType} IN ('source_site_token', 'source_takeoff_id')`,
+    ),
+    check(
+      "source_site_exclusions_non_empty_text_check",
+      sql`length(trim(${table.keyValue})) > 0
+        AND length(trim(${table.originRunKey})) > 0
+        AND length(trim(${table.originProposalId})) > 0`,
+    ),
+    check("source_site_exclusions_status_check", sql`${table.status} IN ('active', 'retired')`),
+    check(
+      "source_site_exclusions_created_at_utc_shape_check",
+      sql`${table.createdAtUtc} GLOB '${sql.raw(utcTimestampGlob)}'`,
+    ),
+    check(
+      "source_site_exclusions_retired_at_utc_shape_check",
+      sql`${table.retiredAtUtc} IS NULL
+        OR ${table.retiredAtUtc} GLOB '${sql.raw(utcTimestampGlob)}'`,
+    ),
+    check(
+      "source_site_exclusions_retirement_shape_check",
+      sql`(
+          ${table.status} = 'active'
+          AND ${table.retiredAtUtc} IS NULL
+          AND ${table.retirementReason} IS NULL
+        )
+        OR (
+          ${table.status} = 'retired'
+          AND ${table.retiredAtUtc} IS NOT NULL
+          AND ${table.retirementReason} IS NOT NULL
+          AND length(trim(${table.retirementReason})) > 0
+        )`,
+    ),
+  ],
+);
 export const flightIngestionRuns = sqliteTable(
   "flight_ingestion_runs",
   {
