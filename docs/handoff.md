@@ -7,7 +7,7 @@
 3. T-020 in `docs/tasks.md` for ticket scope and acceptance criteria.
 4. [`T-020-xccontest-activity-ingestion-plan.md`](T-020-xccontest-activity-ingestion-plan.md) for the completed flight-ingestion prerequisite.
 5. [`T-020-persistent-site-exclusions-plan.md`](T-020-persistent-site-exclusions-plan.md) for durable reviewed source-site exclusions.
-6. DEC-055 through DEC-061 in `docs/decisions.md`; DEC-023 through DEC-030 define the pre-existing XCContest boundary.
+6. DEC-055 through DEC-062 in `docs/decisions.md`; DEC-023 through DEC-030 define the pre-existing XCContest boundary.
 7. Only the relevant sections of `docs/project-brief.md` and `docs/architecture.md`.
 
 Keep durable decisions in `docs/decisions.md`, ticket lifecycle in `docs/tasks.md`, and current operational state here.
@@ -17,11 +17,11 @@ Keep durable decisions in `docs/decisions.md`, ticket lifecycle in `docs/tasks.m
 | Field | Current state |
 | --- | --- |
 | Branch | `feature/T-020-joined-weather-dataset` |
-| Ticket | T-020 is **In Progress**. Its 0–2000 km flight-ingestion prerequisite and persistent reviewed-exclusion support are implemented in the working tree. No joined historical flight/weather dataset, model, or prediction command exists yet. |
-| Active owner operation | XCContest raw collection is currently running for source seasons 2024, 2023, and 2022 under run key `724845c1-7b75-4900-a74c-d61e9de83157`. Do not modify collector/business code, stop the run, launch another live collection, or run destructive database commands while it is active. |
+| Ticket | T-020 is **In Progress**. Its 0–2000 km flight-ingestion prerequisite and persistent reviewed-exclusion support are implemented. No joined historical flight/weather dataset, model, or prediction command exists yet. |
+| Active owner operation | XCContest collection for seasons 2024, 2023, and 2022 completed under run key `724845c1-7b75-4900-a74c-d61e9de83157`, but offline parser resume failed on a saved page/manifest row-count mismatch. A read-only audit found 85 stale-date or inconsistent views among 1487 artifacts. The targeted repair command is implemented and tested offline; no live repair has run yet. Do not treat that source run as label-ready. |
 | Previous accepted run | 2025 run `d577156f-7f73-4e62-81ad-eb6881715739` completed collection and persistence. It is the first season with all-distance activity coverage under the new collector policy. |
 | Local database | `data/local/paragliding.db` already contains `source_site_exclusions`; migration `20260926102539_add_source_site_exclusions` is present in the local migration history. Do not assume a different owner database has been migrated: check it before applying or resuming persistent-exclusion work there. |
-| Live-source boundary | XCContest remains rendered-UI collection with conservative pacing. `fresh` is the only live operation. `resume` is offline and must not open a browser or create source transport. |
+| Live-source boundary | XCContest remains rendered-UI collection with conservative pacing. `xccontest-ingest fresh` and `xccontest-repair collect/resume` are explicit live operations. `xccontest-ingest resume` is offline and must not open a browser or create source transport. |
 | Weather boundary | T-018 GFS pipeline is implemented and historical 2025/2023 acceptance evidence exists. Do not start broad GFS historical acquisition until the flight-label audit has fixed the eligible site-day cohort and a bounded storage plan is approved. |
 
 ## Accepted T-020 business logic
@@ -70,13 +70,13 @@ For every canonical site and local flying date, build three nested labels:
 - Name-only rejections, geometry ambiguity, country conflicts, and coordinate-only outside-catchment cases are not reusable durable exclusions. A new in-scope/ambiguous coordinate or conflicting active mapping produces explicit review instead of silently applying an old exclusion.
 - A normal offline `xccontest-ingest resume` applies the sibling reviewed mapping file transactionally before revalidation. The focused manual command and explicit retirement command are documented in `services/ml/README.md`.
 
-### Safe action after the live run
+### Repair gate before T-020 flight-label audit
 
-1. Let run `724845c1-7b75-4900-a74c-d61e9de83157` finish or reach its documented pause. Inspect its terminal JSON, raw manifest, checkpoint, and collection report; do not infer completion from a partial artifact count.
-2. Run the usual offline `xccontest-ingest resume --run-key <run-key> --policy-file ...`. It reuses collected raw artifacts and advances parser, mapping, validation, and persistence only where each stage is valid.
-3. If it returns `awaiting_mapping_review`, inspect the generated immutable proposals, create the complete sibling decisions JSONL, then rerun the same offline `resume`. Rejections of eligible stable keys become durable exclusions through that normal workflow.
-4. Review the persistence/reconciliation result before treating a season as usable. A mapping or reconciliation pause means the affected evidence is not yet label-ready.
-5. Do not launch GFS collection solely because a raw XCContest run ends. First produce the offline flight-label audit below.
+1. Run the read-only `xccontest-repair audit --run-key 724845c1-7b75-4900-a74c-d61e9de83157`. It currently reports 85 inconsistent views among 1487; 51 contain flight rows from the wrong date, and 34 are empty stale-date views whose true activity is unknown.
+2. The owner should run the headed, paced `xccontest-repair collect` command in the [ML README](../services/ml/README.md#repair-a-finalized-run-with-stale-date-html). It creates a new run key, prints it immediately, re-collects only audited source-default dated views, and never changes the original run.
+3. If interrupted, use `xccontest-repair resume --repair-run-key <new-key> --allow-live-network`. The checkpoint verifies already collected repair artifacts before continuing. A newly paginated view or inconsistent rendered date stops for review.
+4. After the new manifest and `repair-provenance.json` are complete, run offline `xccontest-ingest resume --run-key <new-key> --policy-file ...` with `.env`. Resolve mapping or reconciliation review gates as usual. Only persisted, accepted, coverage-complete evidence should enter the label audit.
+5. Do not launch broad GFS collection solely because raw XCContest repair ends. First produce the offline flight-label audit below.
 
 ## T-020 joined-dataset plan
 

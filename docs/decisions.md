@@ -2690,3 +2690,38 @@ exclusions; existing historical rejections are not inferred or backfilled.
 [`T-020-xccontest-activity-ingestion-plan.md`](T-020-xccontest-activity-ingestion-plan.md),
 [`../packages/database/src/schema.ts`](../packages/database/src/schema.ts), and
 [`handoff.md`](handoff.md).
+
+### DEC-062 - Repair finalized XCContest raw evidence in a separate run
+
+**Status:** Accepted
+
+**Date:** 2026-09-27
+
+**Context:** The completed 2024/2023/2022 raw run has 85 dated list views whose saved
+HTML disagrees with the selected date or manifest observations. The offline parser
+correctly refuses to continue. In particular, an empty stale-date view cannot
+establish that a day had no flights. Editing immutable source artifacts or relaxing
+parser validation would erase the evidence needed for T-020 labels.
+
+**Decision:** Audit every artifact hash, saved selected date, row date, flight ID,
+and count offline. For a finalized manifest-v5 run, a separate explicit live
+repair operation may re-collect only inconsistent dated source-default views
+through the rendered XContest controls at the configured source pace. Verify the
+requested date in saved HTML and flight rows before checkpointing each view.
+Stop on pagination or inconsistent evidence for coverage review. Copy verified
+unchanged artifacts into a new raw run, retain the original run untouched,
+record source and replacement hashes in a repair provenance sidecar, and
+preflight all rows and counters before writing the new immutable manifest.
+Only the new run key proceeds through ordinary offline parsing, mapping,
+validation, and persistence.
+
+**Consequences:** The collector revision advances to 6 because rendered list
+snapshots now capture controls, rows, and HTML in one browser callback and wait
+for the serialized selected date. Manifest schema remains v5. Repair collection
+is live and resumable; `xccontest-ingest resume` remains strictly offline.
+No activity absence or negative training label is inferred from an unverified
+or uncollected view.
+
+**Related files:** [`handoff.md`](handoff.md),
+[`../services/ml/README.md`](../services/ml/README.md), and
+[`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/repair.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/repair.py).

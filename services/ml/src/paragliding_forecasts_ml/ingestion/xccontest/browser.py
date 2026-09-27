@@ -132,44 +132,75 @@ class PlaywrightFlightListDriver:
                 )
 
     def read_page(self, season: int, scope: FlightListScope) -> PageObservation:
-        """Read control fields and retain only the rendered list fragment."""
+        """Read one internally consistent rendered list snapshot.
+
+        XCContest replaces the filter controls and rows asynchronously. Keep the
+        immutable fragment and every observation used to describe it in one
+        synchronous browser callback so a transition cannot combine a previous
+        day's HTML with a newer day's controls or rows.
+        """
 
         page = self._active_page
         self._wait_for_flights_container()
-        fragment_html = page.locator(FLIGHTS_CONTAINER_SELECTOR).evaluate(
-            "element => element.outerHTML"
-        )
-        raw_rows = page.locator(ROW_SELECTOR).evaluate_all(
-            """(rows, selectors) => rows.map(row => {
-                const distance = row.querySelector(selectors.distance)?.textContent?.trim() ?? '';
-                const launchLink = row.querySelector(selectors.launchLink);
-                const launchCell = launchLink?.closest('td');
-                const launchCountry = launchCell
-                    ?.querySelector(selectors.launchCountry)?.textContent?.trim() ?? '';
+        if scope.date_filter is not None:
+            try:
+                page.wait_for_function(
+                    """([selector, expected]) => {
+                        const select = document.querySelector(`#flights ${selector}`);
+                        return select?.querySelector('option[selected]')?.value === expected;
+                    }""",
+                    arg=[DATE_SELECTOR, scope.date_filter],
+                )
+            except PlaywrightTimeoutError as error:
+                raise BrowserCollectionError(
+                    f"XCContest rendered list did not settle on {scope.date_filter}."
+                ) from error
+        snapshot = page.locator(FLIGHTS_CONTAINER_SELECTOR).evaluate(
+            """(flights, selectors) => {
+                const rows = Array.from(flights.querySelectorAll(selectors.row));
+                const selectedValue = selector =>
+                    flights.querySelector(selector)?.value ?? '';
+                const nextLink = flights.querySelector(".XCpager a[title='next page']");
                 return {
-                    id: row.id.replace(/^flight-/, ''),
-                    distance,
-                    launchCountry,
+                    fragmentHtml: flights.outerHTML,
+                    countryFilter: selectedValue(selectors.country),
+                    gliderCategoryFilter: selectedValue(selectors.glider),
+                    dateFilter: selectedValue(selectors.date),
+                    hasNextPage: Boolean(nextLink?.getAttribute('href') && nextLink.getAttribute('href') !== '#'),
+                    rows: rows.map(row => {
+                        const distance = row.querySelector(selectors.distance)?.textContent?.trim() ?? '';
+                        const launchLink = row.querySelector(selectors.launchLink);
+                        const launchCell = launchLink?.closest('td');
+                        const launchCountry = launchCell
+                            ?.querySelector(selectors.launchCountry)?.textContent?.trim() ?? '';
+                        return {
+                            id: row.id.replace(/^flight-/, ''),
+                            distance,
+                            launchCountry,
+                        };
+                    }),
                 };
-            })""",
+            }""",
             {
+                "row": ROW_SELECTOR.removeprefix(f"{FLIGHTS_CONTAINER_SELECTOR} "),
+                "country": COUNTRY_SELECTOR,
+                "glider": GLIDER_SELECTOR,
+                "date": DATE_SELECTOR,
                 "distance": DISTANCE_SELECTOR,
                 "launchLink": LAUNCH_LINK_SELECTOR,
                 "launchCountry": LAUNCH_COUNTRY_SELECTOR,
             },
         )
-        rows = tuple(self._row_observation(row) for row in raw_rows)
-        next_link = page.locator(".XCpager a[title='next page']")
-        next_href = next_link.get_attribute("href") if next_link.count() else None
+        rows = tuple(self._row_observation(row) for row in snapshot["rows"])
         return PageObservation(
             season=season,
             scope=scope,
-            country_filter=page.locator(COUNTRY_SELECTOR).input_value(),
-            glider_category_filter=page.locator(GLIDER_SELECTOR).input_value(),
-            date_filter=page.locator(DATE_SELECTOR).input_value(),
+            country_filter=str(snapshot["countryFilter"]),
+            glider_category_filter=str(snapshot["gliderCategoryFilter"]),
+            date_filter=str(snapshot["dateFilter"]),
             rows=rows,
-            fragment_html=fragment_html,
-            has_next_page=bool(next_href and next_href != "#"),
+            fragment_html=str(snapshot["fragmentHtml"]),
+            has_next_page=bool(snapshot["hasNextPage"]),
         )
 
     @staticmethod

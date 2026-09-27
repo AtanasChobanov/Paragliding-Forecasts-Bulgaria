@@ -129,6 +129,58 @@ scope. It is a source-paced browser operation, not an offline replay, and it doe
 selection options. In contrast, `xccontest-ingest resume` is the later browser-free offline
 parse/validate/reconcile/persist continuation.
 
+### Repair a finalized run with stale date HTML
+
+If `xccontest-ingest resume` fails because a saved list fragment does not agree with
+its manifest, audit the completed raw run first. `xccontest-repair audit` is read-only:
+it checks every artifact hash and compares the serialized date, flight dates, row
+IDs, and row counts with the manifest. It reports every inconsistent view, including
+empty stale-date pages that could otherwise look like reliable no-flight evidence.
+
+```powershell
+uv run --project services/ml xccontest-repair audit `
+  --run-key 724845c1-7b75-4900-a74c-d61e9de83157
+```
+
+For this run the offline audit identifies 85 dated source-default views out of 1487.
+A live repair requests only those views, at the existing recommended 30-second
+source-transition pace. It prints the **new repair run key before opening the
+browser**. Keep that key for recovery. The original raw run and manifest are never
+edited.
+
+```powershell
+uv run --project services/ml xccontest-repair collect `
+  --run-key 724845c1-7b75-4900-a74c-d61e9de83157 `
+  --headed --timeout-seconds 90 --source-delay-seconds 30 `
+  --max-views 100 --allow-live-network
+```
+
+If interrupted, resume the repair run, **not** the original source run:
+
+```powershell
+uv run --project services/ml xccontest-repair resume `
+  --repair-run-key <repair-run-key> --allow-live-network
+```
+
+The repair checkpoint hash-verifies completed replacement views and restores the
+saved browser configuration. Each replacement must show the requested date in the
+saved HTML and in every flight row, have the same browser/HTML row IDs, match the
+requested country, and have no next page. A paginated replacement stops for
+coverage review. Missing, changed, or unverifiable evidence stops rather than
+guessing a no-flight day. On success, the tool copies unchanged verified fragments
+into a new raw directory, records source/replacement hashes in
+`repair-provenance.json`, checks all rows and counters, and writes a complete
+manifest for the new run. It does **not** run the parser or write SQLite.
+
+Continue the ordinary offline ingestion using the **new** run key from the JSON
+result, including the existing mapping and reconciliation review gates:
+
+```powershell
+uv run --env-file .env --project services/ml xccontest-ingest resume `
+  --run-key <repair-run-key> `
+  --policy-file data/local/xccontest-import-policy.json
+```
+
 It is headless by default. Use `--headed` for local UI inspection. `--slow-mo-ms` is
 only a Playwright debugging slowdown, not a rate-limit control. Source-changing browser
 operations wait 30 seconds by default. `--source-delay-seconds` may increase that delay;
@@ -470,7 +522,7 @@ evidence, run metadata, or the CLI contract must increment `collector_version`. 
 edit that changes manifest fields, shape, semantics, or compatibility must increment
 `manifest_schema_version` as well. A collector commit or pull request without the
 applicable version bump, focused tests, and corresponding README/decision update is
-incomplete. Current values are `xccontest-collector/5` and manifest schema v5. Current
+incomplete. Current values are `xccontest-collector/6` and manifest schema v5. Current
 version identifiers live in `ingestion/xccontest/versions.py`; manifest compatibility
 policy remains in `manifest.py`.
 

@@ -5,6 +5,7 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from paragliding_forecasts_ml.ingestion.xccontest.browser import (
     COUNTRY_SELECTOR,
+    ROW_SELECTOR,
     BrowserCollectionError,
     PlaywrightFlightListDriver,
 )
@@ -111,6 +112,50 @@ def test_accepts_dates_from_both_calendar_years_of_an_xccontest_season() -> None
         2025,
         ("2024-10-01", "2024-12-31", "2025-01-01", "2025-09-30"),
     )
+
+
+def test_read_page_captures_fragment_controls_and_rows_in_one_browser_callback() -> None:
+    class SnapshotLocator:
+        def wait_for(self, *, state: str) -> None:
+            assert state == "visible"
+
+        def evaluate(self, expression: str, selectors: dict[str, str]) -> dict[str, object]:
+            assert "fragmentHtml: flights.outerHTML" in expression
+            assert selectors["row"] == ROW_SELECTOR.removeprefix("#flights ")
+            assert selectors["date"] == 'select[name="filter[date]"]'
+            return {
+                "fragmentHtml": '<div id="flights">same snapshot</div>',
+                "countryFilter": "BG",
+                "gliderCategoryFilter": "FAI3",
+                "dateFilter": "2022-05-13",
+                "hasNextPage": False,
+                "rows": [{"id": "3134454", "distance": "100.0", "launchCountry": "BG"}],
+            }
+
+    class SnapshotPage:
+        def wait_for_function(self, expression: str, *, arg: object = None) -> None:
+            assert "option[selected]" in expression
+            assert arg == ['select[name="filter[date]"]', "2022-05-13"]
+
+        def locator(self, selector: str) -> SnapshotLocator:
+            assert selector == "#flights"
+            return SnapshotLocator()
+
+        def wait_for_timeout(self, milliseconds: int) -> None:
+            assert milliseconds == 250
+
+    driver = PlaywrightFlightListDriver(
+        CollectorConfig(seasons=(2022,), country_codes=("BG",)), sleeper=lambda _: None
+    )
+    driver._page = SnapshotPage()
+
+    page = driver.read_page(
+        2022, source_default_scope(PRIMARY_GLIDER_CATEGORY, date_filter="2022-05-13")
+    )
+
+    assert page.fragment_html == '<div id="flights">same snapshot</div>'
+    assert page.date_filter == "2022-05-13"
+    assert [row.source_flight_id for row in page.rows] == ["3134454"]
 
 
 @pytest.mark.parametrize("value", ("2024-09-30", "2025-10-01", "not-a-date"))
