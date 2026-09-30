@@ -41,6 +41,40 @@ the activity minimum applies to days whose maximum accepted distance is below
 threshold can likewise establish activity. Complete vectors are site-days
 with all three threshold labels known under the tested minimum.
 
+## All four source seasons after repair, 2022–2025
+
+The complete current inventory has **985 active site-days / 5,090 flights /
+525 distinct dates**. Including 2025 gives the following label counts:
+
+| Minimum flights for a negative | 100+ positive | 100+ negative | 200+ positive | 200+ negative | 300+ positive | 300+ negative | Complete vectors |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 (DEC-056) | 293 | 686 | 65 | 913 | 8 | 970 | 978 |
+| 2 | 293 | 445 | 65 | 651 | 8 | 702 | 710 |
+| 3 | 293 | 301 | 65 | 482 | 8 | 528 | 536 |
+
+For **100+ pooled over all four seasons**, ≥3 produces a nearly balanced
+**293 positive / 301 negative** candidate set. It is a numerically viable
+experiment; class balance alone is not a reason to reject it. For honest
+historical evaluation, however, fitting all four seasons would leave no
+untouched 2025 season. The development/test rows below show what remains
+under that proposed split. Of the 985 active site-days, **391** have an
+unknown 100+ label under ≥3, compared with **6** under ≥1.
+
+| Location | 100+ positive | Negative ≥1 | Negative ≥2 | Negative ≥3 |
+| --- | ---: | ---: | ---: | ---: |
+| Sofia / Vitosha | 32 | 172 | 102 | 69 |
+| Zlatitsa | 12 | 83 | 51 | 34 |
+| Sopot | 98 | 227 | 172 | 138 |
+| Nevsha | 52 | 29 | 14 | 9 |
+| Shumen | 80 | 139 | 84 | 43 |
+| Pastrina | 14 | 20 | 12 | 6 |
+| Dobrich region | 5 | 16 | 10 | 2 |
+| **All seven** | **293** | **686** | **445** | **301** |
+
+Even with repaired 2025 included, ≥3 leaves only **two** 100+ negative
+site-days for Dobrich, **six** for Pastrina, and **nine** for Nevsha. This
+limits site-level fitting and error analysis despite the good pooled balance.
+
 ## Development cohort, seasons 2022–2024
 
 There are **738 active site-days / 3,754 flights / 389 distinct dates**. The
@@ -64,6 +98,21 @@ Those rows become unknown, not positive. The selected 100+ positive share
 among known examples rises from **28.9%** at one flight to **38.7%** at two
 and **48.5%** at three. This shift is selection, not evidence that good XC
 weather has become more common.
+
+No classifier needs more negative rows than positive rows as a general rule.
+The requirement is enough representative evidence for both outcomes in the
+intended sites, seasons, and evaluation folds. A near-50/50 training ratio can
+be useful computationally, but it does not itself improve label truth or
+calibration. In the four-season inventory, ≥3 keeps all **293** confirmed
+100+ positives, including **29** one-flight and **30** two-flight positive
+days, while converting **385** low-activity known negatives to `unknown`.
+The observed positive share of the remaining known 100+ rows moves from
+**29.9%** (≥1) to **49.3%** (≥3). That asymmetry selects examples using
+future flight activity, which is unavailable at forecast time; probabilities
+fitted or calibrated on the restricted cohort may overstate the frequency of
+100+ days in the broader recorded-activity cohort. A training sampler or
+class weighting can adjust optimization without changing the audited label
+policy; evaluation and calibration must still state their target cohort.
 
 ### 100+ examples by location
 
@@ -125,15 +174,19 @@ dates, far below the planning checkpoint of 30 independent events.
 ## Recommendation for T-020
 
 Keep DEC-056's **one accepted positive-distance flight** as the default
-negative activity minimum, provided the daily source and mapping coverage
-checks pass. The seven-site development comparison supports this choice:
-raising the universal minimum to two or three discards many known negatives
-and makes the already sparse sites much harder to assess. Preserve flight
+audited negative minimum for now, provided the daily source and mapping
+coverage checks pass. The stronger justification is representativeness and
+local support, not a need for more negatives than positives: ≥3 is a viable
+**pooled 100+ experiment** by count, but its local negatives are sparse and
+its asymmetric selection changes the cohort that the learned probability
+describes. ≥2 is also a reasonable sensitivity policy. Preserve flight
 count, maximum distance, coverage, and reason fields in the production offline
-audit, and report ≥2 and ≥3 as sensitivity cohorts during chronological
-development validation. If that later evaluation demonstrates systematic
-label noise from singleton days, revisit the policy with an explicit decision
-and evaluate the site and season trade-off again.
+audit; compare ≥1/≥2/≥3 in chronological development folds for ranking,
+false positives/negatives, site coverage, and calibration. Only then choose
+whether the extra activity evidence improves the outcome enough to justify
+the narrower population, recording any change to DEC-056 explicitly before
+using the reserved 2025 season for final testing. This analysis alone cannot
+rank the three policies by predictive performance.
 
 This comparison cannot prove that a singleton short flight represents an
 attempt to fly 100 km, or that the absence of a longer recorded flight was
