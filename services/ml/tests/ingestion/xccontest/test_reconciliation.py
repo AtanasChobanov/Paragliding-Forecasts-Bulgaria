@@ -31,6 +31,7 @@ from paragliding_forecasts_ml.ingestion.xccontest.site_mapping import (
 from paragliding_forecasts_ml.ingestion.xccontest.versions import (
     MAPPING_OUTPUT_DIRECTORY,
     MAPPING_VERSION,
+    PARSER_OUTPUT_DIRECTORY,
     PARSER_VERSION,
     PERSISTENCE_VERSION,
     VALIDATION_OUTPUT_DIRECTORY,
@@ -255,7 +256,7 @@ def _write_run(
     raw_manifest_overrides: dict | None = None,
 ) -> Path:
     raw = root / "data" / "raw" / "xccontest" / run_key
-    parser = root / "data" / "interim" / "xccontest" / run_key / "parser-v2"
+    parser = root / "data" / "interim" / "xccontest" / run_key / PARSER_OUTPUT_DIRECTORY
     output = parser.parent / VALIDATION_OUTPUT_DIRECTORY / snapshot
     raw.mkdir(parents=True, exist_ok=True)
     parser.mkdir(parents=True, exist_ok=True)

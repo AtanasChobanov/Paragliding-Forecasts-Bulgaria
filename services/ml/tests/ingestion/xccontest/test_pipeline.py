@@ -11,6 +11,7 @@ from paragliding_forecasts_ml.ingestion.xccontest.models import CollectorConfig
 from paragliding_forecasts_ml.ingestion.xccontest.persistence import PersistenceError
 from paragliding_forecasts_ml.ingestion.xccontest.versions import (
     MAPPING_OUTPUT_DIRECTORY,
+    PARSER_VERSION,
     VALIDATION_OUTPUT_DIRECTORY,
 )
 
@@ -62,7 +63,7 @@ def _stub_offline_stages(monkeypatch, root: Path, report: dict) -> list[str]:
     monkeypatch.setattr(
         pipeline,
         "_existing_or_parsed",
-        lambda *_: calls.append("parse") or {"parser_version": "xccontest-parser/2"},
+        lambda *_: calls.append("parse") or {"parser_version": PARSER_VERSION},
     )
     monkeypatch.setattr(
         pipeline,

@@ -17,6 +17,7 @@ from paragliding_forecasts_ml.ingestion.xccontest.site_mapping import (
     source_site_token,
     write_mapping_proposals,
 )
+from paragliding_forecasts_ml.ingestion.xccontest.versions import PARSER_OUTPUT_DIRECTORY
 
 
 def database_url() -> str:
@@ -75,7 +76,7 @@ def record(*, flight_id: str = "100", latitude: float = 42.68733, longitude: flo
 
 
 def write_parser_staging(tmp_path: Path, records: list[dict]) -> None:
-    output = tmp_path / "data" / "interim" / "xccontest" / "test-run" / "parser-v2"
+    output = tmp_path / "data" / "interim" / "xccontest" / "test-run" / PARSER_OUTPUT_DIRECTORY
     output.mkdir(parents=True)
     (output / "normalized-flights.jsonl").write_text(
         "".join(json.dumps(item) + "\n" for item in records), encoding="utf-8"
@@ -367,7 +368,7 @@ def test_persists_eligible_rejected_token_and_reuses_it_without_proposal(tmp_pat
     second = record(flight_id="101")
     second.pop("launch_latitude_deg")
     second.pop("launch_longitude_deg")
-    output = tmp_path / "data" / "interim" / "xccontest" / "next-run" / "parser-v2"
+    output = tmp_path / "data" / "interim" / "xccontest" / "next-run" / PARSER_OUTPUT_DIRECTORY
     output.mkdir(parents=True)
     (output / "normalized-flights.jsonl").write_text(json.dumps(second) + "\n", encoding="utf-8")
     (output / "parse-report.json").write_text(

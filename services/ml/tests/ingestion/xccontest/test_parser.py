@@ -12,6 +12,7 @@ from paragliding_forecasts_ml.ingestion.xccontest.parser import (
     parse_run,
 )
 from paragliding_forecasts_ml.ingestion.xccontest.parser_cli import build_parser
+from paragliding_forecasts_ml.ingestion.xccontest.versions import PARSER_OUTPUT_DIRECTORY
 
 
 def flight_row(
@@ -38,13 +39,28 @@ def fragment(*rows: str) -> str:
     return f'<div id="flights"><table class="XClist"><tbody>{"".join(rows)}</tbody></table></div>'
 
 
+def dated_fragment(serialized_date: str, *rows: str) -> str:
+    return (
+        '<select name="filter[date]">'
+        f'<option value="{serialized_date}" selected>{serialized_date}</option>'
+        "</select>" + fragment(*rows)
+    )
+
+
 def write_run(
-    tmp_path, *, run_key: str = "test-run", fragments: list[str], version: int | None = None
+    tmp_path,
+    *,
+    run_key: str = "test-run",
+    fragments: list[str],
+    date_filters: list[str | None] | None = None,
+    version: int | None = None,
 ):
     raw_dir = tmp_path / "data" / "raw" / "xccontest" / run_key
     raw_dir.mkdir(parents=True)
     artifacts = []
-    for index, html in enumerate(fragments, start=1):
+    date_filters = date_filters or [None] * len(fragments)
+    assert len(date_filters) == len(fragments)
+    for index, (html, date_filter) in enumerate(zip(fragments, date_filters, strict=True), start=1):
         path = raw_dir / f"view-{index}.html"
         path.write_text(html, encoding="utf-8")
         artifacts.append(
@@ -54,7 +70,7 @@ def write_run(
                 "season": 2025,
                 "country_code": "BG" if version == 2 else None,
                 "category": "pg",
-                "date_filter": None,
+                "date_filter": date_filter,
                 "sort_key": "distance",
                 "sort_direction": "descending",
             }
@@ -153,7 +169,7 @@ def test_rejects_threshold_and_malformed_legacy_rows(tmp_path) -> None:
     assert parsed.report["threshold_exclusions"] == 1
     assert parsed.report["records_rejected"] == 2
     assert parsed.report["raw_manifest_schema_version"] == 1
-    assert parsed.output_dir.name == "parser-v2"
+    assert parsed.output_dir.name == PARSER_OUTPUT_DIRECTORY
 
 
 def test_fails_closed_for_artifact_hash_escape_and_existing_output(tmp_path) -> None:
@@ -181,3 +197,50 @@ def test_cross_year_season_time_and_cli_contract(tmp_path) -> None:
     assert record["takeoff_at_utc"] == "2024-10-01T08:55:00Z"
     namespace = build_parser().parse_args(["--run-key", "test-run"])
     assert namespace.run_key == "test-run"
+
+
+def test_dated_artifact_requires_matching_selected_date_and_flight_dates(tmp_path) -> None:
+    write_run(
+        tmp_path,
+        fragments=[dated_fragment("2025-08-02", flight_row("123"))],
+        date_filters=["2025-08-02"],
+    )
+
+    parsed = parse_run("test-run", project_root=tmp_path)
+
+    assert [record["source_flight_id"] for record in jsonl(parsed.normalized_path)] == ["123"]
+
+
+@pytest.mark.parametrize(
+    ("serialized_date", "row_date", "message"),
+    [
+        ("2025-08-03", "02.08.25", "selected date does not match"),
+        ("2025-08-02", "03.08.25", "flight date does not match"),
+    ],
+)
+def test_dated_artifact_mismatch_stops_before_writing_parser_output(
+    tmp_path, serialized_date: str, row_date: str, message: str
+) -> None:
+    write_run(
+        tmp_path,
+        fragments=[dated_fragment(serialized_date, flight_row("123", date=row_date))],
+        date_filters=["2025-08-02"],
+    )
+
+    with pytest.raises(ParseError, match=message):
+        parse_run("test-run", project_root=tmp_path)
+
+    assert not (tmp_path / "data" / "interim" / "xccontest" / "test-run").exists()
+
+
+def test_empty_dated_artifact_stops_when_selected_date_is_stale(tmp_path) -> None:
+    write_run(
+        tmp_path,
+        fragments=[dated_fragment("2025-08-03")],
+        date_filters=["2025-08-02"],
+    )
+
+    with pytest.raises(ParseError, match="selected date does not match"):
+        parse_run("test-run", project_root=tmp_path)
+
+    assert not (tmp_path / "data" / "interim" / "xccontest" / "test-run").exists()

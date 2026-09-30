@@ -12,7 +12,11 @@ from paragliding_forecasts_ml.ingestion.xccontest.persistence import (
 )
 from paragliding_forecasts_ml.ingestion.xccontest.site_mapping import auto_apply_coordinate_mappings
 from paragliding_forecasts_ml.ingestion.xccontest.validator import validate_run
-from paragliding_forecasts_ml.ingestion.xccontest.versions import VALIDATION_VERSION
+from paragliding_forecasts_ml.ingestion.xccontest.versions import (
+    PARSER_OUTPUT_DIRECTORY,
+    PARSER_VERSION,
+    VALIDATION_VERSION,
+)
 
 
 def database_url() -> str:
@@ -78,7 +82,7 @@ def write_parser_output(tmp_path: Path, records: list[dict]) -> None:
     raw = tmp_path / "data" / "raw" / "xccontest" / "test-run"
     raw.mkdir(parents=True)
     (raw / "manifest.json").write_text('{"source":"xccontest"}\n', encoding="utf-8")
-    staging = tmp_path / "data" / "interim" / "xccontest" / "test-run" / "parser-v2"
+    staging = tmp_path / "data" / "interim" / "xccontest" / "test-run" / PARSER_OUTPUT_DIRECTORY
     staging.mkdir(parents=True)
     (staging / "normalized-flights.jsonl").write_text(
         "".join(json.dumps(record) + "\n" for record in records), encoding="utf-8"
@@ -88,7 +92,7 @@ def write_parser_output(tmp_path: Path, records: list[dict]) -> None:
             {
                 "source": "xccontest",
                 "run_key": "test-run",
-                "parser_version": "xccontest-parser/2",
+                "parser_version": PARSER_VERSION,
                 "normalized_candidates": len(records),
                 "row_observations_seen": len(records),
                 "records_rejected": 0,

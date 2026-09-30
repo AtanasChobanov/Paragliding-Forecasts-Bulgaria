@@ -14,7 +14,7 @@ FIXTURE_ROOT = (
     / "data"
     / "samples"
     / "xccontest"
-    / "parser-v2"
+    / "parser-v3"
     / "synthetic-mini-run-v1"
 )
 

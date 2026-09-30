@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -18,11 +19,12 @@ from .models import (
     THRESHOLD_COVERAGE_DISTANCE_KM,
     is_supported_activity_date,
 )
-from .selectors import DISTANCE_SELECTOR
+from .selectors import DATE_SELECTOR, DISTANCE_SELECTOR, TAKEOFF_CELL_SELECTOR
 from .versions import RAW_MANIFEST_SCHEMA_VERSION
 
 COUNTRY_CODE_PATTERN = re.compile(r"^[A-Z]{2}$")
 FLIGHT_ROW_ID_PATTERN = re.compile(r"^flight-([0-9]+)$")
+TAKEOFF_DATE_PATTERN = re.compile(r"\b(\d{2})\.(\d{2})\.(\d{2})\b")
 SUPPORTED_MANIFEST_SCHEMA_VERSIONS = (1, 2, 3, 4, RAW_MANIFEST_SCHEMA_VERSION)
 
 
@@ -86,6 +88,52 @@ class ManifestContract:
                         f"Manifest v4 below-threshold count does not match artifact: {artifact['path']}"
                     )
         return tuple(source_flight_ids)
+
+    def verify_dated_artifact(
+        self, artifact: dict[str, Any], document: Any, rows: list[Any]
+    ) -> None:
+        """Fail closed when a date-scoped raw view does not prove its selected date."""
+
+        expected_date = artifact.get("date_filter")
+        if expected_date is None:
+            return
+        if not isinstance(expected_date, str) or not re.fullmatch(
+            r"\d{4}-\d{2}-\d{2}", expected_date
+        ):
+            raise ManifestValidationError(
+                f"Raw artifact has an invalid date filter: {artifact['path']}"
+            )
+        expected_year, expected_month, expected_day = (
+            int(value) for value in expected_date.split("-")
+        )
+        try:
+            date(expected_year, expected_month, expected_day)
+        except ValueError as error:
+            raise ManifestValidationError(
+                f"Raw artifact has an invalid date filter: {artifact['path']}"
+            ) from error
+
+        selected = document.css_first(f"{DATE_SELECTOR} option[selected]")
+        serialized_date = selected.attributes.get("value") if selected is not None else None
+        if serialized_date != expected_date:
+            raise ManifestValidationError(
+                "Raw artifact selected date does not match manifest date filter: "
+                f"{artifact['path']} (expected {expected_date}, got {serialized_date!r})"
+            )
+
+        for row in rows:
+            takeoff = row.css_first(f"{TAKEOFF_CELL_SELECTOR} .full")
+            match = TAKEOFF_DATE_PATTERN.search(takeoff.text()) if takeoff is not None else None
+            if match is None:
+                raise ManifestValidationError(
+                    f"Raw artifact row is missing its takeoff date: {artifact['path']}"
+                )
+            day, month, short_year = (int(value) for value in match.groups())
+            if (day, month, short_year) != (expected_day, expected_month, expected_year % 100):
+                raise ManifestValidationError(
+                    "Raw artifact flight date does not match manifest date filter: "
+                    f"{artifact['path']} (expected {expected_date})"
+                )
 
     def verify_run_rows(self, source_flight_ids: list[str]) -> None:
         """Verify v2 run-wide observation, distinct-ID, and repeat counters."""

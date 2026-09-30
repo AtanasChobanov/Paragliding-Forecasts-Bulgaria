@@ -373,6 +373,9 @@ Prove:
 Prove:
 
 - parser and validator accept the inclusive 0..2000 domain;
+- a date-filtered raw artifact stops offline parsing unless its serialized selected date and
+  every rendered flight date match the immutable manifest date filter, including an empty
+  stale-date page;
 - negative, non-finite, missing, and over-2000 distances are quarantined;
 - deduplication keeps one canonical flight across all views;
 - conflict detection still rejects materially different records with the same

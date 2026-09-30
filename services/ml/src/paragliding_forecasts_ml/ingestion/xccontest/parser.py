@@ -295,6 +295,7 @@ def parse_run(run_key: str, *, project_root: Path | None = None) -> ParsedRun:
         document = HTMLParser((root / artifact["path"]).read_text(encoding="utf-8"))
         rows = document.css(ROW_SELECTOR)
         try:
+            manifest_contract.verify_dated_artifact(artifact, document, rows)
             raw_source_flight_ids.extend(manifest_contract.verify_artifact_rows(artifact, rows))
         except ManifestValidationError as error:
             raise ParseError(str(error)) from error

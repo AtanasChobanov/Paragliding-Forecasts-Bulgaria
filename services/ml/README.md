@@ -264,7 +264,8 @@ Parser v2 accepts legacy BG-only, manifest-v2, and manifest-v3 runs under their 
 100--2000 km contract, plus manifest-v4 and manifest-v5 runs under the inclusive 0--2000 km
 storage contract. Manifest v5 also carries the bounded all-distance activity coverage used by
 T-020 label audit. It rejects unknown manifest versions. For versioned runs it verifies scope,
-artifact and run counters, every SHA-256, and the actual saved row/qualifying counts before
+artifact and run counters, every SHA-256, actual saved row/qualifying counts, and every dated
+view's serialized selection/flight dates before
 normalizing the numeric flight ID, UTC takeoff timestamp, launch evidence, route, distance,
 duration, and both supported XCContest detail URL forms. It removes identical same-run duplicates
 and keeps every contributing raw artifact reference. A valid version-v4 or version-v5 incomplete
@@ -275,8 +276,8 @@ command.
 
 ### Frozen parser fixture regression test
 
-data/samples/xccontest/parser-v2/synthetic-mini-run-v1 is a small,
-project-authored manifest-v3/HTML mini-run with reviewed parser-v2 golden
+data/samples/xccontest/parser-v3/synthetic-mini-run-v1 is a small,
+project-authored manifest-v3/HTML mini-run with reviewed parser-v3 golden
 outputs. It contains no live XCContest data or pilot information. The
 fixture-based integration/regression test copies it into a temporary raw layout,
 executes the real offline parser, and compares every emitted JSONL/report
@@ -287,7 +288,7 @@ uv run --project services/ml pytest `
   services/ml/tests/ingestion/xccontest/test_parser_fixtures.py -vv
 ```
 
-See data/samples/xccontest/parser-v2/synthetic-mini-run-v1/README.md for the
+See data/samples/xccontest/parser-v3/synthetic-mini-run-v1/README.md for the
 fixture's synthetic origin, sanitation/redistribution constraints, and exact
 coverage matrix. Keep fixtures small and separate from ignored live/raw runs.
 
@@ -300,7 +301,7 @@ geocoding is used and `propose` never changes SQLite.
 
 #### 1. Apply deterministic coordinate mappings
 
-Start with a completed parser-v2 run and a migrated local database. From the repository
+Start with a completed parser-v3 run and a migrated local database. From the repository
 root, use the normal `.env` database configuration (or pass `--database-url`):
 
 ```powershell
@@ -455,7 +456,7 @@ uv run --env-file .env --project services/ml xccontest-site-mappings retire-excl
   --exclusion-id <id> `
   --reason "short scope-change reason"
 ```
-Validate an existing parser-v2 run against only approved mappings:
+Validate an existing parser-v3 run against only approved mappings:
 
 ```powershell
 uv run --env-file .env --project services/ml xccontest-validate --run-key <uuid>
@@ -504,7 +505,7 @@ repeated flight IDs because the umbrella PG view deliberately overlaps exact-cat
 and rescue-sort views; its repeated-observation count is operational coverage
 metadata. The offline `xccontest-parse --run-key <uuid>` command validates legacy
 BG-only and current manifests plus every artifact hash, then writes non-overwritable
-`parser-v2` outputs under `data/interim/xccontest/<run-key>/`: deduplicated
+`parser-v3` outputs under `data/interim/xccontest/<run-key>/`: deduplicated
 `normalized-flights.jsonl`, `parse-rejections.jsonl`, and `parse-report.json`.
 Equal same-run IDs become one record with all artifact references; conflicting IDs
 become one conflicted candidate without a selected value. It never writes or
@@ -539,8 +540,9 @@ layout, or parser CLI contract must increment `PARSER_VERSION` and use a new
 non-overwriting `parser-vN` output directory. The same change must include
 focused legacy/current-manifest tests and update this README and the handoff. The
 staging directory is derived from the parser revision in `versions.py`, so the version
-identifier and `parser-vN` directory cannot drift. Current parser v2 accepts legacy/v1
-and complete manifest-v2 inputs.
+identifier and `parser-vN` directory cannot drift. Current parser v3 accepts legacy/v1
+and complete manifest-v2 inputs, and rejects every date-filtered raw view whose saved HTML
+does not prove its manifest date.
 
 ### Reproducibility and data safety
 
@@ -600,7 +602,7 @@ for an outstanding reconciliation review, and 1 for failed validation or invalid
 
 Persistence makes an already validated XCContest flight snapshot
 repeatable and auditable.  It is an **offline** boundary: it reads the existing
-`parser-v2` and `validation-v4` artifacts, verifies their hashes, and reconciles
+`parser-v3` and `validation-v4` artifacts, verifies their hashes, and reconciles
 accepted records with migrated SQLite.  It does not collect, open a browser, or
 contact XCContest.
 
@@ -810,7 +812,7 @@ preserves, or resolves a record.  Its current `schema_version` is `1`:
 {
   "schema_version": 1,
   "evidence_level": "metadata",
-  "parser_version": "xccontest-parser/2",
+  "parser_version": "xccontest-parser/3",
   "validator_version": "xccontest-validator/2",
   "persistence_version": "xccontest-persistence/3",
   "mapping_key_type": "source_site_token",
