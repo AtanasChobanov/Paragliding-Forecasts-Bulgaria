@@ -7,19 +7,20 @@
 3. T-020 in `docs/tasks.md` for ticket scope and acceptance criteria.
 4. [`T-020-xccontest-activity-ingestion-plan.md`](T-020-xccontest-activity-ingestion-plan.md) for the completed flight-ingestion prerequisite.
 5. [`T-020-persistent-site-exclusions-plan.md`](T-020-persistent-site-exclusions-plan.md) for durable reviewed source-site exclusions.
-6. DEC-055 through DEC-062 in `docs/decisions.md`; DEC-023 through DEC-030 define the pre-existing XCContest boundary.
-7. Only the relevant sections of `docs/project-brief.md` and `docs/architecture.md`.
+6. [`T-020-flight-label-analysis-2026-09-29.md`](T-020-flight-label-analysis-2026-09-29.md) for the pre-repair exploratory counts, negative-count sensitivity, and proposed evaluation splits. Its operational-supersession note explains which figures must be recalculated before cohort selection.
+7. DEC-055 through DEC-062 in `docs/decisions.md`; DEC-023 through DEC-030 define the pre-existing XCContest boundary.
+8. Only the relevant sections of `docs/project-brief.md` and `docs/architecture.md`.
 
 Keep durable decisions in `docs/decisions.md`, ticket lifecycle in `docs/tasks.md`, and current operational state here.
 
-## Current state — 2026-09-27
+## Current state — 2026-09-30
 
 | Field | Current state |
 | --- | --- |
 | Branch | `feature/T-020-joined-weather-dataset` |
 | Ticket | T-020 is **In Progress**. Its 0–2000 km flight-ingestion prerequisite and persistent reviewed-exclusion support are implemented. No joined historical flight/weather dataset, model, or prediction command exists yet. |
-| Active owner operation | XCContest collection for seasons 2024, 2023, and 2022 completed under run key `724845c1-7b75-4900-a74c-d61e9de83157`, but offline parser resume failed on a saved page/manifest row-count mismatch. A read-only audit found 85 stale-date or inconsistent views among 1487 artifacts. The targeted repair command is implemented and tested offline; no live repair has run yet. Do not treat that source run as label-ready. |
-| Previous accepted run | 2025 run `d577156f-7f73-4e62-81ad-eb6881715739` completed collection and persistence. It is the first season with all-distance activity coverage under the new collector policy. |
+| Completed owner operations | The 2024/2023/2022 repair is `9c70c7a0-89f2-4a56-8b8e-a608eb3dde6e`, replacing 85 views and copying 1402 from original `724845c1-7b75-4900-a74c-d61e9de83157`; it persisted 3753 accepted flights and its raw audit reports zero issues among 1487 artifacts. The owner also repaired 2025 as `89841b61-c681-4008-b833-031d4aee636e`, copying 219 views and recollecting the 31 faulty views from `d577156f-7f73-4e62-81ad-eb6881715739`; its 250-artifact audit reports zero issues and offline persistence recorded 1336 accepted flights (284 inserted, 1052 revalidated unchanged). Use these repaired runs, not their source runs. |
+| Flight-evidence readiness | The v3 parser now verifies a dated artifact's selected source date and every rendered row date against its manifest date before producing output. Both repaired runs parse successfully with this guard (2022–2024: 1487 artifacts / 9169 normalized observations; 2025: 250 / 3165). This verifies the raw evidence required to start the offline label audit; it does not itself produce labels or a training cohort. |
 | Local database | `data/local/paragliding.db` already contains `source_site_exclusions`; migration `20260926102539_add_source_site_exclusions` is present in the local migration history. Do not assume a different owner database has been migrated: check it before applying or resuming persistent-exclusion work there. |
 | Live-source boundary | XCContest remains rendered-UI collection with conservative pacing. `xccontest-ingest fresh` and `xccontest-repair collect/resume` are explicit live operations. `xccontest-ingest resume` is offline and must not open a browser or create source transport. |
 | Weather boundary | T-018 GFS pipeline is implemented and historical 2025/2023 acceptance evidence exists. Do not start broad GFS historical acquisition until the flight-label audit has fixed the eligible site-day cohort and a bounded storage plan is approved. |
@@ -52,6 +53,17 @@ For every canonical site and local flying date, build three nested labels:
 
 ## T-020 flight-ingestion prerequisite
 
+### Pre-repair exploratory inventory — 2026-09-29
+
+- All numbers in this subsection and in the linked report are a **pre-2025-repair snapshot**. They remain useful for deciding what the label audit must report, especially negative-policy sensitivity, but are not a current candidate inventory and must not be used to choose a weather or evaluation cohort. The local database now has 5171 canonical positive-distance flights after the repaired 2025 persistence; the production offline audit must recompute its counts from the repaired evidence.
+- The snapshot contained 4887 unique positive-distance flights. Its 2022–2025 subset had 4806 flights / 972 active site-days / 521 distinct dates, observed maximum-distance bands `000/100/110/111` = `679/228/57/8`, and 100+/200+/300+ positives `293/65/8`. The 2026 legacy rows were threshold-only and remain outside the negative cohort.
+- In that snapshot, among 679 below-100 site-days, 247 had one flight, 141 had two, and 72 had three. Applying a future activity threshold of 2/3/5 flights would have reduced known 100+ negatives from 651 to 422/286/145. The label audit must preserve the count and reason for every row so that such a policy can be reviewed and versioned; DEC-056's current MVP minimum remains one accepted positive-distance flight.
+- Both effective all-distance runs had zero actionable mapping quarantines. The 2025 validation's 865 `review_required` rows are resolved by its matching run-local reviewed rejection file; 2022–2024 has 2222 persistent exclusions plus 374 coordinate-based rejections. Six invalid-duration parser rows were below 1.4 km and cannot conceal threshold positives.
+- The snapshot showed evidence at all seven sites in every season but sparse Pastrina and Dobrich activity, and only eight 300+ positive site-days across seven calendar dates. The repair may change every current count; the production audit, rather than this exploration, is the basis for deciding whether pooled 100+/200+ experiments or any 300+ evaluation are supportable.
+- Proposed, not accepted: use 2022–2024 for chronological development/tuning/calibration and reserve repaired 2025 for final historical testing. Reserve whole joined site/date/horizon examples, keeping all sites and horizons of a target date together. Do not fit or calibrate on the final-test outcomes. The pre-repair strict full-label counts were development 736 days with `212/42/3` positives and provisional 2025 183 with `56/17/5`; recompute before adopting this split.
+- Weather SQLite has 28 snapshots across four runs, but only two historical target dates (2025-08-02 and 2023-10-03), and their newest-cycle/evening-cutoff compliance is not yet established. Broad GFS acquisition remains gated.
+- The detailed report and local ignored scratch script/output locations are documented in [`T-020-flight-label-analysis-2026-09-29.md`](T-020-flight-label-analysis-2026-09-29.md). T-020 remains In Progress; no new accepted decision or later-ticket implementation was added.
+
 ### Implemented collection policy
 
 - The public command still selects repeated `--season`; users do not need date-range flags.
@@ -70,13 +82,12 @@ For every canonical site and local flying date, build three nested labels:
 - Name-only rejections, geometry ambiguity, country conflicts, and coordinate-only outside-catchment cases are not reusable durable exclusions. A new in-scope/ambiguous coordinate or conflicting active mapping produces explicit review instead of silently applying an old exclusion.
 - A normal offline `xccontest-ingest resume` applies the sibling reviewed mapping file transactionally before revalidation. The focused manual command and explicit retirement command are documented in `services/ml/README.md`.
 
-### Repair gate before T-020 flight-label audit
+### Verified repair gate before T-020 flight-label audit
 
-1. Run the read-only `xccontest-repair audit --run-key 724845c1-7b75-4900-a74c-d61e9de83157`. It currently reports 85 inconsistent views among 1487; 51 contain flight rows from the wrong date, and 34 are empty stale-date views whose true activity is unknown.
-2. The owner should run the headed, paced `xccontest-repair collect` command in the [ML README](../services/ml/README.md#repair-a-finalized-run-with-stale-date-html). It creates a new run key, prints it immediately, re-collects only audited source-default dated views, and never changes the original run.
-3. If interrupted, use `xccontest-repair resume --repair-run-key <new-key> --allow-live-network`. The checkpoint verifies already collected repair artifacts before continuing. A newly paginated view or inconsistent rendered date stops for review.
-4. After the new manifest and `repair-provenance.json` are complete, run offline `xccontest-ingest resume --run-key <new-key> --policy-file ...` with `.env`. Resolve mapping or reconciliation review gates as usual. Only persisted, accepted, coverage-complete evidence should enter the label audit.
-5. Do not launch broad GFS collection solely because raw XCContest repair ends. First produce the offline flight-label audit below.
+1. Repaired 2022–2024 run `9c70c7a0-89f2-4a56-8b8e-a608eb3dde6e` and repaired 2025 run `89841b61-c681-4008-b833-031d4aee636e` both pass `xccontest-repair audit` with zero issues. The original 2025 run remains historical provenance only because its 31 stale dated views are superseded by the repair run.
+2. Parser v3 additionally makes a stale or foreign dated raw artifact a hard offline failure: the selected date in the saved document and every rendered result-row date must equal the manifest `date_filter`. The 2022–2025 repaired evidence passes that new guard.
+3. The next T-020 implementation step is the deterministic, offline flight-label audit below. It must use only persisted, accepted, coverage-complete repaired evidence, write tri-state reasons and activity counts, and recompute every inventory figure.
+4. Do not launch broad GFS collection solely because raw XCContest repair is complete. First produce and review the offline flight-label audit.
 
 ## T-020 joined-dataset plan
 
@@ -84,9 +95,9 @@ T-020 is a reproducible dataset-building task, not a model-training task. Its ou
 
 ### Phase 1 — complete flight evidence
 
-1. Complete the currently running 2024/2023/2022 collection through offline mapping, validation, and persistence.
-2. Start with 2024 and 2023 for the first audit; include 2022 only if the audit shows that 300+ site-days remain too sparse.
-3. Preserve 2025 as the known all-distance reference season. Earlier legacy collection without complete short-flight coverage may contribute positive threshold evidence, but cannot manufacture reliable negatives until re-collected under the activity policy.
+1. The 2022–2025 collection, repair, mapping, validation, and persistence are complete in the repaired runs; parser v3 has replayed both repaired raw sets successfully.
+2. Run the production offline audit before treating any per-threshold count, split, or all-distance cohort as final. The 2022 inclusion added no 300+ positive site-days in the pre-repair review; scarcity remains unresolved pending the recomputed audit.
+3. Earlier legacy collection without complete short-flight coverage may contribute positive threshold evidence, but cannot manufacture reliable negatives until re-collected under the activity policy. Keep the 2026 legacy subset separate.
 
 ### Phase 2 — offline label audit (no GFS download)
 
@@ -100,7 +111,7 @@ For every site-day in the candidate seasons, emit a deterministic `site_day_labe
 
 Exclude `unknown` rows from supervised training. Keep them in a separate audited output because later coverage repair may make them usable.
 
-Planning checkpoints after the audit: target roughly 100 positive and 100 negative known site-days for 100+, roughly 50 positives for 200+, and at least 30 independent 300+ positive site-days across seasons/sites before interpreting a 300+ result as more than exploratory. These are planning thresholds, not proof of model quality. Season 2025 alone had approximately 80/23/5 positive site-days for 100+/200+/300+, so multi-season evidence is needed, especially for 300+.
+Planning checkpoints after the audit: target roughly 100 positive and 100 negative known site-days for 100+, roughly 50 positives for 200+, and at least 30 independent 300+ positive site-days across seasons/sites before interpreting a 300+ result as more than exploratory. These are planning thresholds, not proof of model quality. The pre-repair 2026-09-29 snapshot found 293/65/8 observed positives across 2022–2025; rerun the count from repaired evidence, although the 300+ checkpoint is expected to remain far away.
 
 ### Phase 3 — freeze the weather cohort and acquisition plan
 
@@ -147,9 +158,11 @@ T-019 is in Review. It collects official NOAA/NCEI IGRA v2.2 observations for So
 ## Verification and commit context
 
 - Commit `1234419` (`T-020 skip complete threshold date sorts`) added the non-paginated threshold sort avoidance. Focused collector tests (15), Ruff check, and format check passed.
-- The uncommitted persistent-exclusion implementation has focused XCContest tests, database migration tests, and documentation updates pending final verification/commit. Do not claim a run has used that implementation until its actual local artifacts and terminal result are reviewed.
+- Commit `a27f6df` recorded persistent site exclusions and the dataset plan; `3d26309` added resumable raw repair. The 2022–2024 persistence artifacts now demonstrate actual use of persistent exclusions and repaired raw evidence.
+- The 2026-09-29 review ran read-only raw audits (2022–2024: zero issues; 2025: 31 issues), SQLite quick/foreign-key checks, effective stage-hash and accepted-row reconciliation, terminal mapping review, nested-label/count assertions, and database-byte preservation checks. Two final replays produced identical summary/site-day bytes; scratch Ruff lint/format, `repo:check`, and `git diff --check` passed. No product code changed; product suites were not rerun. The detailed report is an analysis, not a claim of completing the production T-020 audit or weather join.
+- The owner completed 2025 repair run `89841b61-c681-4008-b833-031d4aee636e`: its 250-artifact raw audit reports zero issues, and its offline persistence recorded 1336 accepted flights. Parser v3's selected-date and rendered-row-date guard passed replay of both repaired runs (2022–2024: 1487 artifacts / 9169 normalized observations; 2025: 250 / 3165). Focused XCContest tests pass `117 passed`; the full ML suite passes `351 passed`, `npm.cmd run repo:check` passes, and `git diff --check` passes.
 - A Vite build retains its existing >500 kB chunk warning; it is not a T-020 failure.
 
 ## Commands and safety
 
-Use `uv run --project services/ml ...` for ML commands. Only `fresh` performs owner-authorized live collection. `resume` must remain offline. Do not store raw downloads, databases, model artifacts, or generated datasets in Git. Do not change business logic while the owner’s multi-season run is active.
+Use `uv run --project services/ml ...` for ML commands. `xccontest-ingest resume` must remain offline; collector recovery and `xccontest-repair collect/resume` are distinct explicitly authorized live operations. Do not store raw downloads, databases, model artifacts, or generated datasets in Git. Do not change business logic while an owner collection is active.
