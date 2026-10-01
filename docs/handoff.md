@@ -23,7 +23,7 @@ Keep durable decisions in `docs/decisions.md`, ticket lifecycle in `docs/tasks.m
 | Ticket | T-020 is **In Progress**. Flight ingestion/repair, persistent exclusions, and **phase 2 offline label auditing are implemented and verified**. Phase 3 cohort/acquisition planning and phase 4 weather join remain. No model or prediction command exists yet. |
 | Completed owner operations | The 2024/2023/2022 repair is `9c70c7a0-89f2-4a56-8b8e-a608eb3dde6e`, replacing 85 views and copying 1402 from original `724845c1-7b75-4900-a74c-d61e9de83157`; it persisted 3753 accepted flights and its raw audit reports zero issues among 1487 artifacts. The owner also repaired 2025 as `89841b61-c681-4008-b833-031d4aee636e`, copying 219 views and recollecting the 31 faulty views from `d577156f-7f73-4e62-81ad-eb6881715739`; its 250-artifact audit reports zero issues and offline persistence recorded 1336 accepted flights (284 inserted, 1052 revalidated unchanged). Use these repaired runs, not their source runs. |
 | Flight-evidence readiness | Parser v3's dated-view guard passed both repaired runs (2022–2024: 1487 artifacts / 9169 normalized observations; 2025: 250 / 3165). The production label command independently rechecks that guard against the raw artifacts and verifies effective persisted parser-v2/validation evidence without rewriting it. |
-| Phase 2 audit | `uv run --project services/ml flight-label-audit` produces audit `cd6c8b99b6898ec41cb631a2ee9913cd6b76df377b1046d777a8fadc91c92a38`. Full-calendar output: 10,227 site-days, 5,090 positive-distance flights, 985 active site-days / 525 dates; 978 all-three-known vectors and 9,249 any-unknown vectors. Threshold-specific positive/negative counts: 100+ = 293/686, 200+ = 65/913, 300+ = 8/970. Results and manifests are ignored local JSONL/JSON artifacts, not a weather-backed training dataset. |
+| Phase 2 audit | The verified **v1** snapshot is `cd6c8b99b6898ec41cb631a2ee9913cd6b76df377b1046d777a8fadc91c92a38`: 10,227 site-days, 5,090 positive-distance flights, 985 active site-days / 525 dates; 978 all-three-known vectors and 9,249 any-unknown vectors. Threshold-specific positive/negative counts: 100+ = 293/686, 200+ = 65/913, 300+ = 8/970. **v2** now reads sites from SQLite and snapshots/seasons/maturity from JSON configuration, with no Python site/run/year whitelist. It has synthetic verification only; the owner requested to execute the updated real audit manually. Preserve both existing v1 artifact directories. |
 | Repaired-data analysis | The 2026-09-30 read-only review finds 5171 canonical flights, including 5090 in seasons 2022–2025. Across all four source seasons, minimum 1/2/3 flights gives 686/445/301 known 100+ negative site-days against 293 positives; ≥3 is a numerically viable pooled 100+ experiment. For proposed development seasons 2022–2024, the negatives are 524/338/226 against 213 positives, with especially sparse Dobrich, Nevsha, and Pastrina support at ≥3. Retain DEC-056's one-flight default pending chronological sensitivity validation, not because negatives must outnumber positives. Exact report linked above. |
 | Local database | `data/local/paragliding.db` already contains `source_site_exclusions`; migration `20260926102539_add_source_site_exclusions` is present in the local migration history. Do not assume a different owner database has been migrated: check it before applying or resuming persistent-exclusion work there. |
 | Live-source boundary | XCContest remains rendered-UI collection with conservative pacing. `xccontest-ingest fresh` and `xccontest-repair collect/resume` are explicit live operations. `xccontest-ingest resume` is offline and must not open a browser or create source transport. |
@@ -56,6 +56,25 @@ waiting period for another run or future season and does not waive coverage or
 mapping checks. Phase 2 uses conservative complete parent daily coverage for
 negatives; confirmed positives retain their independent evidence even when
 higher-threshold absence is unknown.
+
+Those snapshot declarations now live in
+`services/ml/src/paragliding_forecasts_ml/datasets/resources/flight-label-audit-policy.json`.
+The ordinary command selects seasons from that default; use repeated `--season`
+for a subset and `--policy-file` for another explicitly chosen snapshot set.
+No generic late-upload age rule has been accepted. Adding seasons or run IDs
+requires configuration data, not Python edits. `mature: false` preserves
+positive evidence but keeps absence unknown. The site catalog is read from SQLite.
+
+The any-unknown file deliberately partitions whole three-threshold vectors:
+Shumen 2023-10-17, 107.88 km, is positive for 100+ and unknown for 200+/300+.
+All seven active unknown vectors are outside the collected daily activity window.
+Read-only inspection found no mistaken 100+ unknown on that confirmed flight.
+The two existing directories have identical label JSONL bytes; their summaries
+differ because statistics were expanded during initial implementation.
+
+`docs/tasks.md` has been restored to its pre-implementation content. Root
+`AGENTS.md` now permits only status-column changes there; keep implementation
+notes/results in this handoff or focused documentation.
 
 ### Overdevelopment and cloudbase context
 
@@ -175,6 +194,15 @@ The 2023-10-03 retry succeeded after a bounded shortwave numerical-noise fix. Cu
 T-019 is in Review. It collects official NOAA/NCEI IGRA v2.2 observations for Sofia `BUM00015614`, preserves immutable raw/normalized/validated artifacts, and has no SQLite or training-join role. It may support later GFS validation (T-039), but it is not a predictor for T-020.
 
 ## Verification and commit context
+
+- Follow-up v2 verification passes **49 dataset tests / 400 full ML tests**,
+  Ruff lint/format, repository structure, and Git diff checks. Site catalogs
+  and run/season policy inputs are now data-driven, including synthetic tests
+  for an added site, future season, another snapshot UUID, and false maturity.
+  Existing v1 artifacts were inspected read-only to explain the seven active
+  any-unknown vectors and the differing summary versions. **No updated real
+  audit was executed**: the owner will run it manually. A v2 run will create a
+  new versioned output directory and retain both previous v1 directories.
 
 - The 2026-10-01 phase 2 implementation has 36 focused dataset tests. The full
   ML suite passes **387 tests**; Ruff lint/format over `services/ml`,

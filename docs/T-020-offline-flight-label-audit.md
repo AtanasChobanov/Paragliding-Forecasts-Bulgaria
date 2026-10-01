@@ -2,7 +2,11 @@
 
 ## Scope and accepted policy
 
-Implemented on 1 October 2026. The supported command is:
+Initial version implemented on 1 October 2026. The owner-data results below are
+the verified v1 snapshot. A follow-up v2 reads the site catalog dynamically from
+SQLite and run/season/maturity declarations from JSON configuration; it has
+been tested only with synthetic evidence, as the owner requested
+to run the updated real-data audit manually. The supported command is:
 
 ```powershell
 uv run --project services/ml flight-label-audit
@@ -95,6 +99,14 @@ The full-calendar denominator intentionally differs from the earlier exploratory
 script's collected-date denominator. Unknown counts are therefore larger; no
 new negatives are inferred from the additional dates.
 
+The seven active any-unknown vectors are Shumen 2023-10-17 (107.88 km), Sopot
+2023-10-29 (55.58 km), Sopot 2024-10-17/18/19 (4.07/4.40/6.26 km),
+Sofia/Vitosha 2024-10-20 (9.03 km), and Shumen 2024-11-05 (5.98 km).
+All are outside daily activity coverage. The 107.88 km vector has a **positive
+100+ label** and unknown 200+/300+ labels; the other vectors have no complete
+threshold-absence evidence. Their presence in the any-unknown file is deliberate,
+not a replacement of confirmed positives with unknown labels.
+
 ## Local artifacts and replay
 
 Verified audit identity:
@@ -113,12 +125,21 @@ All generated files remain ignored under
 Two supported-command replays on unchanged evidence return the same audit ID
 and verify every existing output byte. Outputs contain source identity and
 provenance, with no pilot fields. For a subset use repeated `--season`; the
-command only accepts 2022–2025 and requires the corresponding repaired run.
+default policy declares 2022–2025 and the corresponding repaired runs. A custom
+`--policy-file` declares other seasons/snapshots without editing Python.
 The service README documents all options and failure behavior.
+
+There is also an earlier local development audit
+`0bea27ef619ac44743bb406e8c25b10f555562beaf1221154e10bf992b48b30e`.
+Its three JSONL label files are byte-identical to the final v1 audit; only the
+summary/reporting content changed when complete-vector and activity-sensitivity
+statistics were added. These are versioned artifacts, not duplicate collection
+runs. The repeated final executions checked reproducibility and reused the same
+directory. Old immutable outputs have been preserved.
 
 ## Validation and remaining work
 
-Verification includes 36 synthetic offline tests covering site isolation,
+The initial verification included 36 synthetic offline tests covering site isolation,
 inclusive thresholds, timezone/season boundaries, leap day, zero and invalid
 distances, unknowns, partial/maturity/mapping gates, reviewed rejection, lost
 threshold candidates, stale HTML dates, hash mismatch, SQLite reconciliation,
@@ -126,6 +147,13 @@ training permission, immutable output, deterministic replay, and CLI failures.
 The full ML suite, Ruff lint/format, repository structure check, and Git diff
 check must pass before the phase is reported complete. See the handoff for the
 final execution results.
+
+The follow-up v2 passes 49 dataset tests and 400 full ML tests, plus Ruff
+lint/format, repository structure, and Git diff checks. Extra synthetic cases
+cover a database-added site, configuration-defined future season and snapshot,
+false maturity, and the 107.88 km partial vector. Real-data v2 replay is
+intentionally not performed at the owner's request. Running the updated command
+will write a new versioned directory, preserving existing v1 evidence.
 
 T-020 remains In Progress. Phase 3 must review the cohort, chronological split,
 exact evening-cutoff/horizon acquisition manifest, and bounded storage plan.

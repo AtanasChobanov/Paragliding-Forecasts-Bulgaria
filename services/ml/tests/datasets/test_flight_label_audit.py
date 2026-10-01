@@ -15,7 +15,7 @@ from paragliding_forecasts_ml.datasets.flight_label_audit import (
     audit_labels,
     encoded,
 )
-from paragliding_forecasts_ml.datasets.flight_labels import SITE_SLUGS, LabelAuditError
+from paragliding_forecasts_ml.datasets.flight_labels import LabelAuditError
 from paragliding_forecasts_ml.ingestion.xccontest.artifacts import RawArtifactStore
 from paragliding_forecasts_ml.ingestion.xccontest.models import (
     PRIMARY_GLIDER_CATEGORY,
@@ -27,6 +27,15 @@ from paragliding_forecasts_ml.ingestion.xccontest.models import (
 from paragliding_forecasts_ml.ingestion.xccontest.persistence import digest
 
 KEY = "89841b61-c681-4008-b833-031d4aee636e"
+TEST_SITE_SLUGS = {
+    "sofia-vitosha-kominite",
+    "zlatitsa",
+    "sopot",
+    "nevsha",
+    "shumen",
+    "pastrina",
+    "dobrich-region",
+}
 
 
 @pytest.fixture
@@ -45,7 +54,7 @@ def evidence(tmp_path):
             source_site_mapping_id INTEGER, takeoff_at_utc TEXT, scored_distance_km REAL,
             last_validated_by_ingestion_run_id INTEGER);
     """)
-    catalog = [(i, slug, "BG") for i, slug in enumerate(sorted(SITE_SLUGS), 1)]
+    catalog = [(i, slug, "BG") for i, slug in enumerate(sorted(TEST_SITE_SLUGS), 1)]
     connection.executemany("INSERT INTO sites VALUES (?,?,?)", catalog)
     shumen = next(i for i, slug, _ in catalog if slug == "shumen")
     connection.execute("INSERT INTO source_site_mappings VALUES (10,?, 'approved')", (shumen,))
@@ -248,9 +257,9 @@ def test_training_permission_required_and_output_path_bounded(evidence):
 
 
 def test_unreviewed_future_maturity_is_not_inferred():
-    from paragliding_forecasts_ml.datasets.flight_labels import MATURE_RUNS
+    from paragliding_forecasts_ml.datasets.audit_policy import load_policy
 
-    assert 2026 not in {s for seasons in MATURE_RUNS.values() for s in seasons}
+    assert 2026 not in load_policy().seasons
 
 
 def test_input_change_during_audit_is_detected(evidence):
@@ -428,3 +437,101 @@ def test_cli_reports_verification_failure(monkeypatch, capsys):
     monkeypatch.setattr(flight_label_cli, "audit_labels", failure)
     assert flight_label_cli.main(["--season", "2025"]) == 1
     assert "synthetic verification failure" in capsys.readouterr().err
+
+
+def test_new_site_is_loaded_from_database(evidence):
+    root, database, _ = evidence
+    connection = sqlite3.connect(database)
+    connection.execute("INSERT INTO sites VALUES (8,'new-launch','BG')")
+    connection.commit()
+    connection.close()
+    result = run(root)
+    assert result["summary"]["site_days"] == 8 * 365
+    rows = [
+        json.loads(line)
+        for line in (Path(result["output_directory"]) / "site_day_label_audit.jsonl")
+        .read_text()
+        .splitlines()
+    ]
+    new = [r for r in rows if r["site_slug"] == "new-launch"]
+    assert len(new) == 365 and all(r["flight_count"] == 0 for r in new)
+
+
+def test_false_maturity_in_configuration_blocks_negatives_without_losing_activity(evidence):
+    from paragliding_forecasts_ml.datasets.audit_policy import load_policy
+
+    root, _, _ = evidence
+    policy = load_policy().document
+    policy["coverage_runs"] = [e for e in policy["coverage_runs"] if e["run_key"] == KEY]
+    policy["coverage_runs"][0]["mature"] = False
+    path = root / "data/local/audit-policy.json"
+    path.write_bytes(encoded(policy))
+    result = run(root, policy_file=path)
+    assert result["summary"]["accepted_positive_distance_flights"] == 1
+    assert result["summary"]["thresholds"]["100"]["negative"] == 0
+    assert result["summary"]["thresholds"]["100"]["unknown_reasons"]["evidence_not_mature"] == 1
+
+
+def test_new_snapshot_uuid_does_not_require_source_changes(evidence):
+    from paragliding_forecasts_ml.datasets.audit_policy import load_policy
+
+    root, database, report_path = evidence
+    new_key = "11111111-1111-4111-8111-111111111111"
+    # Change only synthetic identity and its immutable references, not product code.
+    for zone in ("raw", "interim"):
+        (root / "data" / zone / "xccontest" / KEY).rename(
+            root / "data" / zone / "xccontest" / new_key
+        )
+    for path in (root / "data").rglob("*.json*"):
+        path.write_bytes(path.read_bytes().replace(KEY.encode(), new_key.encode()))
+    report_path = Path(str(report_path).replace(KEY, new_key))
+    connection = sqlite3.connect(database)
+    row = connection.execute("SELECT notes,raw_manifest_path FROM flight_ingestion_runs").fetchone()
+    connection.execute(
+        "UPDATE flight_ingestion_runs SET run_key=?,notes=?,raw_manifest_path=?",
+        (new_key, row[0].replace(KEY, new_key), row[1].replace(KEY, new_key)),
+    )
+    connection.commit()
+    connection.close()
+    # Reseal using this synthetic key, following the existing persistence contract.
+    report = json.loads(report_path.read_text())
+    for name in (
+        "accepted_flights",
+        "site_quarantine",
+        "parser_normalized",
+        "parser_report",
+        "raw_manifest",
+    ):
+        report[name + "_sha256"] = digest(root / report[name + "_path"])
+    report_path.write_bytes(encoded(report))
+    connection = sqlite3.connect(database)
+    notes = json.loads(connection.execute("SELECT notes FROM flight_ingestion_runs").fetchone()[0])
+    event = notes["persistence_events"][-1]
+    event["validation_report_sha256"] = digest(report_path)
+    body = {
+        "schema_version": 1,
+        "run_key": new_key,
+        **{
+            k: event[k]
+            for k in (
+                "validation_snapshot_sha256",
+                "validation_report_sha256",
+                "accepted_flights_sha256",
+                "mapping_review_complete",
+            )
+        },
+    }
+    event["event_sha256"] = hashlib.sha256(
+        json.dumps(body, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    connection.execute(
+        "UPDATE flight_ingestion_runs SET raw_manifest_sha256=?,notes=?",
+        (report["raw_manifest_sha256"], json.dumps(notes)),
+    )
+    connection.commit()
+    connection.close()
+    policy = load_policy().document
+    policy["coverage_runs"] = [{"run_key": new_key, "seasons": [2025], "mature": True}]
+    path = root / "data/local/audit-policy.json"
+    path.write_bytes(encoded(policy))
+    assert run(root, policy_file=path)["summary"]["thresholds"]["100"]["negative"] == 1

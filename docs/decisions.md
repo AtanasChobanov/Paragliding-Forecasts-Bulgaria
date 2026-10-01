@@ -2751,8 +2751,12 @@ It never turns a no-flight day into a negative. Legacy accepted flights may
 retain confirmed positives with their own verified provenance, but legacy runs
 are not a source of mature negative coverage. The 2026 subset is excluded.
 
-**Consequences:** The offline audit pins these run/season identities and records
-the maturity-policy version in its manifest and each site's date coverage.
+**Consequences:** The offline audit pins these run/season identities through
+`datasets/resources/flight-label-audit-policy.json`, not Python constants, and
+records the configuration/hash and maturity-policy version in its manifest and
+each site's date coverage. A local `--policy-file` may declare another reviewed
+snapshot set without editing product code; a missing generic maturity rule is
+not silently inferred for that set. The site catalog comes from SQLite.
 This is an explicit acceptance of these historical snapshots, not a guarantee
 against future uploads. A generic waiting period or maturity rule for another
 run/season remains an open choice; do not infer one from this decision.

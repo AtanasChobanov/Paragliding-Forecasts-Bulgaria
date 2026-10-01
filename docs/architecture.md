@@ -186,8 +186,10 @@ artifacts with a hashed manifest rather than new canonical database tables.
 T-020 phase 2 is implemented by the offline `flight-label-audit` command under
 `services/ml/src/paragliding_forecasts_ml/datasets/`. It reads migrated SQLite
 and verifies raw/accepted/stage evidence without database writes or transport.
-DEC-063 pins the two reviewed repaired 2022–2025 runs as mature coverage. It
-enumerates every date in the source seasons for all seven sites, emits an audit
+DEC-063 pins the two reviewed repaired 2022–2025 runs as mature coverage through
+the packaged JSON audit policy; a local `--policy-file` can select another
+reviewed snapshot set. Sites come from SQLite without a fixed name/count list.
+It enumerates every date in the source seasons for those sites, emits an audit
 and separate complete/unknown label vectors, and hashes inputs, policies,
 provenance, and outputs in a deterministic manifest. It creates no schema or
 public API. The weather cohort, acquisition plan, and actual join remain the

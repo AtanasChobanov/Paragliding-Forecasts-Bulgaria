@@ -5,7 +5,6 @@ from datetime import date
 import pytest
 
 from paragliding_forecasts_ml.datasets.flight_labels import (
-    SITE_SLUGS,
     LabelAuditError,
     build_rows,
     flying_date,
@@ -15,9 +14,18 @@ from paragliding_forecasts_ml.datasets.flight_labels import (
 
 
 def sites():
+    slugs = {
+        "sofia-vitosha-kominite",
+        "zlatitsa",
+        "sopot",
+        "nevsha",
+        "shumen",
+        "pastrina",
+        "dobrich-region",
+    }
     return [
         {"id": i, "slug": slug, "country_code_iso2": "BG"}
-        for i, slug in enumerate(sorted(SITE_SLUGS), 1)
+        for i, slug in enumerate(sorted(slugs), 1)
     ]
 
 
@@ -143,3 +151,23 @@ def test_full_calendar_includes_leap_day_and_deterministic_site_day_identity():
     assert len({(r["site_id"], r["local_date"]) for r in rows}) == len(rows)
     assert all(states(r) == ["unknown"] * 3 for r in rows)
     assert rows == build_rows(list(reversed(sites())), [], coverage(), (2025,))
+
+
+def test_new_database_site_is_enumerated_without_source_code_change():
+    catalog = sites() + [{"id": 8, "slug": "new-launch", "country_code_iso2": "BG"}]
+    rows = build_rows(catalog, [flight(107.88)], coverage(), (2025,))
+    assert len(rows) == 8 * 365
+    new = [r for r in rows if r["site_slug"] == "new-launch"]
+    assert len(new) == 365 and all(states(r) == ["unknown"] * 3 for r in new)
+
+
+def test_partial_vector_preserves_the_107km_positive_in_unknown_output():
+    evidence = coverage()
+    evidence[(2025, "2025-06-12", "BG")].update(
+        activity_state="out_of_window",
+        activity_reason="outside_activity_window",
+        threshold_complete={str(t): False for t in (100, 200, 300)},
+    )
+    row = day_rows([flight(107.88)], evidence)["shumen"]
+    assert states(row) == ["positive", "unknown", "unknown"]
+    assert row["all_labels_known"] is False

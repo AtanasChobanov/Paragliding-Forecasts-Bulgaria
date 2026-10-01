@@ -8,26 +8,10 @@ from datetime import date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-VERSION = "site-day-flight-label-audit/1"
+VERSION = "site-day-flight-label-audit/2"
 POLICY = "DEC-056-positive-distance-minimum-1/1"
 THRESHOLDS = (100, 200, 300)
 TIMEZONE = ZoneInfo("Europe/Sofia")
-SITE_SLUGS = frozenset(
-    {
-        "sofia-vitosha-kominite",
-        "zlatitsa",
-        "sopot",
-        "nevsha",
-        "shumen",
-        "pastrina",
-        "dobrich-region",
-    }
-)
-MATURE_RUNS = {
-    "9c70c7a0-89f2-4a56-8b8e-a608eb3dde6e": (2022, 2023, 2024),
-    "89841b61-c681-4008-b833-031d4aee636e": (2025,),
-}
-MATURITY_POLICY = "DEC-063-reviewed-repaired-seasons-2022-2025/1"
 
 
 class LabelAuditError(RuntimeError):
@@ -58,13 +42,14 @@ def build_rows(
     coverage: dict[tuple[int, str, str], dict[str, Any]],
     seasons: tuple[int, ...],
 ) -> list[dict[str, Any]]:
-    """Enumerate the full seven-site calendar, grouping only by site and local date."""
-    if {s["slug"] for s in sites} != SITE_SLUGS or len(sites) != 7:
-        raise LabelAuditError("The audit requires exactly the seven canonical sites.")
+    """Enumerate the database site catalog, grouping only by site and local date."""
+    site_ids = {s["id"] for s in sites}
+    if not sites or len(site_ids) != len(sites) or len({s["slug"] for s in sites}) != len(sites):
+        raise LabelAuditError("The canonical site catalog must be nonempty with unique IDs/slugs.")
     groups = defaultdict(list)
     identities = set()
     for flight in flights:
-        if flight["site_id"] not in {s["id"] for s in sites}:
+        if flight["site_id"] not in site_ids:
             raise LabelAuditError("Flight maps outside the canonical site catalog.")
         identity = (flight["source_id"], flight["source_flight_id"])
         if identity in identities:

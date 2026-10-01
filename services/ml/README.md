@@ -76,8 +76,10 @@ uv run --project services/ml flight-label-audit
 
 This command reads existing SQLite and immutable source/stage evidence. It
 does not collect XCContest, apply mapping decisions, write SQLite, collect GFS,
-join weather, or train a model. The default selects source seasons 2022–2025;
-repeat `--season` to audit a subset, for example `--season 2024 --season 2025`.
+join weather, or train a model. The packaged JSON policy currently declares
+source seasons 2022–2025; repeat `--season` to audit a subset, for example
+`--season 2024 --season 2025`. The CLI has no hardcoded year choices; omitted
+`--season` selects all seasons declared in the chosen policy.
 A source season spans 1 October of the preceding year through 30 September.
 `--database-url` follows the existing repository-relative SQLite configuration.
 
@@ -87,12 +89,34 @@ site and `Europe/Sofia` flying date. Thresholds 100/200/300 km are inclusive:
 one accepted threshold flight gives `positive`; one accepted positive-distance
 flight plus complete mature coverage and terminal mapping can give `negative`;
 everything else is `unknown`. Stored zero-distance flights do not prove activity.
-The seven-site full calendar includes no-activity and out-of-window days, so a
+The site catalog comes from SQLite, including historical inactive sites; there
+is no Python list or fixed site count. The full calendar includes no-activity
+and out-of-window days, so a
 missing flight is never silently assigned a negative. Labels remain nested.
 
 DEC-063 explicitly accepts the repaired 2022–2024 and 2025 run identities as
-mature historical snapshots. A different/future run has no automatic maturity
-rule. The builder verifies their persisted accepted records against canonical
+mature historical snapshots. Those identities are data in the packaged
+`datasets/resources/flight-label-audit-policy.json`, not constants in Python.
+For another snapshot set, copy that JSON to a local ignored file, update its
+version and declared runs/seasons, and use `--policy-file`:
+
+```powershell
+uv run --project services/ml flight-label-audit `
+  --season 2027 --policy-file data/local/flight-label-audit-policy.json
+```
+
+Each `coverage_runs` entry has `run_key`, a nonempty `seasons` list, and a boolean
+`mature`. Exactly one chosen snapshot may cover each season: the audit must not
+silently select a superseded or overlapping run merely because it is newer.
+`mature: true` is an operator's explicit acceptance of a historical snapshot for
+negative labels, not a claim that the collector measured upload completeness.
+`false` keeps absence unknown but preserves confirmed positives. A succeeded
+ingestion alone cannot establish that late uploads have finished. No generic
+waiting period is assumed. New years/run identities require configuration data
+and persisted compatible evidence, not Python edits or a new per-year module.
+The policy version, document, and file SHA-256 are retained in the manifest.
+
+The builder verifies the selected persisted records against canonical
 SQLite and current approved site mapping, raw artifact hashes/counts/dates,
 effective persistence and validation provenance, parser staging, rejected
 threshold candidates, and reviewed mapping dispositions. An earlier accepted
@@ -122,11 +146,25 @@ Outputs go to `data/processed/flight-label-audits/<audit-id>/`:
   hashes, every consumed file hash, run/stage/mapping provenance, output hashes,
   limitations, and the content-derived audit identity.
 
+The file partition is by the **whole three-label vector**, not by flight distance
+or by the 100+ label alone. Shumen on 2023-10-17 has 107.88 km accepted evidence:
+100+ is `positive`, but 200+/300+ are `unknown` because that date has no complete
+daily capture. It therefore belongs in the any-unknown file with its positive
+100+ evidence preserved. Likewise a short flight incidentally visible in an
+out-of-window season view does not prove that another longer flight was absent.
+The full audit is the source for threshold-specific positives; the known file
+currently contains only complete vectors. No no-activity/partial day is made
+negative merely to move it between files.
+
+Version 2 includes database-driven sites and configurable snapshot selection.
+The owner-data counts below refer to the earlier verified v1 output; v2 was
+checked with synthetic fixtures only and is awaiting the owner's manual audit.
+
 No current execution timestamp enters the outputs. A repeat with identical
 inputs has identical bytes and reuses an identical existing directory. New
 outputs publish atomically; a changed existing output fails without overwrite.
 Optional `--output-directory` must remain below ignored `data/processed/`.
-Source artifacts and database bytes are rechecked before publication. The
+Source artifacts, database bytes, and the policy are rechecked before publication. The
 command fails with exit code 1 if evidence is missing, changed, incompatible,
 unpermitted for training, or inconsistent; it never recollects or repairs it.
 

@@ -24,9 +24,8 @@ from paragliding_forecasts_ml.storage.sqlite import (
     resolve_database_path,
 )
 
+from .audit_policy import AuditPolicy, load_policy
 from .flight_labels import (
-    MATURE_RUNS,
-    MATURITY_POLICY,
     POLICY,
     THRESHOLDS,
     VERSION,
@@ -59,11 +58,14 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
 
 
 class EvidenceReader:
-    def __init__(self, root: Path, runs: dict[str, dict[str, Any]]) -> None:
+    def __init__(
+        self, root: Path, runs: dict[str, dict[str, Any]], policy: AuditPolicy | None = None
+    ) -> None:
         self.root = root
         self.runs = runs
         self.files: dict[str, str] = {}
         self.verified: dict[str, dict[str, Any]] = {}
+        self.policy = policy or load_policy()
 
     def file(self, path: str, expected: str | None = None) -> Path:
         target = local_path(path, self.root, "Audit input")
@@ -287,8 +289,9 @@ class EvidenceReader:
                         "run_key": key,
                         "raw_manifest_sha256": evidence["run"]["raw_manifest_sha256"],
                         "mapping_snapshot_sha256": event["validation_snapshot_sha256"],
-                        "maturity_policy_version": MATURITY_POLICY,
-                        "mature": season in MATURE_RUNS.get(key, ()),
+                        "maturity_policy_version": self.policy.version,
+                        "mature": self.policy.runs[key]["mature"]
+                        and season in self.policy.runs[key]["seasons"],
                         "activity_state": state,
                         "activity_reason": reason,
                         "activity_scope_statuses": statuses,
@@ -316,18 +319,17 @@ class EvidenceReader:
 
 def audit_labels(
     *,
-    seasons: tuple[int, ...] = (2022, 2023, 2024, 2025),
+    seasons: tuple[int, ...] | None = None,
     database_url: str | None = None,
     output_directory: Path | None = None,
     project_root: Path | None = None,
+    policy_file: Path | None = None,
 ) -> dict[str, Any]:
     root = (project_root or repository_root()).resolve()
-    if (
-        not seasons
-        or len(set(seasons)) != len(seasons)
-        or not set(seasons) <= {2022, 2023, 2024, 2025}
-    ):
-        raise LabelAuditError("Choose unique source seasons from 2022 through 2025.")
+    policy = load_policy(policy_file)
+    seasons = policy.seasons if seasons is None else seasons
+    if not seasons or len(set(seasons)) != len(seasons) or not set(seasons) <= set(policy.seasons):
+        raise LabelAuditError("Choose unique source seasons declared in the audit policy.")
     url = configured_database_url(database_url)
     db_path = resolve_database_path(url, root)
     db_hash = digest(db_path)
@@ -347,7 +349,7 @@ def audit_labels(
         runs = {
             r["run_key"]: dict(r) for r in connection.execute("SELECT * FROM flight_ingestion_runs")
         }
-        reader = EvidenceReader(root, runs)
+        reader = EvidenceReader(root, runs, policy)
         candidates = [
             dict(r)
             for r in connection.execute(
@@ -358,14 +360,15 @@ def audit_labels(
             if source_season(flying_date(r["takeoff_at_utc"])) in seasons
         ]
         coverage = {}
-        for key, allowed_seasons in MATURE_RUNS.items():
+        for key, run_policy in policy.runs.items():
+            allowed_seasons = run_policy["seasons"]
             selected = tuple(s for s in sorted(seasons) if s in allowed_seasons)
             if selected:
                 coverage.update(reader.coverage(key, selected))
         canonical = {(r["source_id"], r["source_flight_id"]): r for r in candidates}
         if len(canonical) != len(candidates):
             raise LabelAuditError("Duplicate canonical source identities.")
-        # Repaired snapshots must reconcile in both directions; include the earlier verified
+        # Configured snapshots must reconcile in both directions; include earlier verified
         # out-of-window canonical positive, with its own run and no repaired negative coverage.
         for key in list(reader.verified):
             evidence = reader.verified[key]
@@ -399,6 +402,8 @@ def audit_labels(
     finally:
         connection.close()
     reader.recheck()
+    if load_policy(policy_file).sha256 != policy.sha256:
+        raise LabelAuditError("Audit policy changed during verification; no output published.")
     if digest(db_path) != db_hash:
         raise LabelAuditError("Database changed during audit; repeat on a stable snapshot.")
     summary = {
@@ -431,7 +436,9 @@ def audit_labels(
     manifest = {
         "schema_version": VERSION,
         "negative_policy_version": POLICY,
-        "maturity_policy_version": MATURITY_POLICY,
+        "maturity_policy_version": policy.version,
+        "audit_policy": policy.document,
+        "audit_policy_sha256": policy.sha256,
         "query_version": QUERY_VERSION,
         "source_seasons": sorted(seasons),
         "timezone": "Europe/Sofia",
@@ -451,8 +458,8 @@ def audit_labels(
                 "validator_version": e["report"]["validator_version"],
                 "persistence_pipeline_version": e["run"]["pipeline_version"],
                 "persistence_event": e["event"],
-                "role": "reviewed_mature_repaired_coverage"
-                if key in MATURE_RUNS
+                "role": "configured_coverage_snapshot"
+                if key in policy.runs
                 else "supplemental_accepted_positive_evidence",
             }
             for key, e in sorted(reader.verified.items())
