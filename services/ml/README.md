@@ -68,6 +68,83 @@ services/ml/
 
 ## XCContest flight ingestion (T-020)
 
+### Offline site-day label audit (T-020 phase 2)
+
+```powershell
+uv run --project services/ml flight-label-audit
+```
+
+This command reads existing SQLite and immutable source/stage evidence. It
+does not collect XCContest, apply mapping decisions, write SQLite, collect GFS,
+join weather, or train a model. The default selects source seasons 2022–2025;
+repeat `--season` to audit a subset, for example `--season 2024 --season 2025`.
+A source season spans 1 October of the preceding year through 30 September.
+`--database-url` follows the existing repository-relative SQLite configuration.
+
+The versioned module is `datasets/flight_labels.py`, with verification/publication
+in `datasets/flight_label_audit.py`. Labels apply independently to each canonical
+site and `Europe/Sofia` flying date. Thresholds 100/200/300 km are inclusive:
+one accepted threshold flight gives `positive`; one accepted positive-distance
+flight plus complete mature coverage and terminal mapping can give `negative`;
+everything else is `unknown`. Stored zero-distance flights do not prove activity.
+The seven-site full calendar includes no-activity and out-of-window days, so a
+missing flight is never silently assigned a negative. Labels remain nested.
+
+DEC-063 explicitly accepts the repaired 2022–2024 and 2025 run identities as
+mature historical snapshots. A different/future run has no automatic maturity
+rule. The builder verifies their persisted accepted records against canonical
+SQLite and current approved site mapping, raw artifact hashes/counts/dates,
+effective persistence and validation provenance, parser staging, rejected
+threshold candidates, and reviewed mapping dispositions. An earlier accepted
+out-of-window 100+ flight retains its independently verified positive evidence;
+it cannot supply negative coverage. Superseded faulty raw runs are not used.
+
+The negative coverage gate is conservative: a non-paginated source-default
+daily parent view and its complete/empty scope are required. Exact-category
+fallback alone does not prove exhaustive coverage. Unresolved mapping blocks
+run-wide negative eligibility; a parser rejection/conflict that could hide a
+threshold candidate blocks absence for that threshold across the run. Known
+short parser rejections cannot hide a 100+ achievement and do not block it.
+Confirmed positives survive those coverage gaps.
+
+Outputs go to `data/processed/flight-label-audits/<audit-id>/`:
+
+- `site_day_label_audit.jsonl`: every site/date, activity count/max/total km,
+  accepted source identities, tri-state labels/reasons, threshold-positive IDs,
+  and source/mapping/activity/maturity coverage with raw hash pointers;
+- `known_site_day_labels.jsonl`: only vectors with all three labels known;
+- `unknown_site_day_labels.jsonl`: all vectors with any unknown label, retaining
+  their confirmed positives; exclude this file from supervised fitting;
+- `summary.json`: inventories by site, season, and site/season, complete vectors,
+  independent positive dates, unknown reasons, and minimum 1/2/3 activity
+  sensitivity. This comparison does not change the one-flight default;
+- `manifest.json`: policy/schema/query versions, database byte/logical snapshot
+  hashes, every consumed file hash, run/stage/mapping provenance, output hashes,
+  limitations, and the content-derived audit identity.
+
+No current execution timestamp enters the outputs. A repeat with identical
+inputs has identical bytes and reuses an identical existing directory. New
+outputs publish atomically; a changed existing output fails without overwrite.
+Optional `--output-directory` must remain below ignored `data/processed/`.
+Source artifacts and database bytes are rechecked before publication. The
+command fails with exit code 1 if evidence is missing, changed, incompatible,
+unpermitted for training, or inconsistent; it never recollects or repairs it.
+
+Reproduce the synthetic offline boundary/threshold tests:
+
+```powershell
+uv run --project services/ml pytest services/ml/tests/datasets -q
+uv run --project services/ml ruff check services/ml
+uv run --project services/ml ruff format --check services/ml
+```
+
+Recorded XC achievement is not a safety label, proof of weather-only potential,
+or guaranteed flyability. Realised flight counts/distances are label evidence,
+not future-weather predictor inputs. See
+[`T-020-offline-flight-label-audit.md`](../../docs/T-020-offline-flight-label-audit.md)
+for the verified owner-data inventory. Broad GFS acquisition remains gated by
+the separate phase 3 cohort/storage plan.
+
 ### Commands and collector workflow
 
 Run a new end-to-end XCContest ingestion pipeline:

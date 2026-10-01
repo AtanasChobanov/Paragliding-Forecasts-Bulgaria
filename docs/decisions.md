@@ -74,6 +74,8 @@ consequences. Temporary progress and Git state belong in
 | DEC-059     | Automate deterministic XCContest coordinate mapping dispositions                 | Accepted   | 2026-09-25 |
 | DEC-060     | Bound XCContest activity scans to the Bulgarian XC season                        | Accepted   | 2026-09-25 |
 | DEC-061     | Persist reviewed XCContest stable-key exclusions                                 | Accepted   | 2026-09-26 |
+| DEC-062     | Repair finalized XCContest raw evidence in a separate run                       | Accepted   | 2026-09-27 |
+| DEC-063     | Accept reviewed repaired 2022–2025 evidence as mature for label auditing          | Accepted   | 2026-10-01 |
 
 ## Individual decisions
 
@@ -2725,3 +2727,36 @@ or uncollected view.
 **Related files:** [`handoff.md`](handoff.md),
 [`../services/ml/README.md`](../services/ml/README.md), and
 [`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/repair.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/repair.py).
+
+### DEC-063 - Accept reviewed repaired 2022–2025 evidence as mature for label auditing
+
+**Status:** Accepted
+
+**Date:** 2026-10-01
+
+**Context:** DEC-056 and the architecture require mature coverage before an
+absent threshold can become a negative. They do not define a general late-upload
+waiting period. The owner explicitly approved treating the two repaired
+historical runs as mature for T-020 phase 2.
+
+**Decision:** The maturity policy
+`DEC-063-reviewed-repaired-seasons-2022-2025/1` accepts only:
+
+- `9c70c7a0-89f2-4a56-8b8e-a608eb3dde6e` for source seasons 2022, 2023, and 2024;
+- `89841b61-c681-4008-b833-031d4aee636e` for source season 2025.
+
+Maturity does not waive raw/date/hash verification, accepted positive-distance
+activity, complete coverage, terminal mapping, or canonical persistence checks.
+It never turns a no-flight day into a negative. Legacy accepted flights may
+retain confirmed positives with their own verified provenance, but legacy runs
+are not a source of mature negative coverage. The 2026 subset is excluded.
+
+**Consequences:** The offline audit pins these run/season identities and records
+the maturity-policy version in its manifest and each site's date coverage.
+This is an explicit acceptance of these historical snapshots, not a guarantee
+against future uploads. A generic waiting period or maturity rule for another
+run/season remains an open choice; do not infer one from this decision.
+
+**Related files:** [`T-020-offline-flight-label-audit.md`](T-020-offline-flight-label-audit.md),
+[`../services/ml/src/paragliding_forecasts_ml/datasets/flight_labels.py`](../services/ml/src/paragliding_forecasts_ml/datasets/flight_labels.py),
+and [`handoff.md`](handoff.md).

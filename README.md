@@ -178,6 +178,7 @@ configured `VITE_API_BASE_URL` to load dashboard data.
 | `npm run db:migrate --workspace @paragliding-forecasts/database`                                    | Apply reviewed committed migrations to the configured local SQLite file                            |
 | `npm run repo:check`                                                                                | Validate repository structure and runnable workspace metadata                                      |
 | `uv sync --project services/ml`                                                                     | Sync the Python ML environment                                                                     |
+| `uv run --project services/ml flight-label-audit`                                                    | Audit repaired 2022–2025 site-day labels offline; emit hashed local JSONL outputs                    |
 
 ## Run browser smoke tests
 

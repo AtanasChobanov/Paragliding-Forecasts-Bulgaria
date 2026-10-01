@@ -183,6 +183,16 @@ complete threshold coverage, and terminal mapping evidence. No accepted flight
 means unknown. Generated joined datasets remain ignored, deterministic JSONL
 artifacts with a hashed manifest rather than new canonical database tables.
 
+T-020 phase 2 is implemented by the offline `flight-label-audit` command under
+`services/ml/src/paragliding_forecasts_ml/datasets/`. It reads migrated SQLite
+and verifies raw/accepted/stage evidence without database writes or transport.
+DEC-063 pins the two reviewed repaired 2022–2025 runs as mature coverage. It
+enumerates every date in the source seasons for all seven sites, emits an audit
+and separate complete/unknown label vectors, and hashes inputs, policies,
+provenance, and outputs in a deterministic manifest. It creates no schema or
+public API. The weather cohort, acquisition plan, and actual join remain the
+later T-020 phases.
+
 The initial project-brief prediction fields map to the T-002 internal
 `ForecastPrediction` domain model: numeric site identity/date, generation
 timestamp, cloudbase, three XC probability bands, overdevelopment risk,
