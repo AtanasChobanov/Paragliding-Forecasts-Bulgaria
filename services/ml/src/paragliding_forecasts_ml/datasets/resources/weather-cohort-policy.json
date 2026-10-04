@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "policy_version": "T-020-evening-weather-cohort/1",
+  "source_audit_id": "f30cf3707dc91a310a26938a6c3eb7ca9acacd933d7cfe5f4db6505e5f1ed714",
+  "development_seasons": [2022, 2023, 2024],
+  "backtest_seasons": [2025],
+  "development_positive_100_quota": 160,
+  "development_negative_100_quota": 160,
+  "mandatory_positive_threshold_km": 200,
+  "rare_site_positive_100_max": 20,
+  "selection_seed": "T-020-phase-3-cohort-v1",
+  "technical_sample_target_dates": [
+    "2022-05-01",
+    "2023-08-22",
+    "2024-06-29",
+    "2025-07-19",
+    "2025-08-02"
+  ],
+  "issue_time_local": "20:00",
+  "timezone": "Europe/Sofia",
+  "flying_window_version": "sofia-flying-window/1",
+  "horizons_days": [1, 2, 3]
+}

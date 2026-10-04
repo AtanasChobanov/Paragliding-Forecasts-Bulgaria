@@ -10,24 +10,26 @@
 6. [`T-020-repaired-flight-label-threshold-analysis-2026-09-30.md`](T-020-repaired-flight-label-threshold-analysis-2026-09-30.md) for the current repaired-data inventory and development comparison of one, two, and three flights for negative examples.
 7. [`T-020-flight-label-analysis-2026-09-29.md`](T-020-flight-label-analysis-2026-09-29.md) for the pre-repair historical snapshot and proposed evaluation splits; its exact cohort counts are superseded.
 8. [`T-020-offline-flight-label-audit.md`](T-020-offline-flight-label-audit.md) for the implemented phase 2 command, evidence checks, artifacts, and owner-data results.
-9. DEC-055 through DEC-063 in `docs/decisions.md`; DEC-023 through DEC-030 define the pre-existing XCContest boundary.
-10. Only the relevant sections of `docs/project-brief.md` and `docs/architecture.md`.
+9. [`T-020-phase-3-gfs-cohort-acquisition-plan.md`](T-020-phase-3-gfs-cohort-acquisition-plan.md) for the 2022–2024 training / 2025 backtest proposal, three-horizon GFS acquisition, live resume design, storage gate, and existing-run inventory.
+10. DEC-055 through DEC-064 in `docs/decisions.md`; DEC-023 through DEC-030 define the pre-existing XCContest boundary.
+11. Only the relevant sections of `docs/project-brief.md` and `docs/architecture.md`.
 
 Keep durable decisions in `docs/decisions.md`, ticket lifecycle in `docs/tasks.md`, and current operational state here.
 
-## Current state — 2026-10-01
+## Current state — 2026-10-04
 
 | Field | Current state |
 | --- | --- |
 | Branch | `feature/T-020-joined-weather-dataset` |
-| Ticket | T-020 is **In Progress**. Flight ingestion/repair, persistent exclusions, and **phase 2 offline label auditing are implemented and verified**. Phase 3 cohort/acquisition planning and phase 4 weather join remain. No model or prediction command exists yet. |
+| Ticket | T-020 is **In Progress**. Flight ingestion/repair, persistent exclusions, phase 2 label audit, and the **phase 3 offline cohort planner** are implemented. The pinned cohort is decision DEC-064. Metadata-only GFS availability/byte probing, live raw resume, storage lifecycle, and the bounded live sample remain. Phase 4 weather join remains. No model or prediction command exists yet. |
 | Completed owner operations | The 2024/2023/2022 repair is `9c70c7a0-89f2-4a56-8b8e-a608eb3dde6e`, replacing 85 views and copying 1402 from original `724845c1-7b75-4900-a74c-d61e9de83157`; it persisted 3753 accepted flights and its raw audit reports zero issues among 1487 artifacts. The owner also repaired 2025 as `89841b61-c681-4008-b833-031d4aee636e`, copying 219 views and recollecting the 31 faulty views from `d577156f-7f73-4e62-81ad-eb6881715739`; its 250-artifact audit reports zero issues and offline persistence recorded 1336 accepted flights (284 inserted, 1052 revalidated unchanged). Use these repaired runs, not their source runs. |
 | Flight-evidence readiness | Parser v3's dated-view guard passed both repaired runs (2022–2024: 1487 artifacts / 9169 normalized observations; 2025: 250 / 3165). The production label command independently rechecks that guard against the raw artifacts and verifies effective persisted parser-v2/validation evidence without rewriting it. |
-| Phase 2 audit | The verified **v1** snapshot is `cd6c8b99b6898ec41cb631a2ee9913cd6b76df377b1046d777a8fadc91c92a38`: 10,227 site-days, 5,090 positive-distance flights, 985 active site-days / 525 dates; 978 all-three-known vectors and 9,249 any-unknown vectors. Threshold-specific positive/negative counts: 100+ = 293/686, 200+ = 65/913, 300+ = 8/970. **v2** now reads sites from SQLite and snapshots/seasons/maturity from JSON configuration, with no Python site/run/year whitelist. It has synthetic verification only; the owner requested to execute the updated real audit manually. Preserve both existing v1 artifact directories. |
+| Phase 2 audit | The verified **v1** snapshot is `cd6c8b99b6898ec41cb631a2ee9913cd6b76df377b1046d777a8fadc91c92a38`: 10,227 site-days, 5,090 positive-distance flights, 985 active site-days / 525 dates; 978 all-three-known vectors and 9,249 any-unknown vectors. Threshold-specific positive/negative counts: 100+ = 293/686, 200+ = 65/913, 300+ = 8/970. **v2** reads sites from SQLite and snapshots/seasons/maturity from JSON. A real v2 artifact directory `f30cf3707dc91a310a26938a6c3eb7ca9acacd933d7cfe5f4db6505e5f1ed714` is now present locally; its four output hashes and database-file SHA-256 match its manifest in a read-only check. This session did not rerun the full label-audit command. Preserve both v1 directories and this v2 directory. |
 | Repaired-data analysis | The 2026-09-30 read-only review finds 5171 canonical flights, including 5090 in seasons 2022–2025. Across all four source seasons, minimum 1/2/3 flights gives 686/445/301 known 100+ negative site-days against 293 positives; ≥3 is a numerically viable pooled 100+ experiment. For proposed development seasons 2022–2024, the negatives are 524/338/226 against 213 positives, with especially sparse Dobrich, Nevsha, and Pastrina support at ≥3. Retain DEC-056's one-flight default pending chronological sensitivity validation, not because negatives must outnumber positives. Exact report linked above. |
 | Local database | `data/local/paragliding.db` already contains `source_site_exclusions`; migration `20260926102539_add_source_site_exclusions` is present in the local migration history. Do not assume a different owner database has been migrated: check it before applying or resuming persistent-exclusion work there. |
 | Live-source boundary | XCContest remains rendered-UI collection with conservative pacing. `xccontest-ingest fresh` and `xccontest-repair collect/resume` are explicit live operations. `xccontest-ingest resume` is offline and must not open a browser or create source transport. |
-| Weather boundary | T-018 GFS pipeline is implemented and historical 2025/2023 acceptance evidence exists. Phase 2 fixes auditable label eligibility; it does not accept a split or acquisition cohort. Do not start broad GFS acquisition until phase 3's bounded cohort/storage plan is approved. |
+| Weather boundary | T-018 GFS pipeline is implemented and historical 2025/2023 acceptance evidence exists. `weather-cohort` now freezes 2022–2024 development and 2025 untouched backtesting as plan `2ed9a4d3c46480dc730958894beca1dcb954b07c737b910f64ea7dac4f9c8cad`: 320 development site-days/235 dates, 242 backtest site-days/131 dates, 1,098 unique three-horizon jobs; 2026 is excluded. Candidate cycles are not yet source-verified. Raw selected GFS messages retain global grids, while current derived matrices are compact. About 390 GiB was free on D: at the 2 October inspection, less than the estimated full backfill. The next step is a metadata-only availability/byte probe. The phase 3 plan still requires storage-bounded end-to-end batches and a controlled hybrid retention lifecycle before broad acquisition; neither is implemented. Direct untracked deletion remains unsupported. |
+| 2026 exclusion | The source season ended 30 September, but XCContest flights may still be entered or checked. Current SQLite has only 81 canonical flights on 29 2026-season dates, all created by the 7 August legacy threshold run `f1032827-a98d-4c01-969e-e67b4885f90d`. Its manifest has `minimum_scored_distance_km: 100` and no all-distance daily activity coverage; DEC-056 negatives are unavailable. The current label-audit policy declares only mature repaired 2022–2025 runs. **Do not generate 2026 flight labels, GFS acquisition jobs, or dataset rows in this plan.** |
 
 ## Accepted T-020 business logic
 
@@ -69,8 +71,9 @@ The any-unknown file deliberately partitions whole three-threshold vectors:
 Shumen 2023-10-17, 107.88 km, is positive for 100+ and unknown for 200+/300+.
 All seven active unknown vectors are outside the collected daily activity window.
 Read-only inspection found no mistaken 100+ unknown on that confirmed flight.
-The two existing directories have identical label JSONL bytes; their summaries
-differ because statistics were expanded during initial implementation.
+The two v1 directories have identical label JSONL bytes; their summaries
+differ because statistics were expanded during initial implementation. The later
+v2 directory is separate and has matching local manifest/output/database hashes.
 
 `docs/tasks.md` has been restored to its pre-implementation content. Root
 `AGENTS.md` now permits only status-column changes there; keep implementation
@@ -91,7 +94,7 @@ notes/results in this handoff or focused documentation.
 - In that snapshot, among 679 below-100 site-days, 247 had one flight, 141 had two, and 72 had three. Applying a future activity threshold of 2/3/5 flights would have reduced known 100+ negatives from 651 to 422/286/145. The label audit must preserve the count and reason for every row so that such a policy can be reviewed and versioned; DEC-056's current MVP minimum remains one accepted positive-distance flight.
 - Both effective all-distance runs had zero actionable mapping quarantines. The 2025 validation's 865 `review_required` rows are resolved by its matching run-local reviewed rejection file; 2022–2024 has 2222 persistent exclusions plus 374 coordinate-based rejections. Six invalid-duration parser rows were below 1.4 km and cannot conceal threshold positives.
 - The snapshot showed evidence at all seven sites in every season but sparse Pastrina and Dobrich activity, and only eight 300+ positive site-days across seven calendar dates. The repair may change every current count; the production audit, rather than this exploration, is the basis for deciding whether pooled 100+/200+ experiments or any 300+ evaluation are supportable.
-- Proposed, not accepted: use 2022–2024 for chronological development/tuning/calibration and reserve repaired 2025 for final historical testing. Reserve whole joined site/date/horizon examples, keeping all sites and horizons of a target date together. Do not fit or calibrate on the final-test outcomes. The pre-repair strict full-label counts were development 736 days with `212/42/3` positives and provisional 2025 183 with `56/17/5`; recompute before adopting this split.
+- At the time of this pre-repair snapshot, the 2022–2024 development / 2025 test split was only proposed. The owner selected that split on 3 October 2026; the current plan linked above uses the later v2 audit, not these pre-repair counts. Reserve whole joined site/date/horizon examples, keeping all sites and horizons of a target date together. Do not fit or calibrate on the 2025 backtest outcomes. The old strict full-label counts were development 736 days with `212/42/3` positives and provisional 2025 183 with `56/17/5`; the latter has been superseded by the repaired v2 audit.
 - Weather SQLite has 28 snapshots across four runs, but only two historical target dates (2025-08-02 and 2023-10-03), and their newest-cycle/evening-cutoff compliance is not yet established. Broad GFS acquisition remains gated.
 - The detailed report and local ignored scratch script/output locations are documented in [`T-020-flight-label-analysis-2026-09-29.md`](T-020-flight-label-analysis-2026-09-29.md). T-020 remains In Progress; no new accepted decision or later-ticket implementation was added.
 
@@ -195,14 +198,88 @@ T-019 is in Review. It collects official NOAA/NCEI IGRA v2.2 observations for So
 
 ## Verification and commit context
 
+- On 2026-10-04, `weather-cohort` was implemented and run offline against the
+  hash-verified v2 label audit. The content-derived plan is
+  `2ed9a4d3c46480dc730958894beca1dcb954b07c737b910f64ea7dac4f9c8cad`
+  under ignored `data/processed/weather-cohorts/`. It selected 320 development
+  site-days (160 known 100+ positives and 160 negatives) on 235 dates, kept all
+  242 known 2025 backtest site-days on 131 dates, and emitted 1,098 unique
+  date/horizon requests with DST-aware issue cutoffs, valid hours, candidate
+  cycles, and per-site sampling fractions/weights. All 42 development 200+
+  positives, all three development 300+ positives, and all five 2025 300+
+  positives are present. Repeating the real command returned the same plan ID
+  and byte-identical directory. The command made no network request, weather
+  download, SQLite write, weather join, or model output. Dataset tests passed
+  53/53, full ML tests 404/404, Ruff lint/format, and `repo:check`; run a final
+  diff check after any documentation or code follow-up. Metadata-only source
+  availability and byte probing is the next implementation step.
+
+- On 2026-10-03, the phase 3 plan was refined around the owner's available
+  storage and evening-forecast requirement. It now specifies immutable
+  date/capacity batches in which every GFS date/horizon job completes raw,
+  compacting, validation, feature construction, and verified SQLite persistence
+  before the next job. It proposes a hybrid retention policy: keep full raw for
+  the 15-job technical sample, new protocol evidence, and failures; preserve
+  compact Bulgarian/site evidence plus provenance and receipts for most
+  successful broad jobs; then prune only their global selected-message bytes.
+  This lifecycle and its DEC-046 impact are not implemented or recorded as an
+  accepted decision yet. The plan also confirms DEC-055's 20:00 Sofia cutoff:
+  12Z is the expected newest cycle, 06Z is the completeness fallback, and the
+  required 12Z leads are f019–f077 in summer or f020–f078 in winter. An official
+  NOMADS listing showed f077/f078 around 15:52–15:53 UTC for a recent 12Z run,
+  leaving roughly one summer hour before cutoff; the implementation must still
+  resolve every historical job from its own availability metadata. No payload
+  acquisition was run.
+
+- The owner clarified the production prediction shape: one evening issue
+  predicts three **different** target dates at D+1, D+2, and D+3. The phase 3
+  plan now makes the final dataset grain explicit as one
+  `(site_id, target_local_date, horizon, issue_local_date, selected_cycle)`
+  example. A sampled site-day expands to up to three separately sourced rows
+  with a shared flight outcome; the provisional 320 development site-days mean
+  at most 960 training examples, and 242 reserved 2025 site-days mean at most
+  726 backtest examples. Split/fold/uncertainty grouping remains by whole target
+  date. No phase-4 join or model was implemented in this planning clarification.
+
+- On 2026-10-03, a read-only SQLite/manifest check found the limited 2026
+  threshold-only evidence described above. After reviewing that evidence, the
+  owner chose 2022–2024 for development/training and 2025 as the untouched
+  backtest, excluding 2026 from the present cohort and acquisition. The phase 3
+  proposal was updated accordingly. No flight collection, GFS acquisition,
+  model training, or split command ran in this review. The exact 131-date 2025
+  table still matches the v2 audit; `npm.cmd run repo:check` and
+  `git diff --check` passed.
+
+- The same planning follow-up confirmed that daily weather values, profile
+  layers, quality/missing states, source-native provenance, and manifest hashes
+  persist in SQLite (the current database is about 19 MiB). The later join can
+  therefore be database-first. The plan now specifies verified per-run cold
+  archival to laptop/USB storage and safe local eviction, plus canonical restore
+  for full audit/replay. Current commands do not implement this lifecycle yet;
+  manually deleting raw paths would break offline resume, artifact audits, and
+  duplicate-acquisition verification.
+
+- The 2026-10-02 phase 3 planning session inspected the GFS collector, planner,
+  weather pipeline, compact-grid implementation, the v2 label output, SQLite
+  weather runs, and raw/interim disk use without changing source data. It
+  verified the 131 known 2025 target dates/242 site-days, checked v2 output
+  and SQLite file hashes against the manifest, and issued read-only HEAD probes
+  for one 2022 and one 2023 historical AWS GRIB object (both HTTP 200). No
+  GFS payload was downloaded and no phase 3 command or joined dataset exists.
+  The plan's printed 131-date holdout table was checked against every 2025
+  known date in the v2 audit. `npm.cmd run repo:check`, `git diff --check`,
+  and a trailing-whitespace scan of the new plan passed. See the linked phase
+  3 proposal for the sample, capacity estimates, and cleanup candidates.
+
 - Follow-up v2 verification passes **49 dataset tests / 400 full ML tests**,
   Ruff lint/format, repository structure, and Git diff checks. Site catalogs
   and run/season policy inputs are now data-driven, including synthetic tests
   for an added site, future season, another snapshot UUID, and false maturity.
   Existing v1 artifacts were inspected read-only to explain the seven active
   any-unknown vectors and the differing summary versions. **No updated real
-  audit was executed**: the owner will run it manually. A v2 run will create a
-  new versioned output directory and retain both previous v1 directories.
+  audit was executed at that earlier verification point**; the v2 directory
+  described in the current-state table appeared later. Both previous v1
+  directories remain retained.
 
 - The 2026-10-01 phase 2 implementation has 36 focused dataset tests. The full
   ML suite passes **387 tests**; Ruff lint/format over `services/ml`,

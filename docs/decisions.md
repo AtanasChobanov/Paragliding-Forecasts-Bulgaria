@@ -2764,3 +2764,47 @@ run/season remains an open choice; do not infer one from this decision.
 **Related files:** [`T-020-offline-flight-label-audit.md`](T-020-offline-flight-label-audit.md),
 [`../services/ml/src/paragliding_forecasts_ml/datasets/flight_labels.py`](../services/ml/src/paragliding_forecasts_ml/datasets/flight_labels.py),
 and [`handoff.md`](handoff.md).
+
+### DEC-064 - Freeze the initial T-020 horizon-matched weather cohort
+
+**Status:** Accepted
+
+**Date:** 2026-10-04
+
+**Context:** T-020 phase 2 produced a verified v2 audit of mature repaired
+2022–2025 flight evidence. The owner chose 2022–2024 for development and the
+whole 2025 source season for untouched backtesting, and excluded 2026 because
+its current flight coverage is incomplete. Operationally, one evening issue
+produces separate predictions for D+1, D+2, and D+3 target dates. Historical
+examples must have the same shape.
+
+**Decision:** The versioned `T-020-evening-weather-cohort/1` policy pins audit
+`f30cf3707dc91a310a26938a6c3eb7ca9acacd933d7cfe5f4db6505e5f1ed714`.
+Reserve all known 2025 site-days for backtesting. Select 160 known 100+ positive
+and 160 known 100+ negative 2022–2024 site-days for the initial development
+cohort. All development 200+/300+ positives, positives at sites with at most
+20 development 100+ positives, and complete known rows on the reviewed
+technical sample dates are mandatory. Allocate remaining seats by
+site/season/month/threshold-vector strata and rank within strata with a pinned
+hash seed. Record each row's conditional inclusion fraction and weight.
+
+One future joined example represents one site, one target local date, one
+issue local date, and one D+1/D+2/D+3 horizon. Its weather values come from
+that horizon's newest complete GFS cycle available by DEC-055's 20:00 Sofia
+cutoff. A site-day's flight outcome can appear in three such examples; all
+three stay in the same chronological split. Preserve whole target-date groups
+for validation and uncertainty estimation. The offline planner emits only
+candidate cycles and valid-time/lead requests; source availability and actual
+bytes require a separate metadata probe before acquisition.
+
+**Consequences:** The pinned audit yields 320 selected development site-days
+on 235 target dates and 242 backtest site-days on 131 dates, for 1,098 unique
+target-date/horizon acquisition requests. Selection or audit changes create a
+new content-addressed plan. The balanced sample changes class prevalence;
+downstream calibration must define its target population and use the recorded
+sampling design. This decision does not accept a GFS storage-retention policy,
+authorize a broad download, or establish model performance.
+
+**Related files:** [`T-020-phase-3-gfs-cohort-acquisition-plan.md`](T-020-phase-3-gfs-cohort-acquisition-plan.md),
+[`../services/ml/src/paragliding_forecasts_ml/datasets/resources/weather-cohort-policy.json`](../services/ml/src/paragliding_forecasts_ml/datasets/resources/weather-cohort-policy.json),
+and [`handoff.md`](handoff.md).

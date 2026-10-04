@@ -157,8 +157,8 @@ currently contains only complete vectors. No no-activity/partial day is made
 negative merely to move it between files.
 
 Version 2 includes database-driven sites and configurable snapshot selection.
-The owner-data counts below refer to the earlier verified v1 output; v2 was
-checked with synthetic fixtures only and is awaiting the owner's manual audit.
+An owner-data v2 output is present locally and is the pinned input for the
+T-020 phase 3 cohort planner. The older v1 outputs remain audit history.
 
 No current execution timestamp enters the outputs. A repeat with identical
 inputs has identical bytes and reuses an identical existing directory. New
@@ -182,6 +182,57 @@ not future-weather predictor inputs. See
 [`T-020-offline-flight-label-audit.md`](../../docs/T-020-offline-flight-label-audit.md)
 for the verified owner-data inventory. Broad GFS acquisition remains gated by
 the separate phase 3 cohort/storage plan.
+
+### Offline weather cohort planner (T-020 phase 3)
+
+```powershell
+uv run --project services/ml weather-cohort
+```
+
+This command reads and hash-verifies the pinned v2 label audit and the packaged
+`datasets/resources/weather-cohort-policy.json`. It reads no GFS metadata or
+payload, makes no network request, and does not modify SQLite. The policy
+selects 160 known 100+ positive and 160 known 100+ negative site-days from
+source seasons 2022–2024. All development 200+/300+ positives, positives from
+sites with at most 20 development 100+ positives, and known rows on the chosen
+technical sample dates are mandatory. Remaining seats are allocated by
+site/season/month/threshold-vector stratum, then chosen by a pinned hash seed.
+Each selected row records its conditional inclusion fraction and sampling
+weight. The entire 2025 season remains an unsampled backtest; 2026 is excluded.
+All three horizons for one selected site-day stay in the same split.
+
+The current pinned audit produces 320 development site-days on 235 target
+dates, 242 backtest site-days on 131 target dates, and 1,098 unique target-date
+and horizon requests. Each request has the issue local date, DST-aware 20:00
+Sofia cutoff in UTC, eleven valid UTC hours, site IDs, and nominal candidate
+GFS cycles with their lead hours. Candidate cycles are **not** claims of source
+availability. The next metadata-only probe must resolve the newest complete
+cycle available before each cutoff and measure exact bytes.
+
+Outputs publish atomically under `data/processed/weather-cohorts/<plan-id>/`:
+
+- `selected_site_days.jsonl`: development/backtest rows, three known labels,
+  source-row hashes, inclusion fractions, and weights;
+- `unselected_development_site_days.jsonl`: eligible development rows outside
+  the bounded sample;
+- `acquisition_jobs.jsonl`: one date/horizon request shared by all selected
+  sites on that date; it does not duplicate downloads per site;
+- `summary.json` and `manifest.json`: counts, limitations, policy and source
+  hashes, output hashes, and the content-derived plan ID.
+
+A repeat with identical inputs yields byte-identical outputs; an existing
+directory with changed bytes is rejected. Optional `--audit-id` must match the
+policy, and optional `--policy-file` creates a new versioned policy/plan rather
+than silently reusing the pinned cohort. `--output-directory` must be under
+ignored `data/processed/`. The 320 development site-days can later yield at
+most 960 horizon-specific training examples, and 242 backtest site-days at
+most 726 examples; weather gaps can reduce those counts. The three rows for
+one site-day share a flight outcome and are not independent events. Sampling
+weights require a defined downstream target population and calibration policy.
+
+```powershell
+uv run --project services/ml pytest services/ml/tests/datasets/test_weather_cohort.py -q
+```
 
 ### Commands and collector workflow
 
