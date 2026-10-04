@@ -76,6 +76,8 @@ consequences. Temporary progress and Git state belong in
 | DEC-061     | Persist reviewed XCContest stable-key exclusions                                 | Accepted   | 2026-09-26 |
 | DEC-062     | Repair finalized XCContest raw evidence in a separate run                       | Accepted   | 2026-09-27 |
 | DEC-063     | Accept reviewed repaired 2022–2025 evidence as mature for label auditing          | Accepted   | 2026-10-01 |
+| DEC-064     | Freeze the initial T-020 horizon-matched weather cohort                         | Accepted   | 2026-10-04 |
+| DEC-065     | Require evening prediction and alert delivery by 20:00 Sofia time              | Accepted   | 2026-10-04 |
 
 ## Individual decisions
 
@@ -2807,4 +2809,41 @@ authorize a broad download, or establish model performance.
 
 **Related files:** [`T-020-phase-3-gfs-cohort-acquisition-plan.md`](T-020-phase-3-gfs-cohort-acquisition-plan.md),
 [`../services/ml/src/paragliding_forecasts_ml/datasets/resources/weather-cohort-policy.json`](../services/ml/src/paragliding_forecasts_ml/datasets/resources/weather-cohort-policy.json),
+and [`handoff.md`](handoff.md).
+
+### DEC-065 - Require evening prediction and alert delivery by 20:00 Sofia time
+
+**Status:** Accepted
+
+**Date:** 2026-10-04
+
+**Context:** The owner clarified that predictions and alerts must already have
+been dispatched by 20:00 local time. DEC-055 had used 20:00 as the *source
+availability* cutoff. A source file first available at that minute cannot be
+processed and delivered by the same minute. A one-off metadata survey of 15
+historical sample jobs and 42 recent issue/horizon jobs found 12Z completion
+proxies as late as 19:18:58 local; the 06Z sample was available much earlier.
+
+**Decision:** The primary D+1/D+2/D+3 evening issue and its alert dispatch
+must finish no later than **20:00 Europe/Sofia** on the issue date, using the
+IANA timezone (UTC+3 in summer, UTC+2 in winter). All historical predictor
+rows must reflect a GFS cycle that the operational workflow can select,
+process, and deliver under that rule. A completed 12Z cycle is preferred only
+if a measured end-to-end schedule with reserved processing/dispatch margin can
+meet the deadline; otherwise use a complete, processed 06Z fallback. Never
+choose a later cycle merely because its source metadata predates 20:00.
+
+**Open implementation choice:** The exact latest-safe source time, safety
+buffer, whether the three horizons can use different cycles, and fallback
+trigger require an operational three-horizon timing rehearsal. Prediction and
+alert code do not yet exist, so no 20:00 SLA has been demonstrated. DEC-055's
+20:00 *source* cutoff remains a recorded provisional historical convention,
+not sufficient authority for broad training acquisition under this delivery
+requirement. DEC-064's site-day selection and 2025 reserve remain valid, but
+its acquisition cycle/cutoff reference must be versioned again if the safe
+source deadline differs. Do not start the broad 1,098-job GFS backfill until
+the matching operational and historical rule is frozen.
+
+**Related files:** [`T-020-gfs-metadata-timing-probe-2026-10-04.md`](T-020-gfs-metadata-timing-probe-2026-10-04.md),
+[`T-020-phase-3-gfs-cohort-acquisition-plan.md`](T-020-phase-3-gfs-cohort-acquisition-plan.md),
 and [`handoff.md`](handoff.md).
