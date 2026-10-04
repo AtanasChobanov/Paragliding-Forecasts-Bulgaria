@@ -157,7 +157,8 @@ class GfsPlanner:
                     "incomplete_run", f"GFS f{lead:03d} inventory is incomplete: {error}"
                 ) from error
             modified = _parse_http_time(head.header("Last-Modified"))
-            availability.append(modified)
+            index_modified = _parse_http_time(index.header("Last-Modified"))
+            availability.extend((modified, index_modified))
             for byte_range in ranges:
                 planned.append(
                     GfsPlannedRange(
@@ -169,6 +170,7 @@ class GfsPlanner:
                         object_content_length=length,
                         object_etag=head.header("ETag"),
                         object_last_modified_utc=modified,
+                        index_last_modified_utc=index_modified,
                         byte_start=byte_range.start,
                         byte_end=byte_range.end,
                         selector_keys=byte_range.selector_keys,

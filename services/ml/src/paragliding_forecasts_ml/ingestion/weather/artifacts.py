@@ -108,6 +108,18 @@ class WeatherArtifactStore:
             media_type=media_type,
         )
 
+    def write_raw_checkpoint(self, filename: str, content: bytes) -> ArtifactReference:
+        """Publish one immutable recovery checkpoint below the raw run root."""
+
+        if not filename or Path(filename).name != filename:
+            raise ArtifactError("Raw checkpoint filename must be one safe filename.")
+        return self._write_bytes(
+            self.raw_dir / "checkpoints" / filename,
+            f"raw_checkpoint_{filename.removesuffix('.json')}",
+            content,
+            media_type="application/json",
+        )
+
     def write_raw_model(
         self,
         artifact_key: str,

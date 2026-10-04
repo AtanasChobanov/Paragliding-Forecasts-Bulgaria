@@ -159,40 +159,23 @@ Deleting raw without either a verified cold copy or an accepted compact-evidence
 
 ## Resume contract to implement
 
-`weather-cohort` is implemented. The probe, batch, live resume, and retention
-commands below remain proposed and are **not implemented yet**:
+`weather-cohort` and a **bounded technical-sample** `weather-backfill`
+probe/run/resume-live/status/recover-lock are implemented. They accept only the
+five pinned technical target dates, use an explicit 12Z or 06Z cycle, and
+stop each completed job after verified SQLite persistence. They do **not**
+resolve the final operational as-of rule or support broad cohort batches. The
+exact first-run commands and outputs are in
+[`services/ml/README.md`](../services/ml/README.md). The following
+full-cohort batch/retention workflow remains proposed: resolve a versioned
+operational as-of manifest across all cohort jobs; freeze batches by date and
+aggregate storage budget; execute each batch through SQLite; archive or prune
+raw bytes only under an accepted retention decision. No broad-batch or raw
+pruning command is runnable yet. Existing `weather-ingest resume --run-key
+<complete-raw-run-uuid>` remains offline-only.
 
-```powershell
-# Implemented offline cohort, split, and candidate-cycle job graph; no NOAA traffic.
-uv run --project services/ml weather-cohort
+The future full-cohort acquisition manifest and each batch manifest should be immutable and content-hashed. `batch-create` should exclude already verified completed jobs and record exact planned raw/staging bytes, starting free space, required reserve, target-date bounds, ordered jobs, and retention policy. The full metadata resolver needs per-job checkpoints so repeating it resumes missing inventories and emits the resolved manifest only after the requested scope has been classified; the current bounded technical probe publishes only after all selected jobs resolve. On payload restart, re-verify the manifest, completed raw/stage hashes and SQLite result, skip verified completed jobs, finish offline stages for complete-raw jobs, and fetch only missing ranges for a partially downloaded current job. The technical-sample collector now atomically writes and verifies each completed range/checkpoint and fails closed on changed source identity; broad batches must extend the same safety rule to an aggregate job ledger. Expose broader status/audit with persisted, retention-eligible, pruned/archived, remaining, missing-source, quarantined, bytes planned/written/reclaimed, and next job. A full disk must leave a resumable, inspectable state.
 
-# Explicit, bounded metadata-only archive check: HEAD and .idx, no GRIB payload.
-# Repeating this command resumes verified probe jobs; completion emits an acquisition ID.
-uv run --project services/ml weather-backfill probe --cohort-plan-id <id> --max-jobs 15 --allow-metadata-network
-
-# Freeze one executable batch by dates and/or capacity. The planner may stop earlier
-# than the requested date range so the exact jobs fit every limit.
-uv run --project services/ml weather-backfill batch-create `
-  --acquisition-id <id> `
-  --target-date-from <YYYY-MM-DD> --target-date-to <YYYY-MM-DD> `
-  --max-jobs <N> --max-new-gib <GiB> --minimum-free-gib <GiB>
-
-# Execute only that immutable batch; every completed job reaches SQLite.
-uv run --project services/ml weather-backfill run --batch-id <id> --allow-live-network
-
-# After interruption: live range/job recovery, still explicit about network.
-uv run --project services/ml weather-backfill resume-live --batch-id <id> --allow-live-network
-
-# After persistence/audit and under the accepted hybrid retention decision only.
-uv run --project services/ml weather-artifacts prune-global-raw --run-key <uuid>
-
-# Existing command remains offline and never creates a NOAA transport.
-uv run --project services/ml weather-ingest resume --run-key <complete-raw-run-uuid>
-```
-
-The resolved acquisition manifest and every derived batch manifest are immutable and content-hashed; the ignored local checkpoint is append-only per job/attempt. `batch-create` excludes already verified completed jobs and records exact planned raw/staging bytes, starting free space, required reserve, target-date bounds, ordered jobs, and retention policy. The metadata probe has its own per-job checkpoint so repeating `probe` resumes missing inventories and emits the resolved manifest only after the requested cohort or sample scope has been classified. On payload restart, re-verify that manifest, all completed raw/stage hashes and SQLite result, skip verified completed jobs, finish offline stages for complete-raw jobs, and fetch only missing ranges for a partially downloaded current job. Write each range to a temporary file, length/hash-verify and atomically publish it, then append a checkpoint. Interrupted temporary files are discarded after validation; completed ranges are never redownloaded merely because a process stopped. Use one writer/lock initially and record host/PID/attempt timestamps; stale-lock recovery must verify evidence before taking over. Expose `status`/`audit` with completed, persisted, retention-eligible, pruned/archived, remaining, missing-source, quarantined, bytes planned/written/reclaimed, and next job. `Ctrl-C`, transient network errors, or a full disk must leave a resumable, inspectable state.
-
-This needs a **new versioned raw-collector protocol**: today's partial manifest is terminal, and immutable artifact paths/ledger events cannot be overwritten. Use append-only collection-attempt/checkpoint events and one final effective complete raw boundary when all planned ranges are present. A changed `.idx`, content length, source ETag/`Last-Modified`, policy hash, or planned byte range must quarantine the attempt instead of merging two source revisions. Preserve `weather-ingest resume` as offline-only; name the network-capable recovery command `resume-live` so operators cannot confuse them. If a job is irrecoverably partial, record a superseding attempt and reuse only verified source-identical ranges; never forge a completed old run. Test crash points after plan, index, range, raw manifest, each offline stage, and committed SQLite transaction.
+The sample's new versioned range-checkpoint path leaves the existing `weather-ingest` collection protocol unchanged. The later broad protocol must preserve immutable attempt evidence, avoid overwriting terminal partial manifests, and quarantine changed `.idx`, content length, source ETag/`Last-Modified`, policy hash, or byte ranges rather than merging revisions. Keep offline `weather-ingest resume` separate from network-capable `weather-backfill resume-live`. Test broad crash points after plan, index, range, raw manifest, each offline stage, and committed SQLite transaction.
 
 ## Bounded sample, capacity gate, and actual later execution
 
@@ -216,11 +199,11 @@ Before any cleanup implementation: enumerate all raw/interim run UUIDs, SQLite m
 
 ## Implementation order, verification, and proposed commits
 
-The offline cohort planner in step 1 is implemented and was run against the pinned v2 audit, producing plan `2ed9a4d3c46480dc730958894beca1dcb954b07c737b910f64ea7dac4f9c8cad`. It verifies the label audit and emits candidate cycles; it makes no claim that a candidate source object exists or met the cutoff. The **next implementation step is the metadata-only probe**, followed by the resumable end-to-end batch protocol. The current one-date command cannot resume a partial raw download, stop safely by aggregate storage, or record compact-retention receipts. After steps 2–3, run the metadata-only five-date probe. Only after its exact bytes/cycles are reviewed should the 15-job live sample run. Broad 2022–2025 batches come after the sample and retention lifecycle pass.
+The offline cohort planner in step 1 is implemented and was run against the pinned v2 audit, producing plan `2ed9a4d3c46480dc730958894beca1dcb954b07c737b910f64ea7dac4f9c8cad`. It verifies the label audit and emits candidate cycles. A one-off 114-inventory metadata timing survey is documented, and the **bounded technical sample** probe/resumable collector/run/status commands are now implemented but have **not** been executed against real GFS payloads at the owner's request. First have the owner probe and run one chosen target date's three horizons under the explicit technical cycle, then audit bytes, elapsed time, outputs and storage. This historical sample alone cannot establish a live 20:00 dispatch SLA, because it uses three separate historical issue dates and no prediction/alert code exists. The full-cohort metadata resolver, approved as-of rule, broad end-to-end batch and retention protocol remain later work. Broad 2022–2025 batches come after the sample and retention lifecycle pass.
 
 1. **Phase-3 cohort policy and planner — implemented:** data-driven policy tied to v2 audit hash; deterministic 2025 backtest reserve and 2022–2024 development sampler; row/date grouping; offline `weather-cohort`; schema and manifest hashes. Verified 131 test dates, 242 test site-days, 320 development site-days, all eight 300+ positives across development/test, no unknown or split crossover, and byte-identical replay. Reject any 2026 row/job under this cohort policy. Focused DST, site grouping, integrity, and stratum inclusion tests pass.
-2. **Metadata-only as-of probe:** share the existing GFS selector/inventory logic without payload GET; record candidate completeness/availability and exact bytes for D+1/2/3. Test summer/winter cutoffs, multiple sites on one date, no complete cycle, changed inventory, unavailable historical lead, and fail-closed behavior. Do a bounded read-only archive probe of the five-date sample.
-3. **Resumable end-to-end batch protocol:** implement immutable `batch-create` plus per-range atomic checkpoints and `weather-backfill run/resume-live/status/audit` with job/resource identity, date bounds, byte/free-space budgets, locks, explicit network flag, and the existing offline stage service. A job is complete only after SQLite verification; never advance while complete raw is waiting for offline stages. Keep `weather-ingest resume` offline. Test interruption at every boundary and that a resumed run does not re-request a verified range or duplicate SQLite rows; test clean stop before a cap, unexpected full disk, corrupt/checkpoint/source-change quarantine, and exclusion of already persisted jobs from later batches.
+2. **Bounded technical-sample metadata probe — implemented, not live-run:** shares the existing GFS selector/inventory logic without payload GET, verifies GRIB and index `Last-Modified`, records explicit-cycle completeness and exact bytes for up to five dates × D+1/2/3. The full-cohort as-of resolver still needs an operational latest-safe deadline/fallback rule, checkpointed metadata work for 1,098 jobs, and fail-closed source-change coverage.
+3. **Resumable sample collector — implemented synthetically; broad batch protocol remains:** immutable per-range checkpoints and `weather-backfill run/resume-live/status/recover-lock` with a pinned plan, free-space reserve, explicit network flag, and existing offline stage service are in place for the limited sample. A completed job reaches SQLite before the next starts. Interrupted verified ranges are skipped; changed source identity fails closed. Implement the later immutable `batch-create`, exact aggregate capacity control, archive/retention audit, and broad run lifecycle separately. Keep `weather-ingest resume` offline.
 4. **Bounded live sample only after byte/storage review:** execute at most the 15 sample jobs with an approved exact byte cap and local GFS usage policy; compare manifest plans to actual cycles/lead hours, raw size, compact size, seven site snapshots, hash audits, elapsed time and no duplicate date/horizon acquisition. Report missing/unavailable jobs honestly; do not turn failures into later-cycle substitutes.
 5. **Storage and phase-4 gate:** record the hybrid retention decision, then implement and test the archive catalogue plus `archive`/`evict-local`/`restore` and `prune-global-raw` lifecycle against disposable synthetic and bounded real runs. Measure copy/reread throughput on each intended volume, require an explicit free-space reserve, prove that an archived run restores and fully replays, and prove that a compact-retained run still passes the new persisted/compact audit and database-first join preflight while honestly refusing raw replay. Freeze the exact broad manifest, batch layout, peak hot bytes, and retained bytes before broad acquisition. Update `services/ml/README.md`, root setup only if needed, `docs/handoff.md`, and `docs/decisions.md` for the accepted storage/protocol choice. Leave T-020 In Progress until the actual phase-4 join and all required validation pass.
 

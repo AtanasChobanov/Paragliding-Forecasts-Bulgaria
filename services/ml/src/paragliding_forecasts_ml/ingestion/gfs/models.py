@@ -18,7 +18,7 @@ from ..atmosphere.contracts import (
 GFS_SOURCE_ID = "noaa_gfs_0p25_aws_grib2"
 GFS_GRID_KEY = "gfs_0p25_global"
 GFS_BUCKET_URL = "https://noaa-gfs-bdp-pds.s3.amazonaws.com"
-GFS_COLLECTOR_VERSION = "gfs-collector/6"
+GFS_COLLECTOR_VERSION = "gfs-collector/7"
 SOFIA_TIME_ZONE = "Europe/Sofia"
 SOFIA_FLYING_WINDOW_VERSION = "sofia-flying-window/1"
 
@@ -125,6 +125,7 @@ class GfsPlannedRange(AtmosphericContract):
     object_content_length: int = Field(gt=0)
     object_etag: str | None = None
     object_last_modified_utc: str
+    index_last_modified_utc: str | None = None
     byte_start: int = Field(ge=0)
     byte_end: int = Field(ge=0)
     selector_keys: tuple[str, ...] = Field(min_length=1)
@@ -136,6 +137,11 @@ class GfsPlannedRange(AtmosphericContract):
     @classmethod
     def timestamps_must_be_utc(cls, value: str) -> str:
         return validate_utc_timestamp(value)
+
+    @field_validator("index_last_modified_utc")
+    @classmethod
+    def index_timestamp_must_be_utc(cls, value: str | None) -> str | None:
+        return validate_utc_timestamp(value) if value is not None else None
 
 
 class GfsResolvedPlan(AtmosphericContract):
