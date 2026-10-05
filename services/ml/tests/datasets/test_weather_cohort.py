@@ -58,8 +58,8 @@ def _fixture(root: Path) -> tuple[str, Path]:
     (audit / "manifest.json").write_bytes(_encoded({**manifest, "audit_id": audit_id}))
     (audit / "known_site_day_labels.jsonl").write_bytes(known)
     policy = {
-        "schema_version": 1,
-        "policy_version": "test/1",
+        "schema_version": 2,
+        "policy_version": "test/2",
         "source_audit_id": audit_id,
         "development_seasons": [2022, 2023],
         "backtest_seasons": [2024],
@@ -69,7 +69,9 @@ def _fixture(root: Path) -> tuple[str, Path]:
         "rare_site_positive_100_max": 0,
         "selection_seed": "synthetic-fixture",
         "technical_sample_target_dates": ["2022-05-01", "2023-10-29"],
-        "issue_time_local": "20:00",
+        "source_ready_time_local": "16:00",
+        "delivery_time_local": "20:00",
+        "cycle_hour_utc": 6,
         "timezone": "Europe/Sofia",
         "flying_window_version": "sofia-flying-window/1",
         "horizons_days": [1, 2, 3],
@@ -101,14 +103,16 @@ def test_cohort_is_site_day_sample_with_three_horizon_jobs_and_stable_replay(
     assert all(j["site_ids"] == [1] for j in jobs[6:])
     assert all(j["cycle_selection_status"] == "unresolved_metadata_probe" for j in jobs)
     assert jobs[0]["issue_local_date"] == "2022-04-30"
-    assert jobs[0]["issue_cutoff_utc"] == "2022-04-30T17:00:00Z"
-    assert jobs[0]["candidate_cycles"][0]["cycle_reference_utc"] == "2022-04-30T12:00:00Z"
-    assert jobs[0]["candidate_cycles"][0]["lead_hours"] == list(range(19, 30))
+    assert jobs[0]["issue_cutoff_utc"] == "2022-04-30T13:00:00Z"
+    assert jobs[0]["delivery_deadline_utc"] == "2022-04-30T17:00:00Z"
+    assert jobs[0]["candidate_cycles"][0]["cycle_reference_utc"] == "2022-04-30T06:00:00Z"
+    assert jobs[0]["candidate_cycles"][0]["lead_hours"] == list(range(25, 36))
+    assert len(jobs[0]["candidate_cycles"]) == 1
     assert jobs[6]["issue_local_date"] == "2023-10-28"
-    assert jobs[6]["issue_cutoff_utc"] == "2023-10-28T17:00:00Z"
-    assert jobs[6]["candidate_cycles"][0]["lead_hours"] == list(range(20, 31))
+    assert jobs[6]["issue_cutoff_utc"] == "2023-10-28T13:00:00Z"
+    assert jobs[6]["candidate_cycles"][0]["lead_hours"] == list(range(26, 37))
     assert jobs[7]["issue_local_date"] == "2023-10-27"
-    assert jobs[7]["candidate_cycles"][0]["lead_hours"] == list(range(44, 55))
+    assert jobs[7]["candidate_cycles"][0]["lead_hours"] == list(range(50, 61))
     assert {r["split"] for r in selected if r["source_season"] == 2024} == {"backtest"}
 
 

@@ -1,6 +1,6 @@
 {
-  "schema_version": 1,
-  "policy_version": "T-020-evening-weather-cohort/1",
+  "schema_version": 2,
+  "policy_version": "T-020-evening-weather-cohort/2",
   "source_audit_id": "f30cf3707dc91a310a26938a6c3eb7ca9acacd933d7cfe5f4db6505e5f1ed714",
   "development_seasons": [2022, 2023, 2024],
   "backtest_seasons": [2025],
@@ -16,7 +16,9 @@
     "2025-07-19",
     "2025-08-02"
   ],
-  "issue_time_local": "20:00",
+  "source_ready_time_local": "16:00",
+  "delivery_time_local": "20:00",
+  "cycle_hour_utc": 6,
   "timezone": "Europe/Sofia",
   "flying_window_version": "sofia-flying-window/1",
   "horizons_days": [1, 2, 3]

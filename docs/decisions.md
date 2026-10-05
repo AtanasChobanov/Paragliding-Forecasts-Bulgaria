@@ -78,6 +78,7 @@ consequences. Temporary progress and Git state belong in
 | DEC-063     | Accept reviewed repaired 2022–2025 evidence as mature for label auditing          | Accepted   | 2026-10-01 |
 | DEC-064     | Freeze the initial T-020 horizon-matched weather cohort                         | Accepted   | 2026-10-04 |
 | DEC-065     | Require evening prediction and alert delivery by 20:00 Sofia time              | Accepted   | 2026-10-04 |
+| DEC-066     | Pin the first historical cohort to 06Z and defer 2025 acquisition             | Accepted   | 2026-10-05 |
 
 ## Individual decisions
 
@@ -2847,3 +2848,47 @@ the matching operational and historical rule is frozen.
 **Related files:** [`T-020-gfs-metadata-timing-probe-2026-10-04.md`](T-020-gfs-metadata-timing-probe-2026-10-04.md),
 [`T-020-phase-3-gfs-cohort-acquisition-plan.md`](T-020-phase-3-gfs-cohort-acquisition-plan.md),
 and [`handoff.md`](handoff.md).
+
+### DEC-066 - Pin the first historical cohort to 06Z and defer 2025 acquisition
+
+**Status:** Accepted by the owner for the T-020 implementation
+
+**Date:** 2026-10-05
+
+**Supersedes:** DEC-064's and DEC-065's provisional newest-cycle and 12Z-preference
+rule for this historical acquisition. The DEC-064 site-day selection, 2025
+reserve, and DEC-065 delivery deadline remain in force.
+
+**Context:** The owner chose the 06Z cycle for every D+1/D+2/D+3 historical
+example to leave enough time for forecast processing and alert delivery by
+20:00 Europe/Sofia. The observed 12Z metadata tail left too little proven
+margin. T-020 needs a development join; T-026 owns the untouched backtest.
+
+**Decision:** Version the cohort policy as `T-020-evening-weather-cohort/2`.
+For each issue local date select exactly that date's 06Z GFS cycle, require
+every selected GRIB and `.idx` source timestamp to be no later than **16:00
+Europe/Sofia**, and record the **20:00 Europe/Sofia** delivery deadline
+separately. The four-hour interval is an initial engineering reserve, not a
+measured end-to-end service guarantee. Missing or later source evidence is an
+explicit excluded horizon, never replaced with 12Z, another date, or an
+observation. Acquire the 2022–2024 development split first. Keep the whole
+2025 cohort reserved and unchanged; its weather may be acquired later with
+the same policy before T-026 evaluation.
+
+For the current 705-job development scope, keep full raw evidence on verified
+cold volumes before evicting only the hot raw GRIB payloads. The retained
+local metadata, compact intermediate evidence, and SQLite graph remain
+auditable. This is a reversible copy-and-evict procedure; it does not accept
+irreversible global-raw pruning or change DEC-046 replay semantics. Cold
+volumes and their immutable receipts are required for later full restore.
+
+**Consequences:** The existing 12Z technical sample remains useful ingestion
+evidence but is ineligible for the fixed-06Z development join. The policy
+creates a new cohort plan ID and 06Z run IDs. A future change to cycle or
+source deadline requires a new policy, plan, acquisition, and joined dataset
+identity. Actual full-cohort metadata availability, throughput, and the live
+20:00 delivery promise remain unverified until the owner runs the commands
+and the prediction/alert pipeline is measured.
+
+**Related files:** [`T-020-phase-3-gfs-cohort-acquisition-plan.md`](T-020-phase-3-gfs-cohort-acquisition-plan.md),
+[`../services/ml/README.md`](../services/ml/README.md), and [`handoff.md`](handoff.md).

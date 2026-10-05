@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 from paragliding_forecasts_ml.ingestion.gfs.models import sofia_window_instants
 from paragliding_forecasts_ml.storage.sqlite import repository_root
 
-VERSION = "weather-cohort-plan/1"
+VERSION = "weather-cohort-plan/2"
 LABEL_VERSION = "site-day-flight-label-audit/2"
 OUTPUT_NAMES = (
     "selected_site_days.jsonl",
@@ -73,12 +73,14 @@ def _read_policy(path: Path | None) -> tuple[dict[str, Any], str]:
         "rare_site_positive_100_max",
         "selection_seed",
         "technical_sample_target_dates",
-        "issue_time_local",
+        "source_ready_time_local",
+        "delivery_time_local",
+        "cycle_hour_utc",
         "timezone",
         "flying_window_version",
         "horizons_days",
     }
-    if not isinstance(policy, dict) or set(policy) != expected or policy["schema_version"] != 1:
+    if not isinstance(policy, dict) or set(policy) != expected or policy["schema_version"] != 2:
         raise CohortPlanError("Unsupported weather-cohort policy schema.")
     _require_hash(policy["source_audit_id"])
     if any(
@@ -110,12 +112,15 @@ def _read_policy(path: Path | None) -> tuple[dict[str, Any], str]:
     ):
         raise CohortPlanError("Invalid rare-site threshold.")
     if (
-        policy["issue_time_local"] != "20:00"
+        policy["source_ready_time_local"] != "16:00"
+        or policy["delivery_time_local"] != "20:00"
+        or type(policy["cycle_hour_utc"]) is not int
+        or policy["cycle_hour_utc"] != 6
         or policy["timezone"] != "Europe/Sofia"
         or policy["flying_window_version"] != "sofia-flying-window/1"
         or policy["horizons_days"] != [1, 2, 3]
     ):
-        raise CohortPlanError("This planner implements the accepted DEC-055 evening policy only.")
+        raise CohortPlanError("This planner implements the fixed 06Z evening policy only.")
     sample_dates = policy["technical_sample_target_dates"]
     if (
         not isinstance(sample_dates, list)
@@ -260,21 +265,15 @@ def _utc(value: datetime) -> str:
     return value.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _candidates(cutoff: datetime, valid_times: tuple[str, ...]) -> list[dict[str, Any]]:
-    start = cutoff.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-    candidates = []
-    for offset in range(8):
-        cycle = start + timedelta(hours=(cutoff.astimezone(UTC).hour // 6) * 6 - 6 * offset)
-        if cycle >= cutoff.astimezone(UTC):
-            continue
-        leads = [
-            int((datetime.fromisoformat(value) - cycle).total_seconds() // 3600)
-            for value in valid_times
-        ]
-        if min(leads) < 0 or max(leads) > 120:
-            continue
-        candidates.append({"cycle_reference_utc": _utc(cycle), "lead_hours": leads})
-    return candidates
+def _fixed_cycle(issue: date, valid_times: tuple[str, ...]) -> list[dict[str, Any]]:
+    cycle = datetime.combine(issue, time(6), tzinfo=UTC)
+    leads = [
+        int((datetime.fromisoformat(value) - cycle).total_seconds() // 3600)
+        for value in valid_times
+    ]
+    if min(leads) < 0 or max(leads) > 120:
+        raise CohortPlanError("The fixed 06Z cycle cannot cover the flying window.")
+    return [{"cycle_reference_utc": _utc(cycle), "lead_hours": leads}]
 
 
 def plan_weather_cohort(
@@ -383,7 +382,7 @@ def plan_weather_cohort(
         valid_times = sofia_window_instants(target)
         for horizon in policy["horizons_days"]:
             issue = day - timedelta(days=horizon)
-            cutoff = datetime.combine(issue, time(20), tzinfo=ZoneInfo("Europe/Sofia"))
+            cutoff = datetime.combine(issue, time(16), tzinfo=ZoneInfo("Europe/Sofia"))
             jobs.append(
                 {
                     "target_local_date": target,
@@ -392,11 +391,14 @@ def plan_weather_cohort(
                     "horizon_days": horizon,
                     "issue_local_date": issue.isoformat(),
                     "issue_cutoff_utc": _utc(cutoff),
+                    "delivery_deadline_utc": _utc(
+                        datetime.combine(issue, time(20), tzinfo=ZoneInfo("Europe/Sofia"))
+                    ),
                     "site_ids": sorted(r["site_id"] for r in by_date[target]),
                     "valid_times_utc": list(valid_times),
                     "flying_window_version": policy["flying_window_version"],
                     "cycle_selection_status": "unresolved_metadata_probe",
-                    "candidate_cycles": _candidates(cutoff, valid_times),
+                    "candidate_cycles": _fixed_cycle(issue, valid_times),
                 }
             )
     summary = {
@@ -433,7 +435,7 @@ def plan_weather_cohort(
             sorted(Counter(r["target_local_date"][5:7] for r in selected).items())
         ),
         "limitations": [
-            "No GFS metadata or payload was requested; candidate cycles are unverified.",
+            "No GFS metadata or payload was requested; the fixed 06Z cycle is unverified.",
             "Selection probabilities are conditional on this frozen policy and audited eligible population; downstream calibration must define its target population and account for mandatory rows.",
             "Three horizons reuse one site-day flight outcome; they are not independent events.",
         ],
