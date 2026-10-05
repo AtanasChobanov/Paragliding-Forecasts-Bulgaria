@@ -19,6 +19,7 @@ dependencies = [
 flight-label-audit = "paragliding_forecasts_ml.datasets.flight_label_cli:main"
 weather-cohort = "paragliding_forecasts_ml.datasets.weather_cohort_cli:main"
 weather-backfill = "paragliding_forecasts_ml.datasets.weather_backfill_cli:main"
+weather-join = "paragliding_forecasts_ml.datasets.weather_join_cli:main"
 xccontest-collect = "paragliding_forecasts_ml.ingestion.xccontest.cli:main"
 xccontest-parse = "paragliding_forecasts_ml.ingestion.xccontest.parser_cli:main"
 xccontest-repair = "paragliding_forecasts_ml.ingestion.xccontest.repair_cli:main"

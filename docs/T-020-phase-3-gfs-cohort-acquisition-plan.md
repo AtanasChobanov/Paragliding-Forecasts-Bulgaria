@@ -1,5 +1,21 @@
 # T-020 phase 3 — GFS cohort, evaluation reserve, and resumable acquisition plan
 
+> **5 October implementation update (DEC-066):** The owner selected a fixed
+> issue-date **06Z** cycle, source-ready cutoff **16:00 Europe/Sofia**, and
+> separate delivery deadline **20:00 Europe/Sofia**. The new `/2` cohort plan
+> supersedes this document's earlier newest-cycle, 12Z-preference and 20:00
+> source-cutoff examples. Acquire **705 development jobs for 2022–2024** first;
+> 2025 remains an untouched, reserved 393-job backtest acquisition for later.
+> `weather-backfill resolve`, `batch-create`, `batch-run`, status/recovery,
+> `weather-artifacts archive-batch`/`evict-batch`/`restore`, and offline
+> `weather-join` are now implemented. Their exact operator order and outputs
+> are in [`services/ml/README.md`](../services/ml/README.md). These commands
+> have **not** been run on the owner's full cohort; no new GFS download or
+> joined output is claimed. The older technical 12Z sample remains technical
+> evidence only. For development, verified full-raw cold archival and
+> reversible D: payload eviction are used; irreversible `prune-global-raw`
+> remains a future choice if the later 2025 acquisition cannot fit.
+
 **Status:** implementation proposal, updated 4 October 2026. This document plans phase 3 and the later phase 4 acquisition; it does not execute a broad download or mark T-020 complete. DEC-065 now requires prediction and alert dispatch by 20:00 local time. The pinned site-day cohort remains useful, but its 20:00 source-cutoff candidate manifest must not drive broad acquisition until an operationally feasible as-of rule is measured and versioned. See the [one-off metadata timing probe](T-020-gfs-metadata-timing-probe-2026-10-04.md). Generated manifests, weather data, and the local database stay ignored by Git.
 
 ## Source snapshot and scope

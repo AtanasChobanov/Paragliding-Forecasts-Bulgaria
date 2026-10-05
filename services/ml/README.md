@@ -1783,6 +1783,148 @@ that result requires review and a new guarded data migration. The currently
 reviewed seven values are pinned by
 `20260824184712_set_copernicus_site_elevations`.
 
+## Fixed 06Z T-020 cohort and resumable acquisition
+
+The current T-020 policy uses the **06Z cycle on each issue date** for D+1,
+D+2 and D+3. All selected GRIB and index metadata must be ready by 16:00
+`Europe/Sofia`; 20:00 local is the separate prediction and alert delivery
+deadline. This is a historical as-of rule, not a measured live delivery SLA.
+`development` covers 2022–2024. The entire 2025 `backtest` cohort stays
+reserved; its acquisition can follow later. The earlier 12Z technical sample
+does not satisfy the 06Z joined-dataset rule. No dates JSON file is needed:
+the content-addressed cohort plan lists every selected site-day and all three
+jobs per target date. Commands below are run from the repository root after
+`uv sync --project services/ml`, with the existing migrated local SQLite and
+GFS usage policy available.
+
+1. Freeze the new offline cohort policy and note the printed `plan_id`:
+
+   ```powershell
+   uv run --project services/ml weather-cohort
+   ```
+
+   This verifies the pinned label audit, writes hashed `manifest.json`,
+   `selected_site_days.jsonl`, and `acquisition_jobs.jsonl` below
+   `data/processed/weather-cohorts/<plan-id>/`. Expect 320 development
+   site-days, 235 dates and 705 development jobs if the pinned audit is
+   unchanged. It makes no GFS request.
+
+2. Resolve GFS metadata in restartable portions until `finalized: true`;
+   repeat the same command with the same options, using the printed
+   `acquisition_id` to inspect progress:
+
+   ```powershell
+   uv run --project services/ml weather-backfill resolve `
+     --cohort-plan-id <plan-id> --split development `
+     --max-new-jobs 75 --maximum-total-mib 2048 `
+     --allow-metadata-network
+   uv run --project services/ml weather-backfill resolution-status `
+     --acquisition-id <acquisition-id>
+   ```
+
+   `resolve` performs NOAA metadata HEAD/index requests, **no GRIB payload
+   ranges**. It checkpoints each job as `ready`, `missing_weather` or
+   `late_source` under `data/processed/weather-acquisitions/<acquisition-id>/`.
+   A `ready` job has a frozen request plan and exact selected bytes. A
+   missing/late job will be excluded from the join; do not substitute a later
+   cycle. `--max-new-jobs` bounds new metadata work per invocation;
+   `--maximum-total-mib` is the per-job cap. A changed site, sampling, usage
+   policy, byte cap or split creates a distinct acquisition identity. Keep
+   these arguments constant for resume.
+
+3. Freeze one capacity-bounded batch and note its `batch_id` and
+   `planned_selected_bytes`:
+
+   ```powershell
+   uv run --project services/ml weather-backfill batch-create `
+     --acquisition-id <acquisition-id> `
+     --max-target-dates 25 --max-new-gib 100 --minimum-free-gib 80
+   uv run --project services/ml weather-backfill batch-status `
+     --batch-id <batch-id>
+   ```
+
+   This is offline. It groups all ready horizons of each selected target date,
+   reserves 64 MiB per job plus 2 GiB scratch, checks free space and keeps
+   80 GiB on D:. The default 100 GiB cap is a **ceiling**, not an expected
+   batch size. The next call returns the same incomplete batch for resume.
+   Manifests and copied frozen plans live under
+   `data/processed/weather-batches/<batch-id>/`.
+
+4. Run one job at a time through download, validation, daily features and
+   SQLite. Repeat after inspecting status; an interrupted partial range is
+   resumed, and a completed SQLite job is verified and skipped:
+
+   ```powershell
+   uv run --project services/ml weather-backfill batch-run `
+     --batch-id <batch-id> --max-jobs 1 `
+     --minimum-free-gib 80 --allow-live-network
+   uv run --project services/ml weather-backfill batch-status `
+     --batch-id <batch-id>
+   ```
+
+   `batch-resume-live` accepts the same flags and performs the same guarded
+   resume path. `--max-jobs` limits newly completed jobs in this invocation.
+   Progress goes to stderr; the final JSON lists each executed run, timing,
+   status and remaining job states. Raw global GRIB ranges are under
+   `data/raw/weather/<run-key>/`; compact/intermediate stages are under
+   `data/interim/weather/<run-key>/`; successful weather rows are in SQLite.
+   If a process is **confirmed stopped** and its `run.lock` is at least five
+   minutes old, `weather-backfill batch-recover-lock --batch-id <batch-id>
+   --confirm-writer-stopped` records the stale lock and permits resume.
+
+5. After every selected job in the batch is `persisted`, copy its full
+   evidence to a mounted **other drive** and verify the cold copy before
+   freeing D: raw payloads:
+
+   ```powershell
+   uv run --project services/ml weather-artifacts archive-batch `
+     --batch-id <batch-id> --volume-root E:\WeatherArchive --max-runs 25
+   uv run --project services/ml weather-artifacts evict-batch `
+     --batch-id <batch-id> --volume-root E:\WeatherArchive --max-runs 25
+   ```
+
+   Create `E:\WeatherArchive` first and replace it with the **actual** mounted
+   volume path. Archive copies raw **and** interim bytes, rereads hashes and
+   checks the succeeded SQLite graph; its catalogue is kept under
+   `data/processed/weather-archives/<run-key>/`. Eviction deletes only verified
+   local `raw/payloads/*.grib2`, retaining metadata, compact intermediate
+   evidence and SQLite rows. The cold volume has a UUID marker so a changed
+   drive letter cannot silently stand in for a different device. Review each
+   JSON `processed_runs` report; rerun a bounded command after interruption.
+   An individual `weather-artifacts archive --run-key <uuid> --volume-root
+   E:\WeatherArchive`, `evict-local`, `restore`, and `audit --scope compact`
+   handle or inspect one run. `restore` copies the full payload back and
+   verifies the effective artifact chain. Keep the cold volume available;
+   eviction is **reversible**, not permission to delete its only full copy.
+   The older 12Z sample runs can be archived individually by their run keys,
+   but they are not reused as 06Z training rows.
+
+6. Repeat steps 3–5 until `batch-create` returns `complete: true`. Then build
+   the offline development dataset:
+
+   ```powershell
+   uv run --project services/ml weather-join `
+     --acquisition-id <acquisition-id>
+   ```
+
+   The result prints `dataset_id`, example and excluded counts, and the
+   output directory. The hashed `training_examples.jsonl`,
+   `excluded_examples.jsonl`, and `manifest.json` are under
+   `data/processed/joined-weather/<dataset-id>/`. Each example is one
+   **site × target date × horizon** with its own exact 06Z run, eleven valid
+   hours, flight label evidence, feature units and quality/provenance. A
+   backtest acquisition later produces `backtest_2025_examples.jsonl` in a
+   separate immutable dataset identity. The join never downloads GFS.
+
+For operator planning, 15 metadata inventories averaged **1.081 GiB/job**.
+Extrapolation gives approximately **762 GiB** selected raw for 705 development
+jobs and **425 GiB** more for 393 reserved 2025 jobs, before compact stages,
+archive duplication, retries and reserve. Fifteen completed sample runs
+averaged **14.41 minutes/job**: roughly **169 hours** development or **264
+hours** including 2025 if run serially. These are estimates, not guarantees;
+the finalized metadata manifest gives the exact selected-byte sum. The 2025
+weather download is not required for the first T-020 training join.
+
 ## NOAA IGRA sounding ingestion (T-019)
 
 `igra-ingest` is the artifact-only NOAA IGRA v2.2 observation boundary for
