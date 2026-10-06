@@ -259,7 +259,7 @@ describe("database foundation migrations", () => {
 
     expect(sqlite.prepare("PRAGMA foreign_keys").get()).toEqual({ foreign_keys: 1 });
     expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({
-      count: 17,
+      count: 18,
     });
 
     if (databaseUrl === undefined) {
@@ -269,7 +269,7 @@ describe("database foundation migrations", () => {
     runMigrations(databaseUrl);
 
     expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({
-      count: 17,
+      count: 18,
     });
     expect(
       sqlite
@@ -733,6 +733,50 @@ describe("database foundation migrations", () => {
     ).toEqual({ cape_j_per_kg: null, cin_magnitude_j_per_kg: null });
   });
 
+  it("keeps hourly product and daily input identities consistent", () => {
+    insertWeatherGraph();
+    const sqlite = activeConnection().sqlite;
+    sqlite.exec(`
+      INSERT INTO weather_product_runs (id, source_id, source_product_key, reference_at_utc)
+      VALUES (11, 10, 'gfs.20260820/06/atmos', '2026-08-20T06:00:00Z');
+      INSERT INTO weather_product_valid_times
+        (id, product_run_id, valid_at_utc, lead_hours, required_inputs_last_modified_at_utc)
+      VALUES (11, 11, '2026-08-20T12:00:00Z', 6, '2026-08-20T09:00:00Z');
+    `);
+    expectSqlFailure(`
+      INSERT INTO weather_point_samples
+        (id, ingestion_run_id, product_valid_time_id, point_footprint_id, coverage_status)
+      VALUES (11, 10, 11, 10, 'complete');
+    `);
+    expectSqlFailure("UPDATE weather_point_samples SET product_valid_time_id = 11 WHERE id = 10;");
+    expectSqlFailure("UPDATE weather_product_valid_times SET product_run_id = 11 WHERE id = 10;");
+    expectSqlFailure("UPDATE weather_ingestion_runs SET product_run_id = 11 WHERE id = 10;");
+    sqlite.exec(`
+      INSERT INTO weather_product_valid_times
+        (id, product_run_id, valid_at_utc, lead_hours)
+      VALUES (12, 10, '2026-08-20T07:00:00Z', 7);
+      INSERT INTO weather_point_samples
+        (id, ingestion_run_id, product_valid_time_id, point_footprint_id, coverage_status)
+      VALUES (12, 10, 12, 11, 'complete');
+    `);
+    expectSqlFailure(`
+      INSERT INTO weather_daily_feature_snapshot_inputs
+        (daily_feature_snapshot_id, weather_point_sample_id) VALUES (10, 12);
+    `);
+    expectSqlFailure("UPDATE weather_point_samples SET point_footprint_id = 11 WHERE id = 10;");
+    expectSqlFailure(
+      "UPDATE weather_daily_feature_snapshots SET point_footprint_id = 11 WHERE id = 10;",
+    );
+    expectSqlFailure(`
+      UPDATE weather_daily_feature_snapshot_inputs SET weather_point_sample_id = 12
+      WHERE daily_feature_snapshot_id = 10 AND weather_point_sample_id = 10;
+    `);
+    expectSqlFailure(`
+      UPDATE weather_product_valid_times
+      SET required_inputs_last_modified_at_utc = 'not-a-utc-time' WHERE id = 10;
+    `);
+  });
+
   it("rejects broken source, interval, footprint, identity, and provenance semantics", () => {
     insertWeatherGraph();
 
@@ -825,6 +869,7 @@ const migrationsDirectory = fileURLToPath(new URL("../drizzle/", import.meta.url
 const weatherMigrationDirectory = "20260820160216_create_weather_foundation";
 const dailyWeatherMigrationDirectory = "20260908181331_refactor_daily_weather_persistence";
 const copernicusElevationMigrationDirectory = "20260824184712_set_copernicus_site_elevations";
+const hourlyTimingMigrationDirectory = "20261006194824_t020_gfs_hourly_source_timing";
 
 let upgradeConnection: DatabaseConnection | undefined;
 let upgradeTestDirectory: string | undefined;
@@ -840,6 +885,37 @@ afterEach(() => {
 });
 
 describe("weather foundation upgrade", () => {
+  it("adds hourly source timing without losing an existing weather graph", () => {
+    mkdirSync(dataLocalDirectory, { recursive: true });
+    upgradeTestDirectory = mkdtempSync(join(dataLocalDirectory, "t020-timing-upgrade-test-"));
+    const oldMigrationsDirectory = join(upgradeTestDirectory, "old-migrations");
+    mkdirSync(oldMigrationsDirectory);
+    for (const entry of readdirSync(migrationsDirectory, { withFileTypes: true })) {
+      if (entry.isDirectory() && entry.name < hourlyTimingMigrationDirectory) {
+        cpSync(join(migrationsDirectory, entry.name), join(oldMigrationsDirectory, entry.name), {
+          recursive: true,
+        });
+      }
+    }
+    const databaseUrl = `file:./data/local/${basename(upgradeTestDirectory)}/upgrade.db`;
+    upgradeConnection = openDatabase(databaseUrl);
+    migrate(upgradeConnection.db, { migrationsFolder: oldMigrationsDirectory });
+    insertWeatherGraph(upgradeConnection);
+    migrate(upgradeConnection.db, { migrationsFolder: migrationsDirectory });
+    expect(
+      upgradeConnection.sqlite
+        .prepare(
+          "SELECT required_inputs_last_modified_at_utc AS timing " +
+            "FROM weather_product_valid_times WHERE id = 10",
+        )
+        .get(),
+    ).toEqual({ timing: null });
+    expect(upgradeConnection.sqlite.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+    expect(
+      upgradeConnection.sqlite.prepare("SELECT count(*) AS count FROM weather_point_samples").get(),
+    ).toEqual({ count: 1 });
+  });
+
   it("renames the populated flight ingestion table without losing rows or foreign keys", () => {
     mkdirSync(dataLocalDirectory, { recursive: true });
     upgradeTestDirectory = mkdtempSync(join(dataLocalDirectory, "t018-upgrade-test-"));

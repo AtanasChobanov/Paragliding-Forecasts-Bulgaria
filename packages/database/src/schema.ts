@@ -748,6 +748,7 @@ export const weatherProductValidTimes = sqliteTable(
       .references(() => weatherProductRuns.id, { onDelete: "restrict" }),
     validAtUtc: text("valid_at_utc").notNull(),
     leadHours: real("lead_hours"),
+    requiredInputsLastModifiedAtUtc: text("required_inputs_last_modified_at_utc"),
   },
   (table) => [
     unique("weather_product_valid_times_product_valid_unique").on(
@@ -762,6 +763,11 @@ export const weatherProductValidTimes = sqliteTable(
     check(
       "weather_product_valid_times_lead_hours_non_negative_check",
       sql`${table.leadHours} IS NULL OR ${table.leadHours} >= 0`,
+    ),
+    check(
+      "weather_product_valid_times_required_inputs_last_modified_at_utc_shape_check",
+      sql`${table.requiredInputsLastModifiedAtUtc} IS NULL
+        OR ${table.requiredInputsLastModifiedAtUtc} GLOB '${sql.raw(utcTimestampGlob)}'`,
     ),
   ],
 );
