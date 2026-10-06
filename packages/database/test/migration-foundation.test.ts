@@ -112,10 +112,9 @@ const insertWeatherGraph = (targetConnection = activeConnection()): void => {
     );
 
     INSERT INTO weather_product_runs (
-      id, source_id, source_product_key, reference_at_utc, available_at_utc
+      id, source_id, source_product_key, reference_at_utc
     ) VALUES (
-      10, 10, 'gfs.20260820/00/atmos', '2026-08-20T00:00:00Z',
-      '2026-08-20T03:30:00Z'
+      10, 10, 'gfs.20260820/00/atmos', '2026-08-20T00:00:00Z'
     );
 
     INSERT INTO weather_product_valid_times (
@@ -259,7 +258,7 @@ describe("database foundation migrations", () => {
 
     expect(sqlite.prepare("PRAGMA foreign_keys").get()).toEqual({ foreign_keys: 1 });
     expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({
-      count: 18,
+      count: 19,
     });
 
     if (databaseUrl === undefined) {
@@ -269,7 +268,7 @@ describe("database foundation migrations", () => {
     runMigrations(databaseUrl);
 
     expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({
-      count: 18,
+      count: 19,
     });
     expect(
       sqlite
@@ -454,14 +453,14 @@ describe("database foundation migrations", () => {
     insertReferenceRows();
     const sqlite = activeConnection().sqlite;
 
-    const distances: ReadonlyArray<readonly [number, number]> = [
+    const distances: readonly (readonly [number, number])[] = [
       [10, 0],
       [11, 78.5],
       [12, 100],
       [13, 2000],
     ];
     for (const [id, distance] of distances) {
-      sqlite.exec(validFlightSql(id, `distance-${id}`, "metadata", distance));
+      sqlite.exec(validFlightSql(id, `distance-${String(id)}`, "metadata", distance));
     }
 
     expectSqlFailure(validFlightSql(14, "negative-distance", "metadata", -0.01));
@@ -885,13 +884,13 @@ afterEach(() => {
 });
 
 describe("weather foundation upgrade", () => {
-  it("adds hourly source timing without losing an existing weather graph", () => {
+  it("removes product timing without losing populated hourly timing or foreign keys", () => {
     mkdirSync(dataLocalDirectory, { recursive: true });
     upgradeTestDirectory = mkdtempSync(join(dataLocalDirectory, "t020-timing-upgrade-test-"));
     const oldMigrationsDirectory = join(upgradeTestDirectory, "old-migrations");
     mkdirSync(oldMigrationsDirectory);
     for (const entry of readdirSync(migrationsDirectory, { withFileTypes: true })) {
-      if (entry.isDirectory() && entry.name < hourlyTimingMigrationDirectory) {
+      if (entry.isDirectory() && entry.name <= hourlyTimingMigrationDirectory) {
         cpSync(join(migrationsDirectory, entry.name), join(oldMigrationsDirectory, entry.name), {
           recursive: true,
         });
@@ -901,7 +900,14 @@ describe("weather foundation upgrade", () => {
     upgradeConnection = openDatabase(databaseUrl);
     migrate(upgradeConnection.db, { migrationsFolder: oldMigrationsDirectory });
     insertWeatherGraph(upgradeConnection);
-    migrate(upgradeConnection.db, { migrationsFolder: migrationsDirectory });
+    upgradeConnection.sqlite.exec(
+      "UPDATE weather_product_valid_times " +
+        "SET required_inputs_last_modified_at_utc = '2026-08-20T03:30:00Z' WHERE id = 10",
+    );
+    upgradeConnection.close();
+    upgradeConnection = undefined;
+    runMigrations(databaseUrl);
+    upgradeConnection = openDatabase(databaseUrl);
     expect(
       upgradeConnection.sqlite
         .prepare(
@@ -909,11 +915,21 @@ describe("weather foundation upgrade", () => {
             "FROM weather_product_valid_times WHERE id = 10",
         )
         .get(),
-    ).toEqual({ timing: null });
+    ).toEqual({ timing: "2026-08-20T03:30:00Z" });
+    expect(
+      upgradeConnection.sqlite
+        .prepare("PRAGMA table_info(weather_product_runs)")
+        .all()
+        .some((column) => column.name === "available_at_utc"),
+    ).toBe(false);
+    expect(upgradeConnection.sqlite.prepare("PRAGMA foreign_keys").get()).toEqual({
+      foreign_keys: 1,
+    });
     expect(upgradeConnection.sqlite.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
     expect(
       upgradeConnection.sqlite.prepare("SELECT count(*) AS count FROM weather_point_samples").get(),
     ).toEqual({ count: 1 });
+    runMigrations(databaseUrl);
   });
 
   it("renames the populated flight ingestion table without losing rows or foreign keys", () => {

@@ -1803,10 +1803,12 @@ several target-day jobs with different forecast-hour files. SQLite now has
 per-hour maximum of GRIB and `.idx` Last-Modified; persistence checks it
 against the immutable request plan. `weather-join` derives a job's ready proxy
 from its exact eleven hours and requires equality with the frozen acquisition
-receipt and the 16:00 issue cutoff. The old product-level `available_at_utc`
-is retained until a subsequent forward-only removal migration. The owner
-authorized a one-off offline repair on 2026-10-06: verified artifacts supplied
-209 hourly values for 19 persisted runs, including the four active 06Z jobs.
+receipt and the 16:00 issue cutoff. The obsolete product-level
+`available_at_utc` column is removed by the follow-up forward-only migration;
+run that database migration before resuming GFS ingestion with this code. The
+owner authorized a one-off offline repair on 2026-10-06: verified artifacts
+supplied 209 hourly values for 19 persisted runs, including the four active
+06Z jobs.
 Four older 00Z test runs lacked suitable metadata and retain NULL hourly
 values; they cannot enter the fixed 06Z join. The one-off script was deleted
 after the repair. No GFS data was fetched for this step. Existing NULL

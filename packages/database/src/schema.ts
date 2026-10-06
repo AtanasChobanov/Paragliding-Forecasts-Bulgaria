@@ -714,7 +714,6 @@ export const weatherProductRuns = sqliteTable(
       .references(() => weatherSources.id, { onDelete: "restrict" }),
     sourceProductKey: text("source_product_key").notNull(),
     referenceAtUtc: text("reference_at_utc"),
-    availableAtUtc: text("available_at_utc"),
   },
   (table) => [
     unique("weather_product_runs_source_product_unique").on(table.sourceId, table.sourceProductKey),
@@ -730,11 +729,6 @@ export const weatherProductRuns = sqliteTable(
       "weather_product_runs_reference_at_utc_shape_check",
       sql`${table.referenceAtUtc} IS NULL
         OR ${table.referenceAtUtc} GLOB '${sql.raw(utcTimestampGlob)}'`,
-    ),
-    check(
-      "weather_product_runs_available_at_utc_shape_check",
-      sql`${table.availableAtUtc} IS NULL
-        OR ${table.availableAtUtc} GLOB '${sql.raw(utcTimestampGlob)}'`,
     ),
   ],
 );

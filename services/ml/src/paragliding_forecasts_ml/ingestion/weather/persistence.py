@@ -165,7 +165,6 @@ _REQUIRED_TABLE_COLUMNS = {
         "source_id",
         "source_product_key",
         "reference_at_utc",
-        "available_at_utc",
     },
     "weather_product_valid_times": {
         "id",
@@ -1085,7 +1084,6 @@ def _resolve_product_run(
             "source_id": source_id,
             "source_product_key": manifest.source_product_key,
             "reference_at_utc": manifest.reference_at_utc,
-            "available_at_utc": None,
         },
     )
 

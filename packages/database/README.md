@@ -30,12 +30,17 @@ The migrations use SQLite `STRICT` tables. Drizzle Kit does not yet declare
 that table option in the TypeScript schema, so every reviewed generated
 migration receives only the minimum explicit `STRICT` amendment before review.
 
-The T-020 hourly-source-timing migration adds nullable
+The first T-020 hourly-source-timing migration adds nullable
 `weather_product_valid_times.required_inputs_last_modified_at_utc`. GFS stores
 the maximum verified GRIB/`.idx` Last-Modified time for one valid hour; a
-job's source-ready proxy is derived from its selected hours. The older
-`weather_product_runs.available_at_utc` is temporarily retained for a
-reviewed offline data repair and must not be read as a cycle-wide ready time.
+job's source-ready proxy is derived from its selected hours. After the owner's
+one-off repair, a second forward-only migration removes the obsolete
+`weather_product_runs.available_at_utc` column. This rebuilds the product table
+while preserving its IDs and the per-hour timing rows. The migration entrypoint
+temporarily disables foreign-key enforcement outside Drizzle's transaction as
+SQLite requires for a populated parent-table rebuild, checks the rebuilt graph
+inside that transaction, and restores enforcement afterward. Take a fresh
+SQLite backup after the repair and before running `db:migrate` on the owner DB.
 Migration triggers reject point samples whose run and valid time belong to
 different products, and daily inputs whose run or point footprint differs
 from their snapshot. These trigger invariants also apply to updates of

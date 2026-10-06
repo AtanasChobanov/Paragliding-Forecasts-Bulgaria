@@ -1,14 +1,14 @@
 # Project Handoff
 
-## T-020 hourly GFS timing repair — applied to verified persisted runs
+## T-020 hourly GFS timing repair — removal migration prepared
 
 The owner accepted DEC-068: a shared GFS product cycle has per-valid-hour
 GRIB/`.idx` Last-Modified evidence. The first forward-only Drizzle migration
 adds nullable `weather_product_valid_times.required_inputs_last_modified_at_utc`
 and SQLite guards for point product identity and daily input run/footprint
-identity. The product-level `available_at_utc` remains temporarily pending a
-later removal migration. Persistence now checks the per-hour request-plan times;
-the joined dataset uses their eleven-hour maximum and output contract `/2`.
+identity. A second forward-only migration is now prepared to remove the
+product-level `available_at_utc`. Persistence checks the per-hour request-plan
+times; the joined dataset uses their eleven-hour maximum and output contract `/2`.
 The `started_at_utc` issue is intentionally deferred.
 
 On 2026-10-06 the owner authorized the agent to execute the one-off repair on
@@ -27,11 +27,26 @@ They are outside the fixed 06Z cohort; do not infer their timing from the old
 product-level value. The one-off repair script and its ignored local smoke-test
 script were deleted as requested. No GFS network fetch or batch command ran.
 
-The obsolete product-level field still needs its separately planned forward-only
-migration after this report is reviewed. T-020 remains In Progress, and the
-active 75-job batch remains paused at raw-complete run
-`84d75951-1bd2-47ae-89fc-28bb50d9a64d`; the owner should resume it offline
-before continuing the batch.
+The owner noted that DEC-068 requires removing the obsolete product-level field.
+The generated follow-up migration rebuilds `weather_product_runs` without that
+column. Python persistence no longer requires or inserts it; GFS request-plan
+and acquisition-receipt `available_at_utc` remain as per-job source metadata.
+The SQLite migrator disables foreign keys outside Drizzle's transaction only
+while upgrading a schema that still has the old column, validates the rebuilt
+graph inside the transaction, and restores foreign keys. A populated temporary
+weather graph upgraded with its per-hour timing and relationships intact; fresh
+schema and idempotence checks passed. The full database suite passed 33 tests,
+the Python suite passed 415 tests, and Drizzle check, TypeScript typecheck,
+ESLint, Prettier, Ruff, and `repo:check` passed. A final read-only owner-DB
+inspection found 18 applied migrations, 209 timed valid hours, and no trigger,
+view, or index referencing the old column. **This second migration has not run
+on the owner's DB.** The pre-repair backup predates the 209-value repair: take
+a new SQLite backup before running
+`npm.cmd run db:migrate --workspace @paragliding-forecasts/database`. Do not
+resume the active 75-job batch with the new persistence code until that
+migration succeeds. T-020 remains In Progress;
+the batch is paused at raw-complete run
+`84d75951-1bd2-47ae-89fc-28bb50d9a64d`.
 
 Code commits: `43fb518` (schema and guards), `7cdbe13` (persistence),
 `0c6b13e` (join), `801f9a4` (documentation). On temporary fixtures, 415 Python

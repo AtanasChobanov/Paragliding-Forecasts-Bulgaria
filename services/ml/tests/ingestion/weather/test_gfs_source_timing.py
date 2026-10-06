@@ -65,7 +65,7 @@ def test_two_jobs_share_product_but_keep_distinct_hourly_source_timing() -> None
         """
         CREATE TABLE weather_product_runs (
           id INTEGER PRIMARY KEY, source_id INTEGER, source_product_key TEXT,
-          reference_at_utc TEXT, available_at_utc TEXT);
+          reference_at_utc TEXT);
         CREATE TABLE weather_product_valid_times (
           id INTEGER PRIMARY KEY, product_run_id INTEGER, valid_at_utc TEXT,
           lead_hours REAL, required_inputs_last_modified_at_utc TEXT);
