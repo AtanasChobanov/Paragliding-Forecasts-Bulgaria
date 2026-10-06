@@ -57,7 +57,7 @@ def _fixture(tmp_path, monkeypatch):
         CREATE TABLE weather_ingestion_runs (id INTEGER, run_key TEXT, status TEXT, target_local_date TEXT, request_purpose TEXT, model_training_allowed INTEGER, raw_manifest_sha256 TEXT, feature_manifest_sha256 TEXT, persistence_input_sha256 TEXT, product_run_id INTEGER);
         CREATE TABLE weather_sampling_footprints (id INTEGER, site_id INTEGER);
         CREATE TABLE weather_daily_feature_snapshots (id INTEGER, ingestion_run_id INTEGER, point_footprint_id INTEGER, neighbourhood_footprint_id INTEGER, feature_contract_version TEXT, air_temperature_2m_mean_k REAL);
-        CREATE TABLE weather_product_valid_times (id INTEGER, product_run_id INTEGER, valid_at_utc TEXT, lead_hours REAL);
+        CREATE TABLE weather_product_valid_times (id INTEGER, product_run_id INTEGER, valid_at_utc TEXT, lead_hours REAL, required_inputs_last_modified_at_utc TEXT);
         CREATE TABLE weather_point_samples (id INTEGER, ingestion_run_id INTEGER, product_valid_time_id INTEGER, point_footprint_id INTEGER);
         CREATE TABLE weather_daily_feature_snapshot_inputs (daily_feature_snapshot_id INTEGER, weather_point_sample_id INTEGER);
         CREATE TABLE weather_daily_feature_profile_layers (id INTEGER, daily_feature_snapshot_id INTEGER, layer_base_agl_m REAL, layer_top_agl_m REAL);
@@ -116,8 +116,8 @@ def _fixture(tmp_path, monkeypatch):
         for index, (valid, lead) in enumerate(zip(valid_times, leads, strict=True), start=1):
             identity = 100 * horizon + index
             connection.execute(
-                "INSERT INTO weather_product_valid_times VALUES (?, ?, ?, ?)",
-                (identity, horizon, valid, lead),
+                "INSERT INTO weather_product_valid_times VALUES (?, ?, ?, ?, ?)",
+                (identity, horizon, valid, lead, available),
             )
             connection.execute(
                 "INSERT INTO weather_point_samples VALUES (?, ?, ?, 1)",
@@ -163,9 +163,31 @@ def test_join_keeps_three_horizons_distinct_and_rejects_bad_lead(tmp_path, monke
     assert result["examples"] == 3
     assert len({item["weather"]["run_key"] for item in examples}) == 3
     assert [item["horizon_days"] for item in examples] == [1, 2, 3]
+    assert examples[0]["weather"]["required_inputs_last_modified_at_utc"].endswith("T10:00:00Z")
     assert examples[0]["weather"]["feature_quality"][0]["statistic_type"] == "mean"
     connection = sqlite3.connect(database)
     connection.execute("UPDATE weather_product_valid_times SET lead_hours = 24 WHERE id = 101")
+    connection.commit()
+    connection.close()
+    with pytest.raises(weather_join.WeatherJoinError, match="mixes runs, footprints, leads"):
+        weather_join.build_joined_dataset(acquisition_id="b" * 64, project_root=tmp_path)
+
+
+def test_join_rejects_missing_or_wrong_hourly_source_timing(tmp_path, monkeypatch) -> None:
+    database = _fixture(tmp_path, monkeypatch)
+    connection = sqlite3.connect(database)
+    connection.execute(
+        "UPDATE weather_product_valid_times SET required_inputs_last_modified_at_utc = NULL "
+        "WHERE id = 101"
+    )
+    connection.commit()
+    with pytest.raises(weather_join.WeatherJoinError, match="mixes runs, footprints, leads"):
+        weather_join.build_joined_dataset(acquisition_id="b" * 64, project_root=tmp_path)
+    connection.execute(
+        "UPDATE weather_product_valid_times SET required_inputs_last_modified_at_utc = ? "
+        "WHERE id = 101",
+        ("2022-04-30T12:00:00Z",),
+    )
     connection.commit()
     connection.close()
     with pytest.raises(weather_join.WeatherJoinError, match="mixes runs, footprints, leads"):

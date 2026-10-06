@@ -22,7 +22,7 @@ from .weather_backfill_cli import _cohort
 from .weather_cohort import _encoded, _load_audit
 from .weather_full_backfill import _resolution, _verified_json, resolution_status
 
-VERSION = "weather-flight-joined-dataset/1"
+VERSION = "weather-flight-joined-dataset/2"
 
 
 class WeatherJoinError(RuntimeError):
@@ -44,7 +44,7 @@ def _weather_record(connection: sqlite3.Connection, job: dict, site_id: int) -> 
                   run.target_local_date, run.request_purpose, run.model_training_allowed,
                   run.raw_manifest_sha256, run.feature_manifest_sha256,
                   run.persistence_input_sha256, product.id AS product_run_id,
-                  product.reference_at_utc, product.available_at_utc,
+                  product.reference_at_utc,
                   source.code AS source_code, source.source_kind
            FROM weather_ingestion_runs AS run
            JOIN weather_product_runs AS product ON product.id = run.product_run_id
@@ -63,8 +63,6 @@ def _weather_record(connection: sqlite3.Connection, job: dict, site_id: int) -> 
         or run["source_code"] != GFS_SOURCE_ID
         or run["source_kind"] != "forecast"
         or run["reference_at_utc"] != job["cycle_reference_utc"]
-        or run["available_at_utc"] != job["available_at_utc"]
-        or run["available_at_utc"] > job["issue_cutoff_utc"]
     ):
         raise WeatherJoinError("Persisted weather run violates the fixed 06Z as-of identity.")
     snapshots = _rows(
@@ -80,8 +78,9 @@ def _weather_record(connection: sqlite3.Connection, job: dict, site_id: int) -> 
     snapshot = snapshots[0]
     inputs = _rows(
         connection,
-        """SELECT valid.valid_at_utc, valid.lead_hours, point.ingestion_run_id,
-                  point.point_footprint_id
+        """SELECT valid.valid_at_utc, valid.lead_hours,
+                  valid.required_inputs_last_modified_at_utc,
+                  valid.product_run_id, point.ingestion_run_id, point.point_footprint_id
            FROM weather_daily_feature_snapshot_inputs AS link
            JOIN weather_point_samples AS point ON point.id = link.weather_point_sample_id
            JOIN weather_product_valid_times AS valid ON valid.id = point.product_valid_time_id
@@ -91,12 +90,18 @@ def _weather_record(connection: sqlite3.Connection, job: dict, site_id: int) -> 
     )
     expected = list(zip(job["valid_times_utc"], job["lead_hours"], strict=True))
     actual = [(item["valid_at_utc"], item["lead_hours"]) for item in inputs]
+    hour_times = [item["required_inputs_last_modified_at_utc"] for item in inputs]
+    hour_ready = max(hour_times) if hour_times and all(hour_times) else None
     if (
         len(inputs) != 11
         or actual != expected
+        or hour_ready is None
+        or hour_ready != job["available_at_utc"]
+        or hour_ready > job["issue_cutoff_utc"]
         or any(
             item["ingestion_run_id"] != run["ingestion_run_id"]
             or item["point_footprint_id"] != snapshot["point_footprint_id"]
+            or item["product_run_id"] != run["product_run_id"]
             for item in inputs
         )
     ):
@@ -157,7 +162,7 @@ def _weather_record(connection: sqlite3.Connection, job: dict, site_id: int) -> 
     return {
         "run_key": run["run_key"],
         "product_reference_at_utc": run["reference_at_utc"],
-        "product_available_at_utc": run["available_at_utc"],
+        "required_inputs_last_modified_at_utc": hour_ready,
         "raw_manifest_sha256": run["raw_manifest_sha256"],
         "feature_manifest_sha256": run["feature_manifest_sha256"],
         "persistence_input_sha256": run["persistence_input_sha256"],
