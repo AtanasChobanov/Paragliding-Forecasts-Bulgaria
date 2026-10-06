@@ -22,6 +22,16 @@ run weather product commands as the agent. The follow-up migration removing
 the obsolete product-level field must wait until repair results are reviewed.
 T-020 remains In Progress, and the active 75-job batch remains paused.
 
+Code commits: `43fb518` (schema and guards), `7cdbe13` (persistence),
+`0c6b13e` (join), `801f9a4` (documentation). On temporary fixtures, 415 Python
+tests and 33 database tests passed; Ruff lint/format, TypeScript typecheck,
+Prettier, Drizzle `db:check`, `repo:check`, and `git diff --check` passed. A
+populated pre-migration test database upgraded without losing weather rows or
+foreign keys. The migration and one-off repair have **not** run on the owner's
+SQLite database; the agent made no GFS network or product request. The owner
+must review the script and run the backup, migration, dry run and eventual
+apply steps personally.
+
 ## Active blocker: per-job GFS source availability — 2026-10-06
 
 The owner successfully resumed 2021-10-02 D+1 offline, then ran the same
