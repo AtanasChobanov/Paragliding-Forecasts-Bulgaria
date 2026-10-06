@@ -1,5 +1,43 @@
 # Project Handoff
 
+## Active blocker: per-job GFS source availability — 2026-10-06
+
+The owner successfully resumed 2021-10-02 D+1 offline, then ran the same
+75-job batch with `--max-jobs 71`. Job 5, 2021-10-02 D+2 run
+`84d75951-1bd2-47ae-89fc-28bb50d9a64d`, completed all 583 GRIB ranges and
+offline stages but failed its atomic SQLite transaction with the error
+`Weather product natural key collides with different immutable timing.` Read-only inspection
+shows four succeeded jobs, this fifth job with a complete raw manifest and no
+database row, and 70 jobs not yet fetched. SQLite `quick_check` is `ok`; no
+batch writer lock exists. The agent ran no weather product command and made
+no code change for this new failure.
+
+The existing product row for `gfs.20210930/06/atmos` has the correct
+2021-09-30T06:00:00Z reference but `available_at_utc` is
+`2021-09-30T09:44:37Z` from the 2021-10-01 D+1 selected lead set. The failed
+job uses the same native product cycle and reference but its different
+selected lead set was ready at `2021-09-30T09:51:16Z`. The GFS planner
+defines this timestamp as the maximum GRIB/index Last-Modified over each
+job's selected ranges. Persistence incorrectly treats it as an immutable
+attribute of the shared product cycle, and `weather-join` also reads it
+from that shared row for an exact per-job as-of check. All 17 product keys
+shared by more than one job in this frozen batch have differing selected-range
+availability. The collision will recur; a simple retry cannot fix it.
+
+Recommended architectural correction, not yet accepted or implemented:
+retain `weather_product_runs` for native source/cycle identity and move the
+selected-range ready timestamp into immutable `weather_ingestion_runs`
+evidence. Add a Drizzle migration, backfill existing run values from verified
+manifest evidence (the 23 currently persisted runs have no mismatch with
+their product rows), adjust persistence/replay and the horizon-matched join,
+and test two target/horizon jobs sharing one product with different
+availability. Do not overwrite the existing product row's timestamp to make
+the fifth job pass; that would make the first job's provenance incorrect.
+After a reviewed correction, the fifth run can resume offline without GFS
+refetch, then the same batch can continue its 70 unstarted jobs. T-020
+remains In Progress. The previous section records the completed shortwave
+repair and the earlier operator state.
+
 ## Active 06Z batch repair — 2026-10-06
 
 The owner-created acquisition `ea7b5dcbbb3e1f9dac97d377946310153fabd4fa7e69cbf077903d881d862492`
@@ -25,11 +63,9 @@ was the lowest reconstructed value. DEC-067 records the accepted policy.
 
 The agent has run no weather product command. Code validation: full ML suite
 413 passed; Ruff lint, Ruff format, `npm.cmd run repo:check`, and `git diff
---check` passed. The owner should first run `weather-ingest resume --run-key
-09ca9a80-37c4-4777-9bb4-b086b3aaa9a9` offline, then inspect batch status,
-then run `weather-backfill batch-run` on the **same** batch ID for the 71
-remaining jobs. No GFS refetch or new batch-create is needed for the first
-four jobs. Product-level replay remains unverified until the owner runs it.
+--check` passed for the shortwave repair. The owner subsequently ran
+`weather-ingest resume` for 2021-10-02 D+1 successfully; the new collision
+and current operator action are recorded above.
 
 ## Implementation in progress — 2026-10-05
 
