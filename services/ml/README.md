@@ -1797,19 +1797,21 @@ jobs per target date. Commands below are run from the repository root after
 `uv sync --project services/ml`, with the existing migrated local SQLite and
 GFS usage policy available.
 
-**Hourly source-timing repair in progress:** An exact GFS cycle can serve
+**Hourly source-timing repair:** An exact GFS cycle can serve
 several target-day jobs with different forecast-hour files. SQLite now has
 `weather_product_valid_times.required_inputs_last_modified_at_utc` for the
 per-hour maximum of GRIB and `.idx` Last-Modified; persistence checks it
 against the immutable request plan. `weather-join` derives a job's ready proxy
 from its exact eleven hours and requires equality with the frozen acquisition
 receipt and the 16:00 issue cutoff. The old product-level `available_at_utc`
-is retained only until the owner reviews and runs the one-off offline repair
-for already persisted rows. The repair is a local script under `data/local/`,
-not a new packaged `weather-ingest` command, and must not run on the owner's
-database without the owner's approval. It does not fetch GFS data. Existing
-NULL per-hour values fail the new join until verified artifact evidence is
-restored. `weather_ingestion_runs.started_at_utc` is not changed in this work.
+is retained until a subsequent forward-only removal migration. The owner
+authorized a one-off offline repair on 2026-10-06: verified artifacts supplied
+209 hourly values for 19 persisted runs, including the four active 06Z jobs.
+Four older 00Z test runs lacked suitable metadata and retain NULL hourly
+values; they cannot enter the fixed 06Z join. The one-off script was deleted
+after the repair. No GFS data was fetched for this step. Existing NULL
+per-hour values fail the new join. `weather_ingestion_runs.started_at_utc`
+is not changed in this work.
 
 1. Freeze the new offline cohort policy and note the printed `plan_id`:
 

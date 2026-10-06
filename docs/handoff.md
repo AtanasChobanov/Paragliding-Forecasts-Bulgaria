@@ -1,36 +1,46 @@
 # Project Handoff
 
-## T-020 hourly GFS timing repair — code prepared, operator repair pending
+## T-020 hourly GFS timing repair — applied to verified persisted runs
 
 The owner accepted DEC-068: a shared GFS product cycle has per-valid-hour
 GRIB/`.idx` Last-Modified evidence. The first forward-only Drizzle migration
 adds nullable `weather_product_valid_times.required_inputs_last_modified_at_utc`
 and SQLite guards for point product identity and daily input run/footprint
-identity. The product-level `available_at_utc` remains temporarily for a
-reviewed data repair. Persistence now checks the per-hour request-plan times;
+identity. The product-level `available_at_utc` remains temporarily pending a
+later removal migration. Persistence now checks the per-hour request-plan times;
 the joined dataset uses their eleven-hour maximum and output contract `/2`.
 The `started_at_utc` issue is intentionally deferred.
 
-An ignored one-off offline script is prepared at
-`data/local/repair_gfs_source_times_once.py`. It has **not** been executed
-against the owner's database. It verifies SQLite raw-manifest SHA-256,
-hash-linked request plans, product/valid-hour identities and existing values;
-its default mode reports proposed updates and `--apply` requires an existing
-backup. Before any owner-database execution, show the exact script, command,
-backup step and expected report to the owner for explicit approval. Do not
-run weather product commands as the agent. The follow-up migration removing
-the obsolete product-level field must wait until repair results are reviewed.
-T-020 remains In Progress, and the active 75-job batch remains paused.
+On 2026-10-06 the owner authorized the agent to execute the one-off repair on
+`data/local/paragliding.db` and then delete its script. The existing backup
+`data/local/paragliding-before-t020-source-times.db` passed `quick_check` and
+was retained (SHA-256
+`ec805e638ae3016759ea0121cf51ce230a89041f870aae2e46b5eb6e6516d84b`).
+The migrated database passed `quick_check` and `foreign_key_check` before and
+after repair. A hash-verified dry run examined 23 succeeded GFS runs: 19 were
+eligible, with 209 distinct hourly values to fill. The agent applied exactly
+those 19 run keys in one SQLite transaction; the subsequent dry run reported
+209 matching values and zero remaining values to fill for those runs. The 44
+other valid hours belong to four old 00Z test runs whose request metadata is
+incompatible or lacks `.idx` Last-Modified, so their timing remains NULL.
+They are outside the fixed 06Z cohort; do not infer their timing from the old
+product-level value. The one-off repair script and its ignored local smoke-test
+script were deleted as requested. No GFS network fetch or batch command ran.
+
+The obsolete product-level field still needs its separately planned forward-only
+migration after this report is reviewed. T-020 remains In Progress, and the
+active 75-job batch remains paused at raw-complete run
+`84d75951-1bd2-47ae-89fc-28bb50d9a64d`; the owner should resume it offline
+before continuing the batch.
 
 Code commits: `43fb518` (schema and guards), `7cdbe13` (persistence),
 `0c6b13e` (join), `801f9a4` (documentation). On temporary fixtures, 415 Python
 tests and 33 database tests passed; Ruff lint/format, TypeScript typecheck,
 Prettier, Drizzle `db:check`, `repo:check`, and `git diff --check` passed. A
 populated pre-migration test database upgraded without losing weather rows or
-foreign keys. The migration and one-off repair have **not** run on the owner's
-SQLite database; the agent made no GFS network or product request. The owner
-must review the script and run the backup, migration, dry run and eventual
-apply steps personally.
+foreign keys. At that earlier coding checkpoint, neither migration nor repair
+had run on the owner's SQLite database. Their later execution and verification
+are recorded above.
 
 ## Active blocker: per-job GFS source availability — 2026-10-06
 
