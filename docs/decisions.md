@@ -79,6 +79,7 @@ consequences. Temporary progress and Git state belong in
 | DEC-064     | Freeze the initial T-020 horizon-matched weather cohort                         | Accepted   | 2026-10-04 |
 | DEC-065     | Require evening prediction and alert delivery by 20:00 Sofia time              | Accepted   | 2026-10-04 |
 | DEC-066     | Pin the first historical cohort to 06Z and defer 2025 acquisition             | Accepted   | 2026-10-05 |
+| DEC-067     | Bound negative reconstructed GFS downward shortwave radiation                 | Accepted   | 2026-10-06 |
 
 ## Individual decisions
 
@@ -2892,3 +2893,38 @@ and the prediction/alert pipeline is measured.
 
 **Related files:** [`T-020-phase-3-gfs-cohort-acquisition-plan.md`](T-020-phase-3-gfs-cohort-acquisition-plan.md),
 [`../services/ml/README.md`](../services/ml/README.md), and [`handoff.md`](handoff.md).
+
+### DEC-067 - Bound negative reconstructed GFS downward shortwave radiation
+
+**Status:** Accepted by the owner for the T-020 backfill repair
+
+**Date:** 2026-10-06
+
+**Context:** A 06Z D+1 job for 2021-10-02 fetched all 583 GRIB ranges and
+passed spatial sampling and validation, but SQLite rejected a negative
+`shortwave_radiation_w_m2` interval value. The original GFS DSWRF averages
+were nonnegative. The 30–34 h and 30–35 h averages have a decoded packing
+increment of 0.02 W/m²; deaveraging produced a minimum of -0.12 W/m² in one
+compact grid cell. The simple packing-error bound is 0.09 W/m², so packing
+alone is not proven to explain the entire discrepancy. Across 22 locally
+retained parsed runs, original DSWRF was nonnegative and the lowest
+reconstructed result was -0.12 W/m².
+
+**Decision:** For current compact GFS normalization, reject a negative
+original DSWRF value. After exact adjacent-hour deaveraging, clamp only
+reconstructed negative values no lower than -0.20 W/m² to zero. Record the
+correction method and a hash-chained report with source references, count and
+minimum per affected interval. This is a deliberately small, provisional
+physical near-zero tolerance, not a claim of a mathematically proven source
+error bound. A value below it fails normalization before SQLite and retains
+the raw evidence for investigation and offline resume. Do not silently
+relax the SQLite nonnegative constraint or refetch a complete raw run merely
+to repeat offline computation.
+
+**Consequences:** Version compact normalization as `gfs-normalizer/9`; retain
+read compatibility with existing `/8` compact artifacts. The failed
+2021-10-02 D+1 job can be resumed offline after deployment. This decision
+does not certify all future dates or change signed sensible/latent fluxes.
+
+**Related files:** [`../services/ml/README.md`](../services/ml/README.md) and
+[`handoff.md`](handoff.md).

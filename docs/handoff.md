@@ -1,5 +1,36 @@
 # Project Handoff
 
+## Active 06Z batch repair — 2026-10-06
+
+The owner-created acquisition `ea7b5dcbbb3e1f9dac97d377946310153fabd4fa7e69cbf077903d881d862492`
+has batch `6c381854cc2136382413b7f9a89b286c0531c1aa0de11b4026361cf0d9fe834e`
+with 75 jobs. Read-only SQLite/artifact inspection found the first three
+2021-10-01 jobs succeeded, 2021-10-02 D+1 run
+`09ca9a80-37c4-4777-9bb4-b086b3aaa9a9` has a complete 583-range raw
+manifest and no database row after persistence rollback, and the other 71
+jobs have not fetched raw payloads. No batch writer lock exists.
+
+The owner approved an empirical -0.20 W/m² near-zero tolerance for
+**reconstructed** GFS downward shortwave radiation. `gfs-normalizer/9`
+now rejects negative native DSWRF, clamps reconstructed values within that
+bound, records an immutable per-interval correction report and method, and
+fails larger negatives before SQLite. Existing compact `/8` artifacts remain
+readable. The 2021-10-02 raw GRIB f034/f035 messages were hash-verified and
+decoded directly: a grid cell had 290.18 and 232.12 W/m² averages over
+30–34 h and 30–35 h, giving -0.12 W/m² for the adjacent hour. The two
+messages' 0.02 W/m² packing increments imply a 0.09 W/m² simple packing
+error bound, so the exact source of the additional discrepancy is unproven.
+Across 22 local parsed runs, native DSWRF was nonnegative and -0.12 W/m²
+was the lowest reconstructed value. DEC-067 records the accepted policy.
+
+The agent has run no weather product command. Code validation: full ML suite
+413 passed; Ruff lint, Ruff format, `npm.cmd run repo:check`, and `git diff
+--check` passed. The owner should first run `weather-ingest resume --run-key
+09ca9a80-37c4-4777-9bb4-b086b3aaa9a9` offline, then inspect batch status,
+then run `weather-backfill batch-run` on the **same** batch ID for the 71
+remaining jobs. No GFS refetch or new batch-create is needed for the first
+four jobs. Product-level replay remains unverified until the owner runs it.
+
 ## Implementation in progress — 2026-10-05
 
 The owner selected fixed 06Z for all three historical horizons and a 16:00
@@ -17,9 +48,10 @@ the fixed-06Z plan is
 `e75ee4091e9eaaec446a457e8ef09cbb5f02235ff37c38062a3129df64191c14`.
 Its reported counts match the selected 320 development site-days/235 dates,
 242 reserved backtest site-days/131 dates, and 1,098 three-horizon jobs.
-The agent has run no product command; the metadata acquisition, batch,
-archive and joined dataset have not yet been generated. Only unit tests,
-lint and repo checks may be run by the agent. Do not present T-020 as Done
+The agent has run no product command; the owner has since generated the
+metadata acquisition and first batch described above. Archives and the
+joined dataset have not yet been generated. Only unit tests, lint and repo
+checks may be run by the agent. Do not present T-020 as Done
 until the owner completes the 06Z development acquisition and join.
 
 The first acquisition split is 2022–2024 development: 320 site-days, 235

@@ -1872,6 +1872,20 @@ GFS usage policy available.
    minutes old, `weather-backfill batch-recover-lock --batch-id <batch-id>
    --confirm-writer-stopped` records the stale lock and permits resume.
 
+   The compact GFS normalizer (`gfs-normalizer/9`) checks original downward
+   shortwave radiation for negative values. A reconstructed one-hour value
+   between `-0.20` and `0 W/m²` is set to zero; the normalized grain records
+   `gfs_shortwave_near_zero_clamp`, and its immutable
+   `shortwave-corrections.json` records the source messages, affected grid-cell
+   count and minimum before correction. A more negative value stops that job
+   before SQLite with a diagnostic error. This threshold is an empirical
+   near-zero tolerance, not a GRIB packing guarantee. Keep the raw artifacts
+   for investigation. `weather-ingest resume --run-key <run-key>` reruns the
+   offline stages from those artifacts without GFS requests; after it succeeds,
+   `batch-run` skips the persisted job and continues the unfinished batch.
+   The current batch runner stops at an unhandled job failure rather than
+   automatically continuing with later jobs.
+
 5. After every selected job in the batch is `persisted`, copy its full
    evidence to a mounted **other drive** and verify the cold copy before
    freeing D: raw payloads:

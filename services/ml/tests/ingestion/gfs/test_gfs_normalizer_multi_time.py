@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 from pathlib import Path
 
 import numpy as np
@@ -18,6 +19,8 @@ from paragliding_forecasts_ml.ingestion.gfs.compact import (
 from paragliding_forecasts_ml.ingestion.gfs.normalizer import (
     GfsCanonicalGridBatch,
     GfsCompactCanonicalGridBatch,
+    _nonnegative_shortwave,
+    _require_nonnegative_native_shortwave,
     _resolve_adjacent_intervals,
     normalize,
 )
@@ -47,7 +50,7 @@ def _compact_native_message(
     step_start_hours: float | None = None,
     missing_count: int = 0,
 ) -> GfsCompactNativeGridMessage:
-    interval = selector == "apcp"
+    interval = selector in {"apcp", "dswrf"}
     return GfsCompactNativeGridMessage(
         selector_key=selector,
         message_number=row + 1,
@@ -64,16 +67,18 @@ def _compact_native_message(
         tables_version=2,
         local_tables_version=1,
         type_of_level="surface"
-        if selector in {"orog", "apcp", "cin_surface"}
+        if selector in {"orog", "apcp", "dswrf", "cin_surface"}
         else "heightAboveGround",
         level=level,
         native_field_name=selector,
-        native_unit="m" if selector == "orog" else "m s**-1",
-        step_type="accum" if interval else "instant",
+        native_unit=(
+            "m" if selector == "orog" else "W m**-2" if selector == "dswrf" else "m s**-1"
+        ),
+        step_type="accum" if selector == "apcp" else "avg" if interval else "instant",
         step_start_hours=(step_start_hours if step_start_hours is not None else float(lead_hours)),
         step_end_hours=float(lead_hours),
-        statistic_type="1" if interval else None,
-        quantization_step=0.0625 if interval else None,
+        statistic_type="1" if selector == "apcp" else "0" if interval else None,
+        quantization_step=0.0625 if selector == "apcp" else 0.02 if interval else None,
         native_missing_count=missing_count,
         compact_missing_count=missing_count,
         values=MatrixSliceReference(
@@ -215,6 +220,8 @@ def test_compact_normalizer_reuses_identity_rows_and_consolidates_derived_rows(
         ("vgrd_10m", "2026-08-24T01:00:00Z", 1, 4.0, None),
         ("apcp", "2026-08-24T01:00:00Z", 1, 1.0, 0.0),
         ("apcp", "2026-08-24T02:00:00Z", 2, 3.0, 0.0),
+        ("dswrf", "2026-08-25T10:00:00Z", 34, 100.0, 30.0),
+        ("dswrf", "2026-08-25T11:00:00Z", 35, 80.2, 30.0),
     )
     values = np.stack(
         [
@@ -223,6 +230,8 @@ def test_compact_normalizer_reuses_identity_rows_and_consolidates_derived_rows(
         ]
     )
     values[1, 0, 0] = np.nan
+    values[7, 0, 0] = 290.18
+    values[8, 0, 0] = 232.12
     matrix = write_float64_matrix(
         store,
         directory,
@@ -276,12 +285,18 @@ def test_compact_normalizer_reuses_identity_rows_and_consolidates_derived_rows(
     assert stage.inputs == (parser_manifest, matrix)
     assert [item.artifact_key for item in stage.outputs] == [
         "gfs_compact_canonical_derived_values",
+        "gfs_shortwave_corrections",
         "gfs_compact_canonical_grid_batch",
     ]
+    corrections = json.loads(store.verify_reference(stage.outputs[1]).read_bytes())
+    assert corrections["tolerance_w_m2"] == 0.2
+    assert corrections["intervals"][0]["corrected_grid_cell_count"] == 1
+    assert corrections["intervals"][0]["minimum_before_clamp_w_m2"] == pytest.approx(-0.12)
     batch_reference = stage.outputs[-1]
     canonical = GfsCompactCanonicalGridBatch.model_validate_json(
         store.verify_reference(batch_reference).read_bytes(), strict=True
     )
+    assert canonical.normalizer_version == "gfs-normalizer/9"
     by_field = {(grain.field_code, grain.valid_at_utc): grain for grain in canonical.surface_grains}
     assert canonical.grid.model_elevation_msl_m.artifact == matrix
     assert by_field[("air_temperature_k", "2026-08-24T01:00:00Z")].values.artifact == matrix
@@ -318,7 +333,36 @@ def test_compact_normalizer_reuses_identity_rows_and_consolidates_derived_rows(
         ),
         2.0,
     )
+    shortwave = by_field[("shortwave_radiation_w_m2", "2026-08-25T11:00:00Z")]
+    assert shortwave.derivation_method == "gfs_shortwave_near_zero_clamp"
+    shortwave_values = load_matrix_slice(
+        store, shortwave.values, expected_selection_sha256=descriptor.selection_sha256
+    )
+    assert shortwave_values[0, 0] == 0.0
+    assert shortwave_values[0, 1] == pytest.approx(1.0)
     assert store.verification.matrices_loaded == 3
+
+
+def test_shortwave_rejects_material_negative_or_negative_native_value(tmp_path) -> None:
+    store = WeatherArtifactStore.create_fresh(RUN_KEY, project_root=tmp_path)
+    directory = store.begin_stage("normalizer", "gfs-normalizer/9", "d" * 64)
+    source = _message(
+        store,
+        directory,
+        selector="dswrf",
+        valid_at_utc="2026-08-25T11:00:00Z",
+        lead_hours=35,
+        value=80.2,
+        step_start_hours=30,
+    )
+    with pytest.raises(ValueError, match="negative downward shortwave"):
+        _require_nonnegative_native_shortwave(np.array([[-0.01]]), source)
+    with pytest.raises(ValueError, match="below -0.2 W/m2"):
+        _nonnegative_shortwave(np.array([[-0.21, 1.0]]), source, (source,))
+    corrected, count, minimum = _nonnegative_shortwave(np.array([[-0.2, 1.0]]), source, (source,))
+    assert corrected.tolist() == [[0.0, 1.0]]
+    assert count == 1
+    assert minimum == -0.2
 
 
 def test_normalizer_keeps_multi_valid_time_arrays_unique_and_promotes_orography(
