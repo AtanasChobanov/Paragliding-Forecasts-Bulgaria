@@ -1,12 +1,12 @@
 # Project Handoff
 
-## T-020 hourly GFS timing repair — removal migration prepared
+## T-020 hourly GFS timing repair — owner migration verified
 
 The owner accepted DEC-068: a shared GFS product cycle has per-valid-hour
 GRIB/`.idx` Last-Modified evidence. The first forward-only Drizzle migration
 adds nullable `weather_product_valid_times.required_inputs_last_modified_at_utc`
 and SQLite guards for point product identity and daily input run/footprint
-identity. A second forward-only migration is now prepared to remove the
+identity. A second forward-only migration removes the
 product-level `available_at_utc`. Persistence checks the per-hour request-plan
 times; the joined dataset uses their eleven-hour maximum and output contract `/2`.
 The `started_at_utc` issue is intentionally deferred.
@@ -39,12 +39,16 @@ schema and idempotence checks passed. The full database suite passed 33 tests,
 the Python suite passed 415 tests, and Drizzle check, TypeScript typecheck,
 ESLint, Prettier, Ruff, and `repo:check` passed. A final read-only owner-DB
 inspection found 18 applied migrations, 209 timed valid hours, and no trigger,
-view, or index referencing the old column. **This second migration has not run
-on the owner's DB.** The pre-repair backup predates the 209-value repair: take
-a new SQLite backup before running
-`npm.cmd run db:migrate --workspace @paragliding-forecasts/database`. Do not
-resume the active 75-job batch with the new persistence code until that
-migration succeeds. T-020 remains In Progress;
+view, or index referencing the old column before the owner ran the second
+migration. The owner then reported running it. A read-only check confirmed
+19 applied migrations, no product-level
+`available_at_utc` column, 209 preserved hourly timing values, `quick_check`
+`ok`, and no foreign-key violations. The 75-job batch still has four persisted
+jobs; the fifth raw manifest is complete but has no SQLite row. No batch writer
+lock exists, and D: had approximately 548 GiB free at verification. The next
+operator step is offline `weather-ingest resume` for the fifth run, then
+`weather-backfill batch-run` for the remaining 70 jobs. The agent has not run
+those product commands. T-020 remains In Progress;
 the batch is paused at raw-complete run
 `84d75951-1bd2-47ae-89fc-28bb50d9a64d`.
 
