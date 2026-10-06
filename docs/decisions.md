@@ -80,6 +80,7 @@ consequences. Temporary progress and Git state belong in
 | DEC-065     | Require evening prediction and alert delivery by 20:00 Sofia time              | Accepted   | 2026-10-04 |
 | DEC-066     | Pin the first historical cohort to 06Z and defer 2025 acquisition             | Accepted   | 2026-10-05 |
 | DEC-067     | Bound negative reconstructed GFS downward shortwave radiation                 | Accepted   | 2026-10-06 |
+| DEC-068     | Store GFS source readiness per valid hour and guard weather graph identity   | Accepted   | 2026-10-06 |
 
 ## Individual decisions
 
@@ -2928,3 +2929,34 @@ does not certify all future dates or change signed sensible/latent fluxes.
 
 **Related files:** [`../services/ml/README.md`](../services/ml/README.md) and
 [`handoff.md`](handoff.md).
+
+### DEC-068 - Store GFS source readiness per valid hour and guard weather graph identity
+
+**Status:** Accepted by the owner for the T-020 backfill repair
+
+**Date:** 2026-10-06
+
+**Context:** Two target-day jobs can use different forecast-hour files from the
+same native GFS cycle. Their selected-file Last-Modified maxima differ, so
+`weather_product_runs.available_at_utc` cannot represent both. The point-sample
+schema also allowed its ingestion run and product valid time to refer to
+different product runs, despite normal writers creating consistent rows.
+
+**Decision:** Keep the native cycle identity in `weather_product_runs`. Record
+`required_inputs_last_modified_at_utc` on `weather_product_valid_times` as the
+maximum verified GRIB and `.idx` Last-Modified timestamp for that forecast hour.
+The job's source-ready proxy is the maximum over its exact eleven valid hours;
+the acquisition receipt and fixed 06Z issue cutoff are independent checks.
+This metadata is immutable for a product/valid-hour identity. A conflicting
+source revision must be investigated and represented with a new product
+identity, never overwritten. Keep both `weather_point_samples` references:
+its ingestion run owns the sampled/derived facts, while the product valid time
+identifies the forecast hour. Enforce their shared product identity and the
+daily snapshot input's matching run and point footprint in SQLite and at join.
+
+**Rollout:** First add the nullable valid-hour field and relational guards.
+Populate already persisted GFS rows only from hash-verified local request plans
+through a one-off reviewed offline script; the product-level column remains
+temporarily for migration safety. Remove it in a later forward-only migration
+after the owner reviews the repair report. A missing per-hour timestamp fails
+the T-020 06Z join. `started_at_utc` is unchanged.

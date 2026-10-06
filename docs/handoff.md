@@ -1,5 +1,27 @@
 # Project Handoff
 
+## T-020 hourly GFS timing repair — code prepared, operator repair pending
+
+The owner accepted DEC-068: a shared GFS product cycle has per-valid-hour
+GRIB/`.idx` Last-Modified evidence. The first forward-only Drizzle migration
+adds nullable `weather_product_valid_times.required_inputs_last_modified_at_utc`
+and SQLite guards for point product identity and daily input run/footprint
+identity. The product-level `available_at_utc` remains temporarily for a
+reviewed data repair. Persistence now checks the per-hour request-plan times;
+the joined dataset uses their eleven-hour maximum and output contract `/2`.
+The `started_at_utc` issue is intentionally deferred.
+
+An ignored one-off offline script is prepared at
+`data/local/repair_gfs_source_times_once.py`. It has **not** been executed
+against the owner's database. It verifies SQLite raw-manifest SHA-256,
+hash-linked request plans, product/valid-hour identities and existing values;
+its default mode reports proposed updates and `--apply` requires an existing
+backup. Before any owner-database execution, show the exact script, command,
+backup step and expected report to the owner for explicit approval. Do not
+run weather product commands as the agent. The follow-up migration removing
+the obsolete product-level field must wait until repair results are reviewed.
+T-020 remains In Progress, and the active 75-job batch remains paused.
+
 ## Active blocker: per-job GFS source availability — 2026-10-06
 
 The owner successfully resumed 2021-10-02 D+1 offline, then ran the same
@@ -24,19 +46,13 @@ from that shared row for an exact per-job as-of check. All 17 product keys
 shared by more than one job in this frozen batch have differing selected-range
 availability. The collision will recur; a simple retry cannot fix it.
 
-Recommended architectural correction, not yet accepted or implemented:
-retain `weather_product_runs` for native source/cycle identity and move the
-selected-range ready timestamp into immutable `weather_ingestion_runs`
-evidence. Add a Drizzle migration, backfill existing run values from verified
-manifest evidence (the 23 currently persisted runs have no mismatch with
-their product rows), adjust persistence/replay and the horizon-matched join,
-and test two target/horizon jobs sharing one product with different
-availability. Do not overwrite the existing product row's timestamp to make
-the fifth job pass; that would make the first job's provenance incorrect.
-After a reviewed correction, the fifth run can resume offline without GFS
-refetch, then the same batch can continue its 70 unstarted jobs. T-020
-remains In Progress. The previous section records the completed shortwave
-repair and the earlier operator state.
+The superseded initial suggestion was to store the selected-range maximum on
+`weather_ingestion_runs`. DEC-068 instead places the source-file timing at
+the exact product valid hour and derives the job maximum. Do not overwrite
+the existing product row's timestamp to make the fifth job pass. After the
+reviewed metadata repair, the fifth run can resume offline without GFS
+refetch, then the same batch can continue its 70 unstarted jobs. The previous
+section records the completed shortwave repair and the earlier operator state.
 
 ## Active 06Z batch repair — 2026-10-06
 

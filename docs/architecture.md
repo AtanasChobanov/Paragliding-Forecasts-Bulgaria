@@ -114,16 +114,24 @@ The source-neutral weather schema is a hybrid relational design:
   exact native GFS cycle or ERA5 coverage product. No semantic `model_version`
   is fabricated when those sources do not publish one; source dataset,
   `source_product_key`, timestamps, manifest, and pipeline versions provide the
-  reproducible identity.
+  reproducible identity. GFS source readiness is specific to the required
+  forecast-hour files, so `weather_product_valid_times` stores their verified
+  Last-Modified maximum for each valid hour. A job's ready proxy is the maximum
+  over its selected valid hours, not an attribute of the whole product cycle.
 - `weather_site_sampling_configs`, grids, reusable grid points, versioned
   footprints, and footprint nodes preserve where and how a canonical site was
   sampled. One approved weather coordinate exists per site in T-018; Dobrich
   uses the accepted-flight Kardam centroid, while its `sites` coordinate remains
   the region/map centre.
-- `weather_samples` holds one canonical point/valid-time record and its direct
-  scalar surface fields. Pressure levels, repeated CAPE/CIN variants, and
-  interval/statistic measurements stay in normalized child tables.
-- `weather_feature_snapshots` holds versioned derived ML-ready features.
+- `weather_point_samples` holds one canonical point/valid-time record and its
+  direct scalar surface fields. Its ingestion run owns the processed fact;
+  its product valid time identifies the forecast hour. SQLite guards require
+  both paths to reference the same product cycle. Pressure levels, repeated
+  CAPE/CIN variants, and interval/statistic measurements stay in normalized
+  child tables.
+- `weather_daily_feature_snapshots` holds versioned derived ML-ready features.
+  Its input links identify the exact hourly samples and must match the daily
+  snapshot's ingestion run and point footprint.
   `weather_field_provenance` records source/native meaning and one explicit
   quality state for each stored field, including `real`, `derived`, `missing`,
   `sentinel_missing`, and `invalid_payload`.

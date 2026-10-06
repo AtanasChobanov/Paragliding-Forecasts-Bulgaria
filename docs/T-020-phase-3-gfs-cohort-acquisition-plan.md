@@ -1,5 +1,13 @@
 # T-020 phase 3 — GFS cohort, evaluation reserve, and resumable acquisition plan
 
+> **6 October source-timing repair (DEC-068):** The selected GFS GRIB/`.idx`
+> files become ready per forecast hour, not per entire cycle. SQLite now has
+> `weather_product_valid_times.required_inputs_last_modified_at_utc`; a job's
+> source-ready proxy is the maximum of its eleven hours and must equal its
+> frozen acquisition receipt. The active batch is paused until existing
+> persisted rows receive an owner-reviewed, one-off offline metadata repair.
+> Its completed raw downloads do not need to be fetched again.
+
 > **5 October implementation update (DEC-066):** The owner selected a fixed
 > issue-date **06Z** cycle, source-ready cutoff **16:00 Europe/Sofia**, and
 > separate delivery deadline **20:00 Europe/Sofia**. The new `/2` cohort plan
