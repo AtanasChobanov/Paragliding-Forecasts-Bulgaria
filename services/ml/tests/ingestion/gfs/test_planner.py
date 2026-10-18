@@ -27,7 +27,9 @@ class FakeTransport(HttpTransport):
                 },
                 b"",
             )
-        return HttpResponse(200, {}, self.index_body)
+        return HttpResponse(
+            200, {"Last-Modified": "Fri, 21 Aug 2026 01:00:01 GMT"}, self.index_body
+        )
 
 
 class LeadAwareFakeTransport(FakeTransport):
@@ -39,7 +41,7 @@ class LeadAwareFakeTransport(FakeTransport):
             f"1:0:d=2026082100:TMP:2 m above ground:{lead} hour fcst:\n"
             f"2:10:d=2026082100:VGRD:10 m above ground:{lead} hour fcst:\n"
         ).encode()
-        return HttpResponse(200, {}, body)
+        return HttpResponse(200, {"Last-Modified": "Fri, 21 Aug 2026 01:00:01 GMT"}, body)
 
 
 def _request() -> GfsRequest:
@@ -63,6 +65,8 @@ def test_planner_persists_selected_forecast_descriptor() -> None:
     planned_range = plan.adapter_request["ranges"][0]
     assert plan.adapter_request["selector_set_version"] == 2
     assert planned_range["forecast_descriptors"] == ["7 hour fcst"]
+    assert plan.adapter_request["available_at_utc"] == "2026-08-21T01:00:01Z"
+    assert planned_range["index_last_modified_utc"] == "2026-08-21T01:00:01Z"
 
 
 def test_weather_ingest_plan_binds_compact_acquisition_identity() -> None:
@@ -105,3 +109,23 @@ def test_planner_classifies_selector_mismatch_separately() -> None:
 
     assert captured.value.kind == "source_contract_mismatch"
     assert "available HPBL forms" in str(captured.value)
+
+
+def test_planner_rejects_index_published_after_source_cutoff() -> None:
+    index = (
+        b"1:0:d=2026082100:TMP:2 m above ground:7 hour fcst:\n"
+        b"2:10:d=2026082100:VGRD:10 m above ground:7 hour fcst:\n"
+    )
+    request = GfsRequest(
+        run_key="123e4567-e89b-42d3-a456-426614174000",
+        request_purpose="historical_forecast",
+        valid_at_utc=("2026-08-21T07:00:00Z",),
+        newest_complete_before_utc="2026-08-21T01:00:00Z",
+        maximum_cycles_back=1,
+    )
+    planner = GfsPlanner(
+        FakeTransport(index), selectors=(GfsSelector("tmp_2m", "TMP", "2 m above ground"),)
+    )
+    with pytest.raises(GfsPlanningError) as captured:
+        planner.plan(request, created_at_utc="2026-08-21T01:01:00Z")
+    assert captured.value.kind == "incomplete_run"

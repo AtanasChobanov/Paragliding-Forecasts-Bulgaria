@@ -7,7 +7,16 @@ from datetime import date
 from itertools import pairwise
 from typing import Self
 
-from playwright.sync_api import Browser, BrowserContext, Page, Playwright, sync_playwright
+from playwright.sync_api import (
+    Browser,
+    BrowserContext,
+    Page,
+    Playwright,
+    sync_playwright,
+)
+from playwright.sync_api import (
+    TimeoutError as PlaywrightTimeoutError,
+)
 
 from .models import (
     SOURCE_LIST_URL,
@@ -75,19 +84,8 @@ class PlaywrightFlightListDriver:
     def prepare_season(self, season: int) -> None:
         """Select one XCContest season through the rendered control."""
 
-        page = self._active_page
-        self._pace_source_transition()
-        response = page.goto(ROOT_URL, wait_until="domcontentloaded")
-        if response is None or not 200 <= response.status < 400:
-            status = "no response" if response is None else str(response.status)
-            raise BrowserCollectionError(f"XCContest flights page navigation failed with {status}.")
-        self._wait_for_flights_container()
-
-        season_option = self._season_option_value(season)
-        self._pace_source_transition()
-        page.locator(SEASON_SELECTOR).select_option(season_option)
-        page.wait_for_load_state("domcontentloaded")
-        self._wait_for_flights_container()
+        self._navigate_to_root()
+        self._select_season(season)
 
     def select_country(self, country_code: str) -> None:
         """Select one discovered ISO2 country through the rendered control."""
@@ -99,7 +97,9 @@ class PlaywrightFlightListDriver:
 
         self._select_option(GLIDER_SELECTOR, scope.category.filter_value)
         self._select_option(DATE_SELECTOR, scope.date_filter or "")
-        self._ensure_sort(scope.sort_key, scope.sort_direction)
+        if scope.sort_mode == "explicit":
+            assert scope.sort_key is not None and scope.sort_direction is not None
+            self._ensure_sort(scope.sort_key, scope.sort_direction)
 
     def available_dates(self, season: int) -> tuple[str, ...]:
         """Read source-offered ISO dates; never invent a calendar or URL filter."""
@@ -132,44 +132,75 @@ class PlaywrightFlightListDriver:
                 )
 
     def read_page(self, season: int, scope: FlightListScope) -> PageObservation:
-        """Read control fields and retain only the rendered list fragment."""
+        """Read one internally consistent rendered list snapshot.
+
+        XCContest replaces the filter controls and rows asynchronously. Keep the
+        immutable fragment and every observation used to describe it in one
+        synchronous browser callback so a transition cannot combine a previous
+        day's HTML with a newer day's controls or rows.
+        """
 
         page = self._active_page
         self._wait_for_flights_container()
-        fragment_html = page.locator(FLIGHTS_CONTAINER_SELECTOR).evaluate(
-            "element => element.outerHTML"
-        )
-        raw_rows = page.locator(ROW_SELECTOR).evaluate_all(
-            """(rows, selectors) => rows.map(row => {
-                const distance = row.querySelector(selectors.distance)?.textContent?.trim() ?? '';
-                const launchLink = row.querySelector(selectors.launchLink);
-                const launchCell = launchLink?.closest('td');
-                const launchCountry = launchCell
-                    ?.querySelector(selectors.launchCountry)?.textContent?.trim() ?? '';
+        if scope.date_filter is not None:
+            try:
+                page.wait_for_function(
+                    """([selector, expected]) => {
+                        const select = document.querySelector(`#flights ${selector}`);
+                        return select?.querySelector('option[selected]')?.value === expected;
+                    }""",
+                    arg=[DATE_SELECTOR, scope.date_filter],
+                )
+            except PlaywrightTimeoutError as error:
+                raise BrowserCollectionError(
+                    f"XCContest rendered list did not settle on {scope.date_filter}."
+                ) from error
+        snapshot = page.locator(FLIGHTS_CONTAINER_SELECTOR).evaluate(
+            """(flights, selectors) => {
+                const rows = Array.from(flights.querySelectorAll(selectors.row));
+                const selectedValue = selector =>
+                    flights.querySelector(selector)?.value ?? '';
+                const nextLink = flights.querySelector(".XCpager a[title='next page']");
                 return {
-                    id: row.id.replace(/^flight-/, ''),
-                    distance,
-                    launchCountry,
+                    fragmentHtml: flights.outerHTML,
+                    countryFilter: selectedValue(selectors.country),
+                    gliderCategoryFilter: selectedValue(selectors.glider),
+                    dateFilter: selectedValue(selectors.date),
+                    hasNextPage: Boolean(nextLink?.getAttribute('href') && nextLink.getAttribute('href') !== '#'),
+                    rows: rows.map(row => {
+                        const distance = row.querySelector(selectors.distance)?.textContent?.trim() ?? '';
+                        const launchLink = row.querySelector(selectors.launchLink);
+                        const launchCell = launchLink?.closest('td');
+                        const launchCountry = launchCell
+                            ?.querySelector(selectors.launchCountry)?.textContent?.trim() ?? '';
+                        return {
+                            id: row.id.replace(/^flight-/, ''),
+                            distance,
+                            launchCountry,
+                        };
+                    }),
                 };
-            })""",
+            }""",
             {
+                "row": ROW_SELECTOR.removeprefix(f"{FLIGHTS_CONTAINER_SELECTOR} "),
+                "country": COUNTRY_SELECTOR,
+                "glider": GLIDER_SELECTOR,
+                "date": DATE_SELECTOR,
                 "distance": DISTANCE_SELECTOR,
                 "launchLink": LAUNCH_LINK_SELECTOR,
                 "launchCountry": LAUNCH_COUNTRY_SELECTOR,
             },
         )
-        rows = tuple(self._row_observation(row) for row in raw_rows)
-        next_link = page.locator(".XCpager a[title='next page']")
-        next_href = next_link.get_attribute("href") if next_link.count() else None
+        rows = tuple(self._row_observation(row) for row in snapshot["rows"])
         return PageObservation(
             season=season,
             scope=scope,
-            country_filter=page.locator(COUNTRY_SELECTOR).input_value(),
-            glider_category_filter=page.locator(GLIDER_SELECTOR).input_value(),
-            date_filter=page.locator(DATE_SELECTOR).input_value(),
+            country_filter=str(snapshot["countryFilter"]),
+            glider_category_filter=str(snapshot["gliderCategoryFilter"]),
+            date_filter=str(snapshot["dateFilter"]),
             rows=rows,
-            fragment_html=fragment_html,
-            has_next_page=bool(next_href and next_href != "#"),
+            fragment_html=str(snapshot["fragmentHtml"]),
+            has_next_page=bool(snapshot["hasNextPage"]),
         )
 
     @staticmethod
@@ -194,16 +225,47 @@ class PlaywrightFlightListDriver:
             f"XCContest did not offer season {season} in its season selector."
         )
 
+    def _navigate_to_root(self) -> None:
+        page = self._active_page
+        self._pace_source_transition()
+        response = page.goto(ROOT_URL, wait_until="domcontentloaded")
+        if response is None or not 200 <= response.status < 400:
+            status = "no response" if response is None else str(response.status)
+            raise BrowserCollectionError(f"XCContest flights page navigation failed with {status}.")
+        self._wait_for_flights_container()
+
+    def _select_season(self, season: int) -> None:
+        page = self._active_page
+        season_option = self._season_option_value(season)
+        self._pace_source_transition()
+        page.locator(SEASON_SELECTOR).select_option(season_option)
+        page.wait_for_load_state("domcontentloaded")
+        self._wait_for_flights_container()
+
     def _select_option(self, selector: str, value: str) -> None:
         page = self._active_page
         if page.locator(selector).input_value() == value:
             return
+        previous_url = page.url
         previous_fragment = page.locator(FLIGHTS_CONTAINER_SELECTOR).evaluate(
             "element => element.outerHTML"
         )
+        page.locator("html").evaluate(
+            "element => element.dataset.xccontestCollectorTransition = 'pending'"
+        )
         self._pace_source_transition()
         page.locator(selector).select_option(value)
-        self._wait_for_selected_value(selector, value, previous_fragment)
+        try:
+            self._wait_for_selected_value(
+                selector,
+                value,
+                previous_fragment,
+                previous_url=previous_url,
+            )
+        finally:
+            page.locator("html").evaluate(
+                "element => delete element.dataset.xccontestCollectorTransition"
+            )
 
     def _ensure_sort(self, sort_key: str, sort_direction: str) -> None:
         page = self._active_page
@@ -254,21 +316,32 @@ class PlaywrightFlightListDriver:
         selector: str,
         expected_value: str,
         previous_fragment: str | None = None,
+        *,
+        previous_url: str | None = None,
     ) -> None:
-        if previous_fragment is None:
-            self._active_page.wait_for_function(
-                "([selector, expectedValue]) => document.querySelector(selector)?.value === expectedValue",
-                arg=[selector, expected_value],
-            )
-        else:
-            self._active_page.wait_for_function(
-                """([selector, expectedValue, previousHtml]) => {
-                    const flights = document.querySelector("#flights");
-                    return document.querySelector(selector)?.value === expectedValue
-                        && flights?.outerHTML !== previousHtml;
-                }""",
-                arg=[selector, expected_value, previous_fragment],
-            )
+        try:
+            if previous_fragment is None or previous_url is None:
+                self._active_page.wait_for_function(
+                    "([selector, expectedValue]) => document.querySelector(selector)?.value === expectedValue",
+                    arg=[selector, expected_value],
+                )
+            else:
+                self._active_page.wait_for_function(
+                    """([selector, expectedValue, previousHtml, previousUrl]) => {
+                        const flights = document.querySelector("#flights");
+                        const documentChanged =
+                            document.documentElement.dataset.xccontestCollectorTransition !== "pending";
+                        return document.querySelector(selector)?.value === expectedValue
+                            && (window.location.href !== previousUrl
+                                || documentChanged
+                                || flights?.outerHTML !== previousHtml);
+                    }""",
+                    arg=[selector, expected_value, previous_fragment, previous_url],
+                )
+        except PlaywrightTimeoutError as error:
+            raise BrowserCollectionError(
+                f"XCContest control {selector} did not settle on {expected_value!r}."
+            ) from error
         self._wait_for_flights_container()
 
     def _pace_source_transition(self) -> None:

@@ -6,16 +6,26 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import Any
 
-from .models import MIN_DISTANCE_KM, SOURCE_CODE, SOURCE_LIST_URL
-from .selectors import DISTANCE_SELECTOR
+from .models import (
+    ACTIVITY_DATE_END_MONTH_DAY,
+    ACTIVITY_DATE_POLICY,
+    ACTIVITY_DATE_START_MONTH_DAY,
+    SOURCE_CODE,
+    SOURCE_LIST_URL,
+    THRESHOLD_COVERAGE_DISTANCE_KM,
+    is_supported_activity_date,
+)
+from .selectors import DATE_SELECTOR, DISTANCE_SELECTOR, TAKEOFF_CELL_SELECTOR
 from .versions import RAW_MANIFEST_SCHEMA_VERSION
 
 COUNTRY_CODE_PATTERN = re.compile(r"^[A-Z]{2}$")
 FLIGHT_ROW_ID_PATTERN = re.compile(r"^flight-([0-9]+)$")
-SUPPORTED_MANIFEST_SCHEMA_VERSIONS = (1, 2, RAW_MANIFEST_SCHEMA_VERSION)
+TAKEOFF_DATE_PATTERN = re.compile(r"\b(\d{2})\.(\d{2})\.(\d{2})\b")
+SUPPORTED_MANIFEST_SCHEMA_VERSIONS = (1, 2, 3, 4, RAW_MANIFEST_SCHEMA_VERSION)
 
 
 class ManifestValidationError(ValueError):
@@ -52,18 +62,78 @@ class ManifestContract:
                 raise ManifestValidationError(
                     "Raw artifact row has a non-numeric scored distance."
                 ) from error
-            qualifying_rows += distance >= MIN_DISTANCE_KM
+            qualifying_rows += distance >= THRESHOLD_COVERAGE_DISTANCE_KM
 
         if self.schema_version >= 2:
             if len(rows) != artifact["row_observation_count"]:
                 raise ManifestValidationError(
                     f"Manifest v2 row count does not match artifact: {artifact['path']}"
                 )
-            if qualifying_rows != artifact["qualifying_row_observation_count"]:
+            expected_qualifying = (
+                artifact["at_or_above_100km_row_observation_count"]
+                if self.schema_version >= 4
+                else artifact["qualifying_row_observation_count"]
+            )
+            if qualifying_rows != expected_qualifying:
                 raise ManifestValidationError(
                     f"Manifest v2 qualifying count does not match artifact: {artifact['path']}"
                 )
+            if self.schema_version >= 4:
+                if source_flight_ids != artifact["source_flight_ids"]:
+                    raise ManifestValidationError(
+                        f"Manifest v4 source IDs do not match artifact: {artifact['path']}"
+                    )
+                if len(rows) - qualifying_rows != artifact["below_100km_row_observation_count"]:
+                    raise ManifestValidationError(
+                        f"Manifest v4 below-threshold count does not match artifact: {artifact['path']}"
+                    )
         return tuple(source_flight_ids)
+
+    def verify_dated_artifact(
+        self, artifact: dict[str, Any], document: Any, rows: list[Any]
+    ) -> None:
+        """Fail closed when a date-scoped raw view does not prove its selected date."""
+
+        expected_date = artifact.get("date_filter")
+        if expected_date is None:
+            return
+        if not isinstance(expected_date, str) or not re.fullmatch(
+            r"\d{4}-\d{2}-\d{2}", expected_date
+        ):
+            raise ManifestValidationError(
+                f"Raw artifact has an invalid date filter: {artifact['path']}"
+            )
+        expected_year, expected_month, expected_day = (
+            int(value) for value in expected_date.split("-")
+        )
+        try:
+            date(expected_year, expected_month, expected_day)
+        except ValueError as error:
+            raise ManifestValidationError(
+                f"Raw artifact has an invalid date filter: {artifact['path']}"
+            ) from error
+
+        selected = document.css_first(f"{DATE_SELECTOR} option[selected]")
+        serialized_date = selected.attributes.get("value") if selected is not None else None
+        if serialized_date != expected_date:
+            raise ManifestValidationError(
+                "Raw artifact selected date does not match manifest date filter: "
+                f"{artifact['path']} (expected {expected_date}, got {serialized_date!r})"
+            )
+
+        for row in rows:
+            takeoff = row.css_first(f"{TAKEOFF_CELL_SELECTOR} .full")
+            match = TAKEOFF_DATE_PATTERN.search(takeoff.text()) if takeoff is not None else None
+            if match is None:
+                raise ManifestValidationError(
+                    f"Raw artifact row is missing its takeoff date: {artifact['path']}"
+                )
+            day, month, short_year = (int(value) for value in match.groups())
+            if (day, month, short_year) != (expected_day, expected_month, expected_year % 100):
+                raise ManifestValidationError(
+                    "Raw artifact flight date does not match manifest date filter: "
+                    f"{artifact['path']} (expected {expected_date})"
+                )
 
     def verify_run_rows(self, source_flight_ids: list[str]) -> None:
         """Verify v2 run-wide observation, distinct-ID, and repeat counters."""
@@ -158,7 +228,7 @@ def _validate_v2_or_v3_scope_and_targets(
         raise ManifestValidationError("Manifest v2 country scope source must be all_sites.")
     if scope.get("primary_glider_category") != "FAI3":
         raise ManifestValidationError("Manifest v2 primary glider category must be FAI3.")
-    if scope.get("minimum_scored_distance_km") != MIN_DISTANCE_KM:
+    if scope.get("minimum_scored_distance_km") != THRESHOLD_COVERAGE_DISTANCE_KM:
         raise ManifestValidationError("Manifest v2 minimum scored distance must be 100 km.")
 
     expected_targets = {(season, country) for season in requested_seasons for country in countries}
@@ -231,6 +301,185 @@ def _validate_v2_or_v3_artifacts_and_counts(
     return {field: counts[field] for field in required_count_fields}
 
 
+def _validate_v4_scope_and_targets(
+    manifest: dict[str, Any],
+) -> tuple[tuple[str, ...], tuple[int, ...]]:
+    if manifest.get("source_url") != SOURCE_LIST_URL:
+        raise ManifestValidationError("Manifest v4 source URL is unsupported.")
+    if not isinstance(manifest.get("collector_version"), str) or not manifest["collector_version"]:
+        raise ManifestValidationError("Manifest v4 must identify its collector version.")
+    if manifest.get("status") not in {"complete", "incomplete"}:
+        raise ManifestValidationError("Manifest v4 collection status is invalid.")
+    scope = manifest.get("scope")
+    if not isinstance(scope, dict):
+        raise ManifestValidationError("Manifest v4 scope must be an object.")
+    countries = _unique_values(
+        scope.get("country_codes"),
+        "scope.country_codes",
+        lambda item: isinstance(item, str) and COUNTRY_CODE_PATTERN.fullmatch(item) is not None,
+    )
+    seasons = _unique_values(
+        scope.get("requested_seasons"),
+        "scope.requested_seasons",
+        lambda item: isinstance(item, int) and 2000 <= item <= 2100,
+    )
+    completed = _unique_values(
+        scope.get("completed_seasons"),
+        "scope.completed_seasons",
+        lambda item: isinstance(item, int) and 2000 <= item <= 2100,
+    )
+    if set(seasons) != set(completed):
+        raise ManifestValidationError(
+            "Manifest v4 must complete every requested season before parsing."
+        )
+    if (
+        scope.get("country_scope_source") != "all_sites"
+        or scope.get("primary_glider_category") != "FAI3"
+        or scope.get("minimum_observed_scored_distance_km") != 0
+        or scope.get("threshold_coverage_distance_km") != THRESHOLD_COVERAGE_DISTANCE_KM
+    ):
+        raise ManifestValidationError("Manifest v4 scope contract is invalid.")
+    expected_targets = {(season, country) for season in seasons for country in countries}
+    targets = manifest.get("target_statuses")
+    if not isinstance(targets, list) or len(targets) != len(expected_targets):
+        raise ManifestValidationError("Manifest v4 target statuses are invalid.")
+    actual_targets: set[tuple[int, str]] = set()
+    for target in targets:
+        if (
+            not isinstance(target, dict)
+            or target.get("status")
+            not in {"complete_primary", "complete_partitioned", "saturated_unresolved"}
+            or not isinstance(target.get("unresolved_scopes"), list)
+        ):
+            raise ManifestValidationError("Manifest v4 target status is invalid.")
+        actual_targets.add((target.get("season"), target.get("country_code")))
+    if actual_targets != expected_targets:
+        raise ManifestValidationError(
+            "Manifest v4 target statuses do not cover the requested scope exactly."
+        )
+    return countries, seasons
+
+
+def _validate_v5_activity_date_policy(manifest: dict[str, Any]) -> None:
+    scope = manifest["scope"]
+    if scope.get("activity_date_policy") != {
+        "name": ACTIVITY_DATE_POLICY,
+        "included_from_month_day": ACTIVITY_DATE_START_MONTH_DAY,
+        "included_through_month_day": ACTIVITY_DATE_END_MONTH_DAY,
+    }:
+        raise ManifestValidationError("Manifest v5 activity-date policy is invalid.")
+
+    for target in manifest["target_statuses"]:
+        skipped_dates = target.get("skipped_activity_dates")
+        if not isinstance(skipped_dates, list) or len(set(skipped_dates)) != len(skipped_dates):
+            raise ManifestValidationError("Manifest v5 skipped activity dates are invalid.")
+        for value in skipped_dates:
+            if not isinstance(value, str):
+                raise ManifestValidationError("Manifest v5 skipped activity dates are invalid.")
+            try:
+                if is_supported_activity_date(value):
+                    raise ManifestValidationError(
+                        "Manifest v5 skipped activity date is inside the supported window."
+                    )
+            except ValueError as error:
+                raise ManifestValidationError(
+                    "Manifest v5 skipped activity date is invalid."
+                ) from error
+
+
+def _validate_v4_artifacts_and_counts(
+    manifest: dict[str, Any],
+    artifacts: list[dict[str, Any]],
+    country_codes: tuple[str, ...],
+    seasons: tuple[int, ...],
+) -> dict[str, int]:
+    total_rows = below = above = 0
+    for artifact in artifacts:
+        if (
+            artifact.get("season") not in seasons
+            or artifact.get("country_code") not in country_codes
+            or artifact.get("acquisition_purpose") not in {"threshold_100", "all_distance_activity"}
+        ):
+            raise ManifestValidationError("Manifest v4 artifact falls outside its declared scope.")
+        mode = artifact.get("sort_mode")
+        key, direction = artifact.get("sort_key"), artifact.get("sort_direction")
+        valid_sort = (
+            key is None and direction is None
+            if mode == "source_default"
+            else mode == "explicit"
+            and key in {"distance", "pilot", "points", "duration"}
+            and direction in {"ascending", "descending"}
+        )
+        ids = artifact.get("source_flight_ids")
+        row_count = artifact.get("row_observation_count")
+        artifact_below = artifact.get("below_100km_row_observation_count")
+        artifact_above = artifact.get("at_or_above_100km_row_observation_count")
+        if (
+            not valid_sort
+            or not isinstance(ids, list)
+            or not all(isinstance(item, str) and item.isdigit() for item in ids)
+            or not isinstance(row_count, int)
+            or row_count != len(ids)
+            or not isinstance(artifact_below, int)
+            or not isinstance(artifact_above, int)
+            or artifact_below < 0
+            or artifact_above < 0
+            or artifact_below + artifact_above != row_count
+            or type(artifact.get("has_next_page")) is not bool
+        ):
+            raise ManifestValidationError("Manifest v4 artifact contract is invalid.")
+        total_rows += row_count
+        below += artifact_below
+        above += artifact_above
+    counts = manifest.get("observation_counts")
+    fields = (
+        "views_written",
+        "row_observations_seen",
+        "distinct_source_flights_seen",
+        "repeated_source_flight_observations",
+        "below_100km_row_observations",
+        "at_or_above_100km_row_observations",
+    )
+    if not isinstance(counts, dict) or any(
+        not isinstance(counts.get(field), int) or counts[field] < 0 for field in fields
+    ):
+        raise ManifestValidationError("Manifest v4 observation counts are invalid.")
+    if (
+        counts["views_written"] != len(artifacts)
+        or counts["row_observations_seen"] != total_rows
+        or counts["below_100km_row_observations"] != below
+        or counts["at_or_above_100km_row_observations"] != above
+        or counts["distinct_source_flights_seen"] + counts["repeated_source_flight_observations"]
+        != total_rows
+    ):
+        raise ManifestValidationError("Manifest v4 observation counts do not match its artifacts.")
+    statuses = manifest.get("activity_scope_statuses")
+    if not isinstance(statuses, list) or any(
+        not isinstance(item, dict)
+        or item.get("status") not in {"complete", "partial_saturated", "empty", "failed"}
+        or type(item.get("source_default_captured")) is not bool
+        for item in statuses
+    ):
+        raise ManifestValidationError("Manifest v4 activity scope statuses are invalid.")
+    return {field: counts[field] for field in fields[:4]}
+
+
+def _validate_v5_activity_artifact_dates(artifacts: list[dict[str, Any]]) -> None:
+    for artifact in artifacts:
+        value = artifact.get("date_filter")
+        if value is None:
+            continue
+        if not isinstance(value, str):
+            raise ManifestValidationError("Manifest v5 artifact date is invalid.")
+        try:
+            if not is_supported_activity_date(value):
+                raise ManifestValidationError(
+                    "Manifest v5 artifact date falls outside the supported activity window."
+                )
+        except ValueError as error:
+            raise ManifestValidationError("Manifest v5 artifact date is invalid.") from error
+
+
 def load_manifest(
     run_key: str, project_root: Path
 ) -> tuple[Path, dict[str, Any], list[dict[str, Any]], ManifestContract]:
@@ -255,7 +504,17 @@ def load_manifest(
     if not isinstance(artifacts, list) or not artifacts:
         raise ManifestValidationError("Raw manifest must contain at least one artifact.")
 
-    if schema_version >= 2:
+    if schema_version >= 4:
+        countries, seasons = _validate_v4_scope_and_targets(manifest)
+        expected_counts = _validate_v4_artifacts_and_counts(manifest, artifacts, countries, seasons)
+        _validate_v3_source_pacing(manifest)
+        if schema_version == 5:
+            _validate_v5_activity_date_policy(manifest)
+            _validate_v5_activity_artifact_dates(artifacts)
+        collector_version = manifest["collector_version"]
+        status = manifest["status"]
+        legacy_country = None
+    elif schema_version >= 2:
         countries, seasons = _validate_v2_or_v3_scope_and_targets(manifest)
         expected_counts = _validate_v2_or_v3_artifacts_and_counts(
             manifest, artifacts, countries, seasons
@@ -288,10 +547,16 @@ def load_manifest(
 
     validated: list[dict[str, Any]] = []
     raw_root = (project_root / "data" / "raw").resolve()
-    required = ("path", "sha256", "season", "category", "sort_key", "sort_direction")
+    required = ("path", "sha256", "season", "category")
     for artifact in artifacts:
         if not isinstance(artifact, dict) or any(not artifact.get(key) for key in required):
             raise ManifestValidationError("Raw manifest artifact is missing required metadata.")
+        if schema_version < 4 and (
+            not artifact.get("sort_key") or not artifact.get("sort_direction")
+        ):
+            raise ManifestValidationError(
+                "Raw manifest artifact is missing required sort metadata."
+            )
         artifact_path = (project_root / artifact["path"]).resolve()
         try:
             artifact_path.relative_to(raw_run_dir.resolve())

@@ -376,6 +376,24 @@ def test_spatial_sampler_preserves_unsupported_as_null_evidence(tmp_path) -> Non
     assert sampled.canonical_value is None
 
 
+def test_spatial_sampler_clamps_only_numerical_noise_for_non_negative_intervals(tmp_path) -> None:
+    _store, _input_manifest, batch = _fixture(tmp_path)
+    shortwave = batch.surface_grains[0].model_copy(
+        update={
+            "field_code": "shortwave_radiation_w_m2",
+            "grain": "interval",
+            "canonical_unit": "W/m2",
+        }
+    )
+    precipitation = shortwave.model_copy(
+        update={"field_code": "precipitation_amount_mm", "canonical_unit": "mm"}
+    )
+
+    assert _sampled_field(shortwave, -8.8e-14).canonical_value == 0.0
+    assert _sampled_field(precipitation, -8.8e-14).canonical_value == 0.0
+    assert _sampled_field(shortwave, -1e-6).canonical_value == -1e-6
+
+
 def test_spatial_stage_handles_multi_time_terrain_agl_exclusions_and_fingerprints(
     tmp_path, monkeypatch
 ) -> None:

@@ -31,7 +31,37 @@ export const runMigrations = (databaseUrl?: string): void => {
   const connection = openDatabase(databaseUrl);
 
   try {
-    migrate(connection.db, { migrationsFolder });
+    const hasObsoleteProductTiming = connection.sqlite
+      .prepare("PRAGMA table_info(weather_product_runs)")
+      .all()
+      .some((column) => column.name === "available_at_utc");
+    if (!hasObsoleteProductTiming) {
+      migrate(connection.db, { migrationsFolder });
+      return;
+    }
+
+    if (connection.sqlite.prepare("PRAGMA foreign_keys").get()?.foreign_keys !== 1) {
+      throw new Error("Weather schema migration requires enabled foreign-key checks.");
+    }
+    if (connection.sqlite.prepare("PRAGMA foreign_key_check").get() !== undefined) {
+      throw new Error("Weather schema migration requires an existing valid foreign-key graph.");
+    }
+
+    // SQLite's documented table-rebuild sequence requires this outside the
+    // transaction that Drizzle opens. The migration checks the rebuilt graph
+    // before that transaction commits; the connection always restores FK mode.
+    connection.sqlite.exec("PRAGMA foreign_keys = OFF");
+    try {
+      migrate(connection.db, { migrationsFolder });
+    } finally {
+      connection.sqlite.exec("PRAGMA foreign_keys = ON");
+    }
+    if (connection.sqlite.prepare("PRAGMA foreign_keys").get()?.foreign_keys !== 1) {
+      throw new Error("Weather schema migration did not restore foreign-key enforcement.");
+    }
+    if (connection.sqlite.prepare("PRAGMA foreign_key_check").get() !== undefined) {
+      throw new Error("Weather schema migration broke foreign-key relationships.");
+    }
   } finally {
     connection.close();
   }

@@ -114,16 +114,24 @@ The source-neutral weather schema is a hybrid relational design:
   exact native GFS cycle or ERA5 coverage product. No semantic `model_version`
   is fabricated when those sources do not publish one; source dataset,
   `source_product_key`, timestamps, manifest, and pipeline versions provide the
-  reproducible identity.
+  reproducible identity. GFS source readiness is specific to the required
+  forecast-hour files, so `weather_product_valid_times` stores their verified
+  Last-Modified maximum for each valid hour. A job's ready proxy is the maximum
+  over its selected valid hours, not an attribute of the whole product cycle.
 - `weather_site_sampling_configs`, grids, reusable grid points, versioned
   footprints, and footprint nodes preserve where and how a canonical site was
   sampled. One approved weather coordinate exists per site in T-018; Dobrich
   uses the accepted-flight Kardam centroid, while its `sites` coordinate remains
   the region/map centre.
-- `weather_samples` holds one canonical point/valid-time record and its direct
-  scalar surface fields. Pressure levels, repeated CAPE/CIN variants, and
-  interval/statistic measurements stay in normalized child tables.
-- `weather_feature_snapshots` holds versioned derived ML-ready features.
+- `weather_point_samples` holds one canonical point/valid-time record and its
+  direct scalar surface fields. Its ingestion run owns the processed fact;
+  its product valid time identifies the forecast hour. SQLite guards require
+  both paths to reference the same product cycle. Pressure levels, repeated
+  CAPE/CIN variants, and interval/statistic measurements stay in normalized
+  child tables.
+- `weather_daily_feature_snapshots` holds versioned derived ML-ready features.
+  Its input links identify the exact hourly samples and must match the daily
+  snapshot's ingestion run and point footprint.
   `weather_field_provenance` records source/native meaning and one explicit
   quality state for each stored field, including `real`, `derived`, `missing`,
   `sentinel_missing`, and `invalid_payload`.
@@ -163,6 +171,38 @@ enable repeatable parsing, auditability, and reprocessing without another
 source request. Canonical accepted flight records are written to SQLite;
 ambiguous or rejected candidates remain in ignored interim/quarantine outputs.
 
+XCContest acquisition starts with one source-default parent-season capture, then
+continues with two explicit purposes. The `threshold-100` phase
+preserves the existing 100+ coverage strategy. The
+`all-distance-activity` phase is part of T-020 and works internally through
+source-offered season dates while the public command remains season-based. For
+each activity scope, it captures source-default order before explicit distance,
+pilot, points, and duration sorts, then uses exact glider classes when a daily
+parent view is saturated. It retains observed 0..2000 km records for the seven
+canonical locations. Only a positive-distance row may later prove activity.
+First-page saturation and mapping gaps remain explicit artifact evidence and
+may not be converted into false negative labels. Existing mapping review and
+quarantine remain sufficient; no new exclusion table is required.
+
+T-020 labels one `Europe/Sofia` site-day as positive, negative, or unknown for
+each inclusive 100/200/300 km threshold. Positive means a confirmed accepted
+threshold flight. Negative additionally requires accepted activity, mature and
+complete threshold coverage, and terminal mapping evidence. No accepted flight
+means unknown. Generated joined datasets remain ignored, deterministic JSONL
+artifacts with a hashed manifest rather than new canonical database tables.
+
+T-020 phase 2 is implemented by the offline `flight-label-audit` command under
+`services/ml/src/paragliding_forecasts_ml/datasets/`. It reads migrated SQLite
+and verifies raw/accepted/stage evidence without database writes or transport.
+DEC-063 pins the two reviewed repaired 2022–2025 runs as mature coverage through
+the packaged JSON audit policy; a local `--policy-file` can select another
+reviewed snapshot set. Sites come from SQLite without a fixed name/count list.
+It enumerates every date in the source seasons for those sites, emits an audit
+and separate complete/unknown label vectors, and hashes inputs, policies,
+provenance, and outputs in a deterministic manifest. It creates no schema or
+public API. The weather cohort, acquisition plan, and actual join remain the
+later T-020 phases.
+
 The initial project-brief prediction fields map to the T-002 internal
 `ForecastPrediction` domain model: numeric site identity/date, generation
 timestamp, cloudbase, three XC probability bands, overdevelopment risk,
@@ -197,6 +237,25 @@ Every displayed forecast must preserve:
 Missing values are not zero. Mock or baseline values are not real observations.
 Those distinctions must survive ingestion, storage, API serialization, and UI
 rendering.
+
+The MVP main issue uses a versioned 20:00 `Europe/Sofia` prior-evening cutoff
+and produces D+1, D+2, and D+3 forecasts. Historical rows use the newest complete
+GFS cycle available by that same cutoff and horizon; later cycles, reanalysis,
+and observations are not substitutes. A future morning refresh is a separate
+issue-time cohort.
+
+The overdevelopment MVP is a configurable decision-tree plus smooth score with
+critical `High` overrides, explicit missing-input behavior, policy version, and
+user-facing reasons. It is an informational weather-risk assessment rather than
+a safety guarantee.
+
+The proposed T-022 cloudbase baseline uses forecast-model soundings from the
+existing GFS profiles at all seven sites. IGRA Sofia remains later observational
+validation rather than a prediction input. The output must distinguish a
+nullable numeric cumulus base from a `blue` thermic-day state and a missing or
+indeterminate state. Exact parcel, inversion, usable-thermal-top, intraday, and
+MSL/AGL presentation rules remain open and are documented in
+[`T-022-sounding-cloudbase-research-note.md`](T-022-sounding-cloudbase-research-note.md).
 
 The contract models these states from one canonical five-state Zod enum. Its
 available-value subset is derived by excluding `missing` and is used only for

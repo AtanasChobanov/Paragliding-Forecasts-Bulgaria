@@ -7,6 +7,7 @@ import json
 import re
 import sqlite3
 from dataclasses import dataclass
+from math import isfinite
 from pathlib import Path
 from typing import Any
 
@@ -16,7 +17,7 @@ from paragliding_forecasts_ml.storage.sqlite import (
     open_writable_database,
 )
 
-from .models import SOURCE_CODE
+from .models import MAX_DISTANCE_KM, SOURCE_CODE, STORAGE_MIN_DISTANCE_KM
 from .reconciliation import (
     ReconciliationAction,
     ReconciliationError,
@@ -141,6 +142,39 @@ def load_policy(path: Path) -> tuple[str, str, bool, bool]:
     return basis, ref.strip(), training, operational
 
 
+def _collection_coverage(manifest: dict[str, Any]) -> dict[str, int | str]:
+    """Summarize immutable raw coverage without treating absent flights as negative evidence."""
+
+    schema_version = manifest.get("manifest_schema_version", 1)
+    if type(schema_version) is not int:
+        schema_version = 1
+    target_statuses = manifest.get("target_statuses")
+    unresolved_scope_count = (
+        sum(
+            len(target.get("unresolved_scopes", []))
+            for target in target_statuses
+            if isinstance(target, dict) and isinstance(target.get("unresolved_scopes"), list)
+        )
+        if isinstance(target_statuses, list)
+        else 0
+    )
+    activity_scope_statuses = manifest.get("activity_scope_statuses")
+    activity_states = (
+        [item.get("status") for item in activity_scope_statuses if isinstance(item, dict)]
+        if isinstance(activity_scope_statuses, list)
+        else []
+    )
+    status = str(manifest["status"])
+    return {
+        "raw_manifest_schema_version": schema_version,
+        "collection_status": status,
+        "coverage_status": "partial" if status == "incomplete" else "complete",
+        "unresolved_scope_count": unresolved_scope_count,
+        "partial_saturated_activity_scope_count": activity_states.count("partial_saturated"),
+        "failed_activity_scope_count": activity_states.count("failed"),
+    }
+
+
 def validate_record(row: dict[str, Any]) -> None:
     if (
         row.get("source") != SOURCE_CODE
@@ -162,7 +196,8 @@ def validate_record(row: dict[str, Any]) -> None:
         raise PersistenceError("Accepted flight has invalid mapping evidence.")
     if (
         type(row.get("scored_distance_km")) not in (int, float)
-        or not 100 <= float(row["scored_distance_km"]) <= 2000
+        or not isfinite(float(row["scored_distance_km"]))
+        or not STORAGE_MIN_DISTANCE_KM <= float(row["scored_distance_km"]) <= MAX_DISTANCE_KM
     ):
         raise PersistenceError("Accepted flight has invalid distance.")
     if row.get("duration_seconds") is not None and (
@@ -254,24 +289,59 @@ def prepare(run_key: str, snapshot: str, root: Path) -> Prepared:
 
 
 def mapping_hash(connection: sqlite3.Connection, source_id: int) -> str:
-    rows = connection.execute(
+    """Match the v4 mapping catalog snapshot used by validation."""
+
+    mappings = connection.execute(
         "SELECT id, site_id, key_type, key_value, point_latitude_deg, point_longitude_deg, status, verification_reference, verified_at_utc FROM source_site_mappings WHERE source_id = ? ORDER BY id",
         (source_id,),
     ).fetchall()
-    payload = [
-        {
-            "id": int(r[0]),
-            "site_id": int(r[1]),
-            "key_type": str(r[2]),
-            "key_value": r[3],
-            "point_latitude_deg": r[4],
-            "point_longitude_deg": r[5],
-            "status": str(r[6]),
-            "verification_reference": r[7],
-            "verified_at_utc": r[8],
-        }
-        for r in rows
-    ]
+    sites = connection.execute(
+        "SELECT id, slug, country_code_iso2, latitude_deg, longitude_deg, catchment_radius_km, is_active FROM sites ORDER BY id"
+    ).fetchall()
+    exclusions = connection.execute(
+        "SELECT id, key_type, key_value, origin_run_key, origin_proposal_id, created_at_utc FROM source_site_exclusions WHERE source_id = ? AND status = 'active' ORDER BY id",
+        (source_id,),
+    ).fetchall()
+    payload = {
+        "source_id": source_id,
+        "sites": [
+            {
+                "id": int(row[0]),
+                "slug": str(row[1]),
+                "country_code_iso2": str(row[2]),
+                "latitude_deg": float(row[3]),
+                "longitude_deg": float(row[4]),
+                "catchment_radius_km": None if row[5] is None else float(row[5]),
+                "is_active": bool(row[6]),
+            }
+            for row in sites
+        ],
+        "mappings": [
+            {
+                "id": int(row[0]),
+                "site_id": int(row[1]),
+                "key_type": str(row[2]),
+                "key_value": row[3],
+                "point_latitude_deg": row[4],
+                "point_longitude_deg": row[5],
+                "status": str(row[6]),
+                "verification_reference": row[7],
+                "verified_at_utc": row[8],
+            }
+            for row in mappings
+        ],
+        "active_exclusions": [
+            {
+                "id": int(row[0]),
+                "key_type": str(row[1]),
+                "key_value": str(row[2]),
+                "origin_run_key": str(row[3]),
+                "origin_proposal_id": str(row[4]),
+                "created_at_utc": str(row[5]),
+            }
+            for row in exclusions
+        ],
+    }
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
@@ -361,6 +431,7 @@ def _run_event(
     mapping_review_complete: bool,
     decisions_digest: str | None,
     counts: dict[str, int],
+    collection_coverage: dict[str, int | str],
     now: str,
 ) -> dict[str, Any]:
     return {
@@ -375,6 +446,7 @@ def _run_event(
         "reconciliation_plan_sha256": plan,
         "reconciliation_decisions_sha256": decisions_digest,
         "mapping_review_complete": mapping_review_complete,
+        "collection_coverage": collection_coverage,
         "counts": counts,
     }
 
@@ -418,6 +490,7 @@ def persist_import(
 
     root = (project_root or repository_root()).resolve()
     prepared = prepare(run_key, validation_snapshot, root)
+    collection_coverage = _collection_coverage(prepared.manifest)
     basis, ref, training, operational = load_policy(policy_path)
     try:
         connection = open_writable_database(configured_database_url(database_url), root)
@@ -499,6 +572,7 @@ def persist_import(
                     "validation_snapshot_sha256": validation_snapshot,
                     "accepted_flights_sha256": prepared.accepted_sha,
                     "pipeline_version": pipeline,
+                    "collection_coverage": collection_coverage,
                     "reconciliation": {
                         "status": "no_op",
                         "event_sha256": event_sha,
@@ -548,6 +622,7 @@ def persist_import(
                     "records_accepted": prepared.report["records_accepted"],
                     "validation_snapshot_sha256": validation_snapshot,
                     "accepted_flights_sha256": prepared.accepted_sha,
+                    "collection_coverage": collection_coverage,
                     "reconciliation": {
                         "plan_sha256": artifacts.plan_sha256,
                         "proposal_count": len(artifacts.proposals),
@@ -637,6 +712,7 @@ def persist_import(
             mapping_review_complete=mapping_review_complete,
             decisions_digest=decisions_digest,
             counts=counts,
+            collection_coverage=collection_coverage,
             now=now,
         )
         existing_run_notes["persistence_events"].append(event)
@@ -780,6 +856,7 @@ def persist_import(
         "validation_snapshot_sha256": validation_snapshot,
         "accepted_flights_sha256": prepared.accepted_sha,
         "pipeline_version": pipeline,
+        "collection_coverage": collection_coverage,
         "reconciliation": {
             "status": "applied",
             "event_sha256": event_sha,

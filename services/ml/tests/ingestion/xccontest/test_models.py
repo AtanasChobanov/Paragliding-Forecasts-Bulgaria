@@ -10,6 +10,8 @@ from paragliding_forecasts_ml.ingestion.xccontest.models import (
     RECOMMENDED_DELAY_SECONDS,
     CollectorConfig,
     FlightListScope,
+    is_supported_activity_date,
+    source_default_scope,
 )
 
 
@@ -52,6 +54,30 @@ def test_scope_rejects_unknown_source_sort() -> None:
         FlightListScope(PRIMARY_GLIDER_CATEGORY, sort_key="unknown")
 
 
+def test_activity_date_policy_keeps_bulgarian_xc_league_window() -> None:
+    assert is_supported_activity_date("2025-02-15")
+    assert is_supported_activity_date("2025-10-15")
+    assert not is_supported_activity_date("2025-02-14")
+    assert not is_supported_activity_date("2024-10-16")
+
+
+def test_source_default_scope_has_no_invented_sort_and_rejects_mixed_state() -> None:
+    selected = source_default_scope(PRIMARY_GLIDER_CATEGORY, date_filter="2025-07-01")
+
+    assert selected.sort_mode == "source_default"
+    assert selected.sort_key is None
+    assert selected.sort_direction is None
+    assert selected.artifact_sort_token == "source-default"
+
+    with pytest.raises(ValueError, match="cannot declare"):
+        FlightListScope(
+            PRIMARY_GLIDER_CATEGORY,
+            sort_mode="source_default",
+            sort_key="distance",
+            sort_direction="descending",
+        )
+
+
 def test_cli_parser_keeps_headless_default_and_supports_multiple_seasons() -> None:
     namespace = build_parser().parse_args(
         ["--season", "2025", "--season", "2024", "--max-views", "5"]
@@ -73,3 +99,7 @@ def test_cli_parser_accepts_database_url_but_not_permission_reference_or_legacy_
         build_parser().parse_args(["--season", "2025", "--permission-reference", "not-used"])
     with pytest.raises(SystemExit):
         build_parser().parse_args(["--season", "2025", "--max-pages", "5"])
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["--season", "2025", "--date", "2025-07-01"])
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["--season", "2025", "--date-from", "2025-07-01"])

@@ -32,8 +32,9 @@ from .parser import (
 )
 from .profile import GFS_FEATURE_PROFILE_PRESSURES_HPA
 
-GFS_NORMALIZER_VERSION = "gfs-normalizer/8"
+GFS_NORMALIZER_VERSION = "gfs-normalizer/9"
 LEGACY_GFS_NORMALIZER_VERSION = "gfs-normalizer/7"
+SHORTWAVE_NEGATIVE_TOLERANCE_W_M2 = 0.2
 
 NativeMessage = GfsNativeGridMessage | GfsCompactNativeGridMessage
 ValueReference = ArtifactReference | MatrixSliceReference
@@ -111,7 +112,7 @@ class GfsCompactCanonicalGridBatch(AtmosphericContract):
     gfs_canonical_grid_batch_schema_version: Literal[5] = 5
     run_key: str
     parser_stage_manifest: ArtifactReference
-    normalizer_version: Literal["gfs-normalizer/8"] = GFS_NORMALIZER_VERSION
+    normalizer_version: Literal["gfs-normalizer/8", "gfs-normalizer/9"] = GFS_NORMALIZER_VERSION
     grid: GfsCompactCanonicalGridDefinition
     reused_parser_values_matrix: ArtifactReference
     derived_values_matrix: ArtifactReference | None = None
@@ -423,6 +424,7 @@ def _normalize_compact(
         "catalogue": "t017-spike-v3",
         "normalization": GFS_NORMALIZER_VERSION,
         "selection_sha256": descriptor.selection_sha256,
+        "shortwave_negative_tolerance_w_m2": SHORTWAVE_NEGATIVE_TOLERANCE_W_M2,
     }
     inputs = (parser_stage_manifest, batch.values_matrix)
     fingerprint = stage_input_fingerprint(
@@ -448,6 +450,7 @@ def _normalize_compact(
     surface: list[GfsCanonicalGridMessage] = []
     pressure: list[GfsCanonicalGridMessage] = []
     interval_messages: dict[str, list[GfsCompactNativeGridMessage]] = defaultdict(list)
+    shortwave_corrections: list[dict[str, object]] = []
     for message in ordered_messages:
         if message.selector_key in _DIRECT:
             surface.append(_compact_direct(message, *_DIRECT[message.selector_key]))
@@ -465,11 +468,31 @@ def _normalize_compact(
                 _INTERVAL_SPECS[selector_key],
                 descriptor,
                 builder,
+                shortwave_corrections,
             )
         )
     surface.extend(_compact_wind_derivations(store, messages, descriptor, builder, pressure=False))
     pressure.extend(_compact_wind_derivations(store, messages, descriptor, builder, pressure=True))
     derived_matrix = builder.publish(store, directory)
+    correction_report = (
+        store.write_stage_bytes(
+            directory,
+            "shortwave-corrections.json",
+            "gfs_shortwave_corrections",
+            canonical_json_bytes(
+                {
+                    "run_key": batch.run_key,
+                    "normalizer_version": GFS_NORMALIZER_VERSION,
+                    "tolerance_w_m2": SHORTWAVE_NEGATIVE_TOLERANCE_W_M2,
+                    "intervals": shortwave_corrections,
+                }
+            ),
+            media_type="application/json",
+            record_count=len(shortwave_corrections),
+        )
+        if shortwave_corrections
+        else None
+    )
     if derived_matrix is not None:
         surface = [_finalize_pending_grain(item, derived_matrix) for item in surface]
         pressure = [_finalize_pending_grain(item, derived_matrix) for item in pressure]
@@ -489,8 +512,8 @@ def _normalize_compact(
         output,
         record_count=len(surface) + len(pressure),
     )
-    outputs = (
-        (derived_matrix, output_reference) if derived_matrix is not None else (output_reference,)
+    outputs = tuple(
+        item for item in (derived_matrix, correction_report, output_reference) if item is not None
     )
     return store.write_stage_manifest(
         directory,
@@ -672,6 +695,7 @@ def _resolve_compact_adjacent_intervals(
     spec: tuple[str, Literal["accumulation", "interval_average"], str | None],
     descriptor: CompactGridDescriptor,
     builder: _DerivedMatrixBuilder,
+    shortwave_corrections: list[dict[str, object]],
 ) -> list[GfsCanonicalGridMessage]:
     field_code, statistic_type, native_sign_convention = spec
     by_window: dict[tuple[float, float], list[GfsCompactNativeGridMessage]] = defaultdict(list)
@@ -685,6 +709,10 @@ def _resolve_compact_adjacent_intervals(
             )
     resolved: list[GfsCanonicalGridMessage] = []
     for current in sorted(messages, key=lambda item: (item.step_end_hours, item.message_number)):
+        if field_code == "shortwave_radiation_w_m2":
+            _require_nonnegative_native_shortwave(
+                _compact_values(store, current, descriptor), current
+            )
         native_duration = current.step_end_hours - current.step_start_hours
         canonical_end = current.step_end_hours
         canonical_start = canonical_end - 1.0
@@ -738,6 +766,25 @@ def _resolve_compact_adjacent_intervals(
                 reuse_native = False
                 derivation_method = "gfs_precipitation_quantization_clamp"
                 quality_state = _interval_quality(values, sources)
+        elif field_code == "shortwave_radiation_w_m2":
+            values, clamped_count, minimum = _nonnegative_shortwave(values, current, sources)
+            if clamped_count:
+                reuse_native = False
+                derivation_method = "gfs_shortwave_near_zero_clamp"
+                quality_state = _interval_quality(values, sources)
+                shortwave_corrections.append(
+                    {
+                        "valid_at_utc": current.valid_at_utc,
+                        "lead_hours": current.lead_hours,
+                        "interval_start_hour": canonical_start,
+                        "interval_end_hour": canonical_end,
+                        "corrected_grid_cell_count": clamped_count,
+                        "minimum_before_clamp_w_m2": minimum,
+                        "source_native_message_references": [
+                            source.native_message_reference for source in sources
+                        ],
+                    }
+                )
         reference = current.values if reuse_native else builder.add(values)
         resolved.append(
             _message(
@@ -1090,6 +1137,42 @@ def _nonnegative_precipitation(
     return values, bool(clamped.any())
 
 
+def _require_nonnegative_native_shortwave(values: np.ndarray, source: NativeMessage) -> None:
+    finite = np.isfinite(values)
+    if np.any(values[finite] < 0.0):
+        raise ValueError(
+            f"GFS DSWRF native message {source.native_message_reference} contains "
+            f"negative downward shortwave radiation (minimum {float(values[finite].min()):.6g} "
+            "W/m2)."
+        )
+
+
+def _nonnegative_shortwave(
+    values: np.ndarray,
+    current: NativeMessage,
+    sources: tuple[NativeMessage, ...],
+) -> tuple[np.ndarray, int, float | None]:
+    """Clamp only negligible reconstructed DSWRF negatives; keep source evidence."""
+
+    finite = np.isfinite(values)
+    negative = finite & (values < 0.0)
+    count = int(negative.sum())
+    if not count:
+        return values, 0, None
+    minimum = float(values[negative].min())
+    if minimum < -SHORTWAVE_NEGATIVE_TOLERANCE_W_M2 - 1e-9:
+        references = ", ".join(source.native_message_reference for source in sources)
+        raise ValueError(
+            f"GFS DSWRF f{current.lead_hours:03d} at {current.valid_at_utc} has "
+            f"{count} reconstructed negative grid cells, minimum {minimum:.6g} W/m2 "
+            f"below -{SHORTWAVE_NEGATIVE_TOLERANCE_W_M2:g} W/m2; "
+            f"source messages: {references}."
+        )
+    corrected = values.copy()
+    corrected[negative] = 0.0
+    return corrected, count, minimum
+
+
 def _interval_quality(
     values: np.ndarray,
     sources: tuple[NativeMessage, ...],
@@ -1212,7 +1295,13 @@ def _message(
         normalization_method=normalization_method,
         normalization_version="gfs-normalization/2" if normalization_method else None,
         derivation_method=derivation_method,
-        derivation_version="gfs-normalization/2" if derivation_method else None,
+        derivation_version=(
+            "gfs-normalization/3"
+            if derivation_method == "gfs_shortwave_near_zero_clamp"
+            else "gfs-normalization/2"
+            if derivation_method
+            else None
+        ),
     )
 
 

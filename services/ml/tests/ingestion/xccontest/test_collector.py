@@ -11,6 +11,7 @@ from paragliding_forecasts_ml.ingestion.xccontest.collector import (
     FlightListCollector,
 )
 from paragliding_forecasts_ml.ingestion.xccontest.models import (
+    ALL_DISTANCE_ACTIVITY_SORTS,
     EXACT_GLIDER_CATEGORIES,
     PRIMARY_GLIDER_CATEGORY,
     RESCUE_SORTS,
@@ -18,6 +19,7 @@ from paragliding_forecasts_ml.ingestion.xccontest.models import (
     FlightListScope,
     PageObservation,
     RowObservation,
+    source_default_scope,
 )
 
 
@@ -100,7 +102,12 @@ class FakeDriver:
     def read_page(self, season: int, selected_scope: FlightListScope) -> PageObservation:
         assert season == 2025
         assert self._country_code is not None
-        return self._pages[(self._country_code, selected_scope)]
+        page = self._pages.get((self._country_code, selected_scope))
+        if page is not None:
+            return page
+        if selected_scope.sort_mode == "source_default" and selected_scope.date_filter is None:
+            return observation(selected_scope, (150.0,), country_code=self._country_code)
+        return observation(selected_scope, (), country_code=self._country_code)
 
 
 def collector(
@@ -132,20 +139,268 @@ def test_completes_from_primary_pg_view_when_it_reaches_the_threshold(tmp_path) 
 
     assert driver.prepared_seasons == [2025]
     assert driver.selected_countries == ["BG"]
-    assert driver.selected_scopes == [("BG", primary)]
+    assert driver.selected_scopes == [
+        ("BG", source_default_scope(PRIMARY_GLIDER_CATEGORY)),
+        ("BG", primary),
+    ]
     assert report.status == "complete"
     assert report.completed_target_count == 1
     assert report.unresolved_scope_count == 0
-    assert report.artifact_count == 1
+    assert report.artifact_count == 2
     assert report.manifest_relative_path == "data/raw/xccontest/test-run/manifest.json"
     assert len(report.manifest_sha256) == 64
     assert report.started_at_utc <= report.completed_at_utc
-    assert report.row_observations_seen == 3
-    assert report.distinct_source_flights_seen == 3
+    assert report.row_observations_seen == 4
+    assert report.distinct_source_flights_seen == 4
     assert report.repeated_source_flight_observations == 0
     checkpoint = json.loads((artifacts.interim_dir / "checkpoint.json").read_text())
     assert checkpoint["country_code"] == "BG"
     assert checkpoint["status"] == "complete_primary"
+
+
+def test_collects_activity_dates_in_order_after_threshold_with_category_fallback(tmp_path) -> None:
+    primary = scope()
+    first_date = "2025-07-01"
+    busy_date = "2025-07-02"
+    first_default = source_default_scope(PRIMARY_GLIDER_CATEGORY, date_filter=first_date)
+    busy_default = source_default_scope(PRIMARY_GLIDER_CATEGORY, date_filter=busy_date)
+    category_defaults = tuple(
+        source_default_scope(category, date_filter=busy_date)
+        for category in EXACT_GLIDER_CATEGORIES
+    )
+    ccc_sorts = tuple(
+        FlightListScope(
+            EXACT_GLIDER_CATEGORIES[0],
+            busy_date,
+            item.sort_key,
+            item.sort_direction,
+        )
+        for item in ALL_DISTANCE_ACTIVITY_SORTS
+    )
+    pages = {
+        ("BG", primary): observation(primary, (120.0,)),
+        ("BG", first_default): observation(first_default, (78.0, 0.0)),
+        ("BG", busy_default): observation(busy_default, (80.0, 0.0), has_next_page=True),
+        ("BG", category_defaults[0]): observation(
+            category_defaults[0], (70.0, 0.0), has_next_page=True
+        ),
+        **{
+            ("BG", category_default): observation(category_default, (70.0, 0.0))
+            for category_default in category_defaults[1:]
+        },
+        **{
+            ("BG", sort_scope): observation(
+                sort_scope,
+                (70.0, 0.0),
+                has_next_page=(
+                    sort_scope.sort_key == "distance" and sort_scope.sort_direction == "descending"
+                ),
+            )
+            for sort_scope in ccc_sorts
+        },
+    }
+    driver, artifacts, instance = collector(
+        tmp_path,
+        pages,
+        dates=(busy_date, first_date),
+    )
+
+    report = instance.collect()
+
+    assert [scope for _country, scope in driver.selected_scopes] == [
+        source_default_scope(PRIMARY_GLIDER_CATEGORY),
+        primary,
+        first_default,
+        busy_default,
+        category_defaults[0],
+        *ccc_sorts,
+        *category_defaults[1:],
+    ]
+    assert report.status == "incomplete"
+    assert report.unresolved_scope_count == 1
+    assert report.artifact_count == len(driver.selected_scopes)
+    manifest = json.loads((artifacts.raw_dir / "manifest.json").read_text())
+    statuses = {
+        (item["category"], item["date_filter"]): item
+        for item in manifest["activity_scope_statuses"]
+    }
+    assert statuses[("pg", busy_date)]["reason"] == "source_default_has_next_page"
+    assert statuses[("ccc", busy_date)]["reason"] == "distance_descending_has_next_page"
+
+
+@pytest.mark.parametrize("distances", [(), (72.0, 18.0)])
+def test_threshold_date_partition_skips_distance_sort_when_default_page_is_complete(
+    tmp_path, distances
+) -> None:
+    primary = scope()
+    ccc = scope(EXACT_GLIDER_CATEGORIES[0])
+    activity_date = "2025-07-01"
+    ccc_default_date = source_default_scope(EXACT_GLIDER_CATEGORIES[0], date_filter=activity_date)
+    ccc_sorted_date = scope(EXACT_GLIDER_CATEGORIES[0], date_filter=activity_date)
+    pg_activity_date = source_default_scope(PRIMARY_GLIDER_CATEGORY, date_filter=activity_date)
+    driver, _artifacts, instance = collector(
+        tmp_path,
+        {
+            ("BG", primary): observation(primary, (200.0,), has_next_page=True),
+            ("BG", ccc): observation(ccc, (200.0,), has_next_page=True),
+            ("BG", ccc_default_date): observation(ccc_default_date, distances),
+            ("BG", pg_activity_date): observation(pg_activity_date, (40.0,)),
+        },
+        dates=(activity_date,),
+    )
+
+    report = instance.collect()
+
+    selected_scopes = [selected_scope for _country, selected_scope in driver.selected_scopes]
+    assert ccc_default_date in selected_scopes
+    assert ccc_sorted_date not in selected_scopes
+    assert report.status == "complete"
+
+
+def test_threshold_date_partition_sorts_only_after_paginated_default_view(tmp_path) -> None:
+    primary = scope()
+    ccc = scope(EXACT_GLIDER_CATEGORIES[0])
+    activity_date = "2025-07-01"
+    ccc_default_date = source_default_scope(EXACT_GLIDER_CATEGORIES[0], date_filter=activity_date)
+    ccc_sorted_date = scope(EXACT_GLIDER_CATEGORIES[0], date_filter=activity_date)
+    pg_activity_date = source_default_scope(PRIMARY_GLIDER_CATEGORY, date_filter=activity_date)
+    driver, _artifacts, instance = collector(
+        tmp_path,
+        {
+            ("BG", primary): observation(primary, (200.0,), has_next_page=True),
+            ("BG", ccc): observation(ccc, (200.0,), has_next_page=True),
+            ("BG", ccc_default_date): observation(ccc_default_date, (85.0,), has_next_page=True),
+            ("BG", ccc_sorted_date): observation(
+                ccc_sorted_date, (200.0, 100.0), has_next_page=True
+            ),
+            ("BG", pg_activity_date): observation(pg_activity_date, (40.0,)),
+        },
+        dates=(activity_date,),
+    )
+
+    report = instance.collect()
+
+    selected_scopes = [selected_scope for _country, selected_scope in driver.selected_scopes]
+    assert selected_scopes.index(ccc_default_date) < selected_scopes.index(ccc_sorted_date)
+    assert report.status == "incomplete"
+
+
+def test_full_100_row_activity_page_without_next_page_skips_fallbacks(tmp_path) -> None:
+    primary = scope()
+    activity_date = "2025-07-01"
+    activity_default = source_default_scope(PRIMARY_GLIDER_CATEGORY, date_filter=activity_date)
+    driver, _artifacts, instance = collector(
+        tmp_path,
+        {
+            ("BG", primary): observation(primary, (120.0,)),
+            ("BG", activity_default): observation(
+                activity_default, range(100), has_next_page=False
+            ),
+        },
+        dates=(activity_date,),
+    )
+
+    report = instance.collect()
+
+    assert [scope for _country, scope in driver.selected_scopes] == [
+        source_default_scope(PRIMARY_GLIDER_CATEGORY),
+        primary,
+        activity_default,
+    ]
+    assert report.status == "complete"
+
+
+def test_skips_outside_supported_activity_dates_and_records_them(tmp_path) -> None:
+    primary = scope()
+    first_active_date = "2025-02-15"
+    second_active_date = "2025-09-30"
+    first_default = source_default_scope(PRIMARY_GLIDER_CATEGORY, date_filter=first_active_date)
+    second_default = source_default_scope(PRIMARY_GLIDER_CATEGORY, date_filter=second_active_date)
+    driver, artifacts, instance = collector(
+        tmp_path,
+        {
+            ("BG", primary): observation(primary, (120.0,)),
+            ("BG", first_default): observation(first_default, (40.0,)),
+            ("BG", second_default): observation(second_default, (50.0,)),
+        },
+        dates=("2024-10-16", "2025-02-14", first_active_date, second_active_date),
+    )
+
+    report = instance.collect()
+
+    selected_dates = {scope.date_filter for _country, scope in driver.selected_scopes}
+    assert selected_dates == {None, first_active_date, second_active_date}
+    assert report.skipped_activity_date_count == 2
+    manifest = json.loads((artifacts.raw_dir / "manifest.json").read_text())
+    assert manifest["target_statuses"][0]["skipped_activity_dates"] == [
+        "2024-10-16",
+        "2025-02-14",
+    ]
+
+
+def test_empty_activity_default_view_skips_explicit_sorts(tmp_path) -> None:
+    primary = scope()
+    empty_date = "2025-07-01"
+    empty_default = source_default_scope(PRIMARY_GLIDER_CATEGORY, date_filter=empty_date)
+    driver, artifacts, instance = collector(
+        tmp_path,
+        {
+            ("BG", primary): observation(primary, (120.0,)),
+            ("BG", empty_default): observation(empty_default, ()),
+        },
+        dates=(empty_date,),
+    )
+
+    report = instance.collect()
+
+    assert [scope for _country, scope in driver.selected_scopes] == [
+        source_default_scope(PRIMARY_GLIDER_CATEGORY),
+        primary,
+        empty_default,
+    ]
+    assert report.artifact_count == 3
+    manifest = json.loads((artifacts.raw_dir / "manifest.json").read_text())
+    assert manifest["activity_scope_statuses"] == [
+        {
+            "season": 2025,
+            "country_code": "BG",
+            "category": "pg",
+            "date_filter": empty_date,
+            "source_default_captured": True,
+            "explicit_sorts": [],
+            "distance_descending_has_next_page": None,
+            "row_observations_seen": 0,
+            "distinct_source_flights_seen": 0,
+            "duplicate_observations": 0,
+            "status": "empty",
+            "reason": None,
+        }
+    ]
+
+
+def test_checkpoint_resume_reuses_verified_default_view_without_refetching(tmp_path) -> None:
+    default_scope = source_default_scope(PRIMARY_GLIDER_CATEGORY)
+    primary = scope()
+    store = RawArtifactStore(project_root=tmp_path, run_key="resume-run")
+    config = CollectorConfig(seasons=(2025,), country_codes=("BG",))
+    store.set_collection_context(config)
+    captured_default = observation(default_scope, (150.0,))
+    store.write_page(captured_default, acquisition_purpose="threshold_100")
+    store.write_checkpoint(
+        season=2025,
+        country_code="BG",
+        status="in_progress",
+        scope=default_scope,
+        acquisition_purpose="threshold_100",
+    )
+
+    driver = FakeDriver({("BG", primary): observation(primary, (120.0,))})
+    resumed = RawArtifactStore.resume("resume-run", project_root=tmp_path)
+    report = FlightListCollector(config=config, driver=driver, artifacts=resumed).collect()
+
+    assert report.status == "complete"
+    assert driver.selected_scopes == [("BG", primary)]
+    assert report.artifact_count == 2
 
 
 def test_saturated_primary_partitions_the_exact_solo_pg_categories(tmp_path) -> None:
@@ -163,16 +418,17 @@ def test_saturated_primary_partitions_the_exact_solo_pg_categories(tmp_path) -> 
 
     report = instance.collect()
 
-    assert driver.selected_scopes == [
+    assert driver.selected_scopes[: 2 + len(category_scopes)] == [
+        ("BG", source_default_scope(PRIMARY_GLIDER_CATEGORY)),
         ("BG", primary),
         *(("BG", item) for item in category_scopes),
     ]
     assert report.status == "complete"
     assert report.unresolved_scope_count == 0
-    assert report.artifact_count == 5
+    assert report.artifact_count > 5
     manifest = json.loads((artifacts.raw_dir / "manifest.json").read_text())
     assert manifest["target_statuses"][0]["status"] == "complete_partitioned"
-    assert not any("category-en-a" in entry["path"] for entry in manifest["artifacts"])
+    assert any("category-en-a" in entry["path"] for entry in manifest["artifacts"])
 
 
 def test_saturated_category_date_runs_every_rescue_sort_and_marks_coverage_unresolved(
@@ -180,7 +436,9 @@ def test_saturated_category_date_runs_every_rescue_sort_and_marks_coverage_unres
 ) -> None:
     primary = scope()
     ccc = scope(EXACT_GLIDER_CATEGORIES[0])
+    overflowing_default = source_default_scope(EXACT_GLIDER_CATEGORIES[0], date_filter="2025-07-01")
     overflowing_date = scope(EXACT_GLIDER_CATEGORIES[0], date_filter="2025-07-01")
+    quiet_default = source_default_scope(EXACT_GLIDER_CATEGORIES[0], date_filter="2025-07-02")
     quiet_date = scope(EXACT_GLIDER_CATEGORIES[0], date_filter="2025-07-02")
     rescue_scopes = tuple(
         scope(
@@ -195,7 +453,9 @@ def test_saturated_category_date_runs_every_rescue_sort_and_marks_coverage_unres
     pages = {
         ("BG", primary): observation(primary, (151.0, 100.0), has_next_page=True),
         ("BG", ccc): observation(ccc, (150.0, 100.0), has_next_page=True),
+        ("BG", overflowing_default): observation(overflowing_default, (90.0,), has_next_page=True),
         ("BG", overflowing_date): observation(overflowing_date, (140.0, 100.0), has_next_page=True),
+        ("BG", quiet_default): observation(quiet_default, (90.0,), has_next_page=True),
         ("BG", quiet_date): observation(quiet_date, (130.0, 99.0), has_next_page=True),
         **{
             ("BG", rescue_scope): observation(rescue_scope, (125.0, 101.0), has_next_page=True)
@@ -214,11 +474,14 @@ def test_saturated_category_date_runs_every_rescue_sort_and_marks_coverage_unres
 
     report = instance.collect()
 
-    assert driver.selected_scopes == [
+    assert driver.selected_scopes[:17] == [
+        ("BG", source_default_scope(PRIMARY_GLIDER_CATEGORY)),
         ("BG", primary),
         ("BG", ccc),
+        ("BG", overflowing_default),
         ("BG", overflowing_date),
         *(("BG", item) for item in rescue_scopes),
+        ("BG", quiet_default),
         ("BG", quiet_date),
         *(("BG", item) for item in other_category_scopes),
     ]
@@ -232,6 +495,7 @@ def test_saturated_category_date_runs_every_rescue_sort_and_marks_coverage_unres
             "category": "ccc",
             "category_filter": "FAI3-41|50",
             "date_filter": "2025-07-01",
+            "sort_mode": "explicit",
             "sort_key": "distance",
             "sort_direction": "descending",
         }
@@ -248,7 +512,7 @@ def test_rejects_launch_outside_the_selected_country_before_writing_artifact(tmp
     with pytest.raises(CollectionError, match="outside the selected country"):
         instance.collect()
 
-    assert artifacts.entries == ()
+    assert len(artifacts.entries) == 1
     failure_report = json.loads((artifacts.interim_dir / "collection-report.json").read_text())
     assert failure_report["error"].startswith("CollectionError:")
 
@@ -268,11 +532,16 @@ def test_collects_each_country_sequentially_in_one_run(tmp_path) -> None:
 
     assert driver.prepared_seasons == [2025]
     assert driver.selected_countries == ["BG", "RS"]
-    assert driver.selected_scopes == [("BG", primary), ("RS", primary)]
+    assert driver.selected_scopes == [
+        ("BG", source_default_scope(PRIMARY_GLIDER_CATEGORY)),
+        ("BG", primary),
+        ("RS", source_default_scope(PRIMARY_GLIDER_CATEGORY)),
+        ("RS", primary),
+    ]
     assert report.country_codes == ("BG", "RS")
     assert report.completed_target_count == 2
     assert report.unresolved_scope_count == 0
-    assert report.artifact_count == 2
+    assert report.artifact_count == 4
     manifest = json.loads((artifacts.raw_dir / "manifest.json").read_text())
     assert manifest["scope"]["country_codes"] == ["BG", "RS"]
     assert manifest["scope"]["country_scope_source"] == "all_sites"
@@ -294,8 +563,8 @@ def test_global_view_cap_applies_across_all_country_targets(tmp_path) -> None:
     with pytest.raises(CollectionError, match="view cap"):
         instance.collect()
 
-    assert driver.selected_countries == ["BG", "RS"]
-    assert driver.selected_scopes == [("BG", primary)]
+    assert driver.selected_countries == ["BG"]
+    assert driver.selected_scopes == [("BG", source_default_scope(PRIMARY_GLIDER_CATEGORY))]
     assert len(artifacts.entries) == 1
     assert not (artifacts.raw_dir / "manifest.json").exists()
 
@@ -317,4 +586,4 @@ def test_rejects_a_page_when_the_country_control_does_not_match_the_target(tmp_p
     with pytest.raises(CollectionError, match="expected country filter"):
         instance.collect()
 
-    assert artifacts.entries == ()
+    assert len(artifacts.entries) == 1

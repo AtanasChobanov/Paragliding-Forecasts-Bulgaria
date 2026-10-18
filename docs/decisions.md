@@ -67,6 +67,20 @@ consequences. Temporary progress and Git state belong in
 | DEC-052     | Require exact catalogue identity at every weather stage boundary                | Accepted   | 2026-09-13 |
 | DEC-053     | Defer ERA5 collection until model evaluation demonstrates a need                | Accepted   | 2026-09-14 |
 | DEC-054     | Keep IGRA soundings artifact-first and outside the training join                 | Accepted   | 2026-09-15 |
+| DEC-055     | Match historical GFS examples to the prior-evening forecast cutoff              | Accepted   | 2026-09-23 |
+| DEC-056     | Build nested XC labels from confirmed flights and explicit activity evidence    | Accepted   | 2026-09-23 |
+| DEC-057     | Use a configurable hybrid rule-and-score overdevelopment baseline               | Accepted   | 2026-09-23 |
+| DEC-058     | Evaluate a GFS model-sounding cloudbase baseline with a blue-day state           | Proposed   | 2026-09-24 |
+| DEC-059     | Automate deterministic XCContest coordinate mapping dispositions                 | Accepted   | 2026-09-25 |
+| DEC-060     | Bound XCContest activity scans to the Bulgarian XC season                        | Accepted   | 2026-09-25 |
+| DEC-061     | Persist reviewed XCContest stable-key exclusions                                 | Accepted   | 2026-09-26 |
+| DEC-062     | Repair finalized XCContest raw evidence in a separate run                       | Accepted   | 2026-09-27 |
+| DEC-063     | Accept reviewed repaired 2022–2025 evidence as mature for label auditing          | Accepted   | 2026-10-01 |
+| DEC-064     | Freeze the initial T-020 horizon-matched weather cohort                         | Accepted   | 2026-10-04 |
+| DEC-065     | Require evening prediction and alert delivery by 20:00 Sofia time              | Accepted   | 2026-10-04 |
+| DEC-066     | Pin the first historical cohort to 06Z and defer 2025 acquisition             | Accepted   | 2026-10-05 |
+| DEC-067     | Bound negative reconstructed GFS downward shortwave radiation                 | Accepted   | 2026-10-06 |
+| DEC-068     | Store GFS source readiness per valid hour and guard weather graph identity   | Accepted   | 2026-10-06 |
 
 ## Individual decisions
 
@@ -1115,12 +1129,13 @@ cannot safely be amended before T-014's cross-run idempotency policy.
 
 **Decision:** `xccontest-ingest fresh` performs preflight, collection, parsing, proposal, and
 validation sequentially. It automatically creates the read-only mapping proposal artifact, but
-never calls mapping `apply`. It persists immediately only when validation has no mapping-actionable
-quarantines and at least one approved record. Otherwise it exits with the explicit
-`awaiting_mapping_review` status before writing canonical flights. After a human applies reviewed
-mapping decisions, `xccontest-ingest resume --run-key <uuid>` performs only offline reusable stages,
-creates or verifies the validation output for the current mapping snapshot, and persists exactly
-once. A rejection in the standard sibling review file resolves only the matching proposal evidence:
+never auto-approves mapping evidence. It persists immediately only when validation has no
+mapping-actionable quarantines and at least one approved record. Otherwise it exits with the
+explicit `awaiting_mapping_review` status before writing canonical flights. After a human completes
+the standard sibling reviewed mapping-decision file, `xccontest-ingest resume --run-key <uuid>`
+performs only offline reusable stages, transactionally applies that file when present, reloads the
+mapping snapshot, creates or verifies validation output, and persists exactly once. A rejection in
+the standard sibling review file resolves only the matching proposal evidence:
 it remains quarantined and is excluded from persistence, but does not block the approved subset. New,
 unresolved, ambiguous, provisional, or country-mismatched mapping evidence still blocks the run. An
 explicit `--persist-approved-only` permits a reviewer to retain mapping-actionable
@@ -2326,8 +2341,254 @@ provenance, retain per-token confidence/units/geometry, require human review,
 and publish explicitly `image_derived` evidence rather than canonical numeric
 observations. Neither presentation nor OCR output may become a T-020 predictor.
 
-**Related files:** [`T-019-implementation-plan.md`](T-019-implementation-plan.md),
-[`tasks.md`](tasks.md), [`architecture.md`](architecture.md), and
+**Related files:** [`tasks.md`](tasks.md), [`architecture.md`](architecture.md),
+[`../services/ml/README.md`](../services/ml/README.md), and
+[`handoff.md`](handoff.md).
+
+
+### DEC-055 - Match historical GFS examples to the prior-evening forecast cutoff
+
+**Status:** Accepted
+
+**Date:** 2026-09-23
+
+**Context:** The production workflow must issue its main forecast during the
+evening before the forecast day and then repeat the three-day view every day.
+Training on a GFS run that became available after the operational forecast was
+issued would leak future information and would overstate model quality. The
+Project Owner accepted an evening window of approximately 18:00--20:00 local
+time and deferred an optional morning refresh until after the MVP.
+
+**Decision:** Use `20:00 Europe/Sofia` as the versioned MVP as-of cutoff. For
+each issue date, select the newest complete GFS cycle whose required products
+were available at or before that cutoff. Convert the local cutoff through the
+IANA timezone so summer and winter UTC offsets are handled correctly; do not
+hard-code an offset. The selected cycle's reference time, provider availability
+time, cutoff, valid times, and lead hours remain part of every joined example.
+
+The daily operational cohort covers D+1, D+2, and D+3. Historical examples use
+the same horizon: a D+2 example for a target date is built from the issue date
+two local calendar days earlier, not from a newer D+1 or same-day run. If no
+complete cycle existed by the cutoff, the join records missing weather evidence
+and does not substitute a later cycle, reanalysis, or observation.
+
+The exact scheduler minute may later move earlier within the accepted evening
+window only through a new versioned cutoff policy and matching historical
+rebuild. A future morning refresh is a separate issue-time cohort whose
+performance must be evaluated separately; it cannot silently share evening
+examples.
+
+**Consequences:** T-020 must create horizon-matched rows and preserve the as-of
+selection evidence. Operational prediction and alert work must use the same
+cutoff policy. The accepted window means "available by forecast time", not a
+literal 24-hour lead requirement.
+
+**Related files:** [`tasks.md`](tasks.md), [`architecture.md`](architecture.md),
+[`project-brief.md`](project-brief.md), and [`handoff.md`](handoff.md).
+
+### DEC-056 - Build nested XC labels from confirmed flights and explicit activity evidence
+
+**Status:** Accepted
+
+**Date:** 2026-09-23
+
+**Context:** XCContest stores flights below 100 km, but the implemented
+collector, parser, and SQLite constraint were intentionally designed around a
+100 km minimum. That is enough to find positive examples, but it cannot
+distinguish a site-day with shorter recorded flights from a day with no source
+evidence. Treating every absent 100+ flight as a negative would confound weather,
+pilot participation, source coverage, privacy, and late uploads.
+
+**Decision:** The model target is the recorded XC achievement at one canonical
+site and one `Europe/Sofia` local date. Thresholds are inclusive: `100+`, `200+`,
+and `300+` mean `>= 100`, `>= 200`, and `>= 300` scored kilometres. Labels are
+nested and are derived from the maximum accepted scored distance for the
+site-day:
+
+- `positive` for threshold T when at least one approved, accepted flight is
+  `>= T`;
+- `negative` when no accepted flight is `>= T`, at least one approved, accepted
+  flight at any positive distance proves recorded activity at that site-day,
+  and complete source/mapping coverage proves that an in-scope `>= T` candidate
+  was not lost;
+- `unknown` in every other case. In particular, a day with no accepted flight
+  is unknown and never becomes negative by absence alone.
+
+For the MVP, one accepted positive-distance flight is the minimum affirmative
+activity observation. The joined dataset must also retain the actual activity
+flight count, maximum and total distance, collection-completeness state, and
+mapping-completeness state so later evaluation can require a higher activity
+count without fetching the source again. Unknown labels remain in an audit
+output but are excluded from model fitting and probability calibration.
+
+Keep two acquisition purposes separate. The existing threshold profile remains
+the coverage mechanism for 100+ positives and threshold absence. A new
+all-distance activity profile collects and persists positive-distance flights,
+especially those below 100 km, for the seven canonical locations. A captured
+short flight is valid activity evidence even when that daily all-distance view
+is saturated; saturation reduces recall and leaves undiscovered site-days
+unknown, but it may not manufacture a negative. Raw manifest and reviewed site
+mapping evidence determine coverage, not a guess based on row count.
+
+From these rules, a complete site-day with maximum 78 km has labels `0,0,0`; a
+157 km day has `1,0,0`; a 240 km day has `1,1,0`; and a 330 km day has `1,1,1`.
+This guarantees the label order needed later for
+`P(300 km) <= P(200 km) <= P(100 km)`.
+
+**Consequences:** The flight schema and ingestion stages must accept the
+inclusive 0..2000 km source domain, while only positive-distance rows may later
+prove activity. Source IDs, approved mapping, validation, reconciliation, and
+provenance rules remain unchanged. T-020 emits tri-state audit labels and only
+binary training rows with sufficient evidence. Product text must describe
+recorded XC potential rather than safety or guaranteed flyability.
+
+**Related files:** [`T-020-xccontest-activity-ingestion-plan.md`](T-020-xccontest-activity-ingestion-plan.md),
+[`tasks.md`](tasks.md), [`architecture.md`](architecture.md),
+[`project-brief.md`](project-brief.md), and [`handoff.md`](handoff.md).
+
+### DEC-057 - Use a configurable hybrid rule-and-score overdevelopment baseline
+
+**Status:** Accepted
+
+**Date:** 2026-09-23
+
+**Context:** T-024 needs an inspectable MVP risk estimate before enough
+expert-confirmed examples exist for a separate ML model. Hard thresholds alone
+would create unstable jumps around boundary values, while an unexplained score
+would not show pilots why the result changed.
+
+**Decision:** T-024 uses a versioned decision tree plus smooth score. The
+configurable score may combine precipitation amount, intensity and duration,
+thunder/convective probability, CAPE or other accepted instability indicators,
+forecast overdevelopment evidence, low cloudbase with precipitation or cloud,
+and the time window of adverse conditions. Transition bands or smooth
+piecewise contributions replace single-point cliffs around ordinary thresholds.
+
+A critical override sets `High` regardless of the accumulated score. The first
+policy must include override branches for configured high precipitation chance,
+configured high overdevelopment/convective evidence, and wind above `10 m/s`
+in the policy's explicitly named relevant wind field/window. Medium-risk cases
+may include low cloudbase and extensive low cloud even without a critical
+factor. Exact precipitation, instability, cloudbase, cloud and duration
+thresholds remain configuration values reviewed with the Project Owner rather
+than literals embedded in code.
+
+Every result carries the policy version, contributing factors, points or
+normalized contributions, triggered override, missing-input state, confidence,
+and concise user-facing reasons. API and UI show `Low`, `Medium`, or `High` plus
+the main reasons. Missing critical inputs cannot silently produce `Low`.
+
+Tests must cover all three levels, transition boundaries, multiple-factor
+combinations, each critical override, missing/partial inputs, deterministic
+reasons, and policy configuration validation. The result is an informational
+assessment of forecast overdevelopment and convective conditions; it is not a
+safety guarantee and does not replace pilot judgement.
+
+**Consequences:** No separate overdevelopment ML model is required for the MVP.
+Later expert and observed labels may justify one, but it must be compared with
+this reproducible baseline. The final numerical policy still belongs to T-024
+and must be reviewed before that task is marked complete.
+
+**Related files:** [`tasks.md`](tasks.md), [`architecture.md`](architecture.md),
+[`project-brief.md`](project-brief.md), and [`handoff.md`](handoff.md).
+
+### DEC-058 - Evaluate a GFS model-sounding cloudbase baseline with a blue-day state
+
+**Status:** Proposed
+
+**Date:** 2026-09-24
+
+**Context:** The Project Owner confirmed that a blue, cloudless thermic day may
+still be flyable and suggested sounding analysis for cloud base, cloud top,
+blocking inversions, and overdevelopment. "Sounding" can mean an observed
+radiosonde profile or a virtual profile sampled from a forecast model. The
+implemented IGRA boundary contains real balloon observations for Sofia, but the
+official station inventory has no current balloon station at each project
+location. Observations also arrive after forecast issue time.
+
+NOAA READY can produce GFS/GFS0p25 soundings for arbitrary coordinates, but it
+is another interface to model data rather than independent observations. Its
+API requires a key, has a published daily call limit, returns text, and does
+not guarantee 24/7 availability. The existing GFS pipeline already holds
+surface and pressure-level temperature, moisture, height and wind profiles,
+CAPE/CIN, boundary-layer height, mixed-layer LCL, and PBL-minus-LCL evidence.
+
+**Proposal:** Evaluate a deterministic T-022 baseline from the existing GFS
+profile at each site and valid time. Keep IGRA Sofia exclusively as later
+validation under T-039. Do not add NOAA READY as a production dependency; it
+may be used for a bounded manual comparison.
+
+The candidate output distinguishes:
+
+- `cumulus`, with nullable AGL/MSL cloud-base values derived from a versioned
+  parcel and LCL method;
+- `blue`, where useful thermic mixing may exist but the parcel does not reach
+  saturation, with no fabricated cloud-base number;
+- `indeterminate`, when required evidence is missing or contradictory.
+
+A blue state is not a negative XC label. A usable thermal-top estimate,
+inversion/cap diagnostics, LFC/EL, CAPE/CIN, and deep-moisture evidence may be
+reported separately and may support the T-024 explainable risk score.
+
+**Consequences:** T-022 still has to select and verify the parcel definition,
+vertical interpolation, inversion and blue-day thresholds, terrain/elevation
+reference, flying-window display rule, MSL/AGL presentation, and missing/
+confidence behavior. This proposal becomes Accepted only after those semantics
+are reviewed. Adding MetPy remains optional and requires a concrete dependency
+review; its upstream license is BSD-3-Clause.
+
+**Related files:** [`T-022-sounding-cloudbase-research-note.md`](T-022-sounding-cloudbase-research-note.md),
+[`architecture.md`](architecture.md), and [`handoff.md`](handoff.md).
+
+### DEC-059 - Automate deterministic XCContest coordinate mapping dispositions
+
+**Status:** Accepted
+
+**Date:** 2026-09-25
+
+**Supersedes:** The no-automatic-write portions of DEC-026 and DEC-027, and the
+proposal-only portion of DEC-029. Their catchment geometry, approved-mapping
+requirement, immutable artifacts, and residual human-review gate remain accepted.
+
+**Context:** The all-distance T-020 collector will encounter many source launch
+coordinates. Requiring manual rejection for points clearly outside every one of
+the seven project catchments creates recurring review work without improving
+mapping accuracy. Conversely, the project already maintains configured radii and
+needs repeatable source token/takeoff-ID mappings for coordinate-confirmed
+launches. New opaque tokens and IDs may still represent nearby or regional
+launches such as Rogachevo, so absence of coordinates must not become an automatic
+rejection.
+
+**Decision:** Before residual proposal generation, `xccontest-ingest fresh` and
+offline `resume` invoke `xccontest-site-mappings auto-apply`. It retains immutable
+v3 automatic decision/report artifacts and writes approved `source_point` plus
+observed `source_site_token` and `source_takeoff_id` mappings only when a valid
+source coordinate is inside exactly one configured catchment and the source
+country matches the target site. The catchment comparison is inclusive at the
+radius boundary and never decodes opaque source tokens or calls a geocoder.
+
+A valid coordinate outside all configured catchments is an audit-only automatic
+rejection. It creates no source-site mapping and no canonical flight, but does
+not block persistence of other approved records. Unknown evidence without valid
+coordinates, overlapping catchments, country mismatch, and an approved mapping
+whose valid coordinate conflicts with its mapped site remain quarantined for
+human review. The automatic stage never alters or silently supersedes an active
+mapping; it does not create a global token/ID blacklist or a new exclusion table.
+
+**Consequences:** `site-mapping-v3` contains the automatic decision/report and
+residual proposal artifacts; `validation-v3/<mapping-snapshot>/` records an
+explicit `mapping_disposition` and auto-rejection count. Pipeline persistence
+pauses only for residual `review_required` mapping quarantines. Existing approved
+source mappings still accept records without coordinates, unless valid
+coordinates show a direct contradiction. Unit coverage must prove unique
+in-country approval, no-coordinate/manual residual behavior, outside-catchment
+nonblocking rejection, and known-mapping coordinate conflict. Live source
+collection remains separately owner-authorized.
+
+**Related files:** [`T-020-xccontest-activity-ingestion-plan.md`](T-020-xccontest-activity-ingestion-plan.md),
+[`../services/ml/README.md`](../services/ml/README.md),
+[`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/site_mapping.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/site_mapping.py),
+[`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/pipeline.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/pipeline.py), and
 [`handoff.md`](handoff.md).
 
 ## Open decisions
@@ -2338,6 +2599,364 @@ observations. Neither presentation nor OCR output may become a T-020 predictor.
 | What are the final coordinates, aliases, and catchment radii for each site?                                               | Current map points are provisional; Pastrina and the Dobrich regional model need particular confirmation.                                                                                                                                                          | T-009.                                                                   |
 | What retention, attribution, licensing, and rate limits apply beyond the current XCContest browser workflow?              | T-013 has a project-owner-confirmed ordinary low-volume UI workflow; do not extend it to bulk/commercial use or SkyNomad without explicit terms.                                                                                                                   | Before broader collection or product use.                                |
 | What final production attribution, retention, and archive-operation wording is required for the selected weather sources? | T-018 uses direct NOAA GFS. T-038 may add CDS ERA5 only after its evidence gate; preserve source/permission evidence and the applicable Copernicus/ECMWF attribution if it does. Confirm final product wording and retention operations before commercial release. | Before a commercial release.                                             |
-| Which first alert channel should be implemented?                                                                          | Dashboard watchlist, email, Telegram, or another agreed channel; alerts require at least one-day lead time and deduplication.                                                                                                                                      | T-027/T-028.                                                             |
+| Which first alert channel should be implemented?                                                                          | Dashboard watchlist, email, Telegram, or another agreed channel; the primary issue uses the accepted prior-evening cutoff and still requires deduplication.                                                                                                                                      | T-027/T-028.                                                             |
+| Which exact GFS sounding policy and output semantics should T-022 use?                                                     | DEC-058 proposes deterministic GFS model soundings with `cumulus`, `blue`, and `indeterminate` states. Select the parcel definition, inversion/blue thresholds, usable thermal top, display time, elevation reference, MSL/AGL presentation, and missing/confidence behavior. IGRA Sofia remains validation only. | Before T-022 implementation.                                             |
 | What deployment/distribution model is required beyond local development?                                                  | The MVP is local-first; cloud/distributed infrastructure needs a demonstrated requirement.                                                                                                                                                                         | No task assigned; decide when deployment becomes an accepted scope item. |
 | What license should the repository use?                                                                                   | No open-source license is currently selected.                                                                                                                                                                                                                      | Repository owner decision; no task assigned.                             |
+
+### DEC-060 - Bound XCContest activity scans to the Bulgarian XC season and stop empty-date sorts
+
+**Status:** Accepted
+
+**Date:** 2026-09-25
+
+**Context:** T-020's all-distance daily scan captures one source-default view plus eight
+explicit sort views for every source-offered date. Most winter dates have no rendered rows,
+so that policy consumes paced source workload without producing training evidence. The
+Bulgarian XC League's published season is 15 February through 15 October, while the main
+XC season is commonly described more narrowly as April through September. Winter flying can
+still occur, so skipped dates cannot be relabelled as no-flight or zero-probability days.
+
+**Decision:** Keep the public XCContest command season-only. Internally, collect daily
+all-distance activity and date-partition fallback views only from 15 February through
+15 October inclusive; record every source-offered date outside that window in manifest v5's
+per-target `skipped_activity_dates` audit. For an in-window date, retain the source-default parent view first. When it has no active
+next page, accept it as complete without category or sort requests, including an exactly
+100-row page. Partition only a paginated parent into exact categories, and run the eight
+explicit re-sort views only for an exact-category default view that is also paginated.
+Move between dates and categories through the current page's rendered selectors instead of
+reopening the root and reconstructing season/country state. The untouched season parent and
+threshold-first entry views retain their existing behavior.
+
+**Consequences:** The policy reduces paced source views without manufacturing negative
+examples. Out-of-window absence remains an explicit coverage limitation; a future product
+season state must say that the XC forecast is outside its supported season rather than show
+`0%`. Old v1--v4 manifests remain readable under their original scope. New v5 manifests
+must validate the fixed policy, skipped dates, and the absence of date-scoped artifacts
+outside the policy window. No date CLI option, parallel collection, pager use, or source API bypass is added. Because
+no canonical URL is reconstructed between dates, both current-season and archived year-prefixed
+URLs remain owned by XCContest's visible controls.
+
+**Sources:** [Bulgarian XC League rules](https://www.xcontest.org/bulgaria/rules/),
+[Bulgaria tourism paragliding guide](https://www.tourism.government.bg/sites/tourism.government.bg/files/uploads/info_materials/eng/sport.pdf),
+and [Sopot XC conditions](https://airtribune.com/bpcup-2025-sopot-round/info).
+
+**Related files:** [`T-020-xccontest-activity-ingestion-plan.md`](T-020-xccontest-activity-ingestion-plan.md),
+[`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/collector.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/collector.py),
+and [`../services/ml/README.md`](../services/ml/README.md).
+
+### DEC-061 - Persist reviewed XCContest stable-key exclusions
+
+**Status:** Accepted
+
+**Date:** 2026-09-26
+
+**Would supersede if accepted:** Only DEC-059's statement that the automatic
+mapping workflow creates no exclusion table. DEC-059's coordinate rules,
+positive-mapping precedence, immutable evidence, and residual human-review gate
+remain unchanged.
+
+**Context:** A human-rejected mapping proposal is currently only run-local. The
+same opaque source site token or takeoff ID can therefore create the same
+proposal on every later run, even after a reviewer has verified that the exact
+source identity belongs outside all supported canonical sites. This repeated
+review will become costly when more seasons and locations are ingested. Weak or
+changing evidence cannot safely use the same shortcut: names may be reused,
+catchment geometry can change, and ambiguous or contradictory coordinates need
+fresh human judgment.
+
+**Proposed decision:** Add an audited `source_site_exclusions` table and reuse
+only exact, manually reviewed `source_site_token` and `source_takeoff_id`
+rejections. The existing minimal review input remains sufficient: the immutable
+proposal identity plus `decision = rejected`; optional notes may provide extra
+context. Do not require a reference, reviewer identity, review timestamp, or a
+new hash field solely for this table. Do not persist name-only, source-point,
+ambiguity, country-mismatch, or positive-mapping coordinate-conflict rejections
+as reusable exclusions.
+
+Positive mappings and fresh valid coordinates retain precedence. An exclusion
+with a new in-scope coordinate, an ambiguous point, or another positively mapped
+stable identifier becomes explicit human-review conflict evidence; it must never
+silently reject the record. Applying a reviewed
+decision stores proposal/run lineage and its technical insertion timestamp.
+Extend the pipeline's existing mapping snapshot—rather than adding database hash
+columns—so it covers sites, catchments, positive mappings, and exclusions for
+safe validation reuse. Retirement is explicit and audited rather than deletion
+or direct database editing.
+
+**Consequences:** The mapping artifact and validation snapshot contracts require
+new versions. Known applicable exclusions no longer create residual proposals or
+block otherwise approved records, but still create traceable quarantine evidence
+and no canonical flight. The current 26 reviewed token rejections are eligible
+by key type and can use their existing minimal rejected decisions. Any future
+site/catchment configuration change requires an explicit audit of active
+exclusions; existing historical rejections are not inferred or backfilled.
+
+**Related files:**
+[`T-020-persistent-site-exclusions-plan.md`](T-020-persistent-site-exclusions-plan.md),
+[`T-020-xccontest-activity-ingestion-plan.md`](T-020-xccontest-activity-ingestion-plan.md),
+[`../packages/database/src/schema.ts`](../packages/database/src/schema.ts), and
+[`handoff.md`](handoff.md).
+
+### DEC-062 - Repair finalized XCContest raw evidence in a separate run
+
+**Status:** Accepted
+
+**Date:** 2026-09-27
+
+**Context:** The completed 2024/2023/2022 raw run has 85 dated list views whose saved
+HTML disagrees with the selected date or manifest observations. The offline parser
+correctly refuses to continue. In particular, an empty stale-date view cannot
+establish that a day had no flights. Editing immutable source artifacts or relaxing
+parser validation would erase the evidence needed for T-020 labels.
+
+**Decision:** Audit every artifact hash, saved selected date, row date, flight ID,
+and count offline. For a finalized manifest-v5 run, a separate explicit live
+repair operation may re-collect only inconsistent dated source-default views
+through the rendered XContest controls at the configured source pace. Verify the
+requested date in saved HTML and flight rows before checkpointing each view.
+Stop on pagination or inconsistent evidence for coverage review. Copy verified
+unchanged artifacts into a new raw run, retain the original run untouched,
+record source and replacement hashes in a repair provenance sidecar, and
+preflight all rows and counters before writing the new immutable manifest.
+Only the new run key proceeds through ordinary offline parsing, mapping,
+validation, and persistence.
+
+**Consequences:** The collector revision advances to 6 because rendered list
+snapshots now capture controls, rows, and HTML in one browser callback and wait
+for the serialized selected date. Manifest schema remains v5. Repair collection
+is live and resumable; `xccontest-ingest resume` remains strictly offline.
+No activity absence or negative training label is inferred from an unverified
+or uncollected view.
+
+**Related files:** [`handoff.md`](handoff.md),
+[`../services/ml/README.md`](../services/ml/README.md), and
+[`../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/repair.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/xccontest/repair.py).
+
+### DEC-063 - Accept reviewed repaired 2022–2025 evidence as mature for label auditing
+
+**Status:** Accepted
+
+**Date:** 2026-10-01
+
+**Context:** DEC-056 and the architecture require mature coverage before an
+absent threshold can become a negative. They do not define a general late-upload
+waiting period. The owner explicitly approved treating the two repaired
+historical runs as mature for T-020 phase 2.
+
+**Decision:** The maturity policy
+`DEC-063-reviewed-repaired-seasons-2022-2025/1` accepts only:
+
+- `9c70c7a0-89f2-4a56-8b8e-a608eb3dde6e` for source seasons 2022, 2023, and 2024;
+- `89841b61-c681-4008-b833-031d4aee636e` for source season 2025.
+
+Maturity does not waive raw/date/hash verification, accepted positive-distance
+activity, complete coverage, terminal mapping, or canonical persistence checks.
+It never turns a no-flight day into a negative. Legacy accepted flights may
+retain confirmed positives with their own verified provenance, but legacy runs
+are not a source of mature negative coverage. The 2026 subset is excluded.
+
+**Consequences:** The offline audit pins these run/season identities through
+`datasets/resources/flight-label-audit-policy.json`, not Python constants, and
+records the configuration/hash and maturity-policy version in its manifest and
+each site's date coverage. A local `--policy-file` may declare another reviewed
+snapshot set without editing product code; a missing generic maturity rule is
+not silently inferred for that set. The site catalog comes from SQLite.
+This is an explicit acceptance of these historical snapshots, not a guarantee
+against future uploads. A generic waiting period or maturity rule for another
+run/season remains an open choice; do not infer one from this decision.
+
+**Related files:** [`T-020-offline-flight-label-audit.md`](T-020-offline-flight-label-audit.md),
+[`../services/ml/src/paragliding_forecasts_ml/datasets/flight_labels.py`](../services/ml/src/paragliding_forecasts_ml/datasets/flight_labels.py),
+and [`handoff.md`](handoff.md).
+
+### DEC-064 - Freeze the initial T-020 horizon-matched weather cohort
+
+**Status:** Accepted
+
+**Date:** 2026-10-04
+
+**Context:** T-020 phase 2 produced a verified v2 audit of mature repaired
+2022–2025 flight evidence. The owner chose 2022–2024 for development and the
+whole 2025 source season for untouched backtesting, and excluded 2026 because
+its current flight coverage is incomplete. Operationally, one evening issue
+produces separate predictions for D+1, D+2, and D+3 target dates. Historical
+examples must have the same shape.
+
+**Decision:** The versioned `T-020-evening-weather-cohort/1` policy pins audit
+`f30cf3707dc91a310a26938a6c3eb7ca9acacd933d7cfe5f4db6505e5f1ed714`.
+Reserve all known 2025 site-days for backtesting. Select 160 known 100+ positive
+and 160 known 100+ negative 2022–2024 site-days for the initial development
+cohort. All development 200+/300+ positives, positives at sites with at most
+20 development 100+ positives, and complete known rows on the reviewed
+technical sample dates are mandatory. Allocate remaining seats by
+site/season/month/threshold-vector strata and rank within strata with a pinned
+hash seed. Record each row's conditional inclusion fraction and weight.
+
+One future joined example represents one site, one target local date, one
+issue local date, and one D+1/D+2/D+3 horizon. Its weather values come from
+that horizon's newest complete GFS cycle available by DEC-055's 20:00 Sofia
+cutoff. A site-day's flight outcome can appear in three such examples; all
+three stay in the same chronological split. Preserve whole target-date groups
+for validation and uncertainty estimation. The offline planner emits only
+candidate cycles and valid-time/lead requests; source availability and actual
+bytes require a separate metadata probe before acquisition.
+
+**Consequences:** The pinned audit yields 320 selected development site-days
+on 235 target dates and 242 backtest site-days on 131 dates, for 1,098 unique
+target-date/horizon acquisition requests. Selection or audit changes create a
+new content-addressed plan. The balanced sample changes class prevalence;
+downstream calibration must define its target population and use the recorded
+sampling design. This decision does not accept a GFS storage-retention policy,
+authorize a broad download, or establish model performance.
+
+**Related files:** [`T-020-phase-3-gfs-cohort-acquisition-plan.md`](T-020-phase-3-gfs-cohort-acquisition-plan.md),
+[`../services/ml/src/paragliding_forecasts_ml/datasets/resources/weather-cohort-policy.json`](../services/ml/src/paragliding_forecasts_ml/datasets/resources/weather-cohort-policy.json),
+and [`handoff.md`](handoff.md).
+
+### DEC-065 - Require evening prediction and alert delivery by 20:00 Sofia time
+
+**Status:** Accepted
+
+**Date:** 2026-10-04
+
+**Context:** The owner clarified that predictions and alerts must already have
+been dispatched by 20:00 local time. DEC-055 had used 20:00 as the *source
+availability* cutoff. A source file first available at that minute cannot be
+processed and delivered by the same minute. A one-off metadata survey of 15
+historical sample jobs and 42 recent issue/horizon jobs found 12Z completion
+proxies as late as 19:18:58 local; the 06Z sample was available much earlier.
+
+**Decision:** The primary D+1/D+2/D+3 evening issue and its alert dispatch
+must finish no later than **20:00 Europe/Sofia** on the issue date, using the
+IANA timezone (UTC+3 in summer, UTC+2 in winter). All historical predictor
+rows must reflect a GFS cycle that the operational workflow can select,
+process, and deliver under that rule. A completed 12Z cycle is preferred only
+if a measured end-to-end schedule with reserved processing/dispatch margin can
+meet the deadline; otherwise use a complete, processed 06Z fallback. Never
+choose a later cycle merely because its source metadata predates 20:00.
+
+**Open implementation choice:** The exact latest-safe source time, safety
+buffer, whether the three horizons can use different cycles, and fallback
+trigger require an operational three-horizon timing rehearsal. Prediction and
+alert code do not yet exist, so no 20:00 SLA has been demonstrated. DEC-055's
+20:00 *source* cutoff remains a recorded provisional historical convention,
+not sufficient authority for broad training acquisition under this delivery
+requirement. DEC-064's site-day selection and 2025 reserve remain valid, but
+its acquisition cycle/cutoff reference must be versioned again if the safe
+source deadline differs. Do not start the broad 1,098-job GFS backfill until
+the matching operational and historical rule is frozen.
+
+**Related files:** [`T-020-gfs-metadata-timing-probe-2026-10-04.md`](T-020-gfs-metadata-timing-probe-2026-10-04.md),
+[`T-020-phase-3-gfs-cohort-acquisition-plan.md`](T-020-phase-3-gfs-cohort-acquisition-plan.md),
+and [`handoff.md`](handoff.md).
+
+### DEC-066 - Pin the first historical cohort to 06Z and defer 2025 acquisition
+
+**Status:** Accepted by the owner for the T-020 implementation
+
+**Date:** 2026-10-05
+
+**Supersedes:** DEC-064's and DEC-065's provisional newest-cycle and 12Z-preference
+rule for this historical acquisition. The DEC-064 site-day selection, 2025
+reserve, and DEC-065 delivery deadline remain in force.
+
+**Context:** The owner chose the 06Z cycle for every D+1/D+2/D+3 historical
+example to leave enough time for forecast processing and alert delivery by
+20:00 Europe/Sofia. The observed 12Z metadata tail left too little proven
+margin. T-020 needs a development join; T-026 owns the untouched backtest.
+
+**Decision:** Version the cohort policy as `T-020-evening-weather-cohort/2`.
+For each issue local date select exactly that date's 06Z GFS cycle, require
+every selected GRIB and `.idx` source timestamp to be no later than **16:00
+Europe/Sofia**, and record the **20:00 Europe/Sofia** delivery deadline
+separately. The four-hour interval is an initial engineering reserve, not a
+measured end-to-end service guarantee. Missing or later source evidence is an
+explicit excluded horizon, never replaced with 12Z, another date, or an
+observation. Acquire the 2022–2024 development split first. Keep the whole
+2025 cohort reserved and unchanged; its weather may be acquired later with
+the same policy before T-026 evaluation.
+
+For the current 705-job development scope, keep full raw evidence on verified
+cold volumes before evicting only the hot raw GRIB payloads. The retained
+local metadata, compact intermediate evidence, and SQLite graph remain
+auditable. This is a reversible copy-and-evict procedure; it does not accept
+irreversible global-raw pruning or change DEC-046 replay semantics. Cold
+volumes and their immutable receipts are required for later full restore.
+
+**Consequences:** The existing 12Z technical sample remains useful ingestion
+evidence but is ineligible for the fixed-06Z development join. The policy
+creates a new cohort plan ID and 06Z run IDs. A future change to cycle or
+source deadline requires a new policy, plan, acquisition, and joined dataset
+identity. Actual full-cohort metadata availability, throughput, and the live
+20:00 delivery promise remain unverified until the owner runs the commands
+and the prediction/alert pipeline is measured.
+
+**Related files:** [`T-020-phase-3-gfs-cohort-acquisition-plan.md`](T-020-phase-3-gfs-cohort-acquisition-plan.md),
+[`../services/ml/README.md`](../services/ml/README.md), and [`handoff.md`](handoff.md).
+
+### DEC-067 - Bound negative reconstructed GFS downward shortwave radiation
+
+**Status:** Accepted by the owner for the T-020 backfill repair
+
+**Date:** 2026-10-06
+
+**Context:** A 06Z D+1 job for 2021-10-02 fetched all 583 GRIB ranges and
+passed spatial sampling and validation, but SQLite rejected a negative
+`shortwave_radiation_w_m2` interval value. The original GFS DSWRF averages
+were nonnegative. The 30–34 h and 30–35 h averages have a decoded packing
+increment of 0.02 W/m²; deaveraging produced a minimum of -0.12 W/m² in one
+compact grid cell. The simple packing-error bound is 0.09 W/m², so packing
+alone is not proven to explain the entire discrepancy. Across 22 locally
+retained parsed runs, original DSWRF was nonnegative and the lowest
+reconstructed result was -0.12 W/m².
+
+**Decision:** For current compact GFS normalization, reject a negative
+original DSWRF value. After exact adjacent-hour deaveraging, clamp only
+reconstructed negative values no lower than -0.20 W/m² to zero. Record the
+correction method and a hash-chained report with source references, count and
+minimum per affected interval. This is a deliberately small, provisional
+physical near-zero tolerance, not a claim of a mathematically proven source
+error bound. A value below it fails normalization before SQLite and retains
+the raw evidence for investigation and offline resume. Do not silently
+relax the SQLite nonnegative constraint or refetch a complete raw run merely
+to repeat offline computation.
+
+**Consequences:** Version compact normalization as `gfs-normalizer/9`; retain
+read compatibility with existing `/8` compact artifacts. The failed
+2021-10-02 D+1 job can be resumed offline after deployment. This decision
+does not certify all future dates or change signed sensible/latent fluxes.
+
+**Related files:** [`../services/ml/README.md`](../services/ml/README.md) and
+[`handoff.md`](handoff.md).
+
+### DEC-068 - Store GFS source readiness per valid hour and guard weather graph identity
+
+**Status:** Accepted by the owner for the T-020 backfill repair
+
+**Date:** 2026-10-06
+
+**Context:** Two target-day jobs can use different forecast-hour files from the
+same native GFS cycle. Their selected-file Last-Modified maxima differ, so
+`weather_product_runs.available_at_utc` cannot represent both. The point-sample
+schema also allowed its ingestion run and product valid time to refer to
+different product runs, despite normal writers creating consistent rows.
+
+**Decision:** Keep the native cycle identity in `weather_product_runs`. Record
+`required_inputs_last_modified_at_utc` on `weather_product_valid_times` as the
+maximum verified GRIB and `.idx` Last-Modified timestamp for that forecast hour.
+The job's source-ready proxy is the maximum over its exact eleven valid hours;
+the acquisition receipt and fixed 06Z issue cutoff are independent checks.
+This metadata is immutable for a product/valid-hour identity. A conflicting
+source revision must be investigated and represented with a new product
+identity, never overwritten. Keep both `weather_point_samples` references:
+its ingestion run owns the sampled/derived facts, while the product valid time
+identifies the forecast hour. Enforce their shared product identity and the
+daily snapshot input's matching run and point footprint in SQLite and at join.
+
+**Rollout:** First add the nullable valid-hour field and relational guards.
+Populate already persisted GFS rows only from hash-verified local request plans
+through a one-off reviewed offline script; the product-level column remains
+temporarily for migration safety. Remove it in a later forward-only migration
+after the owner reviews the repair report. A missing per-hour timestamp fails
+the T-020 06Z join. `started_at_utc` is unchanged.

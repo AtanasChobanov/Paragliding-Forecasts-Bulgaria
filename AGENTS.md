@@ -15,6 +15,10 @@ complete requirements and safety framing.
 - [`docs/architecture.md`](docs/architecture.md) defines system boundaries and
   the accepted high-level design.
 - [`docs/tasks.md`](docs/tasks.md) is the ticket backlog and task-status source.
+  Agents may change **only an existing ticket's status** (`To Do`, `In Progress`,
+  `Review`, or `Done`) when verification justifies it. Do not edit titles,
+  descriptions, dates, owners, labels, other cells, rows, or table formatting.
+  Put implementation progress and results in `docs/handoff.md` or focused docs.
 - [`docs/decisions.md`](docs/decisions.md) records durable accepted/proposed
   decisions and open choices.
 - [`docs/handoff.md`](docs/handoff.md) is the current operational snapshot for

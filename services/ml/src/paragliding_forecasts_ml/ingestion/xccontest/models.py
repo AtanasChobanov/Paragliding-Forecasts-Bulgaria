@@ -2,16 +2,30 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime
+from dataclasses import dataclass, field
+from datetime import date, datetime
+from math import isfinite
 
 SOURCE_CODE = "xccontest"
 SOURCE_LIST_URL = "https://www.xcontest.org/world/en/flights/"
-MIN_DISTANCE_KM = 100.0
+STORAGE_MIN_DISTANCE_KM = 0.0
+THRESHOLD_COVERAGE_DISTANCE_KM = 100.0
+MAX_DISTANCE_KM = 2_000.0
 MIN_DELAY_SECONDS = 3.0
 RECOMMENDED_DELAY_SECONDS = 30.0
 DEFAULT_DELAY_SECONDS = RECOMMENDED_DELAY_SECONDS
 DEFAULT_MAX_VIEWS = 2_000
+ACTIVITY_DATE_POLICY = "bulgarian-xc-league-15-feb-to-15-oct"
+ACTIVITY_DATE_START_MONTH_DAY = "02-15"
+ACTIVITY_DATE_END_MONTH_DAY = "10-15"
+
+
+def is_supported_activity_date(value: str) -> bool:
+    """Return whether one source-offered date is inside the supported XC window."""
+
+    selected_date = date.fromisoformat(value)
+    month_day = selected_date.strftime("%m-%d")
+    return ACTIVITY_DATE_START_MONTH_DAY <= month_day <= ACTIVITY_DATE_END_MONTH_DAY
 
 
 @dataclass(frozen=True)
@@ -38,10 +52,17 @@ class FlightListScope:
 
     category: GliderCategory
     date_filter: str | None = None
-    sort_key: str = "distance"
-    sort_direction: str = "descending"
+    sort_key: str | None = "distance"
+    sort_direction: str | None = "descending"
+    sort_mode: str = field(default="explicit", kw_only=True)
 
     def __post_init__(self) -> None:
+        if self.sort_mode == "source_default":
+            if self.sort_key is not None or self.sort_direction is not None:
+                raise ValueError("XCContest source-default scope cannot declare an explicit sort.")
+            return
+        if self.sort_mode != "explicit":
+            raise ValueError("XCContest sort mode must be source_default or explicit.")
         if self.sort_key not in {"distance", "pilot", "points", "duration"}:
             raise ValueError(f"Unsupported XCContest sort key: {self.sort_key}.")
         if self.sort_direction not in {"ascending", "descending"}:
@@ -51,15 +72,47 @@ class FlightListScope:
     def date_key(self) -> str:
         return self.date_filter or "all"
 
+    @property
+    def artifact_sort_token(self) -> str:
+        """Stable filename/manifest token without inventing a default source order."""
+
+        if self.sort_mode == "source_default":
+            return "source-default"
+        assert self.sort_key is not None and self.sort_direction is not None
+        return f"{self.sort_key}-{self.sort_direction}"
+
+
+def source_default_scope(
+    category: GliderCategory = PRIMARY_GLIDER_CATEGORY,
+    *,
+    date_filter: str | None = None,
+) -> FlightListScope:
+    """Represent XCContest's reset list view with no provider sort claim."""
+
+    return FlightListScope(
+        category=category,
+        date_filter=date_filter,
+        sort_mode="source_default",
+        sort_key=None,
+        sort_direction=None,
+    )
+
 
 RESCUE_SORTS = tuple(
     FlightListScope(
         category=PRIMARY_GLIDER_CATEGORY,
+        sort_mode="explicit",
         sort_key=sort_key,
         sort_direction=direction,
     )
     for sort_key in ("pilot", "points", "duration")
     for direction in ("descending", "ascending")
+)
+
+ALL_DISTANCE_ACTIVITY_SORTS = (
+    FlightListScope(PRIMARY_GLIDER_CATEGORY, sort_key="distance", sort_direction="descending"),
+    FlightListScope(PRIMARY_GLIDER_CATEGORY, sort_key="distance", sort_direction="ascending"),
+    *RESCUE_SORTS,
 )
 
 
@@ -118,8 +171,11 @@ class RowObservation:
     def __post_init__(self) -> None:
         if not self.source_flight_id:
             raise ValueError("XCContest row must expose a source flight ID.")
-        if self.distance_km < 0:
-            raise ValueError("XCContest distance cannot be negative.")
+        if (
+            not isfinite(self.distance_km)
+            or not STORAGE_MIN_DISTANCE_KM <= self.distance_km <= MAX_DISTANCE_KM
+        ):
+            raise ValueError("XCContest distance must be finite and between 0 and 2000 km.")
 
 
 @dataclass(frozen=True)
@@ -160,7 +216,18 @@ class PageObservation:
             and self.scope.sort_direction == "descending"
             and self.has_next_page
             and self.last_distance_km is not None
-            and self.last_distance_km >= MIN_DISTANCE_KM
+            and self.last_distance_km >= THRESHOLD_COVERAGE_DISTANCE_KM
+        )
+
+    @property
+    def is_all_distance_saturated(self) -> bool:
+        """True when an all-distance descending first page still has a next page."""
+
+        return bool(
+            self.scope.sort_mode == "explicit"
+            and self.scope.sort_key == "distance"
+            and self.scope.sort_direction == "descending"
+            and self.has_next_page
         )
 
 
@@ -174,15 +241,20 @@ class ArtifactEntry:
     country_code: str
     category: str
     date_filter: str | None
-    sort_key: str
-    sort_direction: str
+    acquisition_purpose: str
+    sort_mode: str
+    sort_key: str | None
+    sort_direction: str | None
     retrieved_at_utc: datetime
     first_flight_id: str | None
     last_flight_id: str | None
     first_distance_km: float | None
     last_distance_km: float | None
+    has_next_page: bool
+    source_flight_ids: tuple[str, ...]
     row_observation_count: int
     qualifying_row_observation_count: int
+    below_threshold_row_observation_count: int
 
 
 @dataclass(frozen=True)
@@ -193,6 +265,7 @@ class TargetCollectionStatus:
     country_code: str
     status: str
     unresolved_scopes: tuple[FlightListScope, ...]
+    skipped_activity_dates: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -213,3 +286,4 @@ class CollectionReport:
     row_observations_seen: int
     distinct_source_flights_seen: int
     repeated_source_flight_observations: int
+    skipped_activity_date_count: int = 0

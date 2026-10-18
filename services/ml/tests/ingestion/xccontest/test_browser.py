@@ -1,13 +1,20 @@
 from __future__ import annotations
 
 import pytest
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from paragliding_forecasts_ml.ingestion.xccontest.browser import (
     COUNTRY_SELECTOR,
+    ROW_SELECTOR,
     BrowserCollectionError,
     PlaywrightFlightListDriver,
 )
-from paragliding_forecasts_ml.ingestion.xccontest.models import CollectorConfig
+from paragliding_forecasts_ml.ingestion.xccontest.models import (
+    PRIMARY_GLIDER_CATEGORY,
+    CollectorConfig,
+    FlightListScope,
+    source_default_scope,
+)
 
 
 class FakeFlightsLocator:
@@ -47,6 +54,49 @@ def test_passes_wait_for_function_values_by_keyword_argument() -> None:
     ]
 
 
+def test_selected_value_wait_accepts_a_new_document_with_identical_results() -> None:
+    page = FakePage()
+    driver = PlaywrightFlightListDriver(
+        CollectorConfig(seasons=(2025,), country_codes=("BG",)), sleeper=lambda _: None
+    )
+    driver._page = page
+
+    driver._wait_for_selected_value(
+        'select[name="filter[date]"]',
+        "2025-03-16",
+        '<section id="flights"></section>',
+        previous_url="https://www.xcontest.org/2025/world/en/flights/",
+    )
+
+    expression, arguments = page.wait_calls[0]
+    assert "window.location.href !== previousUrl" in expression
+    assert "xccontestCollectorTransition" in expression
+    assert arguments == [
+        'select[name="filter[date]"]',
+        "2025-03-16",
+        '<section id="flights"></section>',
+        "https://www.xcontest.org/2025/world/en/flights/",
+    ]
+
+
+class TimeoutPage(FakePage):
+    def wait_for_function(self, expression: str, *, arg: object = None) -> None:
+        raise PlaywrightTimeoutError("timed out")
+
+
+def test_selected_value_timeout_names_the_unsettled_control() -> None:
+    driver = PlaywrightFlightListDriver(
+        CollectorConfig(seasons=(2025,), country_codes=("BG",)), sleeper=lambda _: None
+    )
+    driver._page = TimeoutPage()
+
+    with pytest.raises(
+        BrowserCollectionError,
+        match=r'control select\[name="filter\[date\]"\] did not settle on \'2025-03-16\'',
+    ):
+        driver._wait_for_selected_value('select[name="filter[date]"]', "2025-03-16")
+
+
 def test_maps_only_collector_control_fields() -> None:
     row = PlaywrightFlightListDriver._row_observation(
         {"id": "5802259", "distance": "400.86", "launchCountry": "BG"}
@@ -62,6 +112,50 @@ def test_accepts_dates_from_both_calendar_years_of_an_xccontest_season() -> None
         2025,
         ("2024-10-01", "2024-12-31", "2025-01-01", "2025-09-30"),
     )
+
+
+def test_read_page_captures_fragment_controls_and_rows_in_one_browser_callback() -> None:
+    class SnapshotLocator:
+        def wait_for(self, *, state: str) -> None:
+            assert state == "visible"
+
+        def evaluate(self, expression: str, selectors: dict[str, str]) -> dict[str, object]:
+            assert "fragmentHtml: flights.outerHTML" in expression
+            assert selectors["row"] == ROW_SELECTOR.removeprefix("#flights ")
+            assert selectors["date"] == 'select[name="filter[date]"]'
+            return {
+                "fragmentHtml": '<div id="flights">same snapshot</div>',
+                "countryFilter": "BG",
+                "gliderCategoryFilter": "FAI3",
+                "dateFilter": "2022-05-13",
+                "hasNextPage": False,
+                "rows": [{"id": "3134454", "distance": "100.0", "launchCountry": "BG"}],
+            }
+
+    class SnapshotPage:
+        def wait_for_function(self, expression: str, *, arg: object = None) -> None:
+            assert "option[selected]" in expression
+            assert arg == ['select[name="filter[date]"]', "2022-05-13"]
+
+        def locator(self, selector: str) -> SnapshotLocator:
+            assert selector == "#flights"
+            return SnapshotLocator()
+
+        def wait_for_timeout(self, milliseconds: int) -> None:
+            assert milliseconds == 250
+
+    driver = PlaywrightFlightListDriver(
+        CollectorConfig(seasons=(2022,), country_codes=("BG",)), sleeper=lambda _: None
+    )
+    driver._page = SnapshotPage()
+
+    page = driver.read_page(
+        2022, source_default_scope(PRIMARY_GLIDER_CATEGORY, date_filter="2022-05-13")
+    )
+
+    assert page.fragment_html == '<div id="flights">same snapshot</div>'
+    assert page.date_filter == "2022-05-13"
+    assert [row.source_flight_id for row in page.rows] == ["3134454"]
 
 
 @pytest.mark.parametrize("value", ("2024-09-30", "2025-10-01", "not-a-date"))
@@ -84,6 +178,51 @@ def test_select_country_uses_the_rendered_country_control(monkeypatch) -> None:
     driver.select_country("RS")
 
     assert selected == [(COUNTRY_SELECTOR, "RS")]
+
+
+def test_source_default_scope_changes_filters_in_place_without_sorting(monkeypatch) -> None:
+    driver = PlaywrightFlightListDriver(
+        CollectorConfig(seasons=(2025,), country_codes=("BG",)), sleeper=lambda _: None
+    )
+    calls: list[tuple[str, ...]] = []
+    monkeypatch.setattr(
+        driver,
+        "_select_option",
+        lambda selector, value: calls.append(("select", selector, value)),
+    )
+    monkeypatch.setattr(
+        driver,
+        "_ensure_sort",
+        lambda *_: pytest.fail("source_default must not click a sortable column"),
+    )
+
+    driver.select_scope(source_default_scope(PRIMARY_GLIDER_CATEGORY, date_filter="2025-07-01"))
+
+    assert calls == [
+        ("select", 'select[name="filter[detail_glider_catg]"]', "FAI3"),
+        ("select", 'select[name="filter[date]"]', "2025-07-01"),
+    ]
+
+
+def test_explicit_scope_does_not_reset_and_applies_its_sort(monkeypatch) -> None:
+    driver = PlaywrightFlightListDriver(
+        CollectorConfig(seasons=(2025,), country_codes=("BG",)), sleeper=lambda _: None
+    )
+    calls: list[tuple[str, ...]] = []
+    monkeypatch.setattr(
+        driver,
+        "_select_option",
+        lambda selector, value: calls.append(("select", selector, value)),
+    )
+    monkeypatch.setattr(
+        driver,
+        "_ensure_sort",
+        lambda key, direction: calls.append(("sort", key, direction)),
+    )
+
+    driver.select_scope(FlightListScope(PRIMARY_GLIDER_CATEGORY))
+
+    assert calls[-1] == ("sort", "distance", "descending")
 
 
 class FakeResponse:

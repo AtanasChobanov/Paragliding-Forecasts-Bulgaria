@@ -67,6 +67,7 @@ const validFlightSql = (
   id: number,
   sourceFlightId: string,
   validationLevel = "metadata",
+  scoredDistanceKm = 150,
 ): string => `
   INSERT INTO flight_records (
     id, source_id, source_flight_id, source_flight_url, source_site_mapping_id,
@@ -76,7 +77,7 @@ const validFlightSql = (
     created_at_utc, updated_at_utc
   ) VALUES (
     ${String(id)}, 1, '${sourceFlightId}', 'https://www.xcontest.org/world/en/flights/detail:test', 100,
-    '2026-08-01T12:00:00Z', 3600, 150, 'free_flight',
+'2026-08-01T12:00:00Z', 3600, ${String(scoredDistanceKm)}, 'free_flight',
     ${validationLevel === "track" ? "'https://www.xcontest.org/track.php?id=test'" : "NULL"},
     '${validationLevel}', 'validated test record', '2026-08-02T10:00:00Z',
     1000, 1000, '2026-08-02T10:00:00Z', '2026-08-02T10:00:00Z'
@@ -111,10 +112,9 @@ const insertWeatherGraph = (targetConnection = activeConnection()): void => {
     );
 
     INSERT INTO weather_product_runs (
-      id, source_id, source_product_key, reference_at_utc, available_at_utc
+      id, source_id, source_product_key, reference_at_utc
     ) VALUES (
-      10, 10, 'gfs.20260820/00/atmos', '2026-08-20T00:00:00Z',
-      '2026-08-20T03:30:00Z'
+      10, 10, 'gfs.20260820/00/atmos', '2026-08-20T00:00:00Z'
     );
 
     INSERT INTO weather_product_valid_times (
@@ -258,7 +258,7 @@ describe("database foundation migrations", () => {
 
     expect(sqlite.prepare("PRAGMA foreign_keys").get()).toEqual({ foreign_keys: 1 });
     expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({
-      count: 15,
+      count: 19,
     });
 
     if (databaseUrl === undefined) {
@@ -268,7 +268,7 @@ describe("database foundation migrations", () => {
     runMigrations(databaseUrl);
 
     expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({
-      count: 15,
+      count: 19,
     });
     expect(
       sqlite
@@ -388,7 +388,7 @@ describe("database foundation migrations", () => {
         .prepare(
           `SELECT name, strict FROM pragma_table_list
            WHERE name IN (
-             'flight_sources', 'sites', 'source_site_mappings', 'flight_ingestion_runs', 'flight_records'
+             'flight_sources', 'sites', 'source_site_mappings', 'source_site_exclusions', 'flight_ingestion_runs', 'flight_records'
            )
            ORDER BY name`,
         )
@@ -398,6 +398,7 @@ describe("database foundation migrations", () => {
       { name: "flight_records", strict: 1 },
       { name: "flight_sources", strict: 1 },
       { name: "sites", strict: 1 },
+      { name: "source_site_exclusions", strict: 1 },
       { name: "source_site_mappings", strict: 1 },
     ]);
     expect(
@@ -409,6 +410,9 @@ describe("database foundation migrations", () => {
              'flight_records_mapping_takeoff_at_index',
              'flight_records_takeoff_distance_index',
              'ingestion_runs_source_started_at_index',
+             'source_site_exclusions_active_key_unique',
+             'source_site_exclusions_lookup_index',
+             'source_site_exclusions_origin_audit_index',
              'source_site_mappings_active_key_unique',
              'source_site_mappings_active_point_unique',
              'source_site_mappings_site_source_status_index'
@@ -421,6 +425,9 @@ describe("database foundation migrations", () => {
       { name: "flight_records_mapping_takeoff_at_index" },
       { name: "flight_records_takeoff_distance_index" },
       { name: "ingestion_runs_source_started_at_index" },
+      { name: "source_site_exclusions_active_key_unique" },
+      { name: "source_site_exclusions_lookup_index" },
+      { name: "source_site_exclusions_origin_audit_index" },
       { name: "source_site_mappings_active_key_unique" },
       { name: "source_site_mappings_active_point_unique" },
       { name: "source_site_mappings_site_source_status_index" },
@@ -441,6 +448,23 @@ describe("database foundation migrations", () => {
         'test-pipeline', '2026-08-11T08:00:00Z', '2026-08-11T08:01:00Z'
       );
     `);
+  });
+  it("accepts the full flight distance storage domain and rejects out-of-range values", () => {
+    insertReferenceRows();
+    const sqlite = activeConnection().sqlite;
+
+    const distances: readonly (readonly [number, number])[] = [
+      [10, 0],
+      [11, 78.5],
+      [12, 100],
+      [13, 2000],
+    ];
+    for (const [id, distance] of distances) {
+      sqlite.exec(validFlightSql(id, `distance-${String(id)}`, "metadata", distance));
+    }
+
+    expectSqlFailure(validFlightSql(14, "negative-distance", "metadata", -0.01));
+    expectSqlFailure(validFlightSql(15, "too-far-distance", "metadata", 2000.01));
   });
   it("enforces source consistency, flight identity, and validation levels", () => {
     insertReferenceRows();
@@ -708,6 +732,50 @@ describe("database foundation migrations", () => {
     ).toEqual({ cape_j_per_kg: null, cin_magnitude_j_per_kg: null });
   });
 
+  it("keeps hourly product and daily input identities consistent", () => {
+    insertWeatherGraph();
+    const sqlite = activeConnection().sqlite;
+    sqlite.exec(`
+      INSERT INTO weather_product_runs (id, source_id, source_product_key, reference_at_utc)
+      VALUES (11, 10, 'gfs.20260820/06/atmos', '2026-08-20T06:00:00Z');
+      INSERT INTO weather_product_valid_times
+        (id, product_run_id, valid_at_utc, lead_hours, required_inputs_last_modified_at_utc)
+      VALUES (11, 11, '2026-08-20T12:00:00Z', 6, '2026-08-20T09:00:00Z');
+    `);
+    expectSqlFailure(`
+      INSERT INTO weather_point_samples
+        (id, ingestion_run_id, product_valid_time_id, point_footprint_id, coverage_status)
+      VALUES (11, 10, 11, 10, 'complete');
+    `);
+    expectSqlFailure("UPDATE weather_point_samples SET product_valid_time_id = 11 WHERE id = 10;");
+    expectSqlFailure("UPDATE weather_product_valid_times SET product_run_id = 11 WHERE id = 10;");
+    expectSqlFailure("UPDATE weather_ingestion_runs SET product_run_id = 11 WHERE id = 10;");
+    sqlite.exec(`
+      INSERT INTO weather_product_valid_times
+        (id, product_run_id, valid_at_utc, lead_hours)
+      VALUES (12, 10, '2026-08-20T07:00:00Z', 7);
+      INSERT INTO weather_point_samples
+        (id, ingestion_run_id, product_valid_time_id, point_footprint_id, coverage_status)
+      VALUES (12, 10, 12, 11, 'complete');
+    `);
+    expectSqlFailure(`
+      INSERT INTO weather_daily_feature_snapshot_inputs
+        (daily_feature_snapshot_id, weather_point_sample_id) VALUES (10, 12);
+    `);
+    expectSqlFailure("UPDATE weather_point_samples SET point_footprint_id = 11 WHERE id = 10;");
+    expectSqlFailure(
+      "UPDATE weather_daily_feature_snapshots SET point_footprint_id = 11 WHERE id = 10;",
+    );
+    expectSqlFailure(`
+      UPDATE weather_daily_feature_snapshot_inputs SET weather_point_sample_id = 12
+      WHERE daily_feature_snapshot_id = 10 AND weather_point_sample_id = 10;
+    `);
+    expectSqlFailure(`
+      UPDATE weather_product_valid_times
+      SET required_inputs_last_modified_at_utc = 'not-a-utc-time' WHERE id = 10;
+    `);
+  });
+
   it("rejects broken source, interval, footprint, identity, and provenance semantics", () => {
     insertWeatherGraph();
 
@@ -800,6 +868,7 @@ const migrationsDirectory = fileURLToPath(new URL("../drizzle/", import.meta.url
 const weatherMigrationDirectory = "20260820160216_create_weather_foundation";
 const dailyWeatherMigrationDirectory = "20260908181331_refactor_daily_weather_persistence";
 const copernicusElevationMigrationDirectory = "20260824184712_set_copernicus_site_elevations";
+const hourlyTimingMigrationDirectory = "20261006194824_t020_gfs_hourly_source_timing";
 
 let upgradeConnection: DatabaseConnection | undefined;
 let upgradeTestDirectory: string | undefined;
@@ -815,6 +884,54 @@ afterEach(() => {
 });
 
 describe("weather foundation upgrade", () => {
+  it("removes product timing without losing populated hourly timing or foreign keys", () => {
+    mkdirSync(dataLocalDirectory, { recursive: true });
+    upgradeTestDirectory = mkdtempSync(join(dataLocalDirectory, "t020-timing-upgrade-test-"));
+    const oldMigrationsDirectory = join(upgradeTestDirectory, "old-migrations");
+    mkdirSync(oldMigrationsDirectory);
+    for (const entry of readdirSync(migrationsDirectory, { withFileTypes: true })) {
+      if (entry.isDirectory() && entry.name <= hourlyTimingMigrationDirectory) {
+        cpSync(join(migrationsDirectory, entry.name), join(oldMigrationsDirectory, entry.name), {
+          recursive: true,
+        });
+      }
+    }
+    const databaseUrl = `file:./data/local/${basename(upgradeTestDirectory)}/upgrade.db`;
+    upgradeConnection = openDatabase(databaseUrl);
+    migrate(upgradeConnection.db, { migrationsFolder: oldMigrationsDirectory });
+    insertWeatherGraph(upgradeConnection);
+    upgradeConnection.sqlite.exec(
+      "UPDATE weather_product_valid_times " +
+        "SET required_inputs_last_modified_at_utc = '2026-08-20T03:30:00Z' WHERE id = 10",
+    );
+    upgradeConnection.close();
+    upgradeConnection = undefined;
+    runMigrations(databaseUrl);
+    upgradeConnection = openDatabase(databaseUrl);
+    expect(
+      upgradeConnection.sqlite
+        .prepare(
+          "SELECT required_inputs_last_modified_at_utc AS timing " +
+            "FROM weather_product_valid_times WHERE id = 10",
+        )
+        .get(),
+    ).toEqual({ timing: "2026-08-20T03:30:00Z" });
+    expect(
+      upgradeConnection.sqlite
+        .prepare("PRAGMA table_info(weather_product_runs)")
+        .all()
+        .some((column) => column.name === "available_at_utc"),
+    ).toBe(false);
+    expect(upgradeConnection.sqlite.prepare("PRAGMA foreign_keys").get()).toEqual({
+      foreign_keys: 1,
+    });
+    expect(upgradeConnection.sqlite.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+    expect(
+      upgradeConnection.sqlite.prepare("SELECT count(*) AS count FROM weather_point_samples").get(),
+    ).toEqual({ count: 1 });
+    runMigrations(databaseUrl);
+  });
+
   it("renames the populated flight ingestion table without losing rows or foreign keys", () => {
     mkdirSync(dataLocalDirectory, { recursive: true });
     upgradeTestDirectory = mkdtempSync(join(dataLocalDirectory, "t018-upgrade-test-"));

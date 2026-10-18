@@ -18,6 +18,7 @@ from paragliding_forecasts_ml.storage.sqlite import (
 )
 
 from ..atmosphere.contracts import ArtifactReference, RawManifest, RequestPlan, StageManifest
+from ..gfs.models import GFS_SOURCE_ID, GfsResolvedPlan
 from .artifacts import ArtifactError, WeatherArtifactStore, stage_input_fingerprint
 from .features.contracts import (
     DailyFeatureSnapshot,
@@ -164,9 +165,14 @@ _REQUIRED_TABLE_COLUMNS = {
         "source_id",
         "source_product_key",
         "reference_at_utc",
-        "available_at_utc",
     },
-    "weather_product_valid_times": {"id", "product_run_id", "valid_at_utc", "lead_hours"},
+    "weather_product_valid_times": {
+        "id",
+        "product_run_id",
+        "valid_at_utc",
+        "lead_hours",
+        "required_inputs_last_modified_at_utc",
+    },
     "weather_grids": {"id", "source_id", "grid_key"},
     "weather_grid_points": {"id", "grid_id", "latitude_deg", "longitude_deg"},
     "weather_sampling_footprints": {
@@ -1061,15 +1067,14 @@ def _resolve_product_run(
 ) -> int:
     manifest = prepared.raw_manifest
     row = connection.execute(
-        """SELECT id, reference_at_utc, available_at_utc FROM weather_product_runs
+        """SELECT id, reference_at_utc FROM weather_product_runs
            WHERE source_id = ? AND source_product_key = ?""",
         (source_id, manifest.source_product_key),
     ).fetchone()
-    expected = (manifest.reference_at_utc, manifest.available_at_utc)
     if row is not None:
-        if (row[1], row[2]) != expected:
+        if row[1] != manifest.reference_at_utc:
             raise WeatherPersistenceError(
-                "Weather product natural key collides with different immutable timing."
+                "Weather product natural key collides with a different reference time."
             )
         return int(row[0])
     return _insert(
@@ -1079,7 +1084,6 @@ def _resolve_product_run(
             "source_id": source_id,
             "source_product_key": manifest.source_product_key,
             "reference_at_utc": manifest.reference_at_utc,
-            "available_at_utc": manifest.available_at_utc,
         },
     )
 
@@ -1252,10 +1256,14 @@ def _product_run_id(
 
 
 def _resolve_valid_time(
-    connection: sqlite3.Connection, product_run_id: int, sample: SiteAlignedSample
+    connection: sqlite3.Connection,
+    product_run_id: int,
+    sample: SiteAlignedSample,
+    required_time: str | None,
 ) -> int:
     row = connection.execute(
-        """SELECT id, lead_hours FROM weather_product_valid_times
+        """SELECT id, lead_hours, required_inputs_last_modified_at_utc
+           FROM weather_product_valid_times
            WHERE product_run_id = ? AND valid_at_utc = ?""",
         (product_run_id, sample.valid_at_utc),
     ).fetchone()
@@ -1263,6 +1271,11 @@ def _resolve_valid_time(
         if not _same(row[1], sample.lead_hours):
             raise WeatherPersistenceError(
                 "Weather valid-time natural key collides with different lead hours."
+            )
+        if required_time is not None and row[2] != required_time:
+            raise WeatherPersistenceError(
+                "Weather valid-time source timing differs from verified request evidence; "
+                "repair existing NULL timing offline or investigate a source revision."
             )
         return int(row[0])
     return _insert(
@@ -1272,8 +1285,52 @@ def _resolve_valid_time(
             "product_run_id": product_run_id,
             "valid_at_utc": sample.valid_at_utc,
             "lead_hours": sample.lead_hours,
+            "required_inputs_last_modified_at_utc": required_time,
         },
     )
+
+
+def _gfs_required_hour_times(
+    prepared: PreparedWeatherPersistence,
+) -> dict[str, tuple[int, str | None]]:
+    if prepared.raw_manifest.source_id != GFS_SOURCE_ID:
+        return {}
+    try:
+        resolved = GfsResolvedPlan.model_validate_json(
+            canonical_json_bytes(prepared.request_plan.adapter_request), strict=True
+        )
+    except ValueError as error:
+        raise WeatherPersistenceError("Verified GFS request plan is invalid.") from error
+    if (
+        resolved.source_product_key != prepared.raw_manifest.source_product_key
+        or resolved.resolved_run_at_utc != prepared.raw_manifest.reference_at_utc
+        or resolved.available_at_utc != prepared.raw_manifest.available_at_utc
+    ):
+        raise WeatherPersistenceError("GFS request and raw manifest source timing disagree.")
+    result: dict[str, tuple[int, str | None]] = {}
+    source_times: list[str] = []
+    for item in resolved.ranges:
+        source_times.append(item.object_last_modified_utc)
+        if item.index_last_modified_utc is not None:
+            source_times.append(item.index_last_modified_utc)
+        elif resolved.gfs_request_schema_version == 3:
+            raise WeatherPersistenceError("Compact GFS request lacks index Last-Modified.")
+        required_time = (
+            max(item.object_last_modified_utc, item.index_last_modified_utc)
+            if item.index_last_modified_utc is not None
+            else None
+        )
+        identity = (item.lead_hours, required_time)
+        previous = result.setdefault(item.valid_at_utc, identity)
+        if previous != identity:
+            raise WeatherPersistenceError("One GFS valid hour has conflicting file timing.")
+    if max(source_times) != resolved.available_at_utc:
+        raise WeatherPersistenceError("GFS job source timing is not the selected-file maximum.")
+    if {(item.valid_at_utc, item.lead_hours) for item in prepared.accepted.samples} != {
+        (valid, lead) for valid, (lead, _) in result.items()
+    }:
+        raise WeatherPersistenceError("GFS request hours differ from accepted hourly samples.")
+    return result
 
 
 def _point_column_for_source_field(field: Any) -> str | None:
@@ -1864,6 +1921,7 @@ def _insert_graph(
 ) -> dict[str, int]:
     source_id, footprint_ids = _resolve_shared_rows(connection, prepared)
     product_run_id = _product_run_id(connection, source_id, prepared)
+    required_hours = _gfs_required_hour_times(prepared)
     run_id = _insert_run(connection, product_run_id, prepared)
     hourly = {item.sample_identity_key: item for item in prepared.hourly.snapshots}
     sample_ids: dict[str, int] = {}
@@ -1873,7 +1931,14 @@ def _insert_graph(
         sample_ids[sample.sample_identity_key] = _insert_point_sample(
             connection,
             run_id,
-            _resolve_valid_time(connection, product_run_id, sample),
+            _resolve_valid_time(
+                connection,
+                product_run_id,
+                sample,
+                required_hours[sample.valid_at_utc][1]
+                if prepared.raw_manifest.source_id == GFS_SOURCE_ID
+                else None,
+            ),
             sample,
             hourly[sample.sample_identity_key],
             footprint_ids,

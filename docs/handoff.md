@@ -1,135 +1,74 @@
 # Project Handoff
 
-## Read first
+## Current state — 2026-10-18
 
-1. `AGENTS.md` for repository rules.
-2. `docs/tasks.md` for ticket status and scope.
-3. This handoff for the T-019 sounding-ingestion planning state.
-4. The relevant sections of `docs/project-brief.md` and
-   `docs/architecture.md` for product/system constraints.
-5. DEC-031 through DEC-054 in `docs/decisions.md` for accepted weather
-   decisions, including the ERA5 deferral boundary.
+T-020 is **Done**. The 2022–2024 source-season development cohort has a verified,
+versioned XCContest × exact-06Z-GFS dataset. T-021 is the next To Do ticket:
+feature calculation tests for weather and sounding fields, units, missingness,
+and date/timezone alignment. Read `AGENTS.md`, this handoff, T-021 in
+`docs/tasks.md`, and only the relevant architecture/brief sections before
+starting it. Do not start T-022/T-023 modeling as part of T-021.
 
-Keep durable decisions in `docs/decisions.md`, ticket lifecycle in
-`docs/tasks.md`, and only current actionable state here.
+The current branch is `feature/T-020-joined-weather-dataset`. The T-020 closure
+changes are in the working tree; preserve them when starting the next task.
 
-## Current state — 2026-09-17
+## Verified T-020 boundary
 
-| Field | Value |
-| --- | --- |
-| Branch | `feature/T-019-sounding-ingestion` |
-| Ticket | `T-019` is **Review**. The artifact-first IGRA pipeline is implemented and owner-operated live acceptance succeeded for the reviewed two-date scope. `T-018` remains in Review and ERA5 remains deferred to T-038. |
-| Reviewed live evidence | HEAD-only inventory found five objects totaling `75,714,341` compressed bytes (`73 MiB` minimum) with no warnings. Owner then ran `fresh` for Sofia `BUM00015614`, 2025-08-02 and 2025-08-11, period-of-record, 80 MiB cap. It used verified cache reuse, accepted 4 soundings, quarantined 0, had 0 missing-evidence records, and exited 0. The source snapshot ID was `c7dd598ab2114720d0ee53ae024eebfd6148a480293e5185d171e4155e3a6fe6`. |
-| Offline replay evidence | Owner ran `resume` for `5ae72afe-e71e-4c32-ade8-cd57426533e8`. It returned the same four accepted soundings, no quarantine/missing evidence, exit 0, and the identical effective manifest SHA-256 `b7cb4e3100f321a28dcad36ecd456a2c2b1310544db2a9a3cdc10c943b0c4abd`. |
-| Next work | Review the task implementation and evidence; do not add SQL, T-020 training joins, GFS/IGRA comparison, ERA5, BUFR, or image/OCR scope. |
-| Local DB | The primary and temporary restoration SQLite databases were migrated by the owner for T-018 acceptance. They are local ignored artifacts and must not be committed. |
-| User work | `docs/T-019-implementation-plan.md` is a local planning reference. Per owner instruction, do not stage or commit it. |
+- Repaired XCContest label audit:
+  `f30cf3707dc91a310a26938a6c3eb7ca9acacd933d7cfe5f4db6505e5f1ed714`.
+  Cohort: `e75ee4091e9eaaec446a457e8ef09cbb5f02235ff37c38062a3129df64191c14`.
+  Development acquisition:
+  `ea7b5dcbbb3e1f9dac97d377946310153fabd4fa7e69cbf077903d881d862492`.
+- All 705 acquisition jobs are finalized `ready` and match 705 `succeeded`
+  SQLite runs. The cohort selects 320 site-days on 235 dates across seven sites.
+- The immutable joined dataset is
+  `data/processed/joined-weather/c294ebdf21cb2380548a52ec46b1f174ec85ce381e7561f88d6c55a3245c1c38/`
+  under `weather-flight-joined-dataset/3`. It has 960 training rows, exactly
+  320 at each D+1/D+2/D+3, and zero actual exclusions. Its two JSONL hashes,
+  full cohort coverage, nested labels, as-of identity, units, missingness and
+  per-field provenance pass the artifact-only verifier. A second join run
+  returned the identical dataset ID.
+- Reproduce verification from the repository root:
 
-## T-019 implementation and operational boundary
+  ```powershell
+  uv run --project services/ml weather-join `
+    --verify-dataset-id c294ebdf21cb2380548a52ec46b1f174ec85ce381e7561f88d6c55a3245c1c38
+  ```
 
-The accepted research and executable implementation logic are in
-[`T-019-implementation-plan.md`](T-019-implementation-plan.md) and DEC-054.
-The operational documentation and commands are in
-[`../services/ml/README.md`](../services/ml/README.md). The task is now in
-**Review**, not Done: its scoped implementation and evidence are ready for
-review, while follow-on work remains deliberately separate.
+  It reads retained acquisition/cohort artifacts, never downloads GFS, and
+  does not read or write SQLite. The build command and full acceptance report
+  are in `docs/T-020-phase-4-joined-dataset-verification.md`.
+- Final validation: 420 Python tests passed; Ruff lint/format,
+  `npm.cmd run repo:check`, and `git diff --check` passed. SQLite `quick_check`
+  returned `ok` with no foreign-key violations. The full Python suite needed
+  normal filesystem permissions because the Windows sandbox denies hard links
+  used by existing tests. The synthetic join tests cover missing/late source,
+  tampered hashes, unknown/non-nested labels, units, missing reasons and timing.
 
-- Source: official NOAA/NCEI IGRA v2.2 raw and provider-derived station ZIPs
-  for Sofia `BUM00015614`; station snapshots update daily and observations are
-  normally published with roughly two days of delay.
-- Command boundary: live HEAD-only `igra-ingest inventory`, bounded live
-  `fresh`, then hash-verified offline `resume`, for explicit UTC dates.
-- Storage: immutable raw station snapshots plus selected, normalized, and
-  validated JSONL/report artifacts only. No SQLite or Drizzle work belongs in
-  T-019.
-- Time policy: every actual sounding on the requested UTC dates is retained.
-  The Sofia 10:00–20:00 flying window is classified later, not filtered here.
-- ML boundary: T-020 joins flight labels only to pre-flight exact GFS features.
-  IGRA observations are not predictors and are not a required join.
-- Comparison boundary: T-039 may consume the effective validated manifest to
-  compare GFS at the exact IGRA station and nominal time, then quantify
-  profile error and calibration/bias evidence.
+## Next-ticket context and limits
 
-### Verified pipeline evidence
+- T-021 should use the packaged `weather-feature-policy-v4.json`, the source-
+  neutral feature contracts, and `services/ml/tests/ingestion/weather/features/`.
+  The T-020 verifier checks the published values' shapes, catalogue units and
+  provenance; T-021 owns calculation-specific tests and date/timezone cases.
+- Across the 960 joined rows, the three provider cloud-base daily fields are
+  unsupported in every row. Each of four thermal/buoyancy summary fields is
+  missing in 20 rows with an explicit reason. Investigate those calculations
+  and missing states in T-021; null must not become zero. Profile-layer fields
+  are present and marked derived in all joined rows.
+- DEC-066 pins the historical evening issue to the issue-date 06Z cycle,
+  source readiness by 16:00 Europe/Sofia and delivery by 20:00. DEC-068 stores
+  source-ready evidence per valid hour. DEC-056 defines nested XC labels and
+  mature activity for negatives. DEC-054 keeps IGRA observations outside the
+  training join; IGRA remains separate validation evidence.
+- The 2025 weather cohort is reserved for later T-026 backtesting. No model,
+  calibration or alert was built in T-020. The development sample is balanced
+  at 160 positive/160 negative 100+ site-days, so its frequency is not an
+  unconditional probability. There are only three 300+ positive development
+  site-days; performance claims for that threshold remain exploratory.
 
-The successful fresh command was:
-
-```powershell
-uv run --project services/ml igra-ingest fresh `
-  --station-id BUM00015614 `
-  --date 2025-08-02 `
-  --date 2025-08-11 `
-  --archive period-of-record `
-  --maximum-total-mib 80 `
-  --allow-live-network
-```
-
-It published run `5ae72afe-e71e-4c32-ade8-cd57426533e8` and its effective
-validator manifest at:
-
-```text
-data/interim/soundings/5ae72afe-e71e-4c32-ade8-cd57426533e8/validator-v1/af4e1b3b9a8a2aa11de719ae11fd8ec51dafe179d3dea12675b4ddc872b72300/stage-manifest.json
-```
-
-`fresh` first checks all five remote objects with HEAD, enforces the compressed
-byte cap before any GET, then stores/reuses hash-verified source evidence. It
-streams the selected ZIP members, parses fixed-width raw and derived records,
-normalizes units/provenance, validates them, partitions accepted/quarantined/
-missing evidence, and writes the effective `stage-manifest.json`. Its terminal
-JSON is sorted and pretty-printed; `validated_manifest` is the trustworthy
-handoff reference for T-039.
-
-The offline replay was:
-
-```powershell
-uv run --project services/ml igra-ingest resume `
-  --run-key 5ae72afe-e71e-4c32-ade8-cd57426533e8
-```
-
-It performed no live transport, verified the artifact chain, and returned the
-same outcome and manifest identity. This is the command to use for safe local
-inspection or recovery of an interrupted offline stage. New fresh runs use the
-explicit `source-snapshot-reference.json` source-stage reference; the old
-extensionless `snapshot` reference is intentionally unsupported and old runs
-must be re-collected.
-
-Prior local verification passed Ruff and the full ML suite (293 tests). The
-current JSON presentation change also passed its formatter, focused Ruff check,
-and three focused CLI tests. These local checks use fixtures/fake transport;
-the owner commands above are the recorded real NOAA acceptance.
-### Storage scaling
-
-The retained GFS run is dominated by derived global arrays, not SQLite rows:
-raw payloads are about 1.09 GiB, active parser v5 artifacts about 10.92 GiB,
-and active normalizer v7 artifacts about 12.01 GiB; spatial/validator/features
-total only about 18 MiB. With superseded history, one retained day is about
-47 GiB, so naive 100-day retention is not viable.
-
-The compact design is locked:
-
-- Decode and validate the full GRIB message in memory, preserving bitmap and
-  sentinel semantics; persist only the deterministic rectangular crop required
-  by configured site footprints.
-- The current seven sites need 77 unique nodes inside an 8 × 24 (192-cell)
-  crop, versus the provider's 1440 × 721 global grid. Derive this crop from the
-  immutable site snapshot and sampling policy; do not hard-code it.
-- A rectangle, rather than sparse nodes, preserves current bilinear/radius
-  sampling. Preserve float64 values, packed masks, global-to-local node
-  translation, and `gfs_0p25_global` SQLite identity.
-- Bind site-config SHA, sampling-policy SHA, and crop-selection version into
-  acquisition/artifact identity. Changed footprint inputs may not silently
-  reuse a compact or persisted graph.
-- Keep raw source evidence and existing completed artifacts. Do not introduce
-  raw pruning, new dependencies, or SQLite columns.
-
-Given identical raw GRIB, site snapshot, and policy, selected-node canonical
-and SQLite business values must be unchanged. Only derived on-disk representation
-and repeated verification work may change.
-
-## Commands and safety
-
-Use `uv run --project services/ml ...` for ML commands. Do not make a live
-network request unless the current phase explicitly calls for the owner-
-authorized bounded fresh operation. Resume must not construct or call a source
-transport. Do not mark S09, S10, or T-018 complete without the documented
-operational evidence.
+Older T-020 operational checkpoints have been removed from this handoff. The
+previously uncommitted October batch interruption notes are preserved in
+`docs/T-020-backfill-interruptions-2026-10.md`; the phase-2 label audit, phase-3
+acquisition plan, accepted decisions and Git history retain the remaining
+historical detail.

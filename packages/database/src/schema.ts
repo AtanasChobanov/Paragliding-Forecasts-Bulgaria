@@ -170,6 +170,78 @@ export const sourceSiteMappings = sqliteTable(
   ],
 );
 
+/**
+ * Reviewed negative source identities. Unlike sourceSiteMappings, an exclusion
+ * deliberately has no canonical site: it records that one exact XCContest key
+ * was checked and is outside the currently supported site scope.
+ */
+export const sourceSiteExclusions = sqliteTable(
+  "source_site_exclusions",
+  {
+    id: integer("id").primaryKey(),
+    sourceId: integer("source_id")
+      .notNull()
+      .references(() => flightSources.id, { onDelete: "restrict" }),
+    keyType: text("key_type").notNull(),
+    keyValue: text("key_value").notNull(),
+    originRunKey: text("origin_run_key").notNull(),
+    originProposalId: text("origin_proposal_id").notNull(),
+    notes: text("notes"),
+    status: text("status").notNull().default("active"),
+    createdAtUtc: text("created_at_utc").notNull(),
+    retiredAtUtc: text("retired_at_utc"),
+    retirementReason: text("retirement_reason"),
+  },
+  (table) => [
+    uniqueIndex("source_site_exclusions_active_key_unique")
+      .on(table.sourceId, table.keyType, table.keyValue)
+      .where(sql`${table.status} = 'active'`),
+    index("source_site_exclusions_lookup_index").on(
+      table.sourceId,
+      table.keyType,
+      table.keyValue,
+      table.status,
+    ),
+    index("source_site_exclusions_origin_audit_index").on(
+      table.originRunKey,
+      table.originProposalId,
+    ),
+    check(
+      "source_site_exclusions_key_type_check",
+      sql`${table.keyType} IN ('source_site_token', 'source_takeoff_id')`,
+    ),
+    check(
+      "source_site_exclusions_non_empty_text_check",
+      sql`length(trim(${table.keyValue})) > 0
+        AND length(trim(${table.originRunKey})) > 0
+        AND length(trim(${table.originProposalId})) > 0`,
+    ),
+    check("source_site_exclusions_status_check", sql`${table.status} IN ('active', 'retired')`),
+    check(
+      "source_site_exclusions_created_at_utc_shape_check",
+      sql`${table.createdAtUtc} GLOB '${sql.raw(utcTimestampGlob)}'`,
+    ),
+    check(
+      "source_site_exclusions_retired_at_utc_shape_check",
+      sql`${table.retiredAtUtc} IS NULL
+        OR ${table.retiredAtUtc} GLOB '${sql.raw(utcTimestampGlob)}'`,
+    ),
+    check(
+      "source_site_exclusions_retirement_shape_check",
+      sql`(
+          ${table.status} = 'active'
+          AND ${table.retiredAtUtc} IS NULL
+          AND ${table.retirementReason} IS NULL
+        )
+        OR (
+          ${table.status} = 'retired'
+          AND ${table.retiredAtUtc} IS NOT NULL
+          AND ${table.retirementReason} IS NOT NULL
+          AND length(trim(${table.retirementReason})) > 0
+        )`,
+    ),
+  ],
+);
 export const flightIngestionRuns = sqliteTable(
   "flight_ingestion_runs",
   {
@@ -365,7 +437,7 @@ export const flightRecords = sqliteTable(
     ),
     check(
       "flight_records_scored_distance_km_range_check",
-      sql`${table.scoredDistanceKm} BETWEEN 100 AND 2000`,
+      sql`${table.scoredDistanceKm} BETWEEN 0 AND 2000`,
     ),
     check(
       "flight_records_route_type_check",
@@ -642,7 +714,6 @@ export const weatherProductRuns = sqliteTable(
       .references(() => weatherSources.id, { onDelete: "restrict" }),
     sourceProductKey: text("source_product_key").notNull(),
     referenceAtUtc: text("reference_at_utc"),
-    availableAtUtc: text("available_at_utc"),
   },
   (table) => [
     unique("weather_product_runs_source_product_unique").on(table.sourceId, table.sourceProductKey),
@@ -659,11 +730,6 @@ export const weatherProductRuns = sqliteTable(
       sql`${table.referenceAtUtc} IS NULL
         OR ${table.referenceAtUtc} GLOB '${sql.raw(utcTimestampGlob)}'`,
     ),
-    check(
-      "weather_product_runs_available_at_utc_shape_check",
-      sql`${table.availableAtUtc} IS NULL
-        OR ${table.availableAtUtc} GLOB '${sql.raw(utcTimestampGlob)}'`,
-    ),
   ],
 );
 
@@ -676,6 +742,7 @@ export const weatherProductValidTimes = sqliteTable(
       .references(() => weatherProductRuns.id, { onDelete: "restrict" }),
     validAtUtc: text("valid_at_utc").notNull(),
     leadHours: real("lead_hours"),
+    requiredInputsLastModifiedAtUtc: text("required_inputs_last_modified_at_utc"),
   },
   (table) => [
     unique("weather_product_valid_times_product_valid_unique").on(
@@ -690,6 +757,11 @@ export const weatherProductValidTimes = sqliteTable(
     check(
       "weather_product_valid_times_lead_hours_non_negative_check",
       sql`${table.leadHours} IS NULL OR ${table.leadHours} >= 0`,
+    ),
+    check(
+      "weather_product_valid_times_required_inputs_last_modified_at_utc_shape_check",
+      sql`${table.requiredInputsLastModifiedAtUtc} IS NULL
+        OR ${table.requiredInputsLastModifiedAtUtc} GLOB '${sql.raw(utcTimestampGlob)}'`,
     ),
   ],
 );

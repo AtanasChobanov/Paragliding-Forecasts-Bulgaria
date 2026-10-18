@@ -5,17 +5,20 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
+from math import isfinite
 from pathlib import Path
 from typing import Any
 
-from .models import SOURCE_CODE
+from .models import MAX_DISTANCE_KM, SOURCE_CODE, STORAGE_MIN_DISTANCE_KM
 from .site_mapping import (
     MappingCatalog,
     SiteMappingError,
     _clean_text,
     _safe_run_directory,
     candidate_evidence,
+    catchment_resolution,
     catchment_suggestions,
+    exclusion_resolution,
     load_mapping_catalog,
     load_parser_records,
     mapping_snapshot_sha256,
@@ -44,18 +47,54 @@ def _sha256(path: Path) -> str:
 
 
 def _mapping_resolution(record: dict[str, Any], catalog: MappingCatalog) -> dict[str, Any]:
+    """Resolve approved evidence, preserving exclusions and contradictions for review."""
+
     try:
         evidence = candidate_evidence(record)
         mappings = matching_mappings(record, catalog)
+        geographic = catchment_resolution(record, catalog.sites)
+        exclusion, exclusion_conflict = exclusion_resolution(record, catalog)
     except SiteMappingError as error:
-        return {"outcome": "quarantined", "reason": str(error), "mapping_ids": []}
+        return {
+            "outcome": "quarantined",
+            "reason": str(error),
+            "mapping_ids": [],
+            "mapping_disposition": "review_required",
+        }
     approved = [mapping for mapping in mappings if mapping.status == "approved"]
     provisional = [mapping for mapping in mappings if mapping.status == "provisional"]
+    if exclusion_conflict:
+        return {
+            "outcome": "quarantined",
+            "reason": "mapping_exclusion_conflict",
+            "mapping_ids": [mapping.id for mapping in mappings],
+            "mapping_disposition": "review_required",
+            "geographic_disposition": geographic.disposition,
+        }
     if not approved:
+        if exclusion is not None:
+            return {
+                "outcome": "quarantined",
+                "reason": "known_source_site_exclusion",
+                "mapping_ids": [mapping.id for mapping in mappings],
+                "mapping_disposition": "persisted_rejection",
+                "source_site_exclusion_id": exclusion.id,
+                "geographic_disposition": geographic.disposition,
+            }
+        if geographic.disposition == "outside_configured_catchments":
+            return {
+                "outcome": "quarantined",
+                "reason": "outside_configured_catchments",
+                "mapping_ids": [mapping.id for mapping in mappings],
+                "mapping_disposition": "auto_rejected",
+                "geographic_disposition": geographic.disposition,
+            }
         return {
             "outcome": "quarantined",
             "reason": "mapping_not_approved" if provisional else "unknown_mapping",
             "mapping_ids": [mapping.id for mapping in mappings],
+            "mapping_disposition": "review_required",
+            "geographic_disposition": geographic.disposition,
         }
     target_site_ids = {mapping.site_id for mapping in approved}
     if len(target_site_ids) != 1:
@@ -63,6 +102,8 @@ def _mapping_resolution(record: dict[str, Any], catalog: MappingCatalog) -> dict
             "outcome": "quarantined",
             "reason": "ambiguous_mapping",
             "mapping_ids": [mapping.id for mapping in approved],
+            "mapping_disposition": "review_required",
+            "geographic_disposition": geographic.disposition,
         }
     site = catalog.sites_by_id[target_site_ids.pop()]
     country = _clean_text(record.get("launch_country_code_iso2"))
@@ -71,13 +112,25 @@ def _mapping_resolution(record: dict[str, Any], catalog: MappingCatalog) -> dict
             "outcome": "quarantined",
             "reason": "mapping_country_mismatch",
             "mapping_ids": [mapping.id for mapping in approved],
+            "mapping_disposition": "review_required",
+            "geographic_disposition": geographic.disposition,
         }
-    for key_type in (
-        "source_takeoff_id",
-        "source_site_token",
-        "normalized_name",
-        "source_point",
+    geographic_site_id = (
+        int(geographic.matches[0]["site_id"])
+        if geographic.disposition == "inside_unique_catchment"
+        else None
+    )
+    if geographic.disposition == "outside_configured_catchments" or (
+        geographic_site_id is not None and geographic_site_id != site.id
     ):
+        return {
+            "outcome": "quarantined",
+            "reason": "mapping_coordinate_conflict",
+            "mapping_ids": [mapping.id for mapping in approved],
+            "mapping_disposition": "review_required",
+            "geographic_disposition": geographic.disposition,
+        }
+    for key_type in ("source_takeoff_id", "source_site_token", "normalized_name", "source_point"):
         if key_type not in evidence:
             continue
         matching = [
@@ -95,6 +148,15 @@ def _mapping_resolution(record: dict[str, Any], catalog: MappingCatalog) -> dict
                 "site_slug": site.slug,
             }
     raise ValidationError("Approved mapping resolution did not select a matching evidence key.")
+
+
+def _has_valid_scored_distance(record: dict[str, Any]) -> bool:
+    value = record.get("scored_distance_km")
+    return (
+        type(value) in (int, float)
+        and isfinite(float(value))
+        and STORAGE_MIN_DISTANCE_KM <= float(value) <= MAX_DISTANCE_KM
+    )
 
 
 def _write_jsonl(path: Path, records: list[dict[str, Any]]) -> None:
@@ -138,6 +200,17 @@ def validate_run(
                 }
             )
             continue
+        if not _has_valid_scored_distance(record):
+            quarantined.append(
+                {
+                    "source": SOURCE_CODE,
+                    "source_flight_id": source_flight_id,
+                    "validation_status": "quarantined",
+                    "reason": "invalid_scored_distance",
+                    "candidate": record,
+                }
+            )
+            continue
         resolution = _mapping_resolution(record, catalog)
         if resolution["outcome"] == "accepted":
             accepted.append(
@@ -160,7 +233,10 @@ def validate_run(
                 "source_flight_id": source_flight_id,
                 "validation_status": "quarantined",
                 "reason": resolution["reason"],
+                "mapping_disposition": resolution["mapping_disposition"],
+                "geographic_disposition": resolution.get("geographic_disposition"),
                 "matching_mapping_ids": resolution["mapping_ids"],
+                "source_site_exclusion_id": resolution.get("source_site_exclusion_id"),
                 "catchment_suggestions": suggestions,
                 "candidate": record,
             }
@@ -209,6 +285,12 @@ def validate_run(
         "records_accepted": len(accepted),
         "records_rejected": rejected,
         "records_quarantined": len(quarantined),
+        "records_auto_rejected": sum(
+            record.get("mapping_disposition") == "auto_rejected" for record in quarantined
+        ),
+        "records_persisted_exclusions": sum(
+            record.get("mapping_disposition") == "persisted_rejection" for record in quarantined
+        ),
         "records_deduplicated": deduplicated,
     }
     report_path.write_text(

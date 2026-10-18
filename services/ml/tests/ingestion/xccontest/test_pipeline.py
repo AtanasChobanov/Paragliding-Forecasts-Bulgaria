@@ -9,6 +9,11 @@ import pytest
 from paragliding_forecasts_ml.ingestion.xccontest import pipeline, pipeline_cli
 from paragliding_forecasts_ml.ingestion.xccontest.models import CollectorConfig
 from paragliding_forecasts_ml.ingestion.xccontest.persistence import PersistenceError
+from paragliding_forecasts_ml.ingestion.xccontest.versions import (
+    MAPPING_OUTPUT_DIRECTORY,
+    PARSER_VERSION,
+    VALIDATION_OUTPUT_DIRECTORY,
+)
 
 RUN_KEY = "11111111-1111-4111-8111-111111111111"
 SNAPSHOT = "a" * 64
@@ -21,7 +26,7 @@ def _validation_report(
     accepted: int = 1,
     candidate: dict | None = None,
 ) -> dict:
-    relative = Path("data/interim/xccontest") / RUN_KEY / "validation-v2" / SNAPSHOT
+    relative = Path("data/interim/xccontest") / RUN_KEY / VALIDATION_OUTPUT_DIRECTORY / SNAPSHOT
     folder = root / relative
     folder.mkdir(parents=True)
     quarantine = folder / "site-quarantine.jsonl"
@@ -58,7 +63,12 @@ def _stub_offline_stages(monkeypatch, root: Path, report: dict) -> list[str]:
     monkeypatch.setattr(
         pipeline,
         "_existing_or_parsed",
-        lambda *_: calls.append("parse") or {"parser_version": "xccontest-parser/2"},
+        lambda *_: calls.append("parse") or {"parser_version": PARSER_VERSION},
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "_existing_or_auto_mapped",
+        lambda *_: calls.append("auto") or {"automatic_decision_count": 0},
     )
     monkeypatch.setattr(
         pipeline,
@@ -67,10 +77,87 @@ def _stub_offline_stages(monkeypatch, root: Path, report: dict) -> list[str]:
     )
     monkeypatch.setattr(
         pipeline,
+        "_apply_reviewed_mapping_decisions_if_present",
+        lambda *_: calls.append("apply") or None,
+    )
+    monkeypatch.setattr(
+        pipeline,
         "_existing_or_validated",
         lambda *_: calls.append("validate") or report,
     )
     return calls
+
+
+def test_reviewed_mapping_apply_is_skipped_without_sibling_decision_file(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        pipeline,
+        "apply_mapping_decisions",
+        lambda *_args, **_kwargs: pytest.fail("missing decisions file must not write SQLite"),
+    )
+
+    result = pipeline._apply_reviewed_mapping_decisions_if_present(
+        RUN_KEY,
+        tmp_path,
+        "file:./data/local/test.db",
+    )
+
+    assert result is None
+
+
+def test_reviewed_mapping_apply_uses_sibling_decision_file(monkeypatch, tmp_path: Path) -> None:
+    mapping_directory = (
+        tmp_path / "data" / "interim" / "xccontest" / RUN_KEY / MAPPING_OUTPUT_DIRECTORY
+    )
+    mapping_directory.mkdir(parents=True)
+    decisions_path = mapping_directory / "mapping-decisions.jsonl"
+    decisions_path.write_text('{"decision":"rejected"}\n', encoding="utf-8")
+    expected = {
+        "records_seen": 1,
+        "exclusions_inserted": 1,
+        "exclusions_unchanged": 0,
+        "rejected_not_persisted": 0,
+    }
+    calls: list[tuple[Path, str | None, Path | None]] = []
+    monkeypatch.setattr(
+        pipeline,
+        "apply_mapping_decisions",
+        lambda path, *, database_url, project_root: (
+            calls.append((path, database_url, project_root)) or expected
+        ),
+    )
+
+    result = pipeline._apply_reviewed_mapping_decisions_if_present(
+        RUN_KEY,
+        tmp_path,
+        "file:./data/local/test.db",
+    )
+
+    assert result == expected
+    assert calls == [(decisions_path, "file:./data/local/test.db", tmp_path)]
+
+
+def test_resume_reports_reviewed_mapping_apply_before_validation(
+    monkeypatch, tmp_path: Path
+) -> None:
+    report = _validation_report(tmp_path, reason=None)
+    calls = _stub_offline_stages(monkeypatch, tmp_path, report)
+    applied = {"records_seen": 1, "exclusions_inserted": 1, "exclusions_unchanged": 0}
+    monkeypatch.setattr(
+        pipeline,
+        "_apply_reviewed_mapping_decisions_if_present",
+        lambda *_: calls.append("apply-reviewed") or applied,
+    )
+    monkeypatch.setattr(
+        pipeline, "persist_import", lambda *_args, **_kwargs: {"status": "succeeded"}
+    )
+
+    result = pipeline.resume_run(RUN_KEY, tmp_path / "policy.json")
+
+    assert result["status"] == "succeeded"
+    assert result["reviewed_mapping_decisions"] == applied
+    assert calls == ["parse", "auto", "propose", "apply-reviewed", "validate"]
 
 
 def test_resume_pauses_for_actionable_mapping_quarantine_without_persistence(
@@ -88,7 +175,7 @@ def test_resume_pauses_for_actionable_mapping_quarantine_without_persistence(
 
     assert result["status"] == "awaiting_mapping_review"
     assert result["actionable_mapping_quarantine_count"] == 1
-    assert calls == ["parse", "propose", "validate"]
+    assert calls == ["parse", "auto", "propose", "apply", "validate"]
 
 
 def test_resume_persists_when_rejected_decision_covers_mapping_quarantine(
@@ -109,7 +196,9 @@ def test_resume_persists_when_rejected_decision_covers_mapping_quarantine(
         "point_latitude_deg": None,
         "point_longitude_deg": None,
     }
-    mapping_directory = tmp_path / "data" / "interim" / "xccontest" / RUN_KEY / "site-mapping-v2"
+    mapping_directory = (
+        tmp_path / "data" / "interim" / "xccontest" / RUN_KEY / MAPPING_OUTPUT_DIRECTORY
+    )
     mapping_directory.mkdir(parents=True)
     (mapping_directory / "mapping-proposals.jsonl").write_text(
         json.dumps(proposal) + "\n", encoding="utf-8"
@@ -133,7 +222,7 @@ def test_resume_persists_when_rejected_decision_covers_mapping_quarantine(
     assert result["status"] == "succeeded"
     assert result["actionable_mapping_quarantine_count"] == 0
     assert result["reviewed_rejected_mapping_quarantine_count"] == 1
-    assert calls == ["parse", "propose", "validate"]
+    assert calls == ["parse", "auto", "propose", "apply", "validate"]
     assert persisted == [(RUN_KEY, SNAPSHOT)]
 
 
@@ -146,7 +235,9 @@ def test_resume_does_not_trust_rejected_decision_for_different_proposal(
             "https://www.xcontest.org/world/en/flights-search/?filter[site]=unresolved-token"
         ),
     }
-    mapping_directory = tmp_path / "data" / "interim" / "xccontest" / RUN_KEY / "site-mapping-v2"
+    mapping_directory = (
+        tmp_path / "data" / "interim" / "xccontest" / RUN_KEY / MAPPING_OUTPUT_DIRECTORY
+    )
     mapping_directory.mkdir(parents=True)
     proposal = {
         "proposal_id": "a" * 64,
@@ -198,7 +289,7 @@ def test_resume_persists_approved_records_after_review_or_explicit_override(
     )
 
     assert result["status"] == "succeeded"
-    assert calls == ["parse", "propose", "validate"]
+    assert calls == ["parse", "auto", "propose", "apply", "validate"]
     assert persisted == [(RUN_KEY, SNAPSHOT)]
 
 
@@ -220,7 +311,7 @@ def test_resume_surfaces_reconciliation_review_without_restarting_stages(
 
     assert result["status"] == "awaiting_reconciliation_review"
     assert "Review reconciliation decisions" in result["next_step"]
-    assert calls == ["parse", "propose", "validate"]
+    assert calls == ["parse", "auto", "propose", "apply", "validate"]
 
 
 def test_resume_stops_when_no_records_are_accepted(monkeypatch, tmp_path) -> None:
@@ -237,9 +328,7 @@ def test_resume_stops_when_no_records_are_accepted(monkeypatch, tmp_path) -> Non
     assert result["status"] == "no_accepted_records"
 
 
-def test_fresh_stops_after_incomplete_collection_without_offline_stages(
-    monkeypatch, tmp_path
-) -> None:
+def test_fresh_continues_offline_for_incomplete_collection(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(pipeline, "_preflight", lambda *_: ("file:./data/local/test.db", ("BG",)))
     collection = SimpleNamespace(
         run_key=RUN_KEY,
@@ -248,17 +337,21 @@ def test_fresh_stops_after_incomplete_collection_without_offline_stages(
         manifest_sha256="b" * 64,
         country_codes=("BG",),
         completed_seasons=(2024,),
+        completed_target_count=1,
+        unresolved_scope_count=1,
+        skipped_activity_date_count=0,
         artifact_count=1,
         row_observations_seen=10,
         distinct_source_flights_seen=10,
         repeated_source_flight_observations=0,
     )
     monkeypatch.setattr(pipeline, "collect_run", lambda _: collection)
+    calls = []
     monkeypatch.setattr(
         pipeline,
         "resume_run",
-        lambda *_args, **_kwargs: pytest.fail(
-            "incomplete collection must not resume automatically"
+        lambda *args, **kwargs: (
+            calls.append((args, kwargs)) or {"status": "succeeded", "run_key": RUN_KEY}
         ),
     )
 
@@ -266,8 +359,16 @@ def test_fresh_stops_after_incomplete_collection_without_offline_stages(
         CollectorConfig(seasons=(2024,), country_codes=("BG",)), tmp_path / "policy.json"
     )
 
-    assert result["status"] == "incomplete_coverage"
+    assert result["status"] == "succeeded"
     assert result["run_key"] == RUN_KEY
+    assert result["collector"]["status"] == "incomplete"
+    assert result["collector"]["unresolved_scope_count"] == 1
+    assert calls == [
+        (
+            (RUN_KEY, tmp_path / "policy.json"),
+            {"database_url": "file:./data/local/test.db", "persist_approved_only": False},
+        )
+    ]
 
 
 def test_fresh_preflight_failure_precedes_collection(monkeypatch, tmp_path) -> None:
@@ -301,3 +402,27 @@ def test_pipeline_cli_returns_distinct_pause_exit_code(monkeypatch, tmp_path, ca
 
     assert exit_code == 2
     assert '"status": "awaiting_mapping_review"' in capsys.readouterr().out
+
+
+def test_resume_persists_when_only_auto_rejected_records_remain(monkeypatch, tmp_path) -> None:
+    report = _validation_report(tmp_path, reason="outside_configured_catchments")
+    quarantine_path = tmp_path / report["site_quarantine_path"]
+    quarantine = json.loads(quarantine_path.read_text(encoding="utf-8"))
+    quarantine["mapping_disposition"] = "auto_rejected"
+    quarantine_path.write_text(json.dumps(quarantine) + "\n", encoding="utf-8")
+    calls = _stub_offline_stages(monkeypatch, tmp_path, report)
+    persisted: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        pipeline,
+        "persist_import",
+        lambda run_key, snapshot, *_args, **_kwargs: (
+            persisted.append((run_key, snapshot)) or {"status": "succeeded"}
+        ),
+    )
+
+    result = pipeline.resume_run(RUN_KEY, tmp_path / "policy.json")
+
+    assert result["status"] == "succeeded"
+    assert result["actionable_mapping_quarantine_count"] == 0
+    assert calls == ["parse", "auto", "propose", "apply", "validate"]
+    assert persisted == [(RUN_KEY, SNAPSHOT)]

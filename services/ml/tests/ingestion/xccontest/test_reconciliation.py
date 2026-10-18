@@ -29,8 +29,12 @@ from paragliding_forecasts_ml.ingestion.xccontest.site_mapping import (
     repository_root,
 )
 from paragliding_forecasts_ml.ingestion.xccontest.versions import (
+    MAPPING_OUTPUT_DIRECTORY,
+    MAPPING_VERSION,
+    PARSER_OUTPUT_DIRECTORY,
     PARSER_VERSION,
     PERSISTENCE_VERSION,
+    VALIDATION_OUTPUT_DIRECTORY,
     VALIDATION_VERSION,
 )
 
@@ -249,28 +253,27 @@ def _write_run(
     mapping_id: int,
     records: list[dict],
     quarantine_records: list[dict] | None = None,
+    raw_manifest_overrides: dict | None = None,
 ) -> Path:
     raw = root / "data" / "raw" / "xccontest" / run_key
-    parser = root / "data" / "interim" / "xccontest" / run_key / "parser-v2"
-    output = parser.parent / "validation-v2" / snapshot
+    parser = root / "data" / "interim" / "xccontest" / run_key / PARSER_OUTPUT_DIRECTORY
+    output = parser.parent / VALIDATION_OUTPUT_DIRECTORY / snapshot
     raw.mkdir(parents=True, exist_ok=True)
     parser.mkdir(parents=True, exist_ok=True)
     output.mkdir(parents=True, exist_ok=True)
     raw_manifest = raw / "manifest.json"
     if not raw_manifest.exists():
-        raw_manifest.write_text(
-            json.dumps(
-                {
-                    "source": "xccontest",
-                    "run_key": run_key,
-                    "status": "complete",
-                    "collector_version": "xccontest-collector/test",
-                    "source_url": "https://www.xcontest.org/world/en/flights/",
-                    "started_at_utc": "2026-08-12T08:00:00Z",
-                }
-            ),
-            encoding="utf-8",
-        )
+        manifest = {
+            "source": "xccontest",
+            "run_key": run_key,
+            "status": "complete",
+            "collector_version": "xccontest-collector/test",
+            "source_url": "https://www.xcontest.org/world/en/flights/",
+            "started_at_utc": "2026-08-12T08:00:00Z",
+        }
+        if raw_manifest_overrides is not None:
+            manifest.update(raw_manifest_overrides)
+        raw_manifest.write_text(json.dumps(manifest), encoding="utf-8")
     normalized = parser / "normalized-flights.jsonl"
     normalized.write_text("{}\n" * (len(records) + len(quarantine_records or [])), encoding="utf-8")
     parser_report = parser / "parse-report.json"
@@ -419,10 +422,11 @@ def _unknown_mapping_quarantines(count: int) -> list[dict]:
 
 
 def _write_mapping_proposal_report(root: Path, run_key: str) -> None:
-    directory = root / "data" / "interim" / "xccontest" / run_key / "site-mapping-v2"
+    directory = root / "data" / "interim" / "xccontest" / run_key / MAPPING_OUTPUT_DIRECTORY
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "proposal-report.json").write_text(
-        json.dumps({"source": "xccontest", "run_key": run_key}), encoding="utf-8"
+        json.dumps({"source": "xccontest", "run_key": run_key, "mapping_version": MAPPING_VERSION}),
+        encoding="utf-8",
     )
 
 
@@ -430,7 +434,7 @@ def _write_mapping_rejections(
     root: Path, run_key: str, quarantines: list[dict], database_url: str
 ) -> dict[str, int]:
     _write_mapping_proposal_report(root, run_key)
-    directory = root / "data" / "interim" / "xccontest" / run_key / "site-mapping-v2"
+    directory = root / "data" / "interim" / "xccontest" / run_key / MAPPING_OUTPUT_DIRECTORY
     proposals: list[dict] = []
     for quarantine in quarantines:
         candidate = quarantine["candidate"]
@@ -782,6 +786,64 @@ def test_conflict_blocks_writes_until_a_reviewed_decision(migrated_database) -> 
         connection.close()
 
 
+def test_persists_v4_activity_flights_with_partial_coverage_lineage(migrated_database) -> None:
+    root, database_url, _name = migrated_database
+    run_key = "aaaaaaa1-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+    mapping_id, snapshot = _create_mapping(root, database_url, "activity-token")
+    policy = _write_run(
+        root,
+        run_key=run_key,
+        snapshot=snapshot,
+        mapping_id=mapping_id,
+        records=[
+            {
+                "source_flight_id": "100",
+                "source_flight_url": "https://www.xcontest.org/world/en/flights/detail:activity",
+                "scored_distance_km": 78.5,
+            }
+        ],
+        raw_manifest_overrides={
+            "manifest_schema_version": 4,
+            "status": "incomplete",
+            "target_statuses": [{"unresolved_scopes": [{"scope": "busy-date"}]}],
+            "activity_scope_statuses": [
+                {"status": "partial_saturated"},
+                {"status": "complete"},
+            ],
+        },
+    )
+
+    persisted = persist_import(
+        run_key, snapshot, policy, database_url=database_url, project_root=root
+    )
+
+    expected_coverage = {
+        "raw_manifest_schema_version": 4,
+        "collection_status": "incomplete",
+        "coverage_status": "partial",
+        "unresolved_scope_count": 1,
+        "partial_saturated_activity_scope_count": 1,
+        "failed_activity_scope_count": 0,
+    }
+    assert persisted["collection_coverage"] == expected_coverage
+    connection = _database(root, database_url)
+    try:
+        assert (
+            connection.execute(
+                "SELECT scored_distance_km FROM flight_records WHERE source_flight_id = '100'"
+            ).fetchone()[0]
+            == 78.5
+        )
+        notes = json.loads(
+            connection.execute(
+                "SELECT notes FROM flight_ingestion_runs WHERE run_key = ?", (run_key,)
+            ).fetchone()[0]
+        )
+        assert notes["persistence_events"][0]["collection_coverage"] == expected_coverage
+    finally:
+        connection.close()
+
+
 def test_cross_run_exact_duplicate_revalidates_the_existing_record(migrated_database) -> None:
     root, database_url, _name = migrated_database
     first_key = "11111111-1111-4111-8111-111111111111"
@@ -1036,6 +1098,9 @@ def test_component_partial_mapping_review_resume_and_no_op(migrated_database, mo
         "promoted": 0,
         "unchanged": 0,
         "rejected": 0,
+        "exclusions_inserted": 0,
+        "exclusions_unchanged": 0,
+        "rejected_not_persisted": 0,
     }
     newly_mapped_records = [
         {**record, "source_site_mapping_id": reviewed_mapping_id}
@@ -1107,11 +1172,32 @@ def test_component_rejected_mappings_revalidate_without_business_field_change(
         "promoted": 0,
         "unchanged": 0,
         "rejected": 2,
+        "exclusions_inserted": 2,
+        "exclusions_unchanged": 0,
+        "rejected_not_persisted": 0,
     }
+
+    connection = _database(root, database_url)
+    try:
+        source_id = int(
+            connection.execute("SELECT id FROM flight_sources WHERE code = 'xccontest'").fetchone()[
+                0
+            ]
+        )
+        refreshed_snapshot = mapping_hash(connection, source_id)
+    finally:
+        connection.close()
+    _write_run(
+        root,
+        run_key=run_key,
+        snapshot=refreshed_snapshot,
+        mapping_id=mapping_id,
+        records=records,
+    )
 
     resumed = pipeline.resume_run(run_key, policy, database_url=database_url)
     assert resumed["status"] == "succeeded"
-    assert resumed["reviewed_rejected_mapping_quarantine_count"] == 2
+    assert resumed["reviewed_rejected_mapping_quarantine_count"] == 0
     assert resumed["persistence"]["reconciliation"]["counts"]["revalidated_unchanged"] == 2
     connection = _database(root, database_url)
     try:

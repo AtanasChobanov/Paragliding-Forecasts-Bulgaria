@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "policy_version": "DEC-063-reviewed-repaired-seasons-2022-2025/1",
+  "coverage_runs": [
+    {
+      "run_key": "9c70c7a0-89f2-4a56-8b8e-a608eb3dde6e",
+      "seasons": [2022, 2023, 2024],
+      "mature": true
+    },
+    {
+      "run_key": "89841b61-c681-4008-b833-031d4aee636e",
+      "seasons": [2025],
+      "mature": true
+    }
+  ]
+}

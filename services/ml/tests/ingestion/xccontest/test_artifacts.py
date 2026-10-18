@@ -6,12 +6,15 @@ import json
 import pytest
 
 from paragliding_forecasts_ml.ingestion.xccontest.artifacts import RawArtifactStore
+from paragliding_forecasts_ml.ingestion.xccontest.manifest import load_manifest
 from paragliding_forecasts_ml.ingestion.xccontest.models import (
     PRIMARY_GLIDER_CATEGORY,
+    CollectorConfig,
     FlightListScope,
     PageObservation,
     RowObservation,
     TargetCollectionStatus,
+    source_default_scope,
 )
 from paragliding_forecasts_ml.ingestion.xccontest.versions import (
     COLLECTOR_VERSION,
@@ -48,7 +51,7 @@ def finalize(store: RawArtifactStore, country_codes: tuple[str, ...] = ("BG",)):
     )
 
 
-def test_writes_country_aware_immutable_fragment_and_manifest_v3(tmp_path) -> None:
+def test_writes_country_aware_immutable_fragment_and_manifest_v5(tmp_path) -> None:
     store = RawArtifactStore(project_root=tmp_path, run_key="test-run")
     entry = store.write_page(page())
     manifest_path = finalize(store)
@@ -57,7 +60,8 @@ def test_writes_country_aware_immutable_fragment_and_manifest_v3(tmp_path) -> No
     assert raw_path.read_text() == '<section id="flights">synthetic test page</section>'
     assert entry.sha256 == hashlib.sha256(raw_path.read_bytes()).hexdigest()
     assert (
-        raw_path.name == "season-2025-country-BG-category-pg-date-all-sort-distance-descending.html"
+        raw_path.name
+        == "season-2025-country-BG-purpose-threshold-100-category-pg-date-all-sort-distance-descending.html"
     )
 
     manifest = json.loads(manifest_path.read_text())
@@ -75,7 +79,13 @@ def test_writes_country_aware_immutable_fragment_and_manifest_v3(tmp_path) -> No
         "country_scope_source": "all_sites",
         "requested_seasons": [2025],
         "primary_glider_category": "FAI3",
-        "minimum_scored_distance_km": 100,
+        "minimum_observed_scored_distance_km": 0,
+        "threshold_coverage_distance_km": 100.0,
+        "activity_date_policy": {
+            "name": "bulgarian-xc-league-15-feb-to-15-oct",
+            "included_from_month_day": "02-15",
+            "included_through_month_day": "10-15",
+        },
         "completed_seasons": [2025],
     }
     assert manifest["target_statuses"] == [
@@ -84,12 +94,68 @@ def test_writes_country_aware_immutable_fragment_and_manifest_v3(tmp_path) -> No
             "country_code": "BG",
             "status": "complete_primary",
             "unresolved_scopes": [],
+            "skipped_activity_dates": [],
         }
     ]
     assert "permission_reference" not in manifest
+    assert manifest["activity_scope_statuses"] == []
     assert manifest["artifacts"][0]["country_code"] == "BG"
+    assert manifest["artifacts"][0]["acquisition_purpose"] == "threshold_100"
+    assert manifest["artifacts"][0]["sort_mode"] == "explicit"
     assert manifest["artifacts"][0]["row_observation_count"] == 1
-    assert manifest["artifacts"][0]["qualifying_row_observation_count"] == 1
+    assert manifest["artifacts"][0]["at_or_above_100km_row_observation_count"] == 1
+    assert manifest["artifacts"][0]["below_100km_row_observation_count"] == 0
+    _path, _manifest, _artifacts, contract = load_manifest("test-run", tmp_path)
+    assert contract.schema_version == RAW_MANIFEST_SCHEMA_VERSION
+
+
+def test_checkpoint_resumes_only_hash_verified_scopes_without_rewriting_artifacts(tmp_path) -> None:
+    store = RawArtifactStore(project_root=tmp_path, run_key="test-run")
+    config = CollectorConfig(seasons=(2025,), country_codes=("BG",))
+    store.set_collection_context(config)
+    selected_page = page()
+    entry = store.write_page(selected_page, acquisition_purpose="threshold_100")
+    store.write_checkpoint(
+        season=2025,
+        country_code="BG",
+        status="in_progress",
+        scope=selected_page.scope,
+        acquisition_purpose="threshold_100",
+    )
+
+    resumed = RawArtifactStore.resume("test-run", project_root=tmp_path)
+    recovered = resumed.recovered_page(
+        season=2025,
+        country_code="BG",
+        scope=selected_page.scope,
+        acquisition_purpose="threshold_100",
+    )
+
+    assert resumed.collection_context["seasons"] == [2025]
+    assert resumed.entries == (entry,)
+    assert recovered is not None
+    assert recovered.has_next_page is False
+    assert recovered.rows[0].source_flight_id == "123"
+    assert (tmp_path / entry.relative_path).is_file()
+
+
+def test_source_default_artifact_uses_the_stable_unsorted_token(tmp_path) -> None:
+    store = RawArtifactStore(project_root=tmp_path, run_key="test-run")
+    selected_page = page()
+    default_page = PageObservation(
+        season=selected_page.season,
+        scope=source_default_scope(PRIMARY_GLIDER_CATEGORY),
+        country_filter=selected_page.country_filter,
+        glider_category_filter=selected_page.glider_category_filter,
+        date_filter=selected_page.date_filter,
+        rows=selected_page.rows,
+        fragment_html=selected_page.fragment_html,
+        has_next_page=False,
+    )
+
+    entry = store.write_page(default_page)
+
+    assert entry.relative_path.endswith("-sort-source-default.html")
 
 
 def test_country_aware_paths_prevent_scope_collisions(tmp_path) -> None:

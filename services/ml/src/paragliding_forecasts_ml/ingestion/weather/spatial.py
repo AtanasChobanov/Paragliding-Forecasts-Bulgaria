@@ -45,7 +45,12 @@ from .serialization import canonical_json_bytes, sha256_bytes
 from .sites import load_site_sampling_configs
 from .wind import component_wind_speed
 
-WEATHER_SPATIAL_VERSION = "weather-spatial/6"
+WEATHER_SPATIAL_VERSION = "weather-spatial/7"
+
+_NUMERICAL_ZERO_TOLERANCE = 1e-12
+_NON_NEGATIVE_INTERVAL_FIELD_CODES = frozenset(
+    {"precipitation_amount_mm", "shortwave_radiation_w_m2"}
+)
 
 
 class SampledField(AtmosphericContract):
@@ -171,6 +176,13 @@ def _sampled_field(grain: GfsCanonicalGridMessage, value: float | None) -> Sampl
         quality = "sentinel_missing"
     else:
         quality = "derived" if grain.quality_state == "derived" else "real"
+        if (
+            grain.grain == "interval"
+            and grain.field_code in _NON_NEGATIVE_INTERVAL_FIELD_CODES
+            and value < 0
+            and math.isclose(value, 0.0, rel_tol=0.0, abs_tol=_NUMERICAL_ZERO_TOLERANCE)
+        ):
+            value = 0.0
     return SampledField(
         field_code=grain.field_code,
         grain=grain.grain,

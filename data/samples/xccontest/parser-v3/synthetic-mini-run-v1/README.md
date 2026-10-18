@@ -1,4 +1,4 @@
-# XCContest parser-v2 synthetic mini-run v1
+# XCContest parser-v3 synthetic mini-run v1
 
 This is a small, deterministic fixture for the offline XCContest parser. It is
 not an XCContest download, a seasonal dataset, an export, or a record of a real
@@ -28,7 +28,7 @@ ignored under `data/raw`.
 - `input/` is a complete immutable manifest-v3 raw-run layout. Its artifact
   paths intentionally refer to `data/raw/xccontest/t015-synthetic-mini-run-v1/`
   so the test can copy it unchanged into an isolated temporary project root.
-- `expected/` contains reviewed golden parser-v2 outputs. Do not regenerate
+- `expected/` contains reviewed golden parser-v3 outputs. Do not regenerate
   them automatically from a changed parser; review every intentional parser
   contract change and update the fixture version or goldens explicitly.
 - `services/ml/tests/ingestion/xccontest/test_parser_fixtures.py` copies the
