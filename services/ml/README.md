@@ -1944,9 +1944,27 @@ is not changed in this work.
    `excluded_examples.jsonl`, and `manifest.json` are under
    `data/processed/joined-weather/<dataset-id>/`. Each example is one
    **site × target date × horizon** with its own exact 06Z run, eleven valid
-   hours, flight label evidence, feature units and quality/provenance. A
+   hours, source-ready cutoff and delivery deadline, flight label evidence,
+   feature units and quality/provenance. A
    backtest acquisition later produces `backtest_2025_examples.jsonl` in a
    separate immutable dataset identity. The join never downloads GFS.
+
+   Verify any published dataset again without network or SQLite writes:
+
+   ```powershell
+   uv run --project services/ml weather-join `
+     --verify-dataset-id <dataset-id>
+   ```
+
+   Verification rehashes both JSONL files and the manifest identity, checks
+   complete site/date/horizon coverage against the pinned cohort and acquisition,
+   validates the 06Z issue dates, Sofia cutoff, eleven valid hours and leads,
+   known nested XC labels, units, missingness and field-level provenance against
+   the packaged weather feature policy. Missing or late source receipts must
+   appear only in `excluded_examples.jsonl`. The verification command reads
+   retained metadata artifacts but never fetches GFS or reads/writes SQLite.
+   The verified development result and its limits are recorded in
+   `docs/T-020-phase-4-joined-dataset-verification.md`.
 
 For operator planning, 15 metadata inventories averaged **1.081 GiB/job**.
 Extrapolation gives approximately **762 GiB** selected raw for 705 development

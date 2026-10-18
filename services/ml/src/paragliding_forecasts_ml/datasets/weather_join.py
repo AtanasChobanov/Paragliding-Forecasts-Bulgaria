@@ -22,7 +22,7 @@ from .weather_backfill_cli import _cohort
 from .weather_cohort import _encoded, _load_audit
 from .weather_full_backfill import _resolution, _verified_json, resolution_status
 
-VERSION = "weather-flight-joined-dataset/2"
+VERSION = "weather-flight-joined-dataset/3"
 
 
 class WeatherJoinError(RuntimeError):
@@ -250,6 +250,8 @@ def build_joined_dataset(
                     "site_slug": site_day["site_slug"],
                     "target_local_date": target,
                     "issue_local_date": job["issue_local_date"],
+                    "issue_cutoff_utc": job["issue_cutoff_utc"],
+                    "delivery_deadline_utc": job["delivery_deadline_utc"],
                     "horizon_days": horizon,
                     "split": site_day["split"],
                     "cycle_reference_utc": job["candidate_cycles"][0]["cycle_reference_utc"],
