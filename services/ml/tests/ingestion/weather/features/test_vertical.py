@@ -5,6 +5,7 @@ import pytest
 from paragliding_forecasts_ml.ingestion.weather.features.vertical import (
     VerticalCoverageError,
     VerticalPoint,
+    bounded_profile,
     bulk_vector_shear_m_s_per_km,
     endpoint_lapse_rate_k_per_km,
     interpolate_linear,
@@ -26,6 +27,15 @@ def test_linear_interpolation_and_trapezoidal_mean_use_exact_uneven_height_segme
     assert trapezoidal_mean(points, 500, 3000) == pytest.approx((30 * 1000 + 55 * 1500) / 2500)
 
 
+def test_bounded_profile_keeps_exact_endpoints_and_only_interior_knots() -> None:
+    points = _points((0, 0), (500, 10), (2000, 10), (3000, 20))
+
+    assert bounded_profile(points, 250, 2000) == _points((250, 5), (500, 10), (2000, 10))
+    assert trapezoidal_mean(points, 0, 2000) == pytest.approx(8.75)
+    assert interpolate_linear(points, 0) == 0
+    assert interpolate_linear(points, 3000) == 20
+
+
 def test_vertical_calculations_fail_closed_without_full_bracketing_or_unique_heights() -> None:
     points = _points((2, 290), (1500, 280))
 
@@ -35,6 +45,44 @@ def test_vertical_calculations_fail_closed_without_full_bracketing_or_unique_hei
         trapezoidal_mean(_points((2, 290), (2, 289), (1500, 280)), 2, 1500)
 
 
+@pytest.mark.parametrize(
+    "points,target",
+    (
+        (_points((2, 290), (1500, 280)), 1),
+        (_points((2, 290), (1500, 280)), 1501),
+    ),
+)
+def test_vertical_interpolation_never_extrapolates(
+    points: tuple[VerticalPoint, ...], target: float
+) -> None:
+    with pytest.raises(VerticalCoverageError, match="not bracketed"):
+        interpolate_linear(points, target)
+
+
+@pytest.mark.parametrize(
+    "points",
+    (
+        (),
+        _points((2, 290)),
+        _points((2, 290), (2, 280)),
+        _points((1500, 280), (2, 290)),
+        _points((2, float("nan")), (1500, 280)),
+        _points((float("inf"), 290), (1500, 280)),
+    ),
+)
+def test_vertical_calculations_reject_incomplete_unordered_and_non_finite_profiles(
+    points: tuple[VerticalPoint, ...],
+) -> None:
+    with pytest.raises(VerticalCoverageError):
+        interpolate_linear(points, 500)
+
+
+@pytest.mark.parametrize("lower,upper", ((2, 2), (1500, 2), (float("nan"), 1500)))
+def test_vertical_layer_requires_finite_increasing_bounds(lower: float, upper: float) -> None:
+    with pytest.raises(VerticalCoverageError):
+        trapezoidal_mean(_points((2, 290), (1500, 280)), lower, upper)
+
+
 def test_lapse_and_endpoint_vector_shear_follow_the_approved_formulas() -> None:
     temperatures = _points((2, 290), (1500, 280))
     u = _points((10, 1), (1500, 4))
@@ -42,6 +90,15 @@ def test_lapse_and_endpoint_vector_shear_follow_the_approved_formulas() -> None:
 
     assert endpoint_lapse_rate_k_per_km(temperatures, 2, 1500) == pytest.approx(1000 * 10 / 1498)
     assert bulk_vector_shear_m_s_per_km(u, v, 10, 1500) == pytest.approx(1000 * 5 / 1490)
+
+
+def test_lapse_and_shear_use_endpoint_differences_with_explicit_kilometres() -> None:
+    temperatures = _points((0, 290), (500, 287), (1500, 278))
+    u = _points((0, 1), (500, 30), (1000, 4))
+    v = _points((0, 2), (500, -20), (1000, 6))
+
+    assert endpoint_lapse_rate_k_per_km(temperatures, 0, 1500) == 8
+    assert bulk_vector_shear_m_s_per_km(u, v, 0, 1000) == 5
 
 
 def test_scalar_speed_is_integrated_before_vector_direction_and_calm_is_null() -> None:
@@ -55,3 +112,13 @@ def test_scalar_speed_is_integrated_before_vector_direction_and_calm_is_null() -
     assert meteorological_direction_from_uv(0, 0) is None
     with pytest.raises(VerticalCoverageError, match="identical AGL heights"):
         scalar_speed_profile(u, _points((11, 4), (1500, 4)))
+
+
+@pytest.mark.parametrize(
+    "u,v,expected_direction",
+    ((0, -1, 0), (-1, 0, 90), (0, 1, 180), (1, 0, 270)),
+)
+def test_meteorological_direction_uses_direction_from_north(
+    u: float, v: float, expected_direction: float
+) -> None:
+    assert meteorological_direction_from_uv(u, v) == pytest.approx(expected_direction)

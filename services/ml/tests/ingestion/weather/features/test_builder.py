@@ -321,6 +321,72 @@ def test_s08_daily_thermal_features_exclude_the_preceding_baseline_interval() ->
     )
 
 
+def test_daily_thermal_summary_stays_missing_when_one_hour_lacks_latent_flux() -> None:
+    policy, _ = load_feature_policy()
+    samples = []
+    for hour in range(10, 21):
+        sample = _thermal_sample(hour, 100.0, 50.0)
+        if hour == 15:
+            sample = sample.model_copy(
+                update={
+                    "fields": tuple(
+                        field
+                        for field in sample.fields
+                        if field.field_code != "surface_latent_heat_flux_upward_w_m2"
+                    )
+                }
+            )
+        samples.append(sample)
+    expected_instants = tuple(sample.valid_at_utc for sample in samples)
+    interval = {
+        value.feature_key: value
+        for value in build_daily_interval_features(
+            tuple(samples), policy.daily_fields, expected_instants_utc=expected_instants
+        )
+    }
+    point = {
+        value.feature_key: value
+        for value in build_daily_point_features(
+            tuple(samples), policy.daily_fields, expected_instants_utc=expected_instants
+        )
+    }
+
+    for key in (
+        "surface_buoyancy_flux_kinematic_mean_m2_s3",
+        "surface_buoyancy_flux_kinematic_max_m2_s3",
+        "convective_velocity_scale_mean_m_s",
+        "convective_velocity_scale_max_m_s",
+    ):
+        assert interval[key].canonical_value is None
+        assert interval[key].quality_state == "missing"
+        assert interval[key].missing_reason == "interval_value_missing"
+    assert interval["surface_sensible_heat_flux_mean_w_m2"].canonical_value == 100.0
+    assert point["mixed_layer_lcl_agl_mean_m"].canonical_value is not None
+    assert point["provider_boundary_layer_height_agl_mean_m"].canonical_value == 1_000.0
+
+
+def test_hourly_thermal_feature_rejects_a_non_hourly_flux_interval() -> None:
+    policy, _ = load_feature_policy()
+    sample = _thermal_sample(15, 100.0, 50.0)
+    fields = tuple(
+        field.model_copy(update={"interval_start_utc": "2026-09-10T13:30:00Z"})
+        if field.field_code == "surface_latent_heat_flux_upward_w_m2"
+        else field
+        for field in sample.fields
+    )
+    values = {
+        value.feature_key: value
+        for value in build_hourly_point_features(
+            sample.model_copy(update={"fields": fields}), policy.hourly_fields
+        )
+    }
+
+    for key in ("surface_buoyancy_flux_kinematic_m2_s3", "convective_velocity_scale_m_s"):
+        assert values[key].canonical_value is None
+        assert values[key].missing_reason == "thermal_strength_input_missing"
+    assert values["mixed_layer_lcl_agl_m"].canonical_value is not None
+
+
 def test_interval_builder_requires_complete_exact_coverage() -> None:
     policy, _ = load_feature_policy()
     samples = tuple(
