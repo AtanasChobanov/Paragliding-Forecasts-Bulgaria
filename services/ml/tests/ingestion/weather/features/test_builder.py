@@ -377,6 +377,45 @@ def test_interval_builder_reduces_exact_hourly_coverage() -> None:
     assert by_key["shortwave_radiation_max_w_m2"].canonical_value == 19.0
 
 
+def test_interval_builder_keeps_zero_and_isolates_one_missing_source_field() -> None:
+    policy, _ = load_feature_policy()
+    samples = []
+    for hour in range(10, 20):
+        sample = _sample(hour)
+        precipitation = _interval("precipitation_amount_mm", 0.0, hour)
+        if hour == 14:
+            precipitation = precipitation.model_copy(
+                update={"canonical_value": None, "quality_state": "missing"}
+            )
+        samples.append(
+            sample.model_copy(
+                update={
+                    "fields": (
+                        *sample.fields,
+                        precipitation,
+                        _interval("shortwave_radiation_w_m2", 100.0, hour),
+                    )
+                }
+            )
+        )
+
+    values = {
+        value.feature_key: value
+        for value in build_daily_interval_features(
+            tuple(samples),
+            policy.daily_fields,
+            expected_instants_utc=tuple(f"2026-09-10T{hour:02d}:00:00Z" for hour in range(10, 21)),
+        )
+    }
+
+    assert values["precipitation_total_mm"].canonical_value is None
+    assert values["precipitation_total_mm"].missing_reason == "interval_value_missing"
+    assert values["precipitation_max_hourly_mm"].canonical_value is None
+    assert values["precipitation_max_hourly_mm"].missing_reason == "interval_value_missing"
+    assert values["shortwave_radiation_mean_w_m2"].canonical_value == 100.0
+    assert values["shortwave_radiation_max_w_m2"].canonical_value == 100.0
+
+
 def _neighbourhood_inputs(hours: range):
     footprint = SamplingFootprint(
         footprint_key="b" * 64,
