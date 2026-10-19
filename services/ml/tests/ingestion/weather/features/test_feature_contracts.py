@@ -204,5 +204,45 @@ def test_v2_contract_rejects_missing_value_without_locator_or_reason() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("updates", "message"),
+    (
+        ({"canonical_unit": "Pa"}, "canonical_unit"),
+        ({"canonical_value": float("nan")}, "finite"),
+        ({"canonical_value": float("inf")}, "finite"),
+        ({"missing_reason": "missing_hour"}, "cannot carry missing_reason"),
+        ({"canonical_value": None}, "must be finite numbers"),
+    ),
+)
+def test_feature_value_rejects_wrong_units_non_finite_numbers_and_state_mismatch(
+    updates: dict[str, object], message: str
+) -> None:
+    valid = _value("air_temperature_2m_mean_k", "air_temperature_k", "K", 290.0)
+
+    with pytest.raises(ValidationError, match=message):
+        FeatureValue.model_validate({**valid.model_dump(), **updates})
+
+
+def test_quality_summary_rejects_counts_that_do_not_describe_its_features() -> None:
+    with pytest.raises(ValidationError, match="must total"):
+        FeatureQualitySummary(total_features=2, quality_counts={"derived": 1})
+
+
+def test_missing_locator_requires_paired_and_increasing_layer_bounds() -> None:
+    with pytest.raises(ValidationError, match="supplied together"):
+        MissingFeatureLocator(
+            feature_key="relative_humidity_mean_percent",
+            layer_base_agl_m=0.0,
+            missing_reason="missing_hour",
+        )
+    with pytest.raises(ValidationError, match="strictly increasing"):
+        MissingFeatureLocator(
+            feature_key="relative_humidity_mean_percent",
+            layer_base_agl_m=1500.0,
+            layer_top_agl_m=1500.0,
+            missing_reason="missing_hour",
+        )
+
+
 def test_legacy_feature_snapshot_contract_remains_v1() -> None:
     assert FeatureSnapshot.model_fields["feature_snapshot_schema_version"].default == 1

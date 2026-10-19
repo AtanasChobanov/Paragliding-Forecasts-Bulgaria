@@ -13,6 +13,7 @@ from paragliding_forecasts_ml.ingestion.weather.spatial import (
     SampledField,
     _derived_wind_fields,
     _haversine_km,
+    _valid_local_date,
     bilinear_footprint,
     pressure_level_agl_heights,
     radius_footprint,
@@ -145,6 +146,21 @@ def test_pressure_levels_below_either_terrain_are_excluded_without_clamping() ->
     assert pressure_level_agl_heights(1500, 1000, 900) == (500, 600)
     assert pressure_level_agl_heights(950, 1000, 900) is None
     assert pressure_level_agl_heights(950, 900, 1000) is None
+
+
+@pytest.mark.parametrize(
+    ("valid_at_utc", "expected_local_date"),
+    (
+        ("2026-03-28T22:30:00Z", "2026-03-29"),
+        ("2026-03-29T21:30:00Z", "2026-03-30"),
+        ("2026-10-24T21:30:00Z", "2026-10-25"),
+        ("2026-10-25T22:30:00Z", "2026-10-26"),
+    ),
+)
+def test_valid_utc_instants_map_to_sofia_local_dates_across_dst(
+    valid_at_utc: str, expected_local_date: str
+) -> None:
+    assert _valid_local_date(valid_at_utc, "Europe/Sofia") == expected_local_date
 
 
 def test_policy_contains_only_bilinear_and_physical_radius_sampling() -> None:

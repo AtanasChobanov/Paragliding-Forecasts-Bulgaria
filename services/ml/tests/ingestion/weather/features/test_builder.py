@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+from collections import Counter
 from math import hypot
 
 import pytest
 
+from paragliding_forecasts_ml.ingestion.atmosphere.catalogue import load_catalogue
+from paragliding_forecasts_ml.ingestion.gfs.models import GFS_SOURCE_ID
+from paragliding_forecasts_ml.ingestion.weather.feature_stage import (
+    _missing_locators,
+    _quality_summary,
+)
 from paragliding_forecasts_ml.ingestion.weather.features.builder import (
     FeatureBuildError,
     build_daily_interval_features,
@@ -11,6 +18,10 @@ from paragliding_forecasts_ml.ingestion.weather.features.builder import (
     build_daily_point_features,
     build_hourly_point_features,
     build_profile_layer,
+)
+from paragliding_forecasts_ml.ingestion.weather.features.contracts import (
+    DailyFeatureSnapshot,
+    HourlyFeatureSnapshot,
 )
 from paragliding_forecasts_ml.ingestion.weather.features.policy import load_feature_policy
 from paragliding_forecasts_ml.ingestion.weather.spatial import (
@@ -567,3 +578,143 @@ def test_neighbourhood_builder_is_strict_and_uses_surface_msl_inputs() -> None:
 
     assert by_key["neighbourhood_pressure_gradient_mean_pa_per_km"].canonical_value is not None
     assert by_key["neighbourhood_low_level_divergence_mean_s_inverse"].canonical_value is not None
+
+
+def test_v4_feature_snapshot_covers_every_policy_key_unit_and_missing_locator() -> None:
+    policy, _ = load_feature_policy()
+    samples = []
+    for hour in range(10, 21):
+        sample = _thermal_sample(hour, 100.0, 50.0)
+        if hour < 20:
+            sample = sample.model_copy(
+                update={
+                    "fields": (
+                        *sample.fields,
+                        _interval("precipitation_amount_mm", 1.0, hour),
+                        _interval("shortwave_radiation_w_m2", 100.0, hour),
+                    )
+                }
+            )
+        samples.append(sample)
+    samples = tuple(samples)
+    expected_instants = tuple(sample.valid_at_utc for sample in samples)
+    footprints, sites, records = _neighbourhood_inputs(range(10, 21))
+
+    hourly_values = build_hourly_point_features(
+        samples[0], policy.hourly_fields, source_id=GFS_SOURCE_ID
+    )
+    hourly_snapshot = HourlyFeatureSnapshot(
+        run_key="11111111-1111-4111-8111-111111111111",
+        sample_identity_key=samples[0].sample_identity_key,
+        site_id=1,
+        point_footprint_key="a" * 64,
+        neighbourhood_footprint_key="b" * 64,
+        valid_at_utc=samples[0].valid_at_utc,
+        valid_local_date=samples[0].valid_local_date,
+        feature_contract_version=policy.feature_contract_version,
+        input_fingerprint_sha256="c" * 64,
+        fields=hourly_values,
+        missing_features=_missing_locators(hourly_values, ()),
+        quality_summary=_quality_summary(hourly_values, ()),
+    )
+
+    point = build_daily_point_features(
+        samples,
+        policy.daily_fields,
+        expected_instants_utc=expected_instants,
+        source_id=GFS_SOURCE_ID,
+    )
+    interval = build_daily_interval_features(
+        samples, policy.daily_fields, expected_instants_utc=expected_instants
+    )
+    neighbourhood = build_daily_neighbourhood_features(
+        samples,
+        records,
+        footprints,
+        sites,
+        policy.daily_fields,
+        expected_instants_utc=expected_instants,
+    )
+    by_key = {value.feature_key: value for value in (*point, *interval, *neighbourhood)}
+    daily_fields = tuple(by_key[entry.feature_key] for entry in policy.daily_fields)
+    layers = tuple(
+        build_profile_layer(
+            samples,
+            layer,
+            policy.entries_for_layer(layer),
+            expected_instants_utc=expected_instants,
+        )
+        for layer in policy.profile_layers
+    )
+    daily_snapshot = DailyFeatureSnapshot(
+        run_key="11111111-1111-4111-8111-111111111111",
+        site_id=1,
+        point_footprint_key="a" * 64,
+        neighbourhood_footprint_key="b" * 64,
+        source_product_key="gfs.t00z.pgrb2.0p25.f006",
+        local_date="2026-09-10",
+        feature_contract_version=policy.feature_contract_version,
+        input_fingerprint_sha256="c" * 64,
+        input_sample_identity_keys=tuple(sample.sample_identity_key for sample in samples),
+        daily_fields=daily_fields,
+        profile_layers=layers,
+        missing_features=_missing_locators(daily_fields, layers),
+        quality_summary=_quality_summary(daily_fields, layers),
+    )
+
+    assert len(hourly_snapshot.fields) == 19
+    assert len(daily_snapshot.daily_fields) == 46
+    assert [len(layer.fields) for layer in daily_snapshot.profile_layers] == [11, 13]
+    assert [value.feature_key for value in hourly_snapshot.fields] == [
+        entry.feature_key for entry in policy.hourly_fields
+    ]
+    assert [value.feature_key for value in daily_snapshot.daily_fields] == [
+        entry.feature_key for entry in policy.daily_fields
+    ]
+    catalogue = load_catalogue()
+    for entries, values in (
+        (policy.hourly_fields, hourly_values),
+        (policy.daily_fields, daily_fields),
+    ):
+        for entry, value in zip(entries, values, strict=True):
+            assert value.field_code == entry.field_code
+            assert value.canonical_unit == catalogue.field_unit(entry.field_code)
+            assert value.variant == entry.variant
+            assert value.statistic == entry.statistic
+            assert value.derivation_method == entry.derivation_method
+    for layer_policy, layer in zip(policy.profile_layers, layers, strict=True):
+        for entry, value in zip(policy.entries_for_layer(layer_policy), layer.fields, strict=True):
+            assert value.canonical_unit == catalogue.field_unit(entry.field_code)
+            assert value.derivation_method == entry.derivation_method
+
+    all_daily_values = (*daily_fields, *(field for layer in layers for field in layer.fields))
+    assert len(all_daily_values) == 70
+    assert daily_snapshot.quality_summary.quality_counts == dict(
+        Counter(value.quality_state for value in all_daily_values)
+    )
+    expected_missing = {
+        (value.feature_key, None, None, value.missing_reason)
+        for value in daily_fields
+        if value.canonical_value is None
+    } | {
+        (value.feature_key, layer.layer_base_agl_m, layer.layer_top_agl_m, value.missing_reason)
+        for layer in layers
+        for value in layer.fields
+        if value.canonical_value is None
+    }
+    assert {
+        (
+            locator.feature_key,
+            locator.layer_base_agl_m,
+            locator.layer_top_agl_m,
+            locator.missing_reason,
+        )
+        for locator in daily_snapshot.missing_features
+    } == expected_missing
+    assert {
+        value.feature_key for value in daily_fields if value.quality_state == "unsupported"
+    } == {
+        "provider_cloud_base_agl_mean_m",
+        "provider_cloud_base_agl_min_m",
+        "provider_cloud_base_agl_max_m",
+    }

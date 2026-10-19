@@ -50,6 +50,27 @@ def test_planar_fit_recovers_gradient_and_surface_divergence_with_km_conversion(
     assert metrics.low_level_divergence_s_inverse == pytest.approx((0.5 + 0.25) / 1000.0)
 
 
+def test_planar_fit_preserves_negative_convergence_and_zero_gradient() -> None:
+    observations = []
+    for location in _locations():
+        offset = local_offset_km(
+            _SITE_LATITUDE, _SITE_LONGITUDE, location.latitude_deg, location.longitude_deg
+        )
+        observations.append(
+            replace(
+                location,
+                mean_sea_level_pressure_pa=100_000.0,
+                wind_u_m_s=2.0 - 0.5 * offset.east_km,
+                wind_v_m_s=1.0 - 0.25 * offset.north_km,
+            )
+        )
+
+    metrics = fit_neighbourhood_metrics(_SITE_LATITUDE, _SITE_LONGITUDE, tuple(observations))
+
+    assert metrics.pressure_gradient_pa_per_km == pytest.approx(0.0, abs=1e-9)
+    assert metrics.low_level_divergence_s_inverse == pytest.approx(-0.00075)
+
+
 def test_local_offset_normalizes_antimeridian_longitudes() -> None:
     east = local_offset_km(0.0, 179.9, 0.0, -179.9)
     west = local_offset_km(0.0, -179.9, 0.0, 179.9)
@@ -87,4 +108,17 @@ def test_planar_fit_rejects_duplicate_nodes_rank_deficiency_and_non_finite_evide
             _SITE_LATITUDE,
             _SITE_LONGITUDE,
             (replace(observations[0], wind_u_m_s=float("nan")), *observations[1:]),
+        )
+
+
+def test_planar_fit_requires_three_nodes_and_valid_coordinates() -> None:
+    observations = _analytic_plane_observations()
+
+    with pytest.raises(NeighbourhoodCoverageError, match="At least three"):
+        fit_neighbourhood_metrics(_SITE_LATITUDE, _SITE_LONGITUDE, observations[:2])
+    with pytest.raises(NeighbourhoodCoverageError, match="latitude"):
+        fit_neighbourhood_metrics(
+            _SITE_LATITUDE,
+            _SITE_LONGITUDE,
+            (replace(observations[0], latitude_deg=91.0), *observations[1:]),
         )
