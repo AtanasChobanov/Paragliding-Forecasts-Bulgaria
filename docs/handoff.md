@@ -1,16 +1,47 @@
 # Project Handoff
 
-## Current state — 2026-10-18
+## Current state — 2026-10-21
 
-T-020 is **Done**. The 2022–2024 source-season development cohort has a verified,
-versioned XCContest × exact-06Z-GFS dataset. T-021 is the next To Do ticket:
-feature calculation tests for weather and sounding fields, units, missingness,
-and date/timezone alignment. Read `AGENTS.md`, this handoff, T-021 in
-`docs/tasks.md`, and only the relevant architecture/brief sections before
-starting it. Do not start T-022/T-023 modeling as part of T-021.
+T-020 and T-021 are **Done**. T-021 was completed on
+`test/T-021-feature-calculation-tests`. The feature test commits are
+`cf64d13`, `a252b86` and `1401867`. The fixes and correction layer are
+`36235a0` (IGRA), `94d1ea8` (wind), `c339d9d` (thermal) and `c8aa2c5`
+(versioned correction).
 
-The current branch is `feature/T-020-joined-weather-dataset`. The T-020 closure
-changes are in the working tree; preserve them when starting the next task.
+The IGRA RH/dew-point/CIN provenance defects, calm-wind/source-quality
+discrepancies and the thermal 2 m anchor rule have local fixes and tests.
+The new feature policy is v5; old v4 remains packaged for historical v3
+verification. `igra-ingest reprocess` forks retained IGRA source evidence into
+a new offline run with the corrected normalizer version; it leaves completed
+old artifacts unchanged.
+
+The chosen versioned correction layer reads the retained SQLite hourly inputs
+without writing SQLite or restoring GFS raw files. It produced correction ID
+`22c8d088635217bdd78792c1a1c1b1514ce92b8f8365d271a156739051a45c51`
+and joined v4 dataset ID
+`5e88d13ff67e201ce8b0f23ed2d517d5af188e6185cd1496cab8798316bf7394`.
+Artifact-only verification passed for both. A repeat build returned identical
+IDs. The v4 dataset has 960 training rows, zero exclusions and **20 patched
+rows / 80 recovered daily values**; 940 other lines are byte-identical to v3.
+The earlier 19/1 expectation was wrong: Pastrina's missing 08:00 UTC flux
+belongs to the preceding interval, outside the 08:00–18:00 UTC flying window.
+The parent v3 ID is
+`c294ebdf21cb2380548a52ec46b1f174ec85ce381e7561f88d6c55a3245c1c38`.
+The correction JSONL SHA-256 is
+`d0c46e246ac80a9bc3c64be80c5b273e5bf0ada0260789620db574506541d57b`;
+the v4 training JSONL SHA-256 is
+`42ae3a7a7ddc34ba156348a7e1bc9ba7a27c3ba6b05050e6e866e12820893150`.
+The correction artifact retains exact inputs and old/new values for every
+patched row. Reproduction and verification commands are in `services/ml/README.md`.
+
+The full offline Python suite passed **499 tests** using normal Windows
+filesystem permissions for hard links. Focused IGRA reprocess and synthetic
+correction/tamper tests passed. Ruff check, Ruff format, repository structure,
+`git diff --check`, both installed CLI help commands, and artifact-only v3,
+correction and v4 verification passed. The final diff review found only T-021
+source, tests, documentation and the permitted ticket-status change; a final
+focused rerun passed 36 tests. Do not begin
+T-022/T-023 modeling as part of this ticket.
 
 ## Verified T-020 boundary
 
@@ -45,17 +76,16 @@ changes are in the working tree; preserve them when starting the next task.
   used by existing tests. The synthetic join tests cover missing/late source,
   tampered hashes, unknown/non-nested labels, units, missing reasons and timing.
 
-## Next-ticket context and limits
+## Dataset context and limits
 
-- T-021 should use the packaged `weather-feature-policy-v4.json`, the source-
-  neutral feature contracts, and `services/ml/tests/ingestion/weather/features/`.
-  The T-020 verifier checks the published values' shapes, catalogue units and
-  provenance; T-021 owns calculation-specific tests and date/timezone cases.
+- The T-020 v3 artifact retains the packaged `weather-feature-policy-v4.json`.
+  The corrected builder defaults to v5 with the same 46-feature contract; the
+  v3 verifier explicitly loads v4, and the v4 joined verifier checks only the
+  four allowlisted daily thermal replacements and correction locator.
 - Across the 960 joined rows, the three provider cloud-base daily fields are
-  unsupported in every row. Each of four thermal/buoyancy summary fields is
-  missing in 20 rows with an explicit reason. Investigate those calculations
-  and missing states in T-021; null must not become zero. Profile-layer fields
-  are present and marked derived in all joined rows.
+  unsupported in every row. The four thermal/buoyancy daily summary fields
+  remain missing in 20 rows of v3 and are finite derived values in those same
+  20 v4 rows. Profile-layer fields remain unchanged and derived.
 - DEC-066 pins the historical evening issue to the issue-date 06Z cycle,
   source readiness by 16:00 Europe/Sofia and delivery by 20:00. DEC-068 stores
   source-ready evidence per valid hour. DEC-056 defines nested XC labels and

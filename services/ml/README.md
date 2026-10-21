@@ -1966,6 +1966,37 @@ is not changed in this work.
    The verified development result and its limits are recorded in
    `docs/T-020-phase-4-joined-dataset-verification.md`.
 
+### T-021 versioned thermal correction
+
+The original T-020 join and SQLite graph remain immutable. The T-021
+`weather-join-correct` command reads the persisted hourly surface, flux and
+profile inputs for the parent v3 dataset and writes a separate, hash-addressed
+correction artifact plus a v4 joined dataset. It recalculates only the four
+daily buoyancy/convective-velocity features and their provenance. It makes no
+GFS request, requires no raw GRIB files, and does not update SQLite.
+
+```powershell
+uv run --project services/ml weather-join-correct build `
+  --parent-dataset-id c294ebdf21cb2380548a52ec46b1f174ec85ce381e7561f88d6c55a3245c1c38 `
+  --expected-candidates 20
+uv run --project services/ml weather-join-correct verify `
+  --correction-id 22c8d088635217bdd78792c1a1c1b1514ce92b8f8365d271a156739051a45c51
+uv run --project services/ml weather-join `
+  --verify-dataset-id 5e88d13ff67e201ce8b0f23ed2d517d5af188e6185cd1496cab8798316bf7394
+```
+
+`build` refuses an unexpected candidate count when `--expected-candidates`
+is supplied and returns the same IDs on a repeat run over unchanged inputs.
+The two `verify` actions are artifact-only: they need the parent join,
+acquisition/cohort/label metadata and correction files, but no SQLite or raw
+weather files. The correction record includes the ten interval inputs and
+old/new quality evidence. The v4 verifier permits changes only to the four
+allowlisted values, their four quality records and the correction locator;
+the other 940 example lines are byte-identical to v3. The correction artifact
+retains the exact per-row inputs, old/new values and quality records; its
+verifier recalculates all 20 rows from that evidence. The corrected join has
+960 training examples, zero exclusions and 80 recovered daily values.
+
 For operator planning, 15 metadata inventories averaged **1.081 GiB/job**.
 Extrapolation gives approximately **762 GiB** selected raw for 705 development
 jobs and **425 GiB** more for 393 reserved 2025 jobs, before compact stages,
@@ -2080,6 +2111,22 @@ To replay a successful or interrupted run without network access, copy the
 uv run --project services/ml igra-ingest resume `
   --run-key 5ae72afe-e71e-4c32-ade8-cd57426533e8
 ```
+
+`resume` preserves an old completed stage and its pinned normalizer version.
+To apply a newer IGRA normalizer to retained source evidence, create a separate
+offline run instead:
+
+```powershell
+uv run --project services/ml igra-ingest reprocess `
+  --run-key 5ae72afe-e71e-4c32-ade8-cd57426533e8
+```
+
+This verifies and reuses the original source snapshot, records its original
+run key and request-plan hash in the new run, and parses/normalizes/validates
+without network access. It requires the retained IGRA raw ZIP snapshot.
+The old run and its validated manifest remain unchanged. A partly completed
+old run whose pinned producer version has changed must use `reprocess` rather
+than silently continue under a different version.
 
 For that reviewed two-date example, the live HEAD-only inventory reported five
 objects totaling exactly `75,714,341` compressed bytes (`73 MiB` minimum) with
