@@ -43,9 +43,9 @@ from .grid import (
 from .sampling_policy import SamplingPolicy, load_sampling_policy
 from .serialization import canonical_json_bytes, sha256_bytes
 from .sites import load_site_sampling_configs
-from .wind import component_wind_speed
+from .wind import component_wind_speed, meteorological_direction_from_uv
 
-WEATHER_SPATIAL_VERSION = "weather-spatial/7"
+WEATHER_SPATIAL_VERSION = "weather-spatial/8"
 
 _NUMERICAL_ZERO_TOLERANCE = 1e-12
 _NON_NEGATIVE_INTERVAL_FIELD_CODES = frozenset(
@@ -59,6 +59,7 @@ class SampledField(AtmosphericContract):
     canonical_unit: str
     canonical_value: float | None
     quality_state: Literal["real", "derived", "missing", "sentinel_missing", "unsupported"]
+    missing_reason: str | None = None
     dimension: str | None = None
     pressure_pa: float | None = Field(default=None, gt=0)
     interval_start_utc: str | None = None
@@ -222,11 +223,7 @@ def _derived_wind_fields(
     u_value = None if u_field is None else u_field.canonical_value
     v_value = None if v_field is None else v_field.canonical_value
     speed = None if u_value is None or v_value is None else component_wind_speed(u_value, v_value)
-    direction = (
-        None
-        if speed is None or speed == 0
-        else (math.degrees(math.atan2(-u_value, -v_value)) + 360.0) % 360.0
-    )
+    direction = None if speed is None else meteorological_direction_from_uv(u_value, v_value)
     dimensions = {item.dimension for item in sources}
     if len(dimensions) > 1:
         raise SpatialSamplingError(
@@ -254,7 +251,14 @@ def _derived_wind_fields(
             field_code="wind_direction_degrees_from_north",
             canonical_unit="degree",
             canonical_value=direction,
-            quality_state="derived" if speed is not None else "sentinel_missing",
+            quality_state="derived" if direction is not None else "sentinel_missing",
+            missing_reason=(
+                None
+                if direction is not None
+                else "wind_components_missing"
+                if speed is None
+                else "wind_direction_undefined"
+            ),
             derivation_method="meteorological_direction_from_bilinear_u_v",
             **common,
         ),

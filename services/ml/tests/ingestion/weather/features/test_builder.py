@@ -187,6 +187,51 @@ def test_hourly_builder_selects_the_normalized_2m_specific_humidity_dimension() 
     assert by_key["specific_humidity_2m_kg_per_kg"].canonical_value == 0.006
 
 
+@pytest.mark.parametrize("u", (0.0, 1e-7))
+def test_numerical_calm_has_valid_speed_and_undefined_direction(u: float) -> None:
+    policy, _ = load_feature_policy()
+    samples = tuple(
+        _sample(hour).model_copy(
+            update={
+                "fields": tuple(
+                    field
+                    for field in _sample(hour).fields
+                    if field.field_code not in {"wind_u_m_s", "wind_v_m_s"}
+                )
+                + (
+                    _field("wind_u_m_s", u, dimension="10m_above_ground"),
+                    _field("wind_v_m_s", 0.0, dimension="10m_above_ground"),
+                )
+            }
+        )
+        for hour in range(10, 21)
+    )
+    hourly = {
+        value.feature_key: value
+        for value in build_hourly_point_features(samples[0], policy.hourly_fields)
+    }
+    daily = {
+        value.feature_key: value
+        for value in build_daily_point_features(
+            samples,
+            policy.daily_fields,
+            expected_instants_utc=tuple(sample.valid_at_utc for sample in samples),
+        )
+    }
+    assert hourly["wind_speed_10m_m_s"].canonical_value == u
+    assert hourly["wind_speed_10m_m_s"].quality_state == "derived"
+    assert hourly["wind_speed_10m_m_s"].input_field_codes == ("wind_u_m_s", "wind_v_m_s")
+    assert hourly["wind_direction_10m_degrees_from_north"].canonical_value is None
+    assert (
+        hourly["wind_direction_10m_degrees_from_north"].missing_reason == "wind_direction_undefined"
+    )
+    assert daily["wind_direction_10m_mean_degrees_from_north"].canonical_value is None
+    assert (
+        daily["wind_direction_10m_mean_degrees_from_north"].missing_reason
+        == "wind_direction_undefined"
+    )
+
+
 def test_hourly_builder_uses_the_canonical_component_wind_speed() -> None:
     u_value = -0.9561042182562771
     v_value = 1.3604827612750012

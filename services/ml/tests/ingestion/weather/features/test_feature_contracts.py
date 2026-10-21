@@ -48,8 +48,8 @@ def test_feature_policy_uses_database_aligned_keys_and_layer_specific_omega() ->
     assert len(policy_sha256) == 64
     assert policy.feature_policy_schema_version == 2
     assert policy.feature_contract_version == "weather-feature-contract/3"
-    assert policy.policy_version == "weather-feature-policy-v4"
-    assert policy.feature_builder_version == "weather-feature-builder/4"
+    assert policy.policy_version == "weather-feature-policy-v5"
+    assert policy.feature_builder_version == "weather-feature-builder/5"
     assert [(layer.layer_base_agl_m, layer.layer_top_agl_m) for layer in policy.profile_layers] == [
         (0.0, 1500.0),
         (1500.0, 3000.0),
@@ -97,6 +97,11 @@ def test_feature_policy_uses_database_aligned_keys_and_layer_specific_omega() ->
             "weather-feature-policy-v3.json",
             "weather-feature-policy-v3",
             "weather-feature-builder/3",
+        ),
+        (
+            "weather-feature-policy-v4.json",
+            "weather-feature-policy-v4",
+            "weather-feature-builder/4",
         ),
     ],
 )
