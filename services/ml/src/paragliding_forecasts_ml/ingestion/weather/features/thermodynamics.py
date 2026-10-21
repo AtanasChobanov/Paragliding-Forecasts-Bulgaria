@@ -324,6 +324,15 @@ def _height_weighted_mean_virtual_potential_temperature(
     profile: tuple[HeightProfilePoint, ...],
     upper_height_agl_m: float,
 ) -> float:
+    usable_profile: list[HeightProfilePoint] = []
+    for point in profile:
+        if not isfinite(point.height_agl_m) or point.height_agl_m < 0.0:
+            raise ThermodynamicError("thermal_profile_below_surface")
+        _require_surface_state(
+            point.pressure_pa, point.temperature_k, point.specific_humidity_kg_per_kg
+        )
+        if point.height_agl_m > 2.0:
+            usable_profile.append(point)
     points = (
         HeightProfilePoint(
             2.0,
@@ -331,13 +340,11 @@ def _height_weighted_mean_virtual_potential_temperature(
             surface_temperature_k,
             surface_specific_humidity_kg_per_kg,
         ),
-        *tuple(sorted(profile, key=lambda point: point.height_agl_m)),
+        *tuple(sorted(usable_profile, key=lambda point: point.height_agl_m)),
     )
     if len({point.height_agl_m for point in points}) != len(points):
         raise ThermodynamicError("thermal_profile_duplicate_height")
     for point in points:
-        if point.height_agl_m < 2.0:
-            raise ThermodynamicError("thermal_profile_below_surface")
         _require_surface_state(
             point.pressure_pa, point.temperature_k, point.specific_humidity_kg_per_kg
         )

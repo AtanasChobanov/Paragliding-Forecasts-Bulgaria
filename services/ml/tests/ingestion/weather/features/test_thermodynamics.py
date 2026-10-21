@@ -188,7 +188,7 @@ def test_thermal_strength_matches_a_constant_virtual_potential_temperature_refer
         (
             1_000.0,
             100.0,
-            (HeightProfilePoint(1.0, 85_000.0, 287.0, 0.009),),
+            (HeightProfilePoint(-1.0, 85_000.0, 287.0, 0.009),),
             "thermal_profile_below_surface",
         ),
     ),
@@ -209,6 +209,28 @@ def test_thermal_strength_rejects_invalid_depth_flux_and_height_evidence(
             provider_boundary_layer_height_agl_m=pbl_height,
             profile=profile,
         )
+
+
+def test_thermal_strength_uses_direct_two_metre_anchor_over_lower_profile_nodes() -> None:
+    kwargs = {
+        "surface_pressure_pa": 90_000.0,
+        "surface_temperature_k": 290.0,
+        "surface_specific_humidity_kg_per_kg": 0.009,
+        "sensible_heat_flux_upward_w_m2": 100.0,
+        "latent_heat_flux_upward_w_m2": 100.0,
+        "provider_boundary_layer_height_agl_m": 1_000.0,
+    }
+    upper = (HeightProfilePoint(1_000.0, 85_000.0, 287.0, 0.009),)
+    baseline = thermal_strength_from_surface_fluxes(**kwargs, profile=upper)
+    with_lower_nodes = thermal_strength_from_surface_fluxes(
+        **kwargs,
+        profile=(
+            HeightProfilePoint(1.0, 89_900.0, 289.0, 0.009),
+            HeightProfilePoint(2.0, 89_800.0, 288.0, 0.009),
+            *upper,
+        ),
+    )
+    assert with_lower_nodes == baseline
 
 
 def test_thermal_strength_refuses_an_unbracketed_boundary_layer() -> None:
