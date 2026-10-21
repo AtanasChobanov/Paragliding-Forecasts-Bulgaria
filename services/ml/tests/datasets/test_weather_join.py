@@ -12,6 +12,11 @@ import pytest
 
 from paragliding_forecasts_ml.datasets import weather_join, weather_join_verify
 from paragliding_forecasts_ml.datasets.weather_cohort import _encoded
+from paragliding_forecasts_ml.datasets.weather_join_correction import (
+    THERMAL_KEYS,
+    build_corrected_joined_dataset,
+)
+from paragliding_forecasts_ml.datasets.weather_join_correction_verify import verify_correction
 from paragliding_forecasts_ml.ingestion.atmosphere.catalogue import load_catalogue
 from paragliding_forecasts_ml.ingestion.gfs.models import GFS_SOURCE_ID, sofia_window_instants
 from paragliding_forecasts_ml.ingestion.weather.features.policy import load_feature_policy
@@ -297,6 +302,148 @@ def test_artifact_verifier_checks_complete_three_horizon_output_and_hashes(
         weather_join_verify.verify_joined_dataset(
             dataset_id=result["dataset_id"], project_root=tmp_path
         )
+
+
+def test_thermal_correction_uses_only_ten_intervals_and_verifies_without_sqlite(
+    tmp_path, monkeypatch
+) -> None:
+    database = _fixture(tmp_path, monkeypatch)
+    connection = sqlite3.connect(database)
+    connection.executescript(
+        """
+        ALTER TABLE weather_point_samples ADD COLUMN surface_pressure_pa REAL;
+        ALTER TABLE weather_point_samples ADD COLUMN air_temperature_2m_k REAL;
+        ALTER TABLE weather_point_samples ADD COLUMN specific_humidity_2m_kg_per_kg REAL;
+        ALTER TABLE weather_point_samples ADD COLUMN provider_boundary_layer_height_agl_m REAL;
+        ALTER TABLE weather_field_provenance ADD COLUMN point_interval_measurement_id INTEGER;
+        CREATE TABLE weather_point_profile_levels (
+          weather_point_sample_id INTEGER, pressure_pa REAL, level_height_site_agl_m REAL,
+          air_temperature_k REAL, specific_humidity_kg_per_kg REAL
+        );
+        CREATE TABLE weather_point_interval_measurements (
+          id INTEGER, weather_point_sample_id INTEGER, field_code TEXT,
+          interval_start_utc TEXT, interval_end_utc TEXT, canonical_value REAL
+        );
+        """
+    )
+    connection.execute(
+        "UPDATE weather_point_samples SET surface_pressure_pa=100000, "
+        "air_temperature_2m_k=300, specific_humidity_2m_kg_per_kg=0, "
+        "provider_boundary_layer_height_agl_m=1000 WHERE ingestion_run_id=1"
+    )
+    for key in THERMAL_KEYS:
+        connection.execute(f"UPDATE weather_daily_feature_snapshots SET {key}=NULL WHERE id=1")
+    connection.execute(
+        "UPDATE weather_field_provenance SET quality_state='missing', "
+        "missing_reason_code='interval_value_missing' WHERE daily_feature_snapshot_id=1 "
+        "AND field_code IN ('surface_buoyancy_flux_kinematic_m2_s3', "
+        "'convective_velocity_scale_m_s')"
+    )
+    valid = dict(
+        connection.execute(
+            "SELECT point.id, valid.valid_at_utc FROM weather_point_samples AS point "
+            "JOIN weather_product_valid_times AS valid ON valid.id=point.product_valid_time_id "
+            "WHERE point.ingestion_run_id=1"
+        )
+    )
+    measurement_id = 1
+    for sample_id in range(102, 112):
+        connection.execute(
+            "INSERT INTO weather_point_profile_levels VALUES (?, 100000, 1000, 300, 0)",
+            (sample_id,),
+        )
+        if sample_id == 102:
+            connection.execute(
+                "INSERT INTO weather_point_profile_levels VALUES (?, 100000, 1, 300, 0)",
+                (sample_id,),
+            )
+        for field, value in (
+            ("surface_sensible_heat_flux_upward_w_m2", 100.0),
+            ("surface_latent_heat_flux_upward_w_m2", 0.0),
+        ):
+            connection.execute(
+                "INSERT INTO weather_point_interval_measurements VALUES (?, ?, ?, ?, ?, ?)",
+                (measurement_id, sample_id, field, valid[sample_id - 1], valid[sample_id], value),
+            )
+            connection.execute(
+                "INSERT INTO weather_field_provenance "
+                "(point_interval_measurement_id, field_code, quality_state) VALUES (?, ?, 'real')",
+                (measurement_id, field),
+            )
+            measurement_id += 1
+    connection.commit()
+    connection.close()
+    for name in ("_resolution", "resolution_status", "_verified_json", "_cohort"):
+        monkeypatch.setattr(weather_join_verify, name, getattr(weather_join, name))
+    parent = weather_join.build_joined_dataset(acquisition_id="b" * 64, project_root=tmp_path)
+    result = build_corrected_joined_dataset(
+        parent_dataset_id=parent["dataset_id"], project_root=tmp_path, expected_candidates=1
+    )
+    assert result["patched"] == 1
+    assert result["examples"] == 3
+    assert (
+        build_corrected_joined_dataset(
+            parent_dataset_id=parent["dataset_id"], project_root=tmp_path, expected_candidates=1
+        )
+        == result
+    )
+    correction, records = verify_correction(
+        correction_id=result["correction_id"], project_root=tmp_path
+    )
+    assert correction["evaluated"] == 1
+    assert records[0]["input_projection"]["hours"][0]["valid_at_utc"] == valid[102]
+    density = 100_000.0 / (287.04 * 300.0)
+    expected_buoyancy = (9.81 / 300.0) * 100.0 / (density * 1004.04)
+    assert records[0]["new_values"][THERMAL_KEYS[0]] == pytest.approx(expected_buoyancy)
+    database.unlink()
+    assert weather_join_verify.verify_joined_dataset(
+        dataset_id=result["dataset_id"], project_root=tmp_path
+    )["verified"]
+    corrupted_record = copy.deepcopy(records[0])
+    corrupted_record["new_values"][THERMAL_KEYS[0]] += 1.0
+    corrupted_content = _encoded(corrupted_record)
+    corrupted_manifest = {key: value for key, value in correction.items() if key != "correction_id"}
+    corrupted_manifest["outputs"]["corrections.jsonl"] = {
+        "bytes": len(corrupted_content),
+        "sha256": weather_join._sha(corrupted_content),
+    }
+    corrupted_id = weather_join._sha(_encoded(corrupted_manifest))
+    corrupted_dir = tmp_path / "data/processed/joined-weather-corrections" / corrupted_id
+    corrupted_dir.mkdir()
+    (corrupted_dir / "manifest.json").write_bytes(
+        _encoded({**corrupted_manifest, "correction_id": corrupted_id})
+    )
+    (corrupted_dir / "corrections.jsonl").write_bytes(corrupted_content)
+    with pytest.raises(weather_join.WeatherJoinError, match="recomputation"):
+        verify_correction(correction_id=corrupted_id, project_root=tmp_path)
+
+    original_dir = tmp_path / "data/processed/joined-weather" / result["dataset_id"]
+    joined_manifest = json.loads((original_dir / "manifest.json").read_bytes())
+    tampered_rows = [
+        json.loads(line)
+        for line in (original_dir / "training_examples.jsonl").read_text().splitlines()
+    ]
+    tampered_rows[0]["label_evidence"]["flight_count"] = 2
+    tampered_content = b"".join(_encoded(row) for row in tampered_rows)
+    tampered_manifest = {
+        key: value for key, value in joined_manifest.items() if key != "dataset_id"
+    }
+    tampered_manifest["outputs"]["training_examples.jsonl"] = {
+        "bytes": len(tampered_content),
+        "sha256": weather_join._sha(tampered_content),
+    }
+    tampered_id = weather_join._sha(_encoded(tampered_manifest))
+    tampered_dir = tmp_path / "data/processed/joined-weather" / tampered_id
+    tampered_dir.mkdir()
+    (tampered_dir / "manifest.json").write_bytes(
+        _encoded({**tampered_manifest, "dataset_id": tampered_id})
+    )
+    (tampered_dir / "training_examples.jsonl").write_bytes(tampered_content)
+    (tampered_dir / "excluded_examples.jsonl").write_bytes(
+        (original_dir / "excluded_examples.jsonl").read_bytes()
+    )
+    with pytest.raises(weather_join.WeatherJoinError, match="unauthorized edit"):
+        weather_join_verify.verify_joined_dataset(dataset_id=tampered_id, project_root=tmp_path)
 
 
 @pytest.mark.parametrize("state", ["missing_weather", "late_source"])

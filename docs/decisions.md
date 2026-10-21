@@ -81,6 +81,7 @@ consequences. Temporary progress and Git state belong in
 | DEC-066     | Pin the first historical cohort to 06Z and defer 2025 acquisition             | Accepted   | 2026-10-05 |
 | DEC-067     | Bound negative reconstructed GFS downward shortwave radiation                 | Accepted   | 2026-10-06 |
 | DEC-068     | Store GFS source readiness per valid hour and guard weather graph identity   | Accepted   | 2026-10-06 |
+| DEC-069     | Correct joined thermal features through an immutable derived layer          | Accepted   | 2026-10-21 |
 
 ## Individual decisions
 
@@ -2960,3 +2961,37 @@ through a one-off reviewed offline script; the product-level column remains
 temporarily for migration safety. Remove it in a later forward-only migration
 after the owner reviews the repair report. A missing per-hour timestamp fails
 the T-020 06Z join. `started_at_utc` is unchanged.
+
+### DEC-069 - Correct joined thermal features through an immutable derived layer
+
+**Status:** Accepted by the owner for T-021
+
+**Date:** 2026-10-21
+
+**Context:** The T-020 development join is hash-addressed and its 705 succeeded
+GFS runs have immutable feature and persistence evidence. Twenty of its 960
+rows have four missing daily thermal metrics because valid pressure-profile
+nodes between ground and the direct 2 m surface anchor were rejected.
+Replaying all runs would require restoring raw files from external volumes.
+The necessary surface, interval-flux and profile inputs are already present
+in the local SQLite graph. A missing Pastrina flux hour ends at the start of
+the flying window, so it does not prevent its ten-interval daily reduction.
+
+**Decision:** Keep the existing SQLite graph and v3 joined dataset unchanged.
+Recompute only the four affected daily thermal metrics from the 11 linked
+persisted point samples and their ten exact flying-window intervals. Publish
+an immutable, content-addressed correction artifact with the input projection,
+old/new values, provenance and parent hashes. Materialize a new v4 joined
+dataset ID from the verified v3 parent, applying only the allowlisted changes.
+The correction and v4 dataset must be verifiable without SQLite or raw GRIB.
+Neither raw restoration nor a GFS network acquisition is part of this repair.
+
+**Consequences:** The original acquisition, run keys, feature manifests and
+v3 dataset remain valid historical evidence. The v4 rows explicitly identify
+their correction; downstream training must select the verified v4 ID when it
+wants the repaired thermal values. A future full replay can still be done from
+retained raw artifacts. IGRA normalization fixes are separately versioned and
+do not change the GFS join.
+
+**Related files:** [`handoff.md`](handoff.md) and
+[`../services/ml/README.md`](../services/ml/README.md).

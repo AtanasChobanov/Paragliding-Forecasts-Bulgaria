@@ -5,9 +5,9 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from itertools import pairwise
-from math import atan2, degrees, hypot, isfinite
+from math import hypot, isfinite
 
-CALM_WIND_EPSILON_M_S = 1e-6
+from ..wind import meteorological_direction_from_uv  # noqa: F401 - compatibility export
 
 
 class VerticalCoverageError(ValueError):
@@ -110,16 +110,6 @@ def scalar_speed_profile(
         VerticalPoint(u_point.height_agl_m, hypot(u_point.value, v_point.value))
         for u_point, v_point in zip(u_profile, v_profile, strict=True)
     )
-
-
-def meteorological_direction_from_uv(u_m_s: float, v_m_s: float) -> float | None:
-    """Return meteorological direction-from degrees, or null for numerical calm."""
-
-    _require_finite(u_m_s, "Wind U")
-    _require_finite(v_m_s, "Wind V")
-    if hypot(u_m_s, v_m_s) <= CALM_WIND_EPSILON_M_S:
-        return None
-    return (degrees(atan2(-u_m_s, -v_m_s)) + 360.0) % 360.0
 
 
 def _validated_profile(points: Sequence[VerticalPoint]) -> tuple[VerticalPoint, ...]:

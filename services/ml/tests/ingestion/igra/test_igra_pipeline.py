@@ -2,7 +2,7 @@ from io import BytesIO
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
-from paragliding_forecasts_ml.ingestion.igra.pipeline import fresh, resume
+from paragliding_forecasts_ml.ingestion.igra.pipeline import fresh, reprocess, resume
 from paragliding_forecasts_ml.ingestion.igra.transport import BytesIgraResponse, IgraTransport
 
 FIXTURES = Path(__file__).parents[2] / "fixtures" / "igra"
@@ -66,6 +66,21 @@ def test_fake_fresh_then_offline_resume(tmp_path: Path) -> None:
     resumed = resume(run_key=str(result["run_key"]), project_root=tmp_path)
     assert resumed["run_key"] == result["run_key"]
     assert resumed["network_mode"] == "cache_reuse"
+    fork = reprocess(run_key=str(result["run_key"]), project_root=tmp_path)
+    assert fork["run_key"] != result["run_key"]
+    assert fork["reprocessed_from_run_key"] == result["run_key"]
+    assert fork["source_snapshot_id"] == result["source_snapshot_id"]
+    assert fork["network_mode"] == "cache_reuse"
+    assert (
+        len(
+            list(
+                (tmp_path / "data/interim/soundings" / fork["run_key"]).glob(
+                    "normalizer-v2/**/stage-manifest.json"
+                )
+            )
+        )
+        == 1
+    )
 
 
 def _zip(member_name: str, content: bytes) -> bytes:

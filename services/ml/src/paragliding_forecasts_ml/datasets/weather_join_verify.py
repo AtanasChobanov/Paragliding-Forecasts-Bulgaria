@@ -312,6 +312,10 @@ def verify_joined_dataset(*, dataset_id: str, project_root: Path | None = None) 
     _require(directory.parent == parent, "Invalid joined dataset path.")
     manifest = json.loads((directory / "manifest.json").read_bytes())
     _require(isinstance(manifest, dict), "Joined manifest is invalid.")
+    if manifest.get("schema_version") == "weather-flight-joined-dataset/4":
+        from .weather_join_correction_verify import verify_corrected_joined_dataset
+
+        return verify_corrected_joined_dataset(dataset_id=dataset_id, project_root=root)
     identity = {key: value for key, value in manifest.items() if key != "dataset_id"}
     _require(
         manifest.get("dataset_id") == dataset_id
@@ -369,7 +373,7 @@ def verify_joined_dataset(*, dataset_id: str, project_root: Path | None = None) 
     }
     _require(bool(selected), "Joined split has no selected site-days.")
     expected = {(site, target, horizon) for site, target in selected for horizon in (1, 2, 3)}
-    policy, _ = load_feature_policy()
+    policy, _ = load_feature_policy("weather-feature-policy-v4.json")
     seen: set[tuple[int, str, int]] = set()
     counts: Counter[str] = Counter()
     reasons: Counter[str] = Counter()

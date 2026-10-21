@@ -31,11 +31,40 @@ from paragliding_forecasts_ml.ingestion.weather.sites import SiteSamplingConfig
 from paragliding_forecasts_ml.ingestion.weather.spatial import (
     CanonicalSiteSampleBatch,
     NeighbourhoodNodeBatch,
+    SampledField,
+    _derived_wind_fields,
     _sampled_field,
     sample_canonical_sites,
 )
 
 RUN_KEY = "99999999-9999-4999-8999-999999999999"
+
+
+def test_spatial_wind_direction_marks_numerical_calm_as_missing() -> None:
+    def component(code: str, value: float) -> SampledField:
+        return SampledField(
+            field_code=code,
+            grain="surface",
+            canonical_unit="m/s",
+            canonical_value=value,
+            quality_state="real",
+            dimension="10m_above_ground",
+            source_selector_keys=(code,),
+            source_raw_artifact_keys=("raw",),
+            source_native_message_references=("message",),
+        )
+
+    for u in (0.0, 1e-7):
+        speed, direction = _derived_wind_fields(
+            component("wind_u_m_s", u),
+            component("wind_v_m_s", 0.0),
+            grain="surface",
+            pressure_pa=None,
+        )
+        assert speed.canonical_value == u
+        assert direction.canonical_value is None
+        assert direction.quality_state == "sentinel_missing"
+        assert direction.missing_reason == "wind_direction_undefined"
 
 
 def _database(root: Path) -> None:

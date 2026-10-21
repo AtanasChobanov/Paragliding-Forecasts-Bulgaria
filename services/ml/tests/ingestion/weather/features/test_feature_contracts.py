@@ -48,8 +48,8 @@ def test_feature_policy_uses_database_aligned_keys_and_layer_specific_omega() ->
     assert len(policy_sha256) == 64
     assert policy.feature_policy_schema_version == 2
     assert policy.feature_contract_version == "weather-feature-contract/3"
-    assert policy.policy_version == "weather-feature-policy-v4"
-    assert policy.feature_builder_version == "weather-feature-builder/4"
+    assert policy.policy_version == "weather-feature-policy-v5"
+    assert policy.feature_builder_version == "weather-feature-builder/5"
     assert [(layer.layer_base_agl_m, layer.layer_top_agl_m) for layer in policy.profile_layers] == [
         (0.0, 1500.0),
         (1500.0, 3000.0),
@@ -97,6 +97,11 @@ def test_feature_policy_uses_database_aligned_keys_and_layer_specific_omega() ->
             "weather-feature-policy-v3.json",
             "weather-feature-policy-v3",
             "weather-feature-builder/3",
+        ),
+        (
+            "weather-feature-policy-v4.json",
+            "weather-feature-policy-v4",
+            "weather-feature-builder/4",
         ),
     ],
 )
@@ -201,6 +206,46 @@ def test_v2_contract_rejects_missing_value_without_locator_or_reason() -> None:
             quality_summary=FeatureQualitySummary(
                 total_features=2, quality_counts={"derived": 1, "missing": 1}
             ),
+        )
+
+
+@pytest.mark.parametrize(
+    ("updates", "message"),
+    (
+        ({"canonical_unit": "Pa"}, "canonical_unit"),
+        ({"canonical_value": float("nan")}, "finite"),
+        ({"canonical_value": float("inf")}, "finite"),
+        ({"missing_reason": "missing_hour"}, "cannot carry missing_reason"),
+        ({"canonical_value": None}, "must be finite numbers"),
+    ),
+)
+def test_feature_value_rejects_wrong_units_non_finite_numbers_and_state_mismatch(
+    updates: dict[str, object], message: str
+) -> None:
+    valid = _value("air_temperature_2m_mean_k", "air_temperature_k", "K", 290.0)
+
+    with pytest.raises(ValidationError, match=message):
+        FeatureValue.model_validate({**valid.model_dump(), **updates})
+
+
+def test_quality_summary_rejects_counts_that_do_not_describe_its_features() -> None:
+    with pytest.raises(ValidationError, match="must total"):
+        FeatureQualitySummary(total_features=2, quality_counts={"derived": 1})
+
+
+def test_missing_locator_requires_paired_and_increasing_layer_bounds() -> None:
+    with pytest.raises(ValidationError, match="supplied together"):
+        MissingFeatureLocator(
+            feature_key="relative_humidity_mean_percent",
+            layer_base_agl_m=0.0,
+            missing_reason="missing_hour",
+        )
+    with pytest.raises(ValidationError, match="strictly increasing"):
+        MissingFeatureLocator(
+            feature_key="relative_humidity_mean_percent",
+            layer_base_agl_m=1500.0,
+            layer_top_agl_m=1500.0,
+            missing_reason="missing_hour",
         )
 
 

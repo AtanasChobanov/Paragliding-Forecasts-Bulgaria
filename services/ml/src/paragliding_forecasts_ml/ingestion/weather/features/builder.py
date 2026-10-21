@@ -108,9 +108,22 @@ def build_hourly_point_features(
                 else meteorological_direction_from_uv(u_value, v_value)
             )
             values.append(
-                _missing_feature(entry, "wind_components_missing")
+                _missing_feature(
+                    entry,
+                    "wind_components_missing"
+                    if u_value is None or v_value is None
+                    else "wind_direction_undefined",
+                )
                 if direction is None
-                else _derived_feature(entry, direction)
+                else _derived_feature(entry, direction, ("wind_u_m_s", "wind_v_m_s"))
+            )
+            continue
+        if entry.feature_key == "wind_speed_10m_m_s":
+            speed = _point_hour_value(sample, entry)
+            values.append(
+                _missing_feature(entry, "wind_components_missing")
+                if speed is None
+                else _derived_feature(entry, speed, ("wind_u_m_s", "wind_v_m_s"))
             )
             continue
         if entry.feature_key in _HOURLY_DERIVED_KEYS:
@@ -339,10 +352,12 @@ def build_daily_point_features(
         values.append(
             _missing_feature(
                 entry,
-                "wind_components_missing" if direction is None else "wind_direction_undefined",
+                "wind_components_missing"
+                if u_value is None or v_value is None
+                else "wind_direction_undefined",
             )
             if direction is None
-            else _derived_feature(entry, direction)
+            else _derived_feature(entry, direction, ("wind_u_m_s", "wind_v_m_s"))
         )
     values.extend(_build_daily_derived_point_features(samples, entries, expected_instants_utc))
     return tuple(values)
@@ -695,7 +710,7 @@ def build_profile_layer(
             fields.append(
                 _missing_feature(entry, "wind_direction_undefined")
                 if direction is None
-                else _derived_feature(entry, direction)
+                else _derived_feature(entry, direction, ("wind_u_m_s", "wind_v_m_s"))
             )
     return FeatureLayer(
         layer_base_agl_m=layer.layer_base_agl_m,
@@ -924,7 +939,9 @@ def _source_feature(entry: FeaturePolicyEntry, value: float) -> FeatureValue:
     )
 
 
-def _derived_feature(entry: FeaturePolicyEntry, value: float) -> FeatureValue:
+def _derived_feature(
+    entry: FeaturePolicyEntry, value: float, input_field_codes: tuple[str, ...] | None = None
+) -> FeatureValue:
     from ...atmosphere.catalogue import load_catalogue
 
     return FeatureValue(
@@ -937,7 +954,7 @@ def _derived_feature(entry: FeaturePolicyEntry, value: float) -> FeatureValue:
         quality_state="derived",
         derivation_method=entry.derivation_method,
         derivation_version=entry.derivation_method,
-        input_field_codes=(entry.field_code,),
+        input_field_codes=input_field_codes or (entry.field_code,),
     )
 
 
