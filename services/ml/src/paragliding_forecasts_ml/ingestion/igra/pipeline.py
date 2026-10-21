@@ -106,6 +106,72 @@ def fresh(
 
 def resume(*, run_key: str, project_root: Path | None = None) -> dict[str, object]:
     """Read hash-verified state only; it has no network option and constructs no transport."""
+    store, plan, snapshot = _stored_source(run_key=run_key, project_root=project_root)
+    return _process(store, plan, snapshot, True)
+
+
+def reprocess(*, run_key: str, project_root: Path | None = None) -> dict[str, object]:
+    """Fork retained IGRA source evidence into a new run with current producer versions."""
+
+    old_store, old_plan, snapshot = _stored_source(run_key=run_key, project_root=project_root)
+    store = IgraArtifactStore.create_fresh(str(uuid4()), project_root=old_store.project_root)
+    plan = IgraRequestPlan.model_validate(
+        {
+            **old_plan.model_dump(mode="python"),
+            "run_key": store.run_key,
+            "created_at_utc": _now(),
+            "component_versions": {
+                "collector": COLLECTOR_VERSION,
+                "parser": PARSER_VERSION,
+                "normalizer": NORMALIZER_VERSION,
+                "validator": VALIDATOR_VERSION,
+            },
+        }
+    )
+    plan_ref = store.write_request_plan(plan)
+    ledger = IgraRunStateLedger(store)
+    ledger.initialize(_now())
+    origin_ref = store.write_bytes(
+        store.interim_dir / "reprocess-origin.json",
+        "reprocess_origin",
+        pretty_json_bytes(
+            {
+                "original_run_key": run_key,
+                "original_request_plan_sha256": old_store.reference_for(
+                    old_store.interim_dir / "request-plan.json",
+                    "request_plan",
+                    media_type="application/json",
+                ).sha256,
+                "source_snapshot_id": snapshot.source_snapshot_id,
+            }
+        ),
+        media_type="application/json",
+    )
+    snapshot_ref = store.reference_for(
+        store.snapshot_directory(plan.station_id, snapshot.source_snapshot_id) / "manifest.json",
+        "source_snapshot_manifest",
+        media_type="application/json",
+    )
+    source_ref = _publish(
+        store,
+        "source_snapshot",
+        COLLECTOR_VERSION,
+        (plan_ref, snapshot_ref, origin_ref),
+        {"source-snapshot-reference.json": snapshot_ref.model_dump(mode="json")},
+    )
+    ledger.append(
+        stage="source_snapshot_complete",
+        disposition="complete",
+        occurred_at_utc=_now(),
+        evidence=source_ref,
+        detail=f"Offline source reuse from IGRA run {run_key}.",
+    )
+    return {**_process(store, plan, snapshot, True), "reprocessed_from_run_key": run_key}
+
+
+def _stored_source(
+    *, run_key: str, project_root: Path | None
+) -> tuple[IgraArtifactStore, IgraRequestPlan, IgraSourceSnapshotManifest]:
     store = IgraArtifactStore(run_key, project_root=project_root)
     events = IgraRunStateLedger(store).load()
     if not any(
@@ -129,7 +195,7 @@ def resume(*, run_key: str, project_root: Path | None = None) -> dict[str, objec
     snapshot = IgraSourceSnapshotManifest.model_validate_json(
         store.verify_reference(snapshot_ref).read_bytes(), strict=True
     )
-    return _process(store, plan, snapshot, True)
+    return store, plan, snapshot
 
 
 def _process(
@@ -146,6 +212,8 @@ def _process(
     )
     parsed_event = _latest(events, "parsed")
     if parsed_event is None:
+        if plan.component_versions["parser"] != PARSER_VERSION:
+            raise IgraPipelineError("Pinned parser version changed; use offline reprocess.")
         raw_ref = artifacts.get("recent_zip") or artifacts["period_of_record_zip"]
         with (
             _open_zip_member(
@@ -192,6 +260,8 @@ def _process(
         parsed_event = ledger.load()[-1]
     normalized_event = _latest(ledger.load(), "normalized")
     if normalized_event is None:
+        if plan.component_versions["normalizer"] != NORMALIZER_VERSION:
+            raise IgraPipelineError("Pinned normalizer version changed; use offline reprocess.")
         parsed_stage = _load_stage(store, parsed_event.evidence)
         from .models import NativeIgraDerivedSounding, NativeIgraSounding
 
@@ -223,6 +293,8 @@ def _process(
         normalized_event = ledger.load()[-1]
     validated_event = _latest(ledger.load(), "validated")
     if validated_event is None:
+        if plan.component_versions["validator"] != VALIDATOR_VERSION:
+            raise IgraPipelineError("Pinned validator version changed; use offline reprocess.")
         normal_stage = _load_stage(store, normalized_event.evidence)
         from .models import (
             CanonicalSounding,

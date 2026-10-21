@@ -9,7 +9,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from .inventory import IgraInventoryError, inventory, parse_selection
-from .pipeline import IgraPipelineError, fresh, resume
+from .pipeline import IgraPipelineError, fresh, reprocess, resume
 from .transport import RetryingIgraTransport, UrllibIgraTransport
 
 
@@ -22,9 +22,10 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("--allow-live-network", action="store_true")
         if name == "fresh":
             command.add_argument("--maximum-total-mib", type=int)
-    resume_parser = subcommands.add_parser("resume")
-    resume_parser.add_argument("--run-key", required=True)
-    resume_parser.add_argument("--project-root", type=Path, default=Path.cwd())
+    for name in ("resume", "reprocess"):
+        offline_parser = subcommands.add_parser(name)
+        offline_parser.add_argument("--run-key", required=True)
+        offline_parser.add_argument("--project-root", type=Path, default=Path.cwd())
     return parser
 
 
@@ -45,6 +46,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         if args.command == "resume":
             result = resume(run_key=args.run_key, project_root=args.project_root)
+        elif args.command == "reprocess":
+            result = reprocess(run_key=args.run_key, project_root=args.project_root)
         else:
             if not args.allow_live_network:
                 raise IgraInventoryError("inventory and fresh require --allow-live-network.")

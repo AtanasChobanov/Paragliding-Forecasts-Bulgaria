@@ -1,3 +1,5 @@
+import pytest
+
 from paragliding_forecasts_ml.ingestion.igra.cli import _write, main
 
 
@@ -33,3 +35,17 @@ def test_resume_does_not_accept_a_live_network_option() -> None:
         assert error.code == 2
     else:
         raise AssertionError("resume unexpectedly accepted a live-network option")
+
+
+def test_reprocess_does_not_accept_a_live_network_option() -> None:
+    from paragliding_forecasts_ml.ingestion.igra.cli import build_parser
+
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(
+            [
+                "reprocess",
+                "--run-key",
+                "00000000-0000-4000-8000-000000000000",
+                "--allow-live-network",
+            ]
+        )

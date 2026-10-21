@@ -85,14 +85,14 @@ def normalize(
             (derived.station_id, derived.nominal_date_utc, derived.nominal_hour_utc),
             _sounding_key(derived.station_id, derived.nominal_date_utc, derived.nominal_hour_utc),
         )
+        parameter_values = _normalize_derived_parameters(derived.parameters)
+        parameter_provenance = _derived_parameter_provenance(derived.parameters)
         parameters.append(
             ProviderDerivedSoundingParameters(
                 sounding_key=key,
                 native_record_sha256=derived.record_sha256,
-                values=_normalize_derived_parameters(derived.parameters),
-                provenance={
-                    name: _derived_provenance(value) for name, value in derived.parameters.items()
-                },
+                values=parameter_values,
+                provenance=parameter_provenance,
             )
         )
         for level in derived.levels:
@@ -150,10 +150,16 @@ def _normalize_level(sounding_key: str, level) -> CanonicalSoundingLevel:
         "pressure_pa": pressure_prov,
         "geopotential_height_msl_m": height_prov,
         "temperature_k": _scaled_provenance(temperature_prov, "raw_temperature_tenth_c_to_k/1"),
-        "dew_point_k": _derived_provenance_from(dpdp_prov, "dew_point_from_depression/1"),
+        "dew_point_k": _dependent_provenance(
+            (temperature_prov, dpdp_prov), "dew_point_from_depression/1"
+        ),
         "reported_relative_humidity_percent": _scaled_provenance(rh_prov, "raw_rh_tenth_percent/1"),
-        "relative_humidity_percent": _derived_provenance_from(
-            dpdp_prov, "magnus_relative_humidity_over_water/1"
+        "relative_humidity_percent": (
+            _scaled_provenance(rh_prov, "raw_rh_tenth_percent/1")
+            if reported_rh is not None
+            else _dependent_provenance(
+                (temperature_prov, dpdp_prov), "magnus_relative_humidity_over_water/1"
+            )
         ),
         "wind_direction_degrees": direction_prov,
         "wind_speed_m_s": _scaled_provenance(speed_prov, "wind_speed_tenth_m_s/1"),
@@ -288,24 +294,58 @@ def _derived_provenance_from(provenance: dict[str, object], method: str) -> dict
     }
 
 
+def _dependent_provenance(
+    dependencies: tuple[dict[str, object], ...], method: str
+) -> dict[str, object]:
+    missing = next((item for item in dependencies if item.get("quality_state") != "real"), None)
+    if missing is not None:
+        return {
+            **missing,
+            "dependency_fields": tuple(item["native_field"] for item in dependencies),
+        }
+    return {
+        "quality_state": "derived",
+        "native_field": ";".join(str(item["native_field"]) for item in dependencies),
+        "dependency_fields": tuple(item["native_field"] for item in dependencies),
+        "derivation_method": method,
+        "derivation_version": NORMALIZER_VERSION,
+    }
+
+
 def _derived_provenance(native: int | None) -> dict[str, object]:
     _value_result, provenance = _value(native, "provider_derived")
     return provenance
+
+
+def _derived_parameter_provenance(
+    values: dict[str, int | None],
+) -> dict[str, dict[str, object]]:
+    result: dict[str, dict[str, object]] = {}
+    for name, native in values.items():
+        _value_result, provenance = _value(native, name)
+        if name == "cin":
+            result["native_cin_j_kg"] = provenance
+            result["cin_magnitude_j_kg"] = _derived_provenance_from(
+                provenance, "absolute_native_cin/1"
+            )
+        else:
+            result[name] = provenance
+    return result
 
 
 def _normalize_derived_parameters(values: dict[str, int | None]) -> dict[str, float | int | None]:
     result: dict[str, float | int | None] = {}
     for name, native in values.items():
         value, _ = _value(native, name)
-        if value is None:
+        if name == "cin":
+            result["native_cin_j_kg"] = value
+            result["cin_magnitude_j_kg"] = None if value is None else abs(value)
+        elif value is None:
             result[name] = None
         elif name == "pw":
             result[name] = value / 100
         elif name in {"invtempdif", "li", "si", "ki", "tti"}:
             result[name] = value / 10
-        elif name == "cin":
-            result["native_cin_j_kg"] = value
-            result["cin_magnitude_j_kg"] = abs(value)
         else:
             result[name] = value
     return result
