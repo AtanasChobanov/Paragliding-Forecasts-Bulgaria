@@ -1,6 +1,107 @@
 # Project Handoff
 
-## Current state — 2026-10-21
+## Current state — 2026-10-28
+
+T-022 is **In Progress** on `feature/T-022-baseline-cloudbase-prediction`.
+The cloudbase-only Python batch is implemented and tested with synthetic data.
+**Do not execute the real prediction/replay commands on the owner's behalf.**
+The owner explicitly reserved those commands for manual execution. No real
+cloudbase batch has been produced by this implementation session. T-022 must
+not be marked Done before that replay and result review.
+
+### Implemented scope
+
+- Read-only selection of explicitly named persisted GFS 06Z D+1/D+2/D+3 runs,
+  with per-hour source readiness by issue-date 16:00 Europe/Sofia.
+- Recover the full above-model-ground pressure column from retained compact
+  grids, including levels below the actual site omitted by site sampling.
+  Verify retained metadata/array hashes and lineage without requiring raw GRIB
+  payloads. Raw manifest metadata and run ledgers still need to be present.
+- Compute 100-hPa mixed-parcel Romps liquid LCL and MetPy 1.7.1 CCL/convective
+  temperature; apply versioned formation rules using existing low cloud,
+  surface RH, model PBL and matched surface fluxes. Keep 50/100-hPa and +/-1 K
+  sensitivity diagnostics. These thresholds are uncalibrated policy choices.
+- Separate `cumulus`, `blue`, `other_cloud`, `indeterminate` and `missing`.
+  Only cumulus has an estimated cloudbase. Potential LCL is a separate value.
+  Blue is not a useful-thermal or clear-sky guarantee. No usable thermal height,
+  Hcrit, cloud top, entrainment or glider-performance model is included.
+- Keep MSL, model AGL and signed site AGL; retain terrain-mismatch warnings.
+  Produce eleven hourly records per site (10:00--20:00 inclusive Sofia).
+  Daily maximum uses only estimated cumulus bases; one numeric hour suffices,
+  with coverage warnings where needed. Only eleven blue hours make a blue day.
+- Publish immutable content-addressed local JSON/JSONL, exact inputs, policy,
+  provenance, library versions and a Markdown report. Changed or incomplete
+  existing artifacts are rejected; repeat builds preserve their identity.
+
+SQLite, stored weather profiles, the joined dataset and T-023 training inputs
+remain unchanged. The owner explicitly deferred any training-feature review
+or correction. No new GFS fields, downloads or external provider are added.
+API/UI integration is also deferred. DEC-058 and the ML README now describe
+the accepted scope and exact algorithm/thresholds.
+
+Implementation commits so far: `4d272ed` (contracts/policy/dependency),
+`2f28ce4` (physics/CCL), `da9fdaf` (retained model column), `1b8959d`
+(formation/aggregation/input guards) and `43fc32d` (CLI/artifacts/report).
+The following documentation commit records the owner-run checkpoint.
+
+### Verification
+
+- Full local Python suite: **569 passed** (includes nine disposable experiment
+  tests that are intentionally not committed).
+- Permanent suite, excluding that disposable test file: **560 passed**.
+  This comprises the existing 499 tests plus 61 new cloudbase tests.
+- Ruff lint and format checks passed; `npm.cmd run repo:check` passed;
+  `git diff --check` passed. No TypeScript behavior changed.
+- Synthetic tests cover model/site elevation differences, recovered low levels,
+  deleted raw GRIB with retained metadata, read-only SQLite, malformed/tampered
+  evidence, strict sampling, units, timing/cutoff, CCL ambiguity, formation-rule
+  boundaries, missing states, daily maxima/coverage, DST, no-network operation
+  and deterministic immutable outputs.
+- Actual retained-source compatibility, output regime distribution and runtime
+  remain unverified until the owner runs the commands below. Synthetic success
+  does not establish cloudbase accuracy or a delivery SLA.
+
+### Owner-run checkpoint
+
+Run from the repository root. First process one existing run (all seven sites):
+
+```powershell
+uv run --project services/ml cloudbase-predict --run-key 93b7b0b5-f3fe-4f8e-8781-01aca0689661
+```
+
+For the retained experiment sample, the owner can then select its existing
+run keys without downloading anything:
+
+```powershell
+$cloudbaseRunKeys = Get-Content 'data/processed/t022-cloudbase-spike/retained-hourly-inputs.jsonl' |
+    ForEach-Object { ($_ | ConvertFrom-Json).run_key } |
+    Sort-Object -Unique
+$cloudbaseArguments = @()
+foreach ($runKey in $cloudbaseRunKeys) {
+    $cloudbaseArguments += @('--run-key', $runKey)
+}
+uv run --project services/ml cloudbase-predict @cloudbaseArguments
+```
+
+Expected sample sizes, if the real replay succeeds: 77 hourly/7 daily records
+for the first command; 36 runs, 2,772 hourly/252 daily records for the second.
+The command prints counts and `output_directory`; inspect that directory's
+`report.md`, `manifest.json`, `hourly.jsonl` and `daily.jsonl` after the owner
+reports execution. Review missing/indeterminate reasons, terrain warnings,
+coverage, base heights and stored-versus-full-column differences. Do not
+interpret computational agreement as observed forecast accuracy. Only after
+this review should T-022 completion or necessary fixes be considered.
+
+### Local files deliberately excluded from Git
+
+The session research notes (sounding/cloudbase note, GFS experiment findings,
+physical method options and profile/terrain audit), disposable spike script,
+its tests and generated experiment data remain local. Do not stage them or
+remove them during implementation. The owner intends to delete temporary
+research files after T-022 is completed; that cleanup is not authorized yet.
+Durable commands and policy are documented in `services/ml/README.md`.
+
+## Previously verified state — 2026-10-21
 
 T-020 and T-021 are **Done**. T-021 was completed on
 `test/T-021-feature-calculation-tests`. The feature test commits are
