@@ -83,6 +83,8 @@ class HourlyResult(Contract):
             raise ValueError("Missing result cannot claim a potential height or confidence.")
         if self.regime != "missing" and self.potential_base is None:
             raise ValueError("A baseline result requires a valid potential base.")
+        if self.regime != "missing" and self.confidence != "low":
+            raise ValueError("The uncalibrated baseline must declare low confidence.")
         if (self.regime == "cumulus") != (self.estimated_cloudbase is not None):
             raise ValueError("Only cumulus has an estimated cloudbase.")
         if self.regime == "cumulus" and self.estimated_cloudbase != self.potential_base:
@@ -109,3 +111,36 @@ class DailyResult(Contract):
     coverage_complete: bool
     confidence: Literal["low"] | None
     limitations: tuple[str, ...]
+
+    @model_validator(mode="after")
+    def summary_and_coverage_agree(self) -> DailyResult:
+        keys = {"cumulus", "blue", "other_cloud", "indeterminate", "missing"}
+        if set(self.regime_counts) != keys or any(n < 0 for n in self.regime_counts.values()):
+            raise ValueError("Daily summary requires every nonnegative regime count.")
+        if sum(self.regime_counts.values()) != 11:
+            raise ValueError("Daily regime counts must cover eleven hours.")
+        classified = sum(self.regime_counts[key] for key in ("cumulus", "blue", "other_cloud"))
+        if (
+            self.present_hours != 11 - self.regime_counts["missing"]
+            or self.classified_hours != classified
+        ):
+            raise ValueError("Daily coverage disagrees with regime counts.")
+        if self.coverage_complete != (classified == 11):
+            raise ValueError("Complete coverage requires eleven classified hours.")
+        available = self.summary_state == "cloudbase_available"
+        if available != (self.max_cloudbase is not None):
+            raise ValueError("Only a numeric summary can have a maximum cloudbase.")
+        if available != (self.max_at_utc is not None) or available != (
+            self.max_at_local is not None
+        ):
+            raise ValueError("A numeric maximum and its timestamps must be present together.")
+        if available != (self.regime_counts["cumulus"] > 0):
+            raise ValueError("Every day with an estimated cumulus base must report its maximum.")
+        if (
+            self.summary_state in {"blue", "other_cloud", "missing"}
+            and self.regime_counts[self.summary_state] != 11
+        ):
+            raise ValueError("An all-day state requires every hour to have that state.")
+        if (self.summary_state == "missing") != (self.confidence is None):
+            raise ValueError("Only a wholly missing day has no baseline confidence.")
+        return self

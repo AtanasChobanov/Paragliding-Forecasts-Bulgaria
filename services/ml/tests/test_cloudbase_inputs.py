@@ -193,6 +193,18 @@ def test_duplicate_hours_cycles_and_units_fail_before_results(retained):
         retained.reader.hours(retained.points)
 
 
+def test_finite_values_with_missing_quality_are_not_used(retained):
+    original = retained.batch.surface_grains[0]
+    retained.batch.surface_grains[0] = original.model_copy(update={"quality_state": "missing"})
+    assert retained.reader.hours(retained.points)[0].surface_pressure_pa is None
+
+
+def test_noncanonical_ready_timestamp_is_not_accepted(retained):
+    retained.points[0]["required_inputs_last_modified_at_utc"] = "2024-06-28T10:00:00+03:00"
+    with pytest.raises(ValueError, match="Timestamp"):
+        retained.reader.hours(retained.points)
+
+
 def test_compact_array_tampering_is_detected_without_raw_payloads(retained):
     path = retained.root / retained.reference.relative_path
     content = bytearray(path.read_bytes())

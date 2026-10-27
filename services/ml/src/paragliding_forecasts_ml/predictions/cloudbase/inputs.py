@@ -13,7 +13,11 @@ from pathlib import Path
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from ...ingestion.atmosphere.contracts import ArtifactReference, StageManifest
+from ...ingestion.atmosphere.contracts import (
+    ArtifactReference,
+    StageManifest,
+    validate_utc_timestamp,
+)
 from ...ingestion.gfs.compact import load_matrix_slice, strict_compact_bilinear_value
 from ...ingestion.gfs.models import GFS_SOURCE_ID
 from ...ingestion.gfs.normalizer import GfsCompactCanonicalGridBatch
@@ -38,7 +42,7 @@ def utc(value: datetime) -> str:
 
 def run_identity(run: dict) -> tuple[str, int, str]:
     """Pin DEC-066 issue identity without selecting a newer, leaked forecast."""
-    reference = datetime.fromisoformat(run["reference_at_utc"])
+    reference = datetime.fromisoformat(validate_utc_timestamp(run["reference_at_utc"]))
     target = date.fromisoformat(run["target_local_date"])
     horizon = (target - reference.date()).days
     if (
@@ -165,6 +169,11 @@ class RetainedReader:
         result = strict_compact_bilinear_value(array, batch.grid.descriptor, footprint)
         return float(result) if result is not None and math.isfinite(result) else None
 
+    def grain_value(self, batch, grain, footprint) -> float | None:
+        if grain is None or grain.quality_state not in {"real", "derived"}:
+            return None
+        return self.value(batch, grain.values, footprint)
+
     def hours(self, points: list[dict]) -> list[HourlyInput]:
         reference, horizon, cutoff = run_identity(self.run)
         batch, samples = self.load()
@@ -220,6 +229,8 @@ class RetainedReader:
                 issues: list[str] = []
                 point = point_index.get((site.site_id, valid))
                 ready = None if point is None else point["required_inputs_last_modified_at_utc"]
+                if ready is not None:
+                    validate_utc_timestamp(ready)
                 if ready is None or ready > cutoff:
                     issues.append("unavailable:source_not_ready_by_cutoff")
                 if point is not None and (
@@ -234,7 +245,7 @@ class RetainedReader:
 
                 def scalar(code, dimension=None, valid=valid, footprint=footprint):
                     grain = surface.get((valid, code, dimension, None))
-                    return None if grain is None else self.value(batch, grain.values, footprint)
+                    return self.grain_value(batch, grain, footprint)
 
                 terrain = self.value(batch, batch.grid.model_elevation_msl_m, footprint)
                 ps = scalar("air_pressure_pa", "surface")
@@ -251,11 +262,7 @@ class RetainedReader:
                             "specific_humidity_kg_per_kg",
                         ):
                             grain = levels.get((valid, code, None, pressure))
-                            values.append(
-                                None
-                                if grain is None
-                                else self.value(batch, grain.values, footprint)
-                            )
+                            values.append(self.grain_value(batch, grain, footprint))
                         z, t, q = values
                         if z is not None and z <= terrain:
                             continue

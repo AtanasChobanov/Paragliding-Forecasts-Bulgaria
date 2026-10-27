@@ -21,7 +21,9 @@ class CloudbasePolicy:
     validation_status: str = "not_observationally_calibrated"
 
     def as_dict(self) -> dict:
-        return asdict(self)
+        result = asdict(self)
+        result["sensitivity_temperature_offsets_k"] = list(self.sensitivity_temperature_offsets_k)
+        return result
 
 
 POLICY = CloudbasePolicy()
