@@ -108,12 +108,14 @@ class RetainedReader:
         metadata = self.store.read_raw_manifest(raw)
         if metadata.source_id != GFS_SOURCE_ID or metadata.status != "complete":
             raise CloudbaseInputError("Raw metadata is not a complete GFS source.")
+        persistence = self.stage("persisted", "persistence")
         receipt = WeatherPersistenceReceipt.model_validate_json(
-            self.read(self.event_reference("persisted")), strict=True
+            self.batch_output(persistence, "weather_persistence_receipt"), strict=True
         )
         if (
             receipt.run_key != self.run["run_key"]
             or receipt.source_id != GFS_SOURCE_ID
+            or receipt.target_local_date != self.run["target_local_date"]
             or receipt.feature_manifest.sha256 != self.run["feature_manifest_sha256"]
             or receipt.persistence_input_sha256 != self.run["persistence_input_sha256"]
         ):
@@ -158,6 +160,7 @@ class RetainedReader:
             self.event_reference("spatially_aligned") not in validation.inputs
             or self.event_reference("validated") not in feature.inputs
             or receipt.feature_manifest != self.event_reference("features_built")
+            or receipt.feature_manifest not in persistence.inputs
         ):
             raise CloudbaseInputError("Accepted validation/feature lineage disagrees.")
         return batch, samples

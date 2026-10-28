@@ -263,7 +263,10 @@ def test_reference_cannot_escape_this_run(retained):
         retained.reader.read(reference)
 
 
-def test_complete_retained_boundary_and_sqlite_read_without_raw_grib(retained, monkeypatch):
+@pytest.mark.parametrize(
+    "persistence_case", ["valid", "missing_receipt", "tampered", "wrong_feature", "wrong_date"]
+)
+def test_complete_retained_boundary_and_sqlite_read_without_raw_grib(retained, persistence_case):
     """Exercise real contracts/SQL/array reads; every byte is synthetic test data."""
     import sqlite3
 
@@ -321,8 +324,9 @@ def test_complete_retained_boundary_and_sqlite_read_without_raw_grib(retained, m
     )
     events = {"raw_complete": raw}
 
-    def stage(name, event, inputs, outputs):
-        directory = store.begin_stage(name, f"synthetic-{name}/1", "c" * 64)
+    def stage(name, event, inputs, outputs, directory=None):
+        if directory is None:
+            directory = store.begin_stage(name, f"synthetic-{name}/1", "c" * 64)
         manifest = StageManifest(
             run_key=RUN,
             stage=name,
@@ -441,20 +445,42 @@ def test_complete_retained_boundary_and_sqlite_read_without_raw_grib(retained, m
         missing_reason_counts={},
         completed_at_utc=timestamp,
     )
+    if persistence_case == "wrong_date":
+        receipt = receipt.model_copy(update={"target_local_date": "2024-06-30"})
     directory = store.begin_stage("persistence", "weather-persistence/3", "b" * 64)
-    events["persisted"] = store.write_stage_bytes(
+    receipt_reference = store.write_stage_bytes(
         directory,
-        "receipt.json",
+        "persistence-receipt.json",
         "weather_persistence_receipt",
         canonical_json_bytes(receipt),
         media_type="application/json",
     )
-    snapshot = SimpleNamespace(
-        effective_event=lambda event: SimpleNamespace(evidence=events[event])
+    output = (
+        receipt_reference.model_copy(update={"artifact_key": "unexpected_receipt"})
+        if persistence_case == "missing_receipt"
+        else receipt_reference
     )
-    monkeypatch.setattr(RunStateLedger, "load_state", lambda _: snapshot)
+    persistence = stage(
+        "persistence",
+        "persisted",
+        [validation if persistence_case == "wrong_feature" else feature],
+        [output],
+        directory=directory,
+    )
+    ledger = RunStateLedger(store)
+    ledger.initialize(occurred_at_utc=timestamp)
+    for name, reference in events.items():
+        ledger.append(
+            invocation_mode="resume",
+            stage=name,
+            disposition="persisted" if name == "persisted" else "complete",
+            occurred_at_utc=timestamp,
+            evidence=reference,
+        )
     # The original bytes are deliberately gone. The retained boundary still works.
     (retained.root / payload.relative_path).unlink()
+    if persistence_case == "tampered":
+        (retained.root / receipt_reference.relative_path).write_bytes(b"tampered")
     db = retained.root / "data/local/synthetic.db"
     db.parent.mkdir(parents=True)
     connection = sqlite3.connect(db)
@@ -491,6 +517,19 @@ def test_complete_retained_boundary_and_sqlite_read_without_raw_grib(retained, m
     connection.commit()
     connection.close()
     digest = sha256_file(db)
+    if persistence_case != "valid":
+        expected_message = {
+            "missing_receipt": "Expected one retained output",
+            "tampered": "(SHA-256|byte count)",
+            "wrong_feature": "lineage disagrees",
+            "wrong_date": "receipt disagree",
+        }[persistence_case]
+        with pytest.raises((CloudbaseInputError, ArtifactError), match=expected_message):
+            read_inputs(
+                RUN, project_root=retained.root, database_url="file:./data/local/synthetic.db"
+            )
+        assert sha256_file(db) == digest
+        return
     rows, evidence = read_inputs(
         RUN, project_root=retained.root, database_url="file:./data/local/synthetic.db"
     )
@@ -498,3 +537,5 @@ def test_complete_retained_boundary_and_sqlite_read_without_raw_grib(retained, m
     assert sha256_file(db) == digest
     assert evidence["verification_scope"] == "retained_compact_values_and_metadata_not_raw_grib"
     assert len(evidence["references"]) >= 8
+    assert persistence.model_dump(mode="json") in evidence["references"]
+    assert receipt_reference.model_dump(mode="json") in evidence["references"]

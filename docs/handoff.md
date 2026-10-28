@@ -5,9 +5,23 @@
 T-022 is **In Progress** on `feature/T-022-baseline-cloudbase-prediction`.
 The cloudbase-only Python batch is implemented and tested with synthetic data.
 **Do not execute the real prediction/replay commands on the owner's behalf.**
-The owner explicitly reserved those commands for manual execution. No real
-cloudbase batch has been produced by this implementation session. T-022 must
-not be marked Done before that replay and result review.
+The owner explicitly reserved those commands for manual execution. The first
+owner-run smoke command failed before calculations because the reader treated
+the persistence stage manifest as a receipt. No real cloudbase batch has been
+produced. T-022 must not be marked Done before a successful replay and review.
+
+### Persistence-reader fix after the first owner-run attempt
+
+The `persisted` ledger event references a `StageManifest`, whose outputs include
+the `weather_persistence_receipt`. The reader now validates that manifest,
+resolves and hash-checks its receipt output, and verifies the receipt's date
+and feature lineage. Ingestion, retained source artifacts and SQLite are
+unchanged. The original integration fixture incorrectly mocked a direct
+receipt as ledger evidence; it now constructs and reads the real ledger chain.
+This synthetic regression reproduced the owner's 22 validation errors before
+the fix and passes after it. Missing/tampered receipt, wrong feature input and
+wrong target date are covered too. The owner should retry the same smoke
+command below; the agent has not executed it.
 
 ### Implemented scope
 
@@ -46,10 +60,11 @@ The following documentation commit records the owner-run checkpoint.
 
 ### Verification
 
-- Full local Python suite: **569 passed** (includes nine disposable experiment
-  tests that are intentionally not committed).
-- Permanent suite, excluding that disposable test file: **560 passed**.
-  This comprises the existing 499 tests plus 61 new cloudbase tests.
+- Permanent suite after the persistence-reader fix: **564 passed**.
+  This comprises the existing 499 tests plus 65 cloudbase tests. The nine
+  disposable experiment tests remain outside Git and were excluded from this
+  run. Before the fix, the full local suite had passed 569 tests with the
+  inaccurate mocked persistence evidence; that did not prove compatibility.
 - Ruff lint and format checks passed; `npm.cmd run repo:check` passed;
   `git diff --check` passed. No TypeScript behavior changed.
 - Synthetic tests cover model/site elevation differences, recovered low levels,
