@@ -13,7 +13,7 @@ from ...ingestion.weather.features.thermodynamics import (
     romps_liquid_lcl_agl_m,
 )
 from ...ingestion.weather.serialization import canonical_json_bytes, sha256_bytes
-from .models import DailyResult, Height, HourlyInput, HourlyResult, Regime
+from .models import CloudContextHour, DailyResult, Height, HourlyInput, HourlyResult, Regime
 from .physics import buoyancy_flux, condensations, parcel
 from .policy import POLICY, CloudbasePolicy
 
@@ -30,10 +30,10 @@ def formation(
     policy: CloudbasePolicy = POLICY,
 ) -> tuple[Regime, str]:
     if rh >= policy.near_saturation_fraction:
-        return "other_cloud", "near_saturated_surface"
+        return "indeterminate", "near_saturated_surface"
     if low_cloud is not None and 0 <= low_cloud <= 100:
         if low_cloud >= policy.widespread_low_cloud_percent:
-            return "other_cloud", "widespread_low_cloud"
+            return "indeterminate", "widespread_low_cloud"
     else:
         return "indeterminate", "low_cloud_input_missing_or_invalid"
     if not base_in_profile:
@@ -135,6 +135,14 @@ def calculate_hour(hour: HourlyInput, policy: CloudbasePolicy = POLICY) -> Hourl
         policy=policy,
     )
     reasons.append(reason)
+    if (
+        hour.low_cloud_percent is not None
+        and hour.low_cloud_percent >= policy.widespread_low_cloud_percent
+    ):
+        reasons.append("widespread_low_cloud")
+    if "widespread_low_cloud" in reasons or "near_saturated_surface" in reasons:
+        reasons.append("cloud_type_unknown")
+        limitations.append("lcl_applicability_uncertain")
     diagnostics.update(
         surface_relative_humidity_fraction=rh,
         mixed_parcel_temperature_k=central.temperature_k,
@@ -241,8 +249,22 @@ def aggregate_day(hours: list[HourlyResult]) -> DailyResult:
         key=lambda h: (-h.estimated_cloudbase.msl_m, h.valid_at_utc),
     )
     maximum = candidates[0] if candidates else None
+    potential_candidates = sorted(
+        (
+            h
+            for h in hours
+            if h.regime == "indeterminate"
+            and h.potential_base is not None
+            and "potential_base_outside_profile" not in h.reason_codes
+            and h.potential_base.msl_m <= h.diagnostics.get("profile_top_msl_m", float("inf"))
+        ),
+        key=lambda h: (-h.potential_base.msl_m, h.valid_at_utc),
+    )
+    potential = potential_candidates[0] if potential_candidates else None
     if maximum:
         state = "cloudbase_available"
+    elif potential:
+        state = "potential_base_available"
     elif counts["blue"] == 11:
         state = "blue"
     elif counts["other_cloud"] == 11:
@@ -260,6 +282,15 @@ def aggregate_day(hours: list[HourlyResult]) -> DailyResult:
         max_cloudbase=None if maximum is None else maximum.estimated_cloudbase,
         max_at_utc=None if maximum is None else maximum.valid_at_utc,
         max_at_local=None if maximum is None else maximum.valid_at_local,
+        max_potential_base=None if potential is None else potential.potential_base,
+        potential_max_at_utc=None if potential is None else potential.valid_at_utc,
+        potential_max_at_local=None if potential is None else potential.valid_at_local,
+        significant_cloud_hours=tuple(
+            CloudContextHour(valid_at_utc=h.valid_at_utc, valid_at_local=h.valid_at_local)
+            for h in sorted(hours, key=lambda h: h.valid_at_utc)
+            if "widespread_low_cloud" in h.reason_codes
+        ),
+        reason_codes=tuple(sorted({reason for h in hours for reason in h.reason_codes})),
         regime_counts={
             key: counts[key]
             for key in ("cumulus", "blue", "other_cloud", "indeterminate", "missing")

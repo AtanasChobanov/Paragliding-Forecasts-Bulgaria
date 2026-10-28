@@ -92,6 +92,11 @@ class HourlyResult(Contract):
         return self
 
 
+class CloudContextHour(Contract):
+    valid_at_utc: str
+    valid_at_local: str
+
+
 class DailyResult(Contract):
     run_key: str
     site_id: int
@@ -99,11 +104,24 @@ class DailyResult(Contract):
     target_local_date: str
     reference_at_utc: str
     horizon_days: int
-    summary_state: Literal["cloudbase_available", "blue", "other_cloud", "indeterminate", "missing"]
+    summary_state: Literal[
+        "cloudbase_available",
+        "potential_base_available",
+        "blue",
+        "other_cloud",
+        "indeterminate",
+        "missing",
+    ]
     max_cloudbase: Height | None
     max_at_utc: str | None
     max_at_local: str | None
     maximum_basis: Literal["estimated_hours_only"] = "estimated_hours_only"
+    max_potential_base: Height | None
+    potential_max_at_utc: str | None
+    potential_max_at_local: str | None
+    potential_maximum_basis: Literal["indeterminate_hours_only"] = "indeterminate_hours_only"
+    significant_cloud_hours: tuple[CloudContextHour, ...]
+    reason_codes: tuple[str, ...]
     regime_counts: dict[str, int]
     expected_hours: Literal[11] = 11
     present_hours: int = Field(ge=0, le=11)
@@ -136,6 +154,15 @@ class DailyResult(Contract):
             raise ValueError("A numeric maximum and its timestamps must be present together.")
         if available != (self.regime_counts["cumulus"] > 0):
             raise ValueError("Every day with an estimated cumulus base must report its maximum.")
+        potential = self.max_potential_base is not None
+        if potential != (self.potential_max_at_utc is not None) or potential != (
+            self.potential_max_at_local is not None
+        ):
+            raise ValueError("A potential maximum and its timestamps must be present together.")
+        if potential and self.regime_counts["indeterminate"] == 0:
+            raise ValueError("Potential maximum requires an indeterminate hour.")
+        if (self.summary_state == "potential_base_available") != (potential and not available):
+            raise ValueError("Potential fallback applies only without an estimated maximum.")
         if (
             self.summary_state in {"blue", "other_cloud", "missing"}
             and self.regime_counts[self.summary_state] != 11

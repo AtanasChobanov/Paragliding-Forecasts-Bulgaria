@@ -70,18 +70,27 @@ def _report(hourly, daily) -> str:
         "",
         "## Daily maxima",
         "",
-        "Maxima use only hours with an estimated cumulus base. A partial maximum describes",
-        "the evaluated hours; it does not establish the maximum for an unresolved full day.",
+        "Expected maxima use estimated cumulus hours; potential maxima use indeterminate hours only.",
+        "Expected values take display priority. A potential LCL is conditional, not the base of existing cloud.",
+        "Coverage complete describes regime classification, not input availability or height accuracy.",
+        "A partial maximum does not establish the maximum for an unresolved full day.",
         "",
-        "| Date | Site | Horizon | State | Max MSL, m | Above site, m | Time UTC | Coverage complete |",
-        "| --- | --- | ---: | --- | ---: | ---: | --- | --- |",
+        *[
+            f"- {state}: {count}"
+            for state, count in sorted(Counter(d.summary_state for d in daily).items())
+        ],
+        "",
+        "| Date | Site | Horizon | State / displayed quantity | Max MSL, m | Above site, m | Time UTC | Coverage complete | Significant cloud times (local) |",
+        "| --- | --- | ---: | --- | ---: | ---: | --- | --- | --- |",
     ]
     for day in daily:
-        height = day.max_cloudbase
-        z = "—" if height is None else f"{height.msl_m:.2f}"
-        agl = "—" if height is None else f"{height.site_agl_m:.2f}"
+        height = day.max_cloudbase or day.max_potential_base
+        timestamp = (day.max_at_utc if day.max_cloudbase else day.potential_max_at_utc) or "-"
+        cloudy = ", ".join(h.valid_at_local[11:16] for h in day.significant_cloud_hours) or "-"
+        z = "-" if height is None else f"{height.msl_m:.2f}"
+        agl = "-" if height is None else f"{height.site_agl_m:.2f}"
         lines.append(
-            f"| {day.target_local_date} | {day.site_slug} | {day.horizon_days} | {day.summary_state} | {z} | {agl} | {day.max_at_utc or '—'} | {day.coverage_complete} |"
+            f"| {day.target_local_date} | {day.site_slug} | {day.horizon_days} | {day.summary_state} | {z} | {agl} | {timestamp} | {day.coverage_complete} | {cloudy} |"
         )
     return "\n".join(lines) + "\n"
 
@@ -158,6 +167,7 @@ def build_predictions(
         "run_keys": sorted(set(run_keys)),
         "hourly_count": len(hourly),
         "daily_count": len(daily),
+        "daily_state_counts": dict(sorted(Counter(day.summary_state for day in daily).items())),
         "regime_counts": dict(sorted(Counter(hour.regime for hour in hourly).items())),
         "files": {
             name: {"sha256": sha256_bytes(value), "byte_count": len(value)}
@@ -174,6 +184,7 @@ def build_predictions(
         "hourly_count": len(hourly),
         "daily_count": len(daily),
         "regime_counts": contents["regime_counts"],
+        "daily_state_counts": contents["daily_state_counts"],
         "network_access": False,
         "database_access": "read_only",
         "validation_status": POLICY.validation_status,

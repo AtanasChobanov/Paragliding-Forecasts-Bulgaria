@@ -1,14 +1,14 @@
-"""Explicit, uncalibrated v1 cloud-formation decision policy."""
+"""Explicit, uncalibrated cloud-formation and conditional-height policy."""
 
 from dataclasses import asdict, dataclass
 
-SCHEMA_VERSION = "cloudbase-batch/1"
-METHOD_VERSION = "mixed100-romps-ccl/1"
+SCHEMA_VERSION = "cloudbase-batch/2"
+METHOD_VERSION = "mixed100-romps-ccl/2"
 
 
 @dataclass(frozen=True)
 class CloudbasePolicy:
-    version: str = "cloudbase-baseline-policy/1"
+    version: str = "cloudbase-baseline-policy/2"
     mixed_depth_pa: float = 10_000.0
     sensitivity_depth_pa: float = 5_000.0
     height_margin_m: float = 250.0

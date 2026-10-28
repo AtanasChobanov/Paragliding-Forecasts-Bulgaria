@@ -60,6 +60,8 @@ def test_batch_is_deterministic_deduplicated_and_language_neutral(tmp_path, fake
     assert result["hourly_count"] == 22 and result["daily_count"] == 2
     manifest = json.loads(original["manifest.json"])
     assert manifest["numerical_versions"]["metpy"] == "1.7.1"
+    assert manifest["schema_version"] == "cloudbase-batch/2"
+    assert sum(result["daily_state_counts"].values()) == 2
     assert len(manifest["artifact_id"]) == 64
     assert set(original) == {
         "manifest.json",
@@ -125,6 +127,7 @@ def test_cli_reports_success_and_failure_without_fabricating_outputs(tmp_path, f
     assert cli.main(["--run-key", fake_reader, "--project-root", str(tmp_path)]) == 0
     result = json.loads(capsys.readouterr().out)
     assert result["hourly_count"] == 11 and result["network_access"] is False
+    assert sum(result["daily_state_counts"].values()) == 1
 
 
 def test_cli_data_failure_is_nonzero_and_has_no_success_stdout(monkeypatch, capsys):

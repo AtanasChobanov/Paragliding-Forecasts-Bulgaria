@@ -24,8 +24,8 @@ def column(cloudbase_column):
         ({"temperature_margin": 0.999}, "indeterminate"),
         ({"b0": 0}, "indeterminate"),
         ({"b0": None}, "indeterminate"),
-        ({"rh": 0.99}, "other_cloud"),
-        ({"low_cloud": 80}, "other_cloud"),
+        ({"rh": 0.99}, "indeterminate"),
+        ({"low_cloud": 80}, "indeterminate"),
         ({"low_cloud": None}, "indeterminate"),
         ({"low_cloud": -1}, "indeterminate"),
         ({"ccl_count": 0}, "indeterminate"),
@@ -124,7 +124,7 @@ def hours_for_day(column, regimes):
         ("blue", "blue"),
         ("missing", "missing"),
         ("other_cloud", "other_cloud"),
-        ("indeterminate", "indeterminate"),
+        ("indeterminate", "potential_base_available"),
     ],
 )
 def test_all_day_states(column, regime, state):
@@ -158,7 +158,7 @@ def test_equal_maximum_uses_earliest_hour_and_not_potential_only(column):
 
 def test_mixed_day_without_base_is_not_all_blue(column):
     rows = hours_for_day(column, ["blue"] * 10 + ["indeterminate"])
-    assert calculation.aggregate_day(rows).summary_state == "indeterminate"
+    assert calculation.aggregate_day(rows).summary_state == "potential_base_available"
 
 
 def test_daily_wire_contract_rejects_false_all_day_and_coverage_claims(column):
@@ -189,3 +189,83 @@ def test_window_and_local_times_across_dst(column, day, first):
     assert rows[0].valid_at_utc == first
     assert "T10:00:00" in rows[0].valid_at_local
     assert calculation.aggregate_day(rows).expected_hours == 11
+
+
+def test_fallback_uses_uncertain_hours_and_excludes_blue_peaks(column):
+    rows = hours_for_day(column, ["indeterminate"] * 2 + ["blue"] * 9)
+    rows[2] = rows[2].model_copy(
+        update={"potential_base": Height(msl_m=9000, model_agl_m=8500, site_agl_m=7500)}
+    )
+    day = calculation.aggregate_day(rows[::-1])
+    assert day.summary_state == "potential_base_available"
+    assert day.max_cloudbase is None and day.max_at_utc is None
+    assert day.max_potential_base == rows[0].potential_base
+    assert day.potential_max_at_utc == rows[0].valid_at_utc
+    assert not day.coverage_complete
+
+
+def test_estimated_base_takes_priority_over_higher_potential(column):
+    rows = hours_for_day(column, ["cumulus", "indeterminate"] + ["blue"] * 9)
+    rows[1] = rows[1].model_copy(
+        update={"potential_base": Height(msl_m=3000, model_agl_m=2500, site_agl_m=1500)}
+    )
+    day = calculation.aggregate_day(rows)
+    assert day.summary_state == "cloudbase_available"
+    assert day.max_cloudbase.msl_m == 2300
+    assert day.max_potential_base.msl_m == 3000
+
+
+def test_widespread_cloud_retains_lcl_with_unknown_type_and_hour_context(column):
+    rows = []
+    for instant in sofia_flying_window(
+        date.fromisoformat(column.target_local_date)
+    ).expected_instants_utc:
+        rows.append(
+            calculation.calculate_hour(
+                column.model_copy(update={"low_cloud_percent": 90, "valid_at_utc": instant})
+            )
+        )
+    assert all(r.regime == "indeterminate" and r.estimated_cloudbase is None for r in rows)
+    assert all(
+        "cloud_type_unknown" in r.reason_codes and "lcl_applicability_uncertain" in r.limitations
+        for r in rows
+    )
+    day = calculation.aggregate_day(rows)
+    assert day.summary_state == "potential_base_available" and day.max_potential_base is not None
+    assert len(day.significant_cloud_hours) == 11
+    assert day.significant_cloud_hours[0].valid_at_local == rows[0].valid_at_local
+    assert "widespread_low_cloud" in day.reason_codes
+    from paragliding_forecasts_ml.predictions.cloudbase.service import _report
+
+    report = _report(rows, [day])
+    assert "potential_base_available" in report
+    assert day.potential_max_at_utc in report
+    assert "10:00, 11:00" in report
+
+
+def test_blue_and_missing_days_have_no_potential_fallback(column):
+    for regime in ("blue", "missing"):
+        day = calculation.aggregate_day(hours_for_day(column, [regime] * 11))
+        assert day.max_potential_base is None and day.potential_max_at_utc is None
+
+
+def test_cloud_warning_is_hour_scoped_and_preserves_estimated_priority(column):
+    rows = hours_for_day(column, ["cumulus", "indeterminate"] + ["blue"] * 9)
+    rows[1] = rows[1].model_copy(
+        update={"reason_codes": ("widespread_low_cloud", "cloud_type_unknown")}
+    )
+    day = calculation.aggregate_day(rows)
+    assert day.summary_state == "cloudbase_available"
+    assert day.max_at_utc == rows[0].valid_at_utc
+    assert [h.valid_at_utc for h in day.significant_cloud_hours] == [rows[1].valid_at_utc]
+
+
+def test_fallback_contract_and_outside_profile_guard(column):
+    rows = hours_for_day(column, ["indeterminate"] + ["blue"] * 10)
+    day = calculation.aggregate_day(rows)
+    for update in ({"summary_state": "indeterminate"}, {"potential_max_at_utc": None}):
+        with pytest.raises(ValidationError):
+            type(day).model_validate({**day.model_dump(), **update})
+    rows[0] = rows[0].model_copy(update={"reason_codes": ("potential_base_outside_profile",)})
+    day = calculation.aggregate_day(rows)
+    assert day.summary_state == "indeterminate" and day.max_potential_base is None
