@@ -43,8 +43,8 @@ were omitted by site-profile sampling, without restoring them in SQLite.
 Model-ground anchoring keeps the surface state, mixed layer and PBL consistent;
 it is not a correction for the model's smoothed mountain terrain.
 
-The versioned method is `mixed100-romps-ccl/1`, with policy
-`cloudbase-baseline-policy/1` and JSON schema `cloudbase-batch/1`:
+The versioned method is `mixed100-romps-ccl/2`, with policy
+`cloudbase-baseline-policy/2` and JSON schema `cloudbase-batch/2`:
 
 - Average potential temperature and specific humidity over the lowest 100 hPa
   with pressure-weighted trapezoids, then bring the parcel to surface pressure.
@@ -64,7 +64,7 @@ Formation policy is applied in this order after a valid central LCL:
 
 | Condition | Hourly regime | Estimated numeric cloudbase |
 | --- | --- | --- |
-| Surface RH >= 99%, or low cloud >= 80% | `other_cloud` | null |
+| Surface RH >= 99%, or low cloud >= 80% | `indeterminate`, unknown cloud type | null; keep conditional LCL |
 | Missing/invalid low cloud, LCL above profile, missing/ambiguous CCL | `indeterminate` | null |
 | PBL-LCL >= 250 m, T2m-Tconv >= 1 K, positive buoyancy flux | `cumulus` | central mixed LCL |
 | PBL-LCL <= -250 m, T2m-Tconv <= -1 K, low cloud <= 20% | `blue` | null |
@@ -96,6 +96,33 @@ counts, `coverage_complete` and warnings; a partial numeric maximum is only a
 maximum over the resolved hours. All-other-cloud and all-missing days have
 separate states. API/UI integration and XC/overdevelopment combination are
 deferred; these records do not change existing HTTP contracts.
+
+Version 2 adds the agreed conditional-height fallback. Each daily result keeps
+`max_cloudbase` and its timestamps for estimated hours, and separately keeps
+`max_potential_base`, `potential_max_at_utc` and `potential_max_at_local` from
+**indeterminate hours only**, bounded by the retained profile top. Blue, missing
+and reserved `other_cloud` hours do not enter that potential maximum. Equal
+heights use the earliest hour. Expected bases take display priority: the state
+is `cloudbase_available` if any exist; otherwise `potential_base_available`
+if a valid conditional maximum exists. All-blue days still have no numeric
+summary. Missing or out-of-profile LCL cannot manufacture a fallback.
+
+`significant_cloud_hours` contains UTC/local instants with low cloud >=80%.
+Daily `reason_codes` and limitations retain unknown-cloud-type and uncertain-LCL-
+applicability context, even when another hour supplies an estimated maximum.
+The low-cloud percentage does not identify cloud genus. Near-saturation likewise
+does not by itself prove a particular cloud type. These cases retain conditional
+LCL but never claim it is the base of existing stratiform or advected cloud.
+Formation gates of 250 m/1 K remain the conservative assessment policy; unresolved
+formation now has its own displayed potential height rather than losing that
+orientation. LCL physics is unchanged. `coverage_complete` keeps its name and
+classification meaning: a potential numeric summary can still have false coverage.
+
+The report displays the expected maximum first, otherwise the conditional maximum,
+with its distinct state and significant-cloud times. JSON stdout and the manifest
+include `daily_state_counts`. Schema/method/policy versions are now 2, creating a
+new immutable artifact without changing v1 files. This is the Python batch output;
+frontend/API mapping is still deferred and no browser card is changed here.
 
 Successful execution prints JSON with counts and an absolute output directory:
 `data/processed/cloudbase/<content-derived-id>/`. It contains:

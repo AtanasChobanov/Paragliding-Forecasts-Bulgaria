@@ -263,7 +263,13 @@ eleven-hour Sofia flying window, with partial-coverage warnings. A blue result
 has no estimated cloudbase and does not estimate usable thermal height. No
 cloud-top or glider-performance calculation is included. Content-addressed
 JSON/JSONL retains inputs, policy, provenance and diagnostics. The owner-run
-real replay is pending. API/UI integration remains deferred; Python regimes
+v1 replay succeeded; the version 2 replay is pending. Version 2 daily outputs
+also retain a maximum conditional LCL over indeterminate hours only, with a
+distinct `potential_base_available` summary when no estimated base exists.
+Estimated bases take priority; blue hours never inflate the potential maximum.
+Timed significant-cloud context does not assert cloud genus from sky coverage.
+`coverage_complete` retains its classification meaning. API/UI integration
+remains deferred; Python regimes
 are separate from the existing public data-status enum described next.
 
 The contract models these states from one canonical five-state Zod enum. Its

@@ -2524,8 +2524,21 @@ multiple CCL intersections remain indeterminate. Use 50/100 hPa and +/-1 K
 sensitivity diagnostics without changing the central estimate. No arbitrary
 entrainment or overshoot rule is introduced.
 
+**Owner follow-up, 2026-10-28:** Version 2 retains the central LCL physics and
+250 m/1 K formation margins, but uncertain formation has an explicit daily
+potential-height fallback. Keep `coverage_complete` unchanged. Low cloud >=80%
+and near-surface saturation yield unknown-type/indeterminate context rather
+than asserting another cloud genus. Preserve timed significant-cloud advisories.
+Daily `max_potential_base` uses only bounded indeterminate-hour LCL; blue/missing
+hours cannot inflate it. An estimated maximum takes priority; otherwise use the
+`potential_base_available` state, explicitly labelled as a conditional LCL.
+All-blue days keep the no-cloudbase indicator. These fields support later UI
+composition; this change does not implement API/UI integration. Old artifacts
+remain immutable under their version 1 identities.
+
 The hourly regimes are `cumulus`, `blue`, `other_cloud`, `indeterminate` and
-`missing`. A potential LCL remains distinct from a numeric estimated cumulus
+`missing`; `other_cloud` is reserved and is not inferred solely from cover
+or surface RH. A potential LCL remains distinct from a numeric estimated cumulus
 base; only `cumulus` has the latter. Blue means local cumulus formation is not
 supported, not that useful thermals or a clear sky are guaranteed. Other cloud
 is not assigned a guessed fog/stratiform base. No usable thermal top, glider

@@ -11,7 +11,43 @@ owner-run smoke command failed because of the receipt lookup, fixed in
 `5fa45293c5eae1e6d3d2054c07fc6c1fd9b29d8fe2513351f20e13df0cf2a71c`.
 The owner also produced the 36-run sample artifact
 `3417df453eeed80d60d9dd15cd05ea50fee1afb30bf511d44a5ce2cb5089f795`.
-T-022 remains In Progress pending policy review.
+T-022 remains In Progress pending the owner-run version 2 replay and review.
+
+### Version 2 conditional LCL output implemented
+
+The owner accepted the discussed numeric fallback and cloud-context behavior.
+Schema/method/policy are version 2; existing version 1 artifacts remain intact.
+Daily output now has `max_potential_base`, `potential_max_at_utc/local` and
+`potential_maximum_basis=indeterminate_hours_only`. Only indeterminate hours
+with LCL within the retained profile enter that maximum; blue/missing hours
+do not. `max_cloudbase` still contains estimated bases only and takes priority.
+Without an estimated maximum, a valid conditional maximum produces
+`summary_state=potential_base_available`. All-blue and all-missing indicators
+are preserved. `coverage_complete` keeps its name and classification semantics.
+
+Low-cloud >=80% or near-surface saturation now means indeterminate cloud type,
+with conditional LCL retained, rather than asserting `other_cloud` from those
+inputs alone. Reasons/limitations explain uncertain LCL applicability.
+`significant_cloud_hours` stores UTC/local instants of >=80% low cloud so later
+UI composition can qualify warnings by time, including mixed days with an
+estimated maximum. Daily reasons are preserved too. The report displays the
+chosen expected/potential quantity and times; manifest and CLI JSON add
+`daily_state_counts`. LCL physics and the conservative 250 m/1 K formation
+margins are unchanged. No frontend/API integration was performed.
+
+The real command remains owner-run only. Rerun the same one-run smoke command
+or the same 36-run Bash invocation below/previously supplied in the conversation;
+the version change creates a new output directory. Review report/daily output
+for potential_base_available, separate expected/potential maxima, timed cloud
+warnings, all-blue no-number days and unchanged coverage semantics. No real
+version 2 calculation was executed by the agent.
+
+Version 2 validation: 570 permanent Python tests passed (disposable spike tests
+excluded), Ruff lint/format, repository structure and diff whitespace checks
+passed. New cases cover potential maxima excluding blue peaks, earliest ties,
+estimated-base priority, missing/all-blue no-fallback behavior, out-of-profile
+rejection, unknown cloud type, timed mixed-day advisories, report fallback
+timestamps and version 2 artifact/CLI round trips.
 
 ### Owner clarification and policy research follow-up
 
