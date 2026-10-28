@@ -6,9 +6,65 @@ T-022 is **In Progress** on `feature/T-022-baseline-cloudbase-prediction`.
 The cloudbase-only Python batch is implemented and tested with synthetic data.
 **Do not execute the real prediction/replay commands on the owner's behalf.**
 The owner explicitly reserved those commands for manual execution. The first
-owner-run smoke command failed before calculations because the reader treated
-the persistence stage manifest as a receipt. No real cloudbase batch has been
-produced. T-022 must not be marked Done before a successful replay and review.
+owner-run smoke command failed because of the receipt lookup, fixed in
+`02d5abc`. The owner subsequently produced artifact
+`5fa45293c5eae1e6d3d2054c07fc6c1fd9b29d8fe2513351f20e13df0cf2a71c`.
+The owner also produced the 36-run sample artifact
+`3417df453eeed80d60d9dd15cd05ea50fee1afb30bf511d44a5ce2cb5089f795`.
+T-022 remains In Progress pending policy review.
+
+### Full owner-run sample review
+
+Read-only review checked file hashes/sizes, all input/hourly/daily Pydantic
+contracts, all daily regime counts and numeric maxima against stored hours.
+The 36 runs cover 12 dates, all seven sites and D+1/D+2/D+3: 2,772 hours and
+252 daily summaries. Every day has eleven present hours, no input issues and
+no missing regime. Hourly regimes: 130 cumulus, 1,327 blue, 253 other_cloud,
+1,062 indeterminate. Daily states: 65 numeric, 65 all-blue, 122 indeterminate.
+All 65 numeric summaries have incomplete regime classification; 23 are based
+on a single cumulus hour. Only the 65 all-blue days have coverage_complete=true.
+This flag describes classification, not data presence.
+
+The 1,062 unresolved hours comprise 1,010 rule fall-throughs and 52 multiple-CCL
+cases. In the 1,010 fall-throughs, 646 have PBL within +/-250 m of LCL and 598
+have convective-temperature margin within +/-1 K (overlapping groups). Thus
+changing the multiple-CCL choice alone cannot resolve most cases. Numeric
+estimated bases range 1,683--4,507 m MSL; none is below its site. Potential LCL
+is below site in 36 hours (31 Vitosha, five Sopot), intentionally preserved.
+
+Sensitivity needs careful interpretation: 121/130 cumulus hours have at least
+one alternative classified indeterminate, but none switches to blue. With
+100-hPa mixing and -1 K perturbation, 118/130 become indeterminate. Changing
+only mixing depth to 50 hPa leaves 125/130 cumulus and five indeterminate.
+These are formation-threshold sensitivities, not measured cloudbase errors.
+The unperturbed central variant matches every stored central regime.
+
+Technical replay and source recovery succeeded for this sample. High abstention,
+the >=80% cloud gate, and the ambiguous coverage name remain policy/product
+limitations requiring review; meteorological accuracy is unverified. These
+12 selected experiment dates are not a representative validation dataset.
+No prediction commands were run by the agent, no policy was changed and
+T-022 was not marked Done.
+
+### First successful owner-run review
+
+Read-only review verified all six-file manifest hashes/sizes. The 2021-10-01
+D+1 run has 77 hourly and seven daily records, all hours present, no input
+issues and potential LCL in every hour. Regimes: zero cumulus, 22 blue,
+18 other_cloud and 37 indeterminate. Thus there is no estimated-base maximum.
+Of the 37 unresolved hours, 11 have multiple CCL intersections and 26 fall
+through the policy: 22 have PBL within the +/-250 m LCL margin despite a negative
+convective-temperature margin; three fail the blue low-cloud <=20% gate;
+one is transitional in both height and temperature. Each site has unresolved
+hours, hence every daily summary is indeterminate. `coverage_complete=false`
+means incomplete regime classification, not missing source hours (present=11
+at every site). These findings expose conservative policy/output limitations,
+not evidence of missing profiles or verified cloudbase accuracy. The >=80%
+low-cloud gate also excludes all 18 cloudy hours from numeric base estimation.
+No thresholds or algorithms were changed during this review. Wider-sample
+evaluation and any accepted policy/wording revision remain pending; do not
+silently turn potential LCL into estimated cloudbase or relax thresholds to
+force numbers. The agent did not rerun the real prediction command.
 
 ### Persistence-reader fix after the first owner-run attempt
 
