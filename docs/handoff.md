@@ -16,6 +16,23 @@ for the accepted Python-batch scope. Frontend/API integration remains deferred.
 
 ### Version 2 owner-run acceptance review
 
+Additional owner-run current-forecast smoke: GFS 2026-10-27 06Z D+1 for
+2026-10-28, run `91ae8760-fdc2-4bd6-8f3f-af3bedc00e46`, produced cloudbase
+artifact `e5a7e9e636e26a9127ffd843319838333769a77a0f1b65b3f672ebb9ed174ea6`.
+Read-only hash and contract checks passed for 77 hours/seven daily summaries.
+All hours are indeterminate, with all seven daily summaries using the potential
+fallback. Vitosha low cloud is approximately 100% all eleven hours; mixed LCL
+is 1,392--1,416 m MSL, or -402 to -378 m relative to the 1,793.929 m site.
+The model ground is 887.69 m, so terrain mismatch remains material. The owner
+reports dark/overcast conditions and clouds entering Vitosha; this is qualitative
+consistency only, not an observed cloud-base measurement or accuracy validation.
+Sopot also has a negative site-relative daily maximum (-47.95 m). No negative
+height was clamped and no real command was rerun by the agent.
+Seven 10:00 input rows lack sensible/latent heat flux, producing
+`buoyancy_input_missing`; this does not prevent the mixed-LCL calculation.
+No source-readiness/profile input issues were recorded. The cause of those
+optional first-hour flux gaps was not investigated in this result review.
+
 Artifact: `e0bd128a9ffb56774eb1ffa733dd8562b579be7d21cde21e6687013eff0bcd5a`.
 Read-only verification passed: every published file hash/size, content-derived
 artifact identity, all 2,772 input/hourly and 252 daily contracts, every expected
