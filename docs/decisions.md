@@ -2558,8 +2558,9 @@ exact sampled inputs, policy, numerical versions, hashes, reasons and a report.
 Only retained GFS 06Z D+1/D+2/D+3 with per-hour readiness by 16:00 Sofia enter;
 missing readiness does not become clear-sky evidence. Retained metadata/matrices
 are verified without requiring archived raw GRIB payloads. Synthetic tests do
-not establish meteorological accuracy. The real replay and its result review
-are reserved for the owner; T-022 remains In Progress until those checks pass.
+not establish meteorological accuracy. The owner completed the version 2 sample replay; artifact and output-consistency
+review passed on 2026-10-28. T-022 batch functionality is complete. Scientific
+accuracy and observational calibration remain unverified.
 
 **Related files:** [`architecture.md`](architecture.md),
 [`handoff.md`](handoff.md), and [`../services/ml/README.md`](../services/ml/README.md).
@@ -2624,7 +2625,7 @@ collection remains separately owner-authorized.
 | What retention, attribution, licensing, and rate limits apply beyond the current XCContest browser workflow?              | T-013 has a project-owner-confirmed ordinary low-volume UI workflow; do not extend it to bulk/commercial use or SkyNomad without explicit terms.                                                                                                                   | Before broader collection or product use.                                |
 | What final production attribution, retention, and archive-operation wording is required for the selected weather sources? | T-018 uses direct NOAA GFS. T-038 may add CDS ERA5 only after its evidence gate; preserve source/permission evidence and the applicable Copernicus/ECMWF attribution if it does. Confirm final product wording and retention operations before commercial release. | Before a commercial release.                                             |
 | Which first alert channel should be implemented?                                                                          | Dashboard watchlist, email, Telegram, or another agreed channel; the primary issue uses the accepted prior-evening cutoff and still requires deduplication.                                                                                                                                      | T-027/T-028.                                                             |
-| Has the T-022 retained-data replay been verified? | DEC-058 fixes cloudbase-only semantics, full model column, 100-hPa LCL, CCL formation diagnostics and explicit hourly/daily states. Automated checks are synthetic; owner-run replay and report review remain. | Before T-022 is marked complete. |
+| Has T-022 been observationally calibrated? | The owner-run version 2 replay and output-consistency review passed for 36 runs; they do not establish meteorological accuracy. Conditional LCL and estimated bases remain explicitly uncalibrated. | Later independent validation; T-039 covers GFS/profile comparison. |
 | What deployment/distribution model is required beyond local development?                                                  | The MVP is local-first; cloud/distributed infrastructure needs a demonstrated requirement.                                                                                                                                                                         | No task assigned; decide when deployment becomes an accepted scope item. |
 | What license should the repository use?                                                                                   | No open-source license is currently selected.                                                                                                                                                                                                                      | Repository owner decision; no task assigned.                             |
 

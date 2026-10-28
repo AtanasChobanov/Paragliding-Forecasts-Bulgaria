@@ -2,7 +2,7 @@
 
 ## Current state — 2026-10-28
 
-T-022 is **In Progress** on `feature/T-022-baseline-cloudbase-prediction`.
+T-022 is **Done** for the accepted Python-batch scope on `feature/T-022-baseline-cloudbase-prediction`.
 The cloudbase-only Python batch is implemented and tested with synthetic data.
 **Do not execute the real prediction/replay commands on the owner's behalf.**
 The owner explicitly reserved those commands for manual execution. The first
@@ -11,7 +11,40 @@ owner-run smoke command failed because of the receipt lookup, fixed in
 `5fa45293c5eae1e6d3d2054c07fc6c1fd9b29d8fe2513351f20e13df0cf2a71c`.
 The owner also produced the 36-run sample artifact
 `3417df453eeed80d60d9dd15cd05ea50fee1afb30bf511d44a5ce2cb5089f795`.
-T-022 remains In Progress pending the owner-run version 2 replay and review.
+The owner-run version 2 replay and read-only review passed. T-022 is Done
+for the accepted Python-batch scope. Frontend/API integration remains deferred.
+
+### Version 2 owner-run acceptance review
+
+Artifact: `e0bd128a9ffb56774eb1ffa733dd8562b579be7d21cde21e6687013eff0bcd5a`.
+Read-only verification passed: every published file hash/size, content-derived
+artifact identity, all 2,772 input/hourly and 252 daily contracts, every expected
+and potential maximum and its UTC/local timestamps, all significant-cloud
+instants, regime counts and coverage flags. Every daily group has eleven hours.
+Input bytes, all hourly LCL/estimated values and every expected daily maximum
+are unchanged from version 1. No prediction was rerun by the agent.
+
+Daily results: 65 expected-base summaries, 122 conditional-LCL summaries and
+65 all-blue summaries. Every formerly indeterminate daily summary now has a
+valid conditional fallback. No missing or unresolved no-height daily summaries
+occur in this selected sample. Significant-cloud warnings appear in 70 daily
+summaries, covering 253 hours; 23 expected-base days retain these warnings.
+In 52 expected-base days the separate potential maximum is higher; expected
+base correctly remains the primary quantity. All 65 blue days have no numeric
+maximum. The 122 potential-summary heights span 1,309--4,810 m MSL, with no
+negative site AGL in those selected daily maxima.
+
+Example, Vitosha D+1 2021-10-01: potential 2,547.68 m MSL / 753.75 m above
+site at 16:00 Sofia, while the higher blue-hour LCL is excluded. Nevsha's
+conditional maximum is 1,653.33 m MSL at 17:00, with significant-cloud context
+for 11:00--15:00 preserved separately.
+
+Together with 570 passing permanent tests and prior Ruff/repository checks,
+this completes the accepted T-022 batch functionality and manual replay gate.
+It does not establish meteorological accuracy, observational calibration or
+operational availability; T-039 validation and later product integration remain
+separate work. Temporary research notes and the disposable experiment remain
+local and were not staged or deleted.
 
 ### Version 2 conditional LCL output implemented
 

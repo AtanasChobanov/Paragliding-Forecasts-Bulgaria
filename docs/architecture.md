@@ -263,7 +263,7 @@ eleven-hour Sofia flying window, with partial-coverage warnings. A blue result
 has no estimated cloudbase and does not estimate usable thermal height. No
 cloud-top or glider-performance calculation is included. Content-addressed
 JSON/JSONL retains inputs, policy, provenance and diagnostics. The owner-run
-v1 replay succeeded; the version 2 replay is pending. Version 2 daily outputs
+v1 and version 2 replays passed artifact and output-consistency review. Version 2 daily outputs
 also retain a maximum conditional LCL over indeterminate hours only, with a
 distinct `potential_base_available` summary when no estimated base exists.
 Estimated bases take priority; blue hours never inflate the potential maximum.

@@ -11,8 +11,10 @@ unless they explicitly require `--allow-live-network`.
 D+1/D+2/D+3 runs. It makes no source requests and opens SQLite read-only.
 It writes a separate prediction artifact; ingestion, stored weather profiles,
 joined training datasets and their feature policies remain unchanged.
-The real retained-data replay is reserved for the owner and has not yet been
-run. Automated checks use synthetic inputs.
+The owner completed the version 2 retained-data replay: 36 runs, 2,772 hourly
+and 252 daily records. Artifact integrity, contracts, maxima and cloud-context
+review passed; see `docs/handoff.md` for the exact local artifact identity.
+Automated checks use synthetic inputs. Meteorological accuracy remains unverified.
 
 From the repository root, after `uv sync --project services/ml`:
 
