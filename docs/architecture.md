@@ -238,24 +238,39 @@ Missing values are not zero. Mock or baseline values are not real observations.
 Those distinctions must survive ingestion, storage, API serialization, and UI
 rendering.
 
-The MVP main issue uses a versioned 20:00 `Europe/Sofia` prior-evening cutoff
-and produces D+1, D+2, and D+3 forecasts. Historical rows use the newest complete
-GFS cycle available by that same cutoff and horizon; later cycles, reanalysis,
-and observations are not substitutes. A future morning refresh is a separate
-issue-time cohort.
+The MVP evening delivery deadline is 20:00 `Europe/Sofia`. DEC-066 pins the
+first historical cohort to issue-date GFS 06Z, with source readiness by 16:00
+Sofia and D+1, D+2 and D+3 horizons. Later cycles, reanalysis and observations
+are not substitutes. A future morning refresh is a separate issue-time cohort.
 
 The overdevelopment MVP is a configurable decision-tree plus smooth score with
 critical `High` overrides, explicit missing-input behavior, policy version, and
 user-facing reasons. It is an informational weather-risk assessment rather than
 a safety guarantee.
 
-The proposed T-022 cloudbase baseline uses forecast-model soundings from the
-existing GFS profiles at all seven sites. IGRA Sofia remains later observational
-validation rather than a prediction input. The output must distinguish a
-nullable numeric cumulus base from a `blue` thermic-day state and a missing or
-indeterminate state. Exact parcel, inversion, usable-thermal-top, intraday, and
-MSL/AGL presentation rules remain open and are documented in
-[`T-022-sounding-cloudbase-research-note.md`](T-022-sounding-cloudbase-research-note.md).
+The T-022 Python cloudbase baseline reads retained GFS compact grids and
+read-only weather-run metadata. Its separate full model column keeps levels
+above model ground, including those below a mountain launch that the existing
+site sampler omits. It does not alter SQLite profiles, joined datasets or
+training features. DEC-058 specifies a 100-hPa mixed-parcel LCL and MetPy CCL
+formation diagnostics, with explicit uncalibrated thresholds and sensitivities.
+
+The language-neutral batch distinguishes hourly `cumulus`, `blue`, `other_cloud`,
+`indeterminate` and `missing`; only cumulus has an estimated numeric cloudbase.
+Potential LCL, MSL/model AGL/signed site AGL, reasons, low confidence and coverage
+remain separate. Daily summaries use the maximum estimated base within the
+eleven-hour Sofia flying window, with partial-coverage warnings. A blue result
+has no estimated cloudbase and does not estimate usable thermal height. No
+cloud-top or glider-performance calculation is included. Content-addressed
+JSON/JSONL retains inputs, policy, provenance and diagnostics. The owner-run
+v1 and version 2 replays passed artifact and output-consistency review. Version 2 daily outputs
+also retain a maximum conditional LCL over indeterminate hours only, with a
+distinct `potential_base_available` summary when no estimated base exists.
+Estimated bases take priority; blue hours never inflate the potential maximum.
+Timed significant-cloud context does not assert cloud genus from sky coverage.
+`coverage_complete` retains its classification meaning. API/UI integration
+remains deferred; Python regimes
+are separate from the existing public data-status enum described next.
 
 The contract models these states from one canonical five-state Zod enum. Its
 available-value subset is derived by excluding `missing` and is used only for

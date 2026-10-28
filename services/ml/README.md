@@ -5,14 +5,160 @@ service. It keeps source collection, offline replay, review, validation, and
 persistence boundaries explicit. Commands below operate only on local artifacts
 unless they explicitly require `--allow-live-network`.
 
+## T-022 offline cloudbase baseline
+
+`cloudbase-predict` processes explicitly selected, already persisted GFS 06Z
+D+1/D+2/D+3 runs. It makes no source requests and opens SQLite read-only.
+It writes a separate prediction artifact; ingestion, stored weather profiles,
+joined training datasets and their feature policies remain unchanged.
+The owner completed the version 2 retained-data replay: 36 runs, 2,772 hourly
+and 252 daily records. Artifact integrity, contracts, maxima and cloud-context
+review passed; see `docs/handoff.md` for the exact local artifact identity.
+Automated checks use synthetic inputs. Meteorological accuracy remains unverified.
+
+From the repository root, after `uv sync --project services/ml`:
+
+```powershell
+uv run --project services/ml cloudbase-predict --run-key <run-uuid>
+```
+
+Repeat `--run-key <run-uuid>` to process multiple runs together. Optional
+`--database-url file:./data/local/paragliding.db` selects an existing repository
+SQLite database; `--project-root` selects the repository artifact root.
+`--help` only displays usage. Missing or inconsistent run evidence fails with
+nonzero exit status and does not publish a partial batch. There are no fetch,
+plan, coverage or analysis subcommands.
+
+Prerequisites: retained run ledger, raw **manifest metadata**, persistence
+receipt, parser/normalizer/spatial/validation/feature manifests, compact grid
+metadata and referenced native/derived `.npy` matrices. Raw GRIB payloads are
+not required. Source identities, hashes, units, cycle/lead and lineage are
+checked without recursively requiring deleted raw payloads. The original
+archived site elevation and interpolation footprint are used. A missing or
+late per-hour source-ready timestamp cannot become a blue-day result. The
+issue-date cutoff is 16:00 Europe/Sofia, using the pinned 06Z forecast.
+
+The column is sampled from retained grids with strict bilinear interpolation.
+Only levels above model ground and with pressure below surface pressure enter
+it. This deliberately recovers levels below the actual launch elevation that
+were omitted by site-profile sampling, without restoring them in SQLite.
+Model-ground anchoring keeps the surface state, mixed layer and PBL consistent;
+it is not a correction for the model's smoothed mountain terrain.
+
+The versioned method is `mixed100-romps-ccl/2`, with policy
+`cloudbase-baseline-policy/2` and JSON schema `cloudbase-batch/2`:
+
+- Average potential temperature and specific humidity over the lowest 100 hPa
+  with pressure-weighted trapezoids, then bring the parcel to surface pressure.
+  Compute liquid-water LCL with the existing Romps implementation.
+- Compute MetPy 1.7.1 CCL and convective temperature from the same mean moisture
+  and environmental temperature profile. Pressure-to-height interpolation is
+  bounded and linear in log pressure. Zero/multiple CCL intersections remain
+  unresolved; no intersection does not prove cloudless conditions.
+- Use model PBL minus LCL and 2 m temperature minus convective temperature as
+  separate formation evidence. Surface buoyancy flux uses the existing helper,
+  model-relative profile heights and matching sensible/latent flux intervals.
+- Retain 50/100 hPa and parcel-temperature -1/0/+1 K sensitivity diagnostics.
+  They flag sensitivity; they neither override the central result nor provide
+  a statistical uncertainty interval.
+
+Formation policy is applied in this order after a valid central LCL:
+
+| Condition | Hourly regime | Estimated numeric cloudbase |
+| --- | --- | --- |
+| Surface RH >= 99%, or low cloud >= 80% | `indeterminate`, unknown cloud type | null; keep conditional LCL |
+| Missing/invalid low cloud, LCL above profile, missing/ambiguous CCL | `indeterminate` | null |
+| PBL-LCL >= 250 m, T2m-Tconv >= 1 K, positive buoyancy flux | `cumulus` | central mixed LCL |
+| PBL-LCL <= -250 m, T2m-Tconv <= -1 K, low cloud <= 20% | `blue` | null |
+| Conflicting, transitional or incomplete formation evidence | `indeterminate` | null |
+| Missing/invalid required mixed-layer column or unavailable source | `missing` | null |
+
+These numerical formation margins are explicit **uncalibrated policy choices**,
+not universal meteorological thresholds. `blue` means local thermally generated
+cumulus is not supported; it does not guarantee an entirely clear sky, useful
+thermals or flight performance. `other_cloud` does not estimate stratiform/fog
+base. CCL supports formation assessment; the output base remains LCL. No cloud
+top, parcel overshoot or usable thermal height is produced.
+
+Hourly results retain `potential_base` separately from
+`estimated_cloudbase` (numeric only for `cumulus`), `regime`, `data_status`,
+`confidence`, reasons, limitations, source identity and diagnostics. Every
+height object contains metres MSL, metres above model ground, and signed metres
+above the archived site elevation. Negative site AGL is preserved, not clamped.
+A model/site elevation difference of at least 250 m is flagged. Every available
+estimate has low confidence and `not_observationally_calibrated` status.
+
+Every site/date/horizon has eleven explicit hours, 10:00 through 20:00 inclusive
+in Europe/Sofia, with UTC/local timestamps. Daily `max_cloudbase` is the largest
+**estimated cumulus base** among those hours; potential bases on blue or
+indeterminate hours never enter the maximum. Ties use the earliest hour. One
+cumulus hour is sufficient for a numeric summary. Only eleven blue hours permit
+an all-day `blue` summary. Missing/conflicting hours instead remain visible in
+counts, `coverage_complete` and warnings; a partial numeric maximum is only a
+maximum over the resolved hours. All-other-cloud and all-missing days have
+separate states. API/UI integration and XC/overdevelopment combination are
+deferred; these records do not change existing HTTP contracts.
+
+Version 2 adds the agreed conditional-height fallback. Each daily result keeps
+`max_cloudbase` and its timestamps for estimated hours, and separately keeps
+`max_potential_base`, `potential_max_at_utc` and `potential_max_at_local` from
+**indeterminate hours only**, bounded by the retained profile top. Blue, missing
+and reserved `other_cloud` hours do not enter that potential maximum. Equal
+heights use the earliest hour. Expected bases take display priority: the state
+is `cloudbase_available` if any exist; otherwise `potential_base_available`
+if a valid conditional maximum exists. All-blue days still have no numeric
+summary. Missing or out-of-profile LCL cannot manufacture a fallback.
+
+`significant_cloud_hours` contains UTC/local instants with low cloud >=80%.
+Daily `reason_codes` and limitations retain unknown-cloud-type and uncertain-LCL-
+applicability context, even when another hour supplies an estimated maximum.
+The low-cloud percentage does not identify cloud genus. Near-saturation likewise
+does not by itself prove a particular cloud type. These cases retain conditional
+LCL but never claim it is the base of existing stratiform or advected cloud.
+Formation gates of 250 m/1 K remain the conservative assessment policy; unresolved
+formation now has its own displayed potential height rather than losing that
+orientation. LCL physics is unchanged. `coverage_complete` keeps its name and
+classification meaning: a potential numeric summary can still have false coverage.
+
+The report displays the expected maximum first, otherwise the conditional maximum,
+with its distinct state and significant-cloud times. JSON stdout and the manifest
+include `daily_state_counts`. Schema/method/policy versions are now 2, creating a
+new immutable artifact without changing v1 files. This is the Python batch output;
+frontend/API mapping is still deferred and no browser card is changed here.
+
+Successful execution prints JSON with counts and an absolute output directory:
+`data/processed/cloudbase/<content-derived-id>/`. It contains:
+
+| File | Contents |
+| --- | --- |
+| `inputs.jsonl` | Exact finite-valued sampled column and source-readiness inputs |
+| `policy.json` | Frozen thresholds and method assumptions |
+| `hourly.jsonl` | Hourly potential/conditional cloud bases and formation diagnostics |
+| `daily.jsonl` | Daily maxima, regimes and coverage |
+| `report.md` | Counts, reasons, limitations, daily maxima and stored/full-column LCL differences |
+| `manifest.json` | Source references, hashes, schema/method/policy identities and numerical-library versions |
+
+Repeated execution with the same inputs and numerical environment returns the
+same artifact identity and preserves the first creation timestamp. Existing
+changed or incomplete outputs are rejected rather than overwritten. Published
+batches are local ignored artifacts. Agreement with stored LCL is a comparison
+of computations, not verification against observed cloud bases. No scientific
+accuracy or operational delivery guarantee has been established.
+
+Synthetic checks (no real prediction replay):
+
+```powershell
+uv run --project services/ml pytest services/ml/tests/test_cloudbase_physics.py services/ml/tests/test_cloudbase_inputs.py services/ml/tests/test_cloudbase_calculation.py services/ml/tests/test_cloudbase_service.py -q
+```
+
 ## Service orientation and setup
 ### Status
 
 The permitted XCContest browser collector and its offline parser/normalizer are
 implemented. The parser turns immutable rendered list artifacts into deduplicated
 local staging records only; it does not match sites, update mappings, write
-SQLite, or make source requests. Feature engineering, training, and prediction
-entry points start in later Takts.
+SQLite, or make source requests. Weather feature engineering and the T-022
+cloudbase batch are also implemented below; XC training remains a later task.
 
 ### Why Python exists in a TypeScript-first repository
 
@@ -751,13 +897,13 @@ stage outputs in the same locations. The conditional mapping review gate stops b
 persistence only when residual manual cases remain, preserving the run key and all
 artifacts for offline `resume`; when the reviewed sibling file is present, `resume`
 applies it, reloads the mapping snapshot, and never contacts XCContest.
-Other Python modules remain planned:
+Run the local Python suite with:
 
 ```powershell
 uv run --project services/ml pytest
-uv run --project services/ml python -m paragliding_forecasts_ml.ingestion
-uv run --project services/ml python -m paragliding_forecasts_ml.prediction
 ```
+
+The cloudbase prediction entry point is `cloudbase-predict`, documented above.
 
 Do not add placeholder modules that report success without doing the documented
 work.

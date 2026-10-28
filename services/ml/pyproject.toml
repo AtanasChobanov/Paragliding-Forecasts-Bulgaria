@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12,<3.14"
 dependencies = [
     "eccodes==2.47.0",
+    "metpy==1.7.1",
     "numpy>=2.0,<3",
     "playwright>=1.62.0",
     "pydantic>=2.12.0,<3",
@@ -16,6 +17,7 @@ dependencies = [
 ]
 
 [project.scripts]
+cloudbase-predict = "paragliding_forecasts_ml.predictions.cloudbase.cli:main"
 flight-label-audit = "paragliding_forecasts_ml.datasets.flight_label_cli:main"
 weather-cohort = "paragliding_forecasts_ml.datasets.weather_cohort_cli:main"
 weather-backfill = "paragliding_forecasts_ml.datasets.weather_backfill_cli:main"

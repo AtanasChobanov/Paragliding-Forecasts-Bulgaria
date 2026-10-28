@@ -1,6 +1,290 @@
 # Project Handoff
 
-## Current state — 2026-10-21
+## Current state — 2026-10-28
+
+T-022 is **Done** for the accepted Python-batch scope on `feature/T-022-baseline-cloudbase-prediction`.
+The cloudbase-only Python batch is implemented and tested with synthetic data.
+**Do not execute the real prediction/replay commands on the owner's behalf.**
+The owner explicitly reserved those commands for manual execution. The first
+owner-run smoke command failed because of the receipt lookup, fixed in
+`02d5abc`. The owner subsequently produced artifact
+`5fa45293c5eae1e6d3d2054c07fc6c1fd9b29d8fe2513351f20e13df0cf2a71c`.
+The owner also produced the 36-run sample artifact
+`3417df453eeed80d60d9dd15cd05ea50fee1afb30bf511d44a5ce2cb5089f795`.
+The owner-run version 2 replay and read-only review passed. T-022 is Done
+for the accepted Python-batch scope. Frontend/API integration remains deferred.
+
+### Version 2 owner-run acceptance review
+
+Additional owner-run current-forecast smoke: GFS 2026-10-27 06Z D+1 for
+2026-10-28, run `91ae8760-fdc2-4bd6-8f3f-af3bedc00e46`, produced cloudbase
+artifact `e5a7e9e636e26a9127ffd843319838333769a77a0f1b65b3f672ebb9ed174ea6`.
+Read-only hash and contract checks passed for 77 hours/seven daily summaries.
+All hours are indeterminate, with all seven daily summaries using the potential
+fallback. Vitosha low cloud is approximately 100% all eleven hours; mixed LCL
+is 1,392--1,416 m MSL, or -402 to -378 m relative to the 1,793.929 m site.
+The model ground is 887.69 m, so terrain mismatch remains material. The owner
+reports dark/overcast conditions and clouds entering Vitosha; this is qualitative
+consistency only, not an observed cloud-base measurement or accuracy validation.
+Sopot also has a negative site-relative daily maximum (-47.95 m). No negative
+height was clamped and no real command was rerun by the agent.
+Seven 10:00 input rows lack sensible/latent heat flux, producing
+`buoyancy_input_missing`; this does not prevent the mixed-LCL calculation.
+No source-readiness/profile input issues were recorded. The cause of those
+optional first-hour flux gaps was not investigated in this result review.
+
+Artifact: `e0bd128a9ffb56774eb1ffa733dd8562b579be7d21cde21e6687013eff0bcd5a`.
+Read-only verification passed: every published file hash/size, content-derived
+artifact identity, all 2,772 input/hourly and 252 daily contracts, every expected
+and potential maximum and its UTC/local timestamps, all significant-cloud
+instants, regime counts and coverage flags. Every daily group has eleven hours.
+Input bytes, all hourly LCL/estimated values and every expected daily maximum
+are unchanged from version 1. No prediction was rerun by the agent.
+
+Daily results: 65 expected-base summaries, 122 conditional-LCL summaries and
+65 all-blue summaries. Every formerly indeterminate daily summary now has a
+valid conditional fallback. No missing or unresolved no-height daily summaries
+occur in this selected sample. Significant-cloud warnings appear in 70 daily
+summaries, covering 253 hours; 23 expected-base days retain these warnings.
+In 52 expected-base days the separate potential maximum is higher; expected
+base correctly remains the primary quantity. All 65 blue days have no numeric
+maximum. The 122 potential-summary heights span 1,309--4,810 m MSL, with no
+negative site AGL in those selected daily maxima.
+
+Example, Vitosha D+1 2021-10-01: potential 2,547.68 m MSL / 753.75 m above
+site at 16:00 Sofia, while the higher blue-hour LCL is excluded. Nevsha's
+conditional maximum is 1,653.33 m MSL at 17:00, with significant-cloud context
+for 11:00--15:00 preserved separately.
+
+Together with 570 passing permanent tests and prior Ruff/repository checks,
+this completes the accepted T-022 batch functionality and manual replay gate.
+It does not establish meteorological accuracy, observational calibration or
+operational availability; T-039 validation and later product integration remain
+separate work. Temporary research notes and the disposable experiment remain
+local and were not staged or deleted.
+
+### Version 2 conditional LCL output implemented
+
+The owner accepted the discussed numeric fallback and cloud-context behavior.
+Schema/method/policy are version 2; existing version 1 artifacts remain intact.
+Daily output now has `max_potential_base`, `potential_max_at_utc/local` and
+`potential_maximum_basis=indeterminate_hours_only`. Only indeterminate hours
+with LCL within the retained profile enter that maximum; blue/missing hours
+do not. `max_cloudbase` still contains estimated bases only and takes priority.
+Without an estimated maximum, a valid conditional maximum produces
+`summary_state=potential_base_available`. All-blue and all-missing indicators
+are preserved. `coverage_complete` keeps its name and classification semantics.
+
+Low-cloud >=80% or near-surface saturation now means indeterminate cloud type,
+with conditional LCL retained, rather than asserting `other_cloud` from those
+inputs alone. Reasons/limitations explain uncertain LCL applicability.
+`significant_cloud_hours` stores UTC/local instants of >=80% low cloud so later
+UI composition can qualify warnings by time, including mixed days with an
+estimated maximum. Daily reasons are preserved too. The report displays the
+chosen expected/potential quantity and times; manifest and CLI JSON add
+`daily_state_counts`. LCL physics and the conservative 250 m/1 K formation
+margins are unchanged. No frontend/API integration was performed.
+
+The real command remains owner-run only. Rerun the same one-run smoke command
+or the same 36-run Bash invocation below/previously supplied in the conversation;
+the version change creates a new output directory. Review report/daily output
+for potential_base_available, separate expected/potential maxima, timed cloud
+warnings, all-blue no-number days and unchanged coverage semantics. No real
+version 2 calculation was executed by the agent.
+
+Version 2 validation: 570 permanent Python tests passed (disposable spike tests
+excluded), Ruff lint/format, repository structure and diff whitespace checks
+passed. New cases cover potential maxima excluding blue peaks, earliest ties,
+estimated-base priority, missing/all-blue no-fallback behavior, out-of-profile
+rejection, unknown cloud type, timed mixed-day advisories, report fallback
+timestamps and version 2 artifact/CLI round trips.
+
+### Owner clarification and policy research follow-up
+
+Keep the name `coverage_complete`; the owner explicitly rejected renaming it.
+The owner expects an explicitly labelled mixed-LCL orientation when formation
+is uncertain. Hourly `potential_base` already exists in all 2,772 records;
+the implemented daily summary contains no separate potential-height maximum.
+Do not describe indeterminate formation as an inability to calculate LCL.
+Displaying/aggregating a fallback quantity still needs explicit semantics;
+never silently insert potential LCL into `max_cloudbase` or imply it is an
+existing stratiform cloud base. Preserve the all-blue no-cloudbase display.
+
+Research recommendations, not applied policy changes: use PBL-LCL as supporting
+evidence rather than a universal hard 250 m cloud-existence test; retain
+250 m/1 K as explicit sensitivity/transition margins pending validation rather
+than hide the potential height; low-cloud >=80% does not identify cloud genus
+and should not by itself assert other-cloud type. NOAA's cloud taxonomy includes
+cumulus among low clouds. NOAA Skew-T guidance distinguishes heating-driven CCL
+from forced lifting (including mountains). MetPy documents the CCL diagnostic,
+not our compound 250 m/1 K/80% classification rule. Relevant primary sources:
+https://www.noaa.gov/jetstream/clouds/ten-basic-clouds
+https://www.weather.gov/source/zhu/ZHU_Training_Page/convective_parameters/skewt/skewtinfo.html
+https://unidata.github.io/MetPy/latest/api/generated/metpy.calc.ccl.html
+https://journals.ametsoc.org/view/journals/atsc/75/7/jas-d-17-0244.1.xml
+No production code, thresholds, output schema or real prediction artifacts were
+changed or regenerated during this research follow-up.
+
+### Full owner-run sample review
+
+Read-only review checked file hashes/sizes, all input/hourly/daily Pydantic
+contracts, all daily regime counts and numeric maxima against stored hours.
+The 36 runs cover 12 dates, all seven sites and D+1/D+2/D+3: 2,772 hours and
+252 daily summaries. Every day has eleven present hours, no input issues and
+no missing regime. Hourly regimes: 130 cumulus, 1,327 blue, 253 other_cloud,
+1,062 indeterminate. Daily states: 65 numeric, 65 all-blue, 122 indeterminate.
+All 65 numeric summaries have incomplete regime classification; 23 are based
+on a single cumulus hour. Only the 65 all-blue days have coverage_complete=true.
+This flag describes classification, not data presence.
+
+The 1,062 unresolved hours comprise 1,010 rule fall-throughs and 52 multiple-CCL
+cases. In the 1,010 fall-throughs, 646 have PBL within +/-250 m of LCL and 598
+have convective-temperature margin within +/-1 K (overlapping groups). Thus
+changing the multiple-CCL choice alone cannot resolve most cases. Numeric
+estimated bases range 1,683--4,507 m MSL; none is below its site. Potential LCL
+is below site in 36 hours (31 Vitosha, five Sopot), intentionally preserved.
+
+Sensitivity needs careful interpretation: 121/130 cumulus hours have at least
+one alternative classified indeterminate, but none switches to blue. With
+100-hPa mixing and -1 K perturbation, 118/130 become indeterminate. Changing
+only mixing depth to 50 hPa leaves 125/130 cumulus and five indeterminate.
+These are formation-threshold sensitivities, not measured cloudbase errors.
+The unperturbed central variant matches every stored central regime.
+
+Technical replay and source recovery succeeded for this sample. High abstention,
+the >=80% cloud gate, and the ambiguous coverage name remain policy/product
+limitations requiring review; meteorological accuracy is unverified. These
+12 selected experiment dates are not a representative validation dataset.
+No prediction commands were run by the agent, no policy was changed and
+T-022 was not marked Done.
+
+### First successful owner-run review
+
+Read-only review verified all six-file manifest hashes/sizes. The 2021-10-01
+D+1 run has 77 hourly and seven daily records, all hours present, no input
+issues and potential LCL in every hour. Regimes: zero cumulus, 22 blue,
+18 other_cloud and 37 indeterminate. Thus there is no estimated-base maximum.
+Of the 37 unresolved hours, 11 have multiple CCL intersections and 26 fall
+through the policy: 22 have PBL within the +/-250 m LCL margin despite a negative
+convective-temperature margin; three fail the blue low-cloud <=20% gate;
+one is transitional in both height and temperature. Each site has unresolved
+hours, hence every daily summary is indeterminate. `coverage_complete=false`
+means incomplete regime classification, not missing source hours (present=11
+at every site). These findings expose conservative policy/output limitations,
+not evidence of missing profiles or verified cloudbase accuracy. The >=80%
+low-cloud gate also excludes all 18 cloudy hours from numeric base estimation.
+No thresholds or algorithms were changed during this review. Wider-sample
+evaluation and any accepted policy/wording revision remain pending; do not
+silently turn potential LCL into estimated cloudbase or relax thresholds to
+force numbers. The agent did not rerun the real prediction command.
+
+### Persistence-reader fix after the first owner-run attempt
+
+The `persisted` ledger event references a `StageManifest`, whose outputs include
+the `weather_persistence_receipt`. The reader now validates that manifest,
+resolves and hash-checks its receipt output, and verifies the receipt's date
+and feature lineage. Ingestion, retained source artifacts and SQLite are
+unchanged. The original integration fixture incorrectly mocked a direct
+receipt as ledger evidence; it now constructs and reads the real ledger chain.
+This synthetic regression reproduced the owner's 22 validation errors before
+the fix and passes after it. Missing/tampered receipt, wrong feature input and
+wrong target date are covered too. The owner should retry the same smoke
+command below; the agent has not executed it.
+
+### Implemented scope
+
+- Read-only selection of explicitly named persisted GFS 06Z D+1/D+2/D+3 runs,
+  with per-hour source readiness by issue-date 16:00 Europe/Sofia.
+- Recover the full above-model-ground pressure column from retained compact
+  grids, including levels below the actual site omitted by site sampling.
+  Verify retained metadata/array hashes and lineage without requiring raw GRIB
+  payloads. Raw manifest metadata and run ledgers still need to be present.
+- Compute 100-hPa mixed-parcel Romps liquid LCL and MetPy 1.7.1 CCL/convective
+  temperature; apply versioned formation rules using existing low cloud,
+  surface RH, model PBL and matched surface fluxes. Keep 50/100-hPa and +/-1 K
+  sensitivity diagnostics. These thresholds are uncalibrated policy choices.
+- Separate `cumulus`, `blue`, `other_cloud`, `indeterminate` and `missing`.
+  Only cumulus has an estimated cloudbase. Potential LCL is a separate value.
+  Blue is not a useful-thermal or clear-sky guarantee. No usable thermal height,
+  Hcrit, cloud top, entrainment or glider-performance model is included.
+- Keep MSL, model AGL and signed site AGL; retain terrain-mismatch warnings.
+  Produce eleven hourly records per site (10:00--20:00 inclusive Sofia).
+  Daily maximum uses only estimated cumulus bases; one numeric hour suffices,
+  with coverage warnings where needed. Only eleven blue hours make a blue day.
+- Publish immutable content-addressed local JSON/JSONL, exact inputs, policy,
+  provenance, library versions and a Markdown report. Changed or incomplete
+  existing artifacts are rejected; repeat builds preserve their identity.
+
+SQLite, stored weather profiles, the joined dataset and T-023 training inputs
+remain unchanged. The owner explicitly deferred any training-feature review
+or correction. No new GFS fields, downloads or external provider are added.
+API/UI integration is also deferred. DEC-058 and the ML README now describe
+the accepted scope and exact algorithm/thresholds.
+
+Implementation commits so far: `4d272ed` (contracts/policy/dependency),
+`2f28ce4` (physics/CCL), `da9fdaf` (retained model column), `1b8959d`
+(formation/aggregation/input guards) and `43fc32d` (CLI/artifacts/report).
+The following documentation commit records the owner-run checkpoint.
+
+### Verification
+
+- Permanent suite after the persistence-reader fix: **564 passed**.
+  This comprises the existing 499 tests plus 65 cloudbase tests. The nine
+  disposable experiment tests remain outside Git and were excluded from this
+  run. Before the fix, the full local suite had passed 569 tests with the
+  inaccurate mocked persistence evidence; that did not prove compatibility.
+- Ruff lint and format checks passed; `npm.cmd run repo:check` passed;
+  `git diff --check` passed. No TypeScript behavior changed.
+- Synthetic tests cover model/site elevation differences, recovered low levels,
+  deleted raw GRIB with retained metadata, read-only SQLite, malformed/tampered
+  evidence, strict sampling, units, timing/cutoff, CCL ambiguity, formation-rule
+  boundaries, missing states, daily maxima/coverage, DST, no-network operation
+  and deterministic immutable outputs.
+- Actual retained-source compatibility, output regime distribution and runtime
+  remain unverified until the owner runs the commands below. Synthetic success
+  does not establish cloudbase accuracy or a delivery SLA.
+
+### Owner-run checkpoint
+
+Run from the repository root. First process one existing run (all seven sites):
+
+```powershell
+uv run --project services/ml cloudbase-predict --run-key 93b7b0b5-f3fe-4f8e-8781-01aca0689661
+```
+
+For the retained experiment sample, the owner can then select its existing
+run keys without downloading anything:
+
+```powershell
+$cloudbaseRunKeys = Get-Content 'data/processed/t022-cloudbase-spike/retained-hourly-inputs.jsonl' |
+    ForEach-Object { ($_ | ConvertFrom-Json).run_key } |
+    Sort-Object -Unique
+$cloudbaseArguments = @()
+foreach ($runKey in $cloudbaseRunKeys) {
+    $cloudbaseArguments += @('--run-key', $runKey)
+}
+uv run --project services/ml cloudbase-predict @cloudbaseArguments
+```
+
+Expected sample sizes, if the real replay succeeds: 77 hourly/7 daily records
+for the first command; 36 runs, 2,772 hourly/252 daily records for the second.
+The command prints counts and `output_directory`; inspect that directory's
+`report.md`, `manifest.json`, `hourly.jsonl` and `daily.jsonl` after the owner
+reports execution. Review missing/indeterminate reasons, terrain warnings,
+coverage, base heights and stored-versus-full-column differences. Do not
+interpret computational agreement as observed forecast accuracy. Only after
+this review should T-022 completion or necessary fixes be considered.
+
+### Local files deliberately excluded from Git
+
+The session research notes (sounding/cloudbase note, GFS experiment findings,
+physical method options and profile/terrain audit), disposable spike script,
+its tests and generated experiment data remain local. Do not stage them or
+remove them during implementation. The owner intends to delete temporary
+research files after T-022 is completed; that cleanup is not authorized yet.
+Durable commands and policy are documented in `services/ml/README.md`.
+
+## Previously verified state — 2026-10-21
 
 T-020 and T-021 are **Done**. T-021 was completed on
 `test/T-021-feature-calculation-tests`. The feature test commits are
