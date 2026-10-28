@@ -13,6 +13,32 @@ The owner also produced the 36-run sample artifact
 `3417df453eeed80d60d9dd15cd05ea50fee1afb30bf511d44a5ce2cb5089f795`.
 T-022 remains In Progress pending policy review.
 
+### Owner clarification and policy research follow-up
+
+Keep the name `coverage_complete`; the owner explicitly rejected renaming it.
+The owner expects an explicitly labelled mixed-LCL orientation when formation
+is uncertain. Hourly `potential_base` already exists in all 2,772 records;
+the implemented daily summary contains no separate potential-height maximum.
+Do not describe indeterminate formation as an inability to calculate LCL.
+Displaying/aggregating a fallback quantity still needs explicit semantics;
+never silently insert potential LCL into `max_cloudbase` or imply it is an
+existing stratiform cloud base. Preserve the all-blue no-cloudbase display.
+
+Research recommendations, not applied policy changes: use PBL-LCL as supporting
+evidence rather than a universal hard 250 m cloud-existence test; retain
+250 m/1 K as explicit sensitivity/transition margins pending validation rather
+than hide the potential height; low-cloud >=80% does not identify cloud genus
+and should not by itself assert other-cloud type. NOAA's cloud taxonomy includes
+cumulus among low clouds. NOAA Skew-T guidance distinguishes heating-driven CCL
+from forced lifting (including mountains). MetPy documents the CCL diagnostic,
+not our compound 250 m/1 K/80% classification rule. Relevant primary sources:
+https://www.noaa.gov/jetstream/clouds/ten-basic-clouds
+https://www.weather.gov/source/zhu/ZHU_Training_Page/convective_parameters/skewt/skewtinfo.html
+https://unidata.github.io/MetPy/latest/api/generated/metpy.calc.ccl.html
+https://journals.ametsoc.org/view/journals/atsc/75/7/jas-d-17-0244.1.xml
+No production code, thresholds, output schema or real prediction artifacts were
+changed or regenerated during this research follow-up.
+
 ### Full owner-run sample review
 
 Read-only review checked file hashes/sizes, all input/hourly/daily Pydantic
