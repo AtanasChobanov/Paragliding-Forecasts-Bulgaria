@@ -5,6 +5,28 @@ service. It keeps source collection, offline replay, review, validation, and
 persistence boundaries explicit. Commands below operate only on local artifacts
 unless they explicitly require `--allow-live-network`.
 
+## T-023 XC probability baseline (implementation in progress)
+
+The `predictions/xc_probability` module currently defines the frozen source
+policy and JSON artifact/numerical contracts. Training and prediction commands
+are not implemented yet. DEC-070 records the accepted model and verification
+scope; no fitted XC model or measured forecast accuracy is available.
+
+The packaged `xc-probability-policy-v1.json` explicitly maps 43 daily, 11
+0–1500 m layer and 13 1500–3000 m layer inputs to weather policy v5, including
+units, field identity and derivation. All 67 physical inputs are required.
+Three wind directions expand to sin/cos, followed by seasonal sin/cos and the
+seven site/three horizon categories: 82 coordinates, with only the first 72
+standardized. Structural-null provider cloud bases and lower-layer vertical
+velocities are excluded. T-022 outputs are not XC inputs.
+
+The contracts retain separate p100/q200 stage parameters, weighted training
+references, unique site-day support and the unsmoothed 300+ k/n conversion.
+Available probabilities are nested, baseline, uncalibrated and low confidence;
+missing estimates carry null value/confidence and a reason. Fifteen distinct
+weather/context contribution groups describe each stage's calculation in logit
+units. These explanations do not establish physical causality or flight safety.
+
 ## T-022 offline cloudbase baseline
 
 `cloudbase-predict` processes explicitly selected, already persisted GFS 06Z
