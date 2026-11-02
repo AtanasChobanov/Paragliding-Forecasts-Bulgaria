@@ -311,4 +311,5 @@ def test_manifest_rejects_unsafe_files(name):
             },
             numerical_versions={"python": "3.12"},
             created_at_utc="2026-11-02T10:00:00Z",
+            execution={"elapsed_seconds_before_publication": 0.0},
         )

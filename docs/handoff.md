@@ -1,6 +1,201 @@
 # Project Handoff
 
-## Current state — 2026-10-28
+## T-023 implementation checkpoint — 2026-11-02
+
+Implemented the first two planned units on `feature/T-023-baseline-XC-model`:
+the frozen 67-input/82-coordinate policy and strict contracts, followed by
+verified chronological study preparation. The first commit is
+`42de152 T-023 define XC probability policy and artifact contracts`; the second
+is `T-023 prepare verified chronological training studies`. The exact
+scikit-learn 1.9.1 dependency and uv lockfile are installed/committed.
+
+`xc-probability prepare` calls the existing joined-v4/correction verifier once,
+rechecks the consumed source bytes, joins source seasons from cohort metadata,
+separates physical inputs from labels and sampling controls, and publishes a
+frozen study. It retains all 67 inputs with unit/quality/provenance, original
+sampling metadata, 82 coordinate identities, site categories, temporal folds
+and six p100/q200 training-weight partitions. Per-stage unique site-day weights
+are normalized then split across horizons without renormalizing rows. Fold
+purges do not change the final fit partition. Invalid/missing training evidence
+fails instead of silently dropping rows. The compact loader verifies hashes,
+schemas, versions, source identity, folds and weights without traversing the
+weather history. No classifier is fitted by preparation.
+
+The owner clarified that dependency setup and technical checks are agent-run;
+only real prepare/train-trials/select/train-final/predict commands are owner-run.
+The owner also accepted removing redundant Markdown reports and separating
+runtime metadata from content identity. Study, final-model and prediction
+bundles use authoritative JSON; future trial/selection Markdown will summarize
+comparisons/limitations. The implemented atomic publisher keeps the first
+creation/execution metadata on reuse. Manifest timing is measured before
+publication; stdout reports the current command's elapsed time and actual bytes.
+
+Verification: the full local Python suite passed **622 tests in 46.83 s**;
+Ruff lint/format passed for 210 Python files; `npm.cmd run repo:check` and
+`git diff --check` passed. The full synthetic 960-row test reproduces the
+320 site-days, 235 target dates, 160/42/3 outcomes, both accepted fold counts
+and cutoffs. Tests cover purge/restoration, conditional weights, invalid input,
+no SQLite/network access, compact semantic validation, deterministic reuse,
+preserved execution metadata, changed/incomplete artifacts and CLI errors.
+Normal Windows filesystem permissions were used for the full suite's existing
+temporary-file/hard-link behavior. No real dataset/product command, model fit,
+prediction, T-022 replay, download or SQLite mutation ran.
+
+**Owner-run checkpoint:** from the repository root, run only this next stage:
+
+```powershell
+uv run --project services/ml --locked xc-probability prepare `
+  --dataset-id 5e88d13ff67e201ce8b0f23ed2d517d5af188e6185cd1496cab8798316bf7394
+```
+
+Review the returned JSON and ignored output bundle after the owner reports
+success. Expect 960 rows, 320 site-days, 235 dates, 67 inputs/82 coordinates,
+160/42/3 positives, folds 282/318 and 600/360, cutoffs 2022-09-28/2023-10-02,
+and zero extra purges. Capture the real study ID, time and bytes. Real retained
+source compatibility and resource use are still unverified. Only after that
+review implement the next planned weighted trial-training commit; train-trials,
+select, train-final and predict are not yet implemented. T-023 remains
+In Progress. All three temporary T-023 planning notes remain local, uncommitted
+and intact; durable operation is documented in DEC-070 and the ML README.
+
+## Plan consolidation — 2026-11-02
+
+At the owner's request, updated the locally saved
+consolidated implementation plan with the follow-up discussion: required
+67-input inventory, automatic reuse of existing dataset verification, no new
+generic verify CLI, one predict command with run keys and bundled exact inputs,
+computed/stored training k/n for 300+, grouped local stage drivers/templates,
+initial per-metric low confidence with reasons, tests/completion gates, manual
+workflow, resource estimates and staged development commits. Explanation
+implementation details concretize the recommended approach in the plan; they
+are not evidence of implemented behavior or statistical validation. Independent
+2025 evaluation does not automatically promote confidence or tune a calibrator.
+The implementation plan itself must remain local and uncommitted, alongside
+the two earlier temporary notes. Future implementation commits must document
+necessary behavior in tracked decisions/READMEs without requiring these files.
+No code/dependency/data change, training, prediction, staging or commit occurred.
+Validation: `npm.cmd run repo:check` and `git diff --check` passed. A read-only
+document check confirmed the copied 43+11+13 inventory, balanced code fences,
+no trailing whitespace and absence of obsolete manual commands from examples.
+The staged file list is empty. No model-quality or product test is claimed.
+
+## Planning follow-up — 2026-11-01
+
+Confidence discussion (recommendation only, not a new accepted policy): define
+the Python confidence semantics in T-023; T-025 owns API/UI presentation and
+T-026 independent evaluation. Existing contracts use low/medium/high plus a
+note, with null confidence for missing metrics. Recommend an explicit v1
+evidence policy returning low for every available XC baseline estimate, with
+per-threshold reasons and training support; never derive this label from the
+probability magnitude or the presence of all required inputs. There is no
+documented formula requiring all three levels to appear. Separate calibration
+of event probabilities from uncertainty about estimated probabilities.
+Official scikit-learn calibration, SciPy bootstrap and MAPIE documentation were
+reviewed. No extra confidence dependency is recommended for v1. A later
+grouped/temporal-block bootstrap with refitted weighted pipelines could assess
+training-data sensitivity, but does not alone establish calibration or cover
+forecast error/reporting bias. Do not resample the 960 rows as independent
+observations, claim conformal classification sets are probability intervals,
+or tune confidence thresholds/calibrators on the reserved 2025 evaluation and
+then report it as untouched. Dynamic confidence thresholds need a separate
+validated policy; they are not selected in this discussion. No model was fitted.
+
+Owner explicitly accepted that all 67 selected physical inputs are required.
+New discussion: brief/Takt-4 and T-025 require confidence/top drivers; the
+current UI already renders topDrivers strings in "Why this result", supplied
+by the mock API repository. Recommendation under discussion (not yet an
+accepted explanation policy): T-023 emits faithful structured local drivers
+from grouped coefficient-times-deviation contributions, separately for p100
+and q200; T-025 owns real API/UI composition/localization. Explain the 300+
+pooled empirical conversion as a method/support note, not an independently
+learned weather driver. Do not treat raw coefficients as local contributions,
+sum logit contributions as percentage points, or assert physical causality.
+
+Owner requested simpler prediction orchestration: remove the planned public
+`prepare-inputs` command and separate input-artifact step. Use one planned
+`xc-probability predict --model-id <id> --run-key <uuid>` command (repeat run-key
+for explicit batches; retain optional database-url/project-root). Internally
+read/validate retained daily GFS features, apply the saved transformer/model,
+and publish predictions together with exact inputs and lineage in one bundle.
+No inputs-id argument or separately published inputs artifact is required.
+Keep reader/transformer/inference as separately testable internal functions.
+No download, retraining or flight-label access is added to prediction.
+
+Existing dataset verification belongs to the reusable dataset module, not
+exclusively the training preparer: T-021 correction also calls it. Preserve
+the documented weather-join audit flag for compatibility, but omit it from
+the normal training workflow; prepare calls the function automatically.
+The owner questioned CLI conventions; this is a workflow simplification,
+not a request to delete existing tested dataset validation.
+
+Existing `weather-join --verify-dataset-id` already validates corrected v4.
+Measured read-only verification passed again in 19.119 s (960 rows, zero
+exclusions, 20 patches); JSON read/parse alone took 0.282 s in a separate run.
+These timings are local observations, not an SLA. No classifier was fitted.
+
+Refine the pending implementation plan to avoid redundant manual audits:
+`prepare` reuses the existing verifier once, then creates frozen model inputs,
+weights and temporal folds. Later commands automatically verify their consumed
+compact artifacts and validate outputs/reload checks. Drop the newly proposed
+generic standalone `xc-probability verify` command and its mandatory manual
+invocations; keep the existing weather verifier for independent dataset audits.
+Do not traverse the full weather acquisition history at every training step.
+
+The current model policy still requires all 67 selected physical inputs;
+structural-null fields are outside that list. Partial-input inference is a
+possible later model/pipeline revision requiring validation, not just relaxing
+request validation. q300 is computed from unique training site-day counts,
+then stored with k/n and lineage in each fitted model; inference multiplies
+the current p200 by stored q300 without reading training labels again.
+
+Resource arithmetic: the 960x82 float64 matrix is 629,760 bytes; final two-model
+coefficients/intercepts/scalers contain 3,632 bytes of numeric values before
+JSON/metadata. An illustrative compact source projection serialized in memory
+to 3,596,373 bytes. These are measured/computed sizes, not implemented artifact
+sizes. Training-time/disk forecasts remain estimates until owner-run commands
+exist; scikit-learn is still absent. No data/model files were written.
+
+## Current state — 2026-10-31
+
+Latest owner decision: retain chronological trial fits/regularization comparison
+and final fitting on all 2022–2024. For 300+, use the pooled empirical
+conditional frequency q=k/n, without smoothing: final development q=3/42.
+This explicitly supersedes the earlier Jeffreys selection in DEC-070 and the
+notes. Share q across sites/horizons, count unique training site-days, and use
+training-fold counts for trials. Preserve insufficient-support handling and
+baseline/low-confidence limitations; no model was trained or data changed.
+The 67 available predictors were counted in corrected versioned dataset v4
+(43 daily + 11 lower-layer + 13 upper-layer), with names separately checked
+against SQLite. Raw hourly point samples are not included in that count.
+
+T-023 design clarification: the final model is to fit **all development source
+seasons 2022–2024**; temporary development comparisons do not permanently
+withhold seasons from that fit. The revised recommended first candidate uses
+all **67 available daily/layer metrics**, with regularization, rather than the
+unproven 16-feature shortlist. Read-only actual-SQLite schema and corrected-v4
+inspection confirmed 43 daily + 11 lower-layer + 13 upper-layer values; raw
+hourly samples are not included in that count. The local clarification
+discussion covered exact DB columns, development-versus-backtest/calibration roles, binary
+labels versus probability output and alternative sparse 300+ methods. All
+42 positive 200+ development site-days have inclusion weight one; the selected
+empirical conditional rate is 3/42, multiplied by predicted p200.
+2025 remains the independent evaluation; no classifier, calibrator,
+dependency install, SQLite/data change or real T-022 replay ran in this follow-up.
+Documented inventory matched actual SQLite/v4 columns; repository structure
+and diff whitespace checks passed. No model-quality test was run.
+
+T-023 has started with a read-only dataset/code/documentation preflight on
+`feature/T-023-baseline-XC-model`; implementation and training have not begun.
+The local preflight recorded verified counts, the proposed training/completion policy and cloudbase
+feature comparison. The existing corrected-v4 artifact verifier passed again
+(960 rows, zero exclusions, 20 patched rows). There are 320 unique site-days
+on 235 dates, 160/42/3 positive site-days for 100+/200+/300+, and the 2022
+source-season subset has no 300+ positives. Installed scikit-learn is absent.
+Existing T-022 v2 outputs match only 54/960 training keys. Proposals in the
+preflight are not accepted decisions; no real T-022 replay or model training
+was run. Keep the 2025 source-season reserve for T-026. The owner's T-022
+manual-execution restriction remains in force. `npm.cmd run repo:check` and
+`git diff --check` passed; this review changed documentation/status only.
 
 T-022 is **Done** for the accepted Python-batch scope on `feature/T-022-baseline-cloudbase-prediction`.
 The cloudbase-only Python batch is implemented and tested with synthetic data.

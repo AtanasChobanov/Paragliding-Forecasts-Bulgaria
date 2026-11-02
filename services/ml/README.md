@@ -7,9 +7,9 @@ unless they explicitly require `--allow-live-network`.
 
 ## T-023 XC probability baseline (implementation in progress)
 
-The `predictions/xc_probability` module currently defines the frozen source
-policy and JSON artifact/numerical contracts. Training and prediction commands
-are not implemented yet. DEC-070 records the accepted model and verification
+The `predictions/xc_probability` module implements study preparation and the
+frozen source policy/JSON contracts. Trial training, selection, final fitting
+and prediction commands are not implemented yet. DEC-070 records the accepted
 scope; no fitted XC model or measured forecast accuracy is available.
 
 The packaged `xc-probability-policy-v1.json` explicitly maps 43 daily, 11
@@ -26,6 +26,64 @@ Available probabilities are nested, baseline, uncalibrated and low confidence;
 missing estimates carry null value/confidence and a reason. Fifteen distinct
 weather/context contribution groups describe each stage's calculation in logit
 units. These explanations do not establish physical causality or flight safety.
+
+### Prepare the frozen development study
+
+From the repository root, the owner runs:
+
+```powershell
+uv run --project services/ml --locked xc-probability prepare `
+  --dataset-id 5e88d13ff67e201ce8b0f23ed2d517d5af188e6185cd1496cab8798316bf7394
+```
+
+Optional `--project-root <path>` selects the repository root. This initial
+version accepts only that pinned corrected-v4 development dataset. It calls
+the reusable joined-dataset verifier once, including its existing correction
+and parent checks. It then rechecks the consumed JSONL bytes against the
+verified source manifests and uses the cohort's source-season mapping. It
+does not access SQLite, download weather, run T-022 or fit a classifier.
+
+The command rejects missing required physical inputs, unknown/non-nested
+labels, incomplete horizon groups, nonfinite values, invalid units or changed
+lineage. It expects 960 rows, 320 site-days on 235 target dates, and 160/42/3
+positive site-days. The 2023/2024 folds group every target date's sites and
+horizons, purging training outcomes on/after the earliest validation issue
+date. Expected exclusive cutoffs are 2022-09-28 and 2023-10-02, with 282/318
+and 600/360 training/validation rows and no additional purges in this dataset.
+Temporary purges do not remove rows from the final training partition.
+
+The one stdout JSON object contains `study_id`, absolute `output_directory`,
+counts, `elapsed_seconds`, `published_bytes` and `reused`. Errors go to stderr
+and return a nonzero exit code. Outputs are immutable and ignored under
+`data/processed/xc-probability/study/<study_id>/`:
+
+- `manifest.json`: content identity, parent references, numerical versions,
+  payload hashes/sizes and separate creation/execution metadata.
+- `study.json`: source lineage, ordered feature/coordinate identities,
+  frozen site categories, summaries by source season and temporal fold row IDs.
+- `rows.jsonl`: selected physical inputs with units/quality/provenance,
+  separated binary labels, original sampling metadata and source-row hashes.
+- `weights.json`: p100/q200 fit partitions for both folds and final training.
+  Each eligible site-day's inverse-inclusion weight is normalized across its
+  training subset, then split equally among three horizons; rows are not
+  renormalized to mean one.
+- `policy.json`, `dataset_manifest.json`, `cohort_manifest.json`: exact frozen
+  policy and upstream identity evidence.
+
+There is no redundant study Markdown report. JSON is authoritative. Only the
+future trial/selection comparisons retain a concise deterministic Markdown
+summary to help assess candidate scores, constant baselines and limitations.
+Variable timing is excluded from content identity: the manifest records
+elapsed time up to publication preparation, and stdout measures the full
+command and actual bytes including the manifest. Repetition preserves both
+the content ID and original publication metadata. Later consumers recheck
+this compact bundle's schemas, hashes, numerical compatibility, folds and
+weights without retraversing the weather acquisition history.
+
+Synthetic checks cover the full 960-row regression inventory and source
+projection errors. Real retained-source compatibility remains pending until
+the owner runs the command above; synthetic success does not validate model
+quality. Training will be implemented after reviewing that owner-run output.
 
 ## T-022 offline cloudbase baseline
 

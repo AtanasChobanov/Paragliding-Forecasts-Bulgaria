@@ -25,6 +25,10 @@ class ArtifactParent(AtmosphericContract):
     artifact_id: Sha256
 
 
+class PublicationTiming(AtmosphericContract):
+    elapsed_seconds_before_publication: FiniteFloat = Field(ge=0)
+
+
 class ArtifactManifest(AtmosphericContract):
     schema_version: Literal["xc-probability-artifact/1"] = "xc-probability-artifact/1"
     kind: ArtifactKind
@@ -35,6 +39,7 @@ class ArtifactManifest(AtmosphericContract):
     files: dict[str, FileDigest] = Field(min_length=1)
     numerical_versions: dict[str, str] = Field(min_length=1)
     created_at_utc: str
+    execution: PublicationTiming
 
     @field_validator("created_at_utc")
     @classmethod
@@ -53,8 +58,6 @@ class ArtifactManifest(AtmosphericContract):
         identities = [(parent.kind, parent.artifact_id) for parent in self.parents]
         if len(identities) != len(set(identities)):
             raise ValueError("Artifact parents cannot repeat.")
-        if "report.md" not in self.files:
-            raise ValueError("Every XC artifact requires a human-readable report.")
         if any(not value.strip() for value in self.numerical_versions.values()):
             raise ValueError("Numerical versions must be explicit.")
         return self

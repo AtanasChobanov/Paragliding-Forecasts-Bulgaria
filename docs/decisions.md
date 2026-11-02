@@ -3106,11 +3106,24 @@ numerical serialization and reload checks, never pickle/joblib. No additional
 prepare-inputs or generic verify CLI is introduced.
 
 **Completion gate:** Passing synthetic tests is necessary but insufficient.
-The owner runs setup and every real study/trial/selection/final-fit/prediction
-command. Verify those artifacts and the seven-row retained-GFS smoke before
-Done; code ready with owner execution pending is Review. Record measured
+The agent runs dependency setup and technical checks. The owner runs every
+real study/trial/selection/final-fit/prediction command. Verify those artifacts
+and the seven-row retained-GFS smoke before Done; code ready with owner
+execution pending is Review. Record measured
 metrics, times/sizes and limitations. Lack of demonstrated development benefit
 must be explicit and is not evidence of a validated forecast model.
+
+**Artifact/report clarification accepted 2026-11-02:** JSON manifests and
+payloads remain authoritative. Do not generate Markdown reports that merely
+repeat study inputs, serialized model state or prediction records. Retain a
+short deterministic report for chronological trial/selection comparisons,
+where it helps assess candidates, baseline comparisons and limitations.
+Any retained report is hashed like other payloads. Variable execution timing
+belongs in stdout and manifest execution metadata outside content identity,
+alongside creation metadata. Record pre-publication elapsed time in the
+manifest and total command time/actual published bytes in stdout. Reusing
+an existing bundle preserves its original publication metadata and reports
+the current execution time on stdout.
 
 **Consequences:** Owner preference prioritizes transparent observed counts over
 additional smoothing assumptions. Jeffreys and other prior choices remain

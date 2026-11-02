@@ -18,6 +18,7 @@ dependencies = [
 ]
 
 [project.scripts]
+xc-probability = "paragliding_forecasts_ml.predictions.xc_probability.cli:main"
 cloudbase-predict = "paragliding_forecasts_ml.predictions.cloudbase.cli:main"
 flight-label-audit = "paragliding_forecasts_ml.datasets.flight_label_cli:main"
 weather-cohort = "paragliding_forecasts_ml.datasets.weather_cohort_cli:main"
