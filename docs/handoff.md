@@ -2,12 +2,14 @@
 
 ## T-023 implementation checkpoint — 2026-11-02
 
-Implemented the first two planned units on `feature/T-023-baseline-XC-model`:
-the frozen 67-input/82-coordinate policy and strict contracts, followed by
-verified chronological study preparation. The first commit is
-`42de152 T-023 define XC probability policy and artifact contracts`; the second
-is `T-023 prepare verified chronological training studies`. The exact
-scikit-learn 1.9.1 dependency and uv lockfile are installed/committed.
+Implemented the first three planned units on `feature/T-023-baseline-XC-model`:
+the frozen 67-input/82-coordinate policy/contracts, verified chronological
+study preparation and weighted conditional trial training. Commits:
+`42de152 T-023 define XC probability policy and artifact contracts`,
+`c9a9980 T-023 prepare verified chronological training studies`, followed by
+`T-023 train weighted conditional XC baselines`. The exact scikit-learn 1.9.1
+dependency and uv lockfile are installed/committed. Selection, final fitting
+and retained-GFS prediction remain unimplemented.
 
 `xc-probability prepare` calls the existing joined-v4/correction verifier once,
 rechecks the consumed source bytes, joins source seasons from cohort metadata,
@@ -30,33 +32,69 @@ comparisons/limitations. The implemented atomic publisher keeps the first
 creation/execution metadata on reuse. Manifest timing is measured before
 publication; stdout reports the current command's elapsed time and actual bytes.
 
-Verification: the full local Python suite passed **622 tests in 46.83 s**;
-Ruff lint/format passed for 210 Python files; `npm.cmd run repo:check` and
-`git diff --check` passed. The full synthetic 960-row test reproduces the
-320 site-days, 235 target dates, 160/42/3 outcomes, both accepted fold counts
-and cutoffs. Tests cover purge/restoration, conditional weights, invalid input,
-no SQLite/network access, compact semantic validation, deterministic reuse,
-preserved execution metadata, changed/incomplete artifacts and CLI errors.
-Normal Windows filesystem permissions were used for the full suite's existing
-temporary-file/hard-link behavior. No real dataset/product command, model fit,
+The owner ran preparation successfully. Study ID:
+`0eda3e7d8e582d97e52a76eaf110b92b8209855785dd3a1664334963a1ceab2b`.
+Owner-measured command time: **23.076731 s**; published size:
+**46,694,941 bytes** (including the retained per-field provenance). Read-only
+`load_study` review passed file/manifest hashes, numerical compatibility,
+source identities, regenerated folds and all six weight partitions. Counts:
+960 rows, 320 site-days, 235 dates, 160/42/3 positives, original unique
+site-day weight sum 736. Fold 2023 has 282/318 training/validation rows,
+cutoff 2022-09-28, no purges, k/n=0/10; fold 2024 has 600/360 rows,
+cutoff 2023-10-02, no purges, k/n=2/23. Normalized weight sums are
+94/43 for p100/q200 in fold 2023, 200/96 in fold 2024 and 320/160 final.
+This review did not fit a classifier or rerun the full joined verifier.
+
+`train-trials` now encodes all 82 inputs and fits six weighted stage/C variants
+per fold, then composes nine validation candidates. Each stage owns training-only
+weighted scaler/reference; only 72 continuous coordinates are standardized.
+The sklearn 1.9.1 API expresses L2 through l1_ratio=0.0; the accepted lbfgs,
+intercept, C grid, tolerances and one-thread policy are unchanged. Class absence
+or convergence warnings fail without retry/fallback/partial publication. Saved
+JSON parameters are checked against sklearn on all fit and validation rows
+at absolute 1e-12, with compact probes retained for reload. k/n is computed
+from unique effective training site-days. A 0/n ratio remains diagnostic;
+unsupported 300+ predictions and metrics are missing.
+
+Trial bundles retain six fitted states, validation predictions, weighted
+diagnostics and a deterministic comparison report against training-only
+constant rates. Brier/log loss, ROC-AUC/AP where defined, raw/weighted confusion
+counts, weighted precision/recall at diagnostic 0.5 and five fixed calibration
+bins are reported per horizon and pooled. Fold mean selection components give
+equal weight to 100+ and final 200+ across three horizons; 300+ is excluded.
+No final selection or calibrator is fitted. Reload verifies scaler/reference,
+probes, predictions, metrics and report without refitting or weather history.
+
+Verification: the full local Python suite passed **633 tests in 47.87 s**;
+Ruff lint/format passed for 214 Python files; `npm.cmd run repo:check` and
+`git diff --check` passed. Eleven new synthetic tests cover direction/leap-year
+encoding, weighted scalers/reference, leakage, class/convergence failure,
+independently computed metrics, six fits/nine candidates, unsupported 300+,
+JSON probes, deterministic reuse and semantic tampering. Normal Windows
+filesystem permissions were used for existing temporary-file/hard-link tests.
+Only synthetic classifiers were fitted. No real trial training, final fit,
 prediction, T-022 replay, download or SQLite mutation ran.
 
 **Owner-run checkpoint:** from the repository root, run only this next stage:
 
 ```powershell
-uv run --project services/ml --locked xc-probability prepare `
-  --dataset-id 5e88d13ff67e201ce8b0f23ed2d517d5af188e6185cd1496cab8798316bf7394
+uv run --project services/ml --locked xc-probability train-trials `
+  --study-id 0eda3e7d8e582d97e52a76eaf110b92b8209855785dd3a1664334963a1ceab2b `
+  --fold 2023
 ```
 
-Review the returned JSON and ignored output bundle after the owner reports
-success. Expect 960 rows, 320 site-days, 235 dates, 67 inputs/82 coordinates,
-160/42/3 positives, folds 282/318 and 600/360, cutoffs 2022-09-28/2023-10-02,
-and zero extra purges. Capture the real study ID, time and bytes. Real retained
-source compatibility and resource use are still unverified. Only after that
-review implement the next planned weighted trial-training commit; train-trials,
-select, train-final and predict are not yet implemented. T-023 remains
-In Progress. All three temporary T-023 planning notes remain local, uncommitted
-and intact; durable operation is documented in DEC-070 and the ML README.
+Review the returned JSON and ignored trial artifact after the owner reports
+success. Expect six fits, nine candidates, 282 training/318 validation rows,
+2,862 validation prediction records and unsupported 300+ with stored 0/10.
+Review convergence, all candidate diagnostics, training-only constant rates,
+300+ missing reasons and content/reload integrity. Capture actual trial ID,
+time and bytes; synthetic tests do not establish real model quality. After
+review, the already implemented next owner command uses the same study with
+`--fold 2024` (600/360 rows, 3,240 predictions, k/n=2/23). Do not run either
+on the owner's behalf. Both successful owner-run trials are needed before
+the next planned selection/final-model implementation unit. T-023 remains
+In Progress. All three temporary T-023 notes remain local, uncommitted and
+intact; durable operation is documented in DEC-070 and the ML README.
 
 ## Plan consolidation — 2026-11-02
 

@@ -7,9 +7,9 @@ unless they explicitly require `--allow-live-network`.
 
 ## T-023 XC probability baseline (implementation in progress)
 
-The `predictions/xc_probability` module implements study preparation and the
-frozen source policy/JSON contracts. Trial training, selection, final fitting
-and prediction commands are not implemented yet. DEC-070 records the accepted
+The `predictions/xc_probability` module implements study preparation,
+chronological trial training and frozen source/JSON contracts. Selection,
+final fitting and prediction are not implemented yet. DEC-070 records the accepted
 scope; no fitted XC model or measured forecast accuracy is available.
 
 The packaged `xc-probability-policy-v1.json` explicitly maps 43 daily, 11
@@ -83,7 +83,85 @@ weights without retraversing the weather acquisition history.
 Synthetic checks cover the full 960-row regression inventory and source
 projection errors. Real retained-source compatibility remains pending until
 the owner runs the command above; synthetic success does not validate model
-quality. Training will be implemented after reviewing that owner-run output.
+quality. The owner's first study completed in 23.08 s with 46,694,941 bytes;
+artifact `0eda3e7d8e582d97e52a76eaf110b92b8209855785dd3a1664334963a1ceab2b`
+passed read-only compact reload, hashes, fold/support and training-weight review.
+It has 736 total original site-day weight. No classifier was fitted in that review.
+
+### Train the chronological development trials
+
+The owner runs each fold separately after reviewing the previous result:
+
+```powershell
+uv run --project services/ml --locked xc-probability train-trials `
+  --study-id 0eda3e7d8e582d97e52a76eaf110b92b8209855785dd3a1664334963a1ceab2b `
+  --fold 2023
+```
+
+Use `--fold 2024` only for the next trial after reviewing the 2023 artifact.
+Both accept optional `--project-root <path>`. This loads/revalidates the frozen
+study; it does not repeat the joined-weather verifier, open SQLite or download
+anything. Training reads only its fold's eligible development rows. Source
+season 2025 is excluded from study fitting and is reserved for T-026.
+
+The 67 physical inputs become 70 coordinates by replacing three wind
+directions with sin/cos. Gregorian year phase adds two coordinates, using
+366 days in leap years, followed by the frozen site/horizon one-hot categories.
+For each p100/q200 stage, learn weighted population means/scales only on its
+training subset. The first 72 coordinates are standardized; one-hot values
+stay unchanged. Exact constant columns use scale one. q200 fits only positive
+100+ site-days and has its own normalized weights, scaler and reference.
+
+Each command fits three p100 and three q200 L2 logistic variants at
+`C={0.03, 0.1, 0.3}`, then evaluates all nine combinations using p200=p100*q200.
+The pinned scikit-learn 1.9.1 API expresses pure L2 with `l1_ratio=0.0`;
+`lbfgs`, intercept, `max_iter=5000`, `tol=1e-8`, no class balancing and one
+numerical thread remain fixed. Missing classes or convergence warnings fail
+the command without partial publication, retries or changing settings.
+JSON inference is checked against sklearn `predict_proba` over all fitting
+and validation rows at absolute tolerance 1e-12. Four compact training/validation
+probes per stage retain sklearn expectations for reload checking.
+
+300+ uses unique training site-day k/n, not horizon row counts. Trial 2023
+expects 0/10: all 300+ validation predictions and scores remain missing with
+`insufficient_300_support`. Trial 2024 expects 2/23. The constant comparator
+uses only original weighted training frequencies for 100+/200+ and the same
+supported 300+ conversion; validation outcome frequency is never its forecast.
+
+The immutable trial bundle contains:
+
+- `trial.json`: six fitted stage states, weighted references/support,
+  numerical probes, algorithm arguments, fold boundary and pooled conversion.
+- `validation_predictions.jsonl`: all nine candidates' per-row p100, q200,
+  final p200 and available/missing p300, linked to frozen study row IDs.
+- `metrics.json`: original-weight Brier, log loss, ROC-AUC, average precision,
+  raw/weighted confusion counts and weighted precision/recall at diagnostic
+  threshold 0.5, plus five fixed calibration bins. Metrics are reported by
+  horizon and pooled; undefined ranking metrics carry nulls with reasons,
+  and empty bins have null means/frequencies. Log loss alone clips probabilities
+  at 1e-15; stored predictions are unchanged.
+- `report.md`: concise candidate comparison against the training-only constant,
+  support limitations and the distinction between development and independent
+  evaluation. It contains no execution time and does not select a final model.
+- `policy.json` and `manifest.json`: frozen method policy, study parent,
+  content hashes, numerical versions and separate execution metadata.
+
+Each candidate's mean score gives equal weight to 100+ and final 200+ at
+three horizons (six components per fold). The eventual selection averages
+both chronological trials, giving 12 components; 300+ never selects the recipe.
+The calibration table is diagnostic and does not fit a calibrator. All
+estimates remain uncalibrated baseline with low confidence. Diagnostic 0.5
+does not set alert thresholds. Repeated horizons are not independent events.
+
+Stdout returns one JSON object with `trial_id`, absolute `output_directory`,
+fit/candidate/row/prediction counts, stored k/n support, constant mean scores,
+current elapsed time and published bytes. Expect six fits, nine candidates,
+282 training/318 validation rows and 2,862 prediction records for fold 2023;
+600/360 rows and 3,240 records for fold 2024. Repetition verifies existing
+content and preserves the original publication metadata. Reload recomputes
+predictions/diagnostics and verifies training-only scalers/references without
+refitting an estimator. Real trial compatibility, convergence, timings and
+model quality remain pending until the owner runs these commands.
 
 ## T-022 offline cloudbase baseline
 

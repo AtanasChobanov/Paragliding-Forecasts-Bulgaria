@@ -13,6 +13,7 @@ from ...datasets.weather_cohort import CohortPlanError
 from ...datasets.weather_join import WeatherJoinError
 from ...storage.sqlite import repository_root
 from .study import prepare_study
+from .trials import train_trials
 
 
 def main(arguments: Sequence[str] | None = None) -> int:
@@ -25,9 +26,20 @@ def main(arguments: Sequence[str] | None = None) -> int:
     )
     prepare.add_argument("--dataset-id", required=True)
     prepare.add_argument("--project-root", type=Path, default=repository_root())
+    trial = commands.add_parser(
+        "train-trials", help="Fit six stage variants and evaluate nine chronological candidates."
+    )
+    trial.add_argument("--study-id", required=True)
+    trial.add_argument("--fold", type=int, choices=(2023, 2024), required=True)
+    trial.add_argument("--project-root", type=Path, default=repository_root())
     args = parser.parse_args(arguments)
     try:
-        result = prepare_study(dataset_id=args.dataset_id, project_root=args.project_root)
+        if args.command == "prepare":
+            result = prepare_study(dataset_id=args.dataset_id, project_root=args.project_root)
+        else:
+            result = train_trials(
+                study_id=args.study_id, fold=args.fold, project_root=args.project_root
+            )
     except (
         OSError,
         ValueError,
