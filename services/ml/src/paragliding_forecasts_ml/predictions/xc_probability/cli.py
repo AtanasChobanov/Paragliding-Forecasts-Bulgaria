@@ -12,6 +12,8 @@ from ...datasets.weather_backfill_cli import BackfillError
 from ...datasets.weather_cohort import CohortPlanError
 from ...datasets.weather_join import WeatherJoinError
 from ...storage.sqlite import repository_root
+from .model_io import train_final
+from .selection import select_recipe
 from .study import prepare_study
 from .trials import train_trials
 
@@ -32,13 +34,35 @@ def main(arguments: Sequence[str] | None = None) -> int:
     trial.add_argument("--study-id", required=True)
     trial.add_argument("--fold", type=int, choices=(2023, 2024), required=True)
     trial.add_argument("--project-root", type=Path, default=repository_root())
+    selection = commands.add_parser(
+        "select", help="Select a recipe from both verified chronological trials."
+    )
+    selection.add_argument("--study-id", required=True)
+    selection.add_argument("--trial-id", action="append", required=True)
+    selection.add_argument("--project-root", type=Path, default=repository_root())
+    final = commands.add_parser(
+        "train-final", help="Refit the selected recipe on all frozen development rows."
+    )
+    final.add_argument("--study-id", required=True)
+    final.add_argument("--selection-id", required=True)
+    final.add_argument("--project-root", type=Path, default=repository_root())
     args = parser.parse_args(arguments)
     try:
         if args.command == "prepare":
             result = prepare_study(dataset_id=args.dataset_id, project_root=args.project_root)
-        else:
+        elif args.command == "train-trials":
             result = train_trials(
                 study_id=args.study_id, fold=args.fold, project_root=args.project_root
+            )
+        elif args.command == "select":
+            result = select_recipe(
+                study_id=args.study_id, trial_ids=args.trial_id, project_root=args.project_root
+            )
+        else:
+            result = train_final(
+                study_id=args.study_id,
+                selection_id=args.selection_id,
+                project_root=args.project_root,
             )
     except (
         OSError,

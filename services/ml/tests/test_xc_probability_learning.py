@@ -6,7 +6,6 @@ import warnings
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 from unittest.mock import patch
-from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import numpy as np
@@ -17,13 +16,11 @@ from threadpoolctl import threadpool_info
 
 from paragliding_forecasts_ml.ingestion.gfs.models import sofia_window_instants
 from paragliding_forecasts_ml.ingestion.weather.serialization import (
-    canonical_json_bytes,
     pretty_json_bytes,
-    sha256_bytes,
 )
 from paragliding_forecasts_ml.predictions.xc_probability import cli, trials
 from paragliding_forecasts_ml.predictions.xc_probability.artifacts import read_bundle
-from paragliding_forecasts_ml.predictions.xc_probability.inputs import ForecastInput, Observation
+from paragliding_forecasts_ml.predictions.xc_probability.inputs import ForecastInput
 from paragliding_forecasts_ml.predictions.xc_probability.learning import (
     FittedStage,
     conversion_support,
@@ -34,81 +31,6 @@ from paragliding_forecasts_ml.predictions.xc_probability.learning import (
 )
 from paragliding_forecasts_ml.predictions.xc_probability.metrics import evaluate_metric
 from paragliding_forecasts_ml.predictions.xc_probability.policy import coordinate_ids, load_policy
-from paragliding_forecasts_ml.predictions.xc_probability.study import StudyRow, compile_study
-
-
-@pytest.fixture
-def synthetic_study():
-    policy, _ = load_policy()
-    rows = []
-    for season, first in ((2022, "2021-10-01"), (2023, "2022-10-01"), (2024, "2023-10-05")):
-        for index in range(14):
-            target = date.fromisoformat(first) + timedelta(days=index // 7)
-            labels = (int(index < 7), int(index < 3), int(season > 2022 and index < 1))
-            denominator = 1 if labels[1] else 2
-            for horizon in (1, 2, 3):
-                issue = target - timedelta(days=horizon)
-                key = {"season": season, "index": index, "horizon": horizon}
-                inputs = ForecastInput(
-                    run_key=str(UUID(int=target.toordinal() * 3 + horizon, version=4)),
-                    site_id=index % 7 + 1,
-                    site_slug=f"site-{index % 7 + 1}",
-                    target_local_date=str(target),
-                    issue_local_date=str(issue),
-                    horizon_days=horizon,
-                    cycle_reference_utc=f"{issue}T06:00:00Z",
-                    source_ready_at_utc=f"{issue}T10:00:00Z",
-                    issue_cutoff_utc=datetime.combine(
-                        issue, time(16), tzinfo=ZoneInfo("Europe/Sofia")
-                    )
-                    .astimezone(UTC)
-                    .strftime("%Y-%m-%dT%H:%M:%SZ"),
-                    valid_times_utc=sofia_window_instants(str(target)),
-                    observations=tuple(
-                        Observation(
-                            feature_id=spec.feature_id,
-                            value=float(position + index + horizon + 1),
-                            canonical_unit=spec.canonical_unit,
-                            quality_state="derived",
-                            missing_reason=None,
-                            provenance={"fixture": "synthetic"},
-                        )
-                        for position, spec in enumerate(policy.required_features)
-                    ),
-                    source_lineage={"fixture": "synthetic"},
-                )
-                rows.append(
-                    StudyRow(
-                        row_id=sha256_bytes(canonical_json_bytes(key)),
-                        inputs=inputs,
-                        source_season=season,
-                        labels=labels,
-                        sampling_weight=float(denominator),
-                        inclusion_numerator=1,
-                        inclusion_denominator=denominator,
-                        label_row_sha256="a" * 64,
-                        cohort_row_sha256=sha256_bytes(
-                            canonical_json_bytes({"season": season, "index": index})
-                        ),
-                    )
-                )
-    source_lineage = {
-        key: letter * 64
-        for key, letter in zip(
-            (
-                "dataset_id",
-                "parent_dataset_id",
-                "correction_id",
-                "cohort_plan_id",
-                "source_audit_id",
-                "dataset_manifest_sha256",
-                "cohort_manifest_sha256",
-            ),
-            "abcdefa",
-            strict=True,
-        )
-    }
-    return compile_study(tuple(rows), lineage=source_lineage, policy=policy)
 
 
 def fit_rows(study, *, stage="p100", fold=2023):

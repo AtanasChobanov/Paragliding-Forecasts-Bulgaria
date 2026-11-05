@@ -1,5 +1,127 @@
 # Project Handoff
 
+## Owner-run trial 2024 review and selection/final implementation — 2026-11-05
+
+The second owner-run trial passed review. Trial ID:
+`829b1b7e266d397854d3f87f1f1ca366fe5207c4b0e688338948c62eefd5e89e`.
+Parent study remains
+`0eda3e7d8e582d97e52a76eaf110b92b8209855785dd3a1664334963a1ceab2b`.
+Measured command time: **2.358427 s**; published size: **1,464,520 bytes**.
+Read-only compact reload verified hashes, source/model/scaler/reference
+lineage, all predictions/diagnostics and report. The review blocked fitting,
+SQLite, network access and weather-history verification. Independent Brier
+calculations matched all 54 components and nine fold means within 1e-15.
+
+Verified six fits, nine candidates, 600 training/360 validation rows and
+3,240 prediction records. The p100 models use 200 site-days with 96 positive
+100+ outcomes; q200 uses 96 site-days with 23 positive 200+ outcomes. Their
+normalized weight sums are 200 and 96 within floating tolerance. Iterations
+for C=0.03/0.1/0.3 are 30/47/76 (p100), 21/31/49 (q200). Every p300 is
+available and equals p200*2/23. All nine fold mean Brier scores improve on
+constant **0.1368382219687292** (log loss **0.42955725195023436**). The lowest
+fold mean Brier is **0.11885410818324776** at C100=0.03/C200=0.1, with log loss
+**0.36493484124595016**. This is development evidence, not final selection or
+independent reliability. Confidence remains low; 2025 remains reserved.
+
+Implemented planned unit four, `T-023 select and persist final XC models`:
+`select` requires exactly two distinct validated trials for the same study,
+one per chronological fold. It freezes all twelve equally weighted score
+components for each candidate and the constant comparator. Brier ties are
+anchored to the global minimum within absolute 1e-12, then lower mean log
+loss, smaller C100 and C200. Trial argument order does not affect the ID.
+No-improvement cases retain the selected logistic recipe and explicit limits.
+
+`train-final` requires a verified selection and revalidates both trials before
+two fresh fits on the final weight partitions, using all development rows.
+There is no manual C bypass or inherited fold purge. JSON models retain
+ordered coordinates/categories, scaler/coefficients/reference/baseline,
+support, source-row digests, numerical probes, computed k/n and frozen
+confidence/group/template policies. An embedded selection snapshot and stable
+manifest identity permit checking selection bytes/parents without opening its
+original files. `load_model` verifies the standalone model bundle and numerical
+probes without study/trial/dataset/SQLite access. Grouped logit contributions
+reconstruct each stage's decision function within absolute 1e-12. Final bundles
+have only model.json, policy.json and manifest.json; no redundant report.
+
+Verification: **647 Python tests passed in 60.93 s**; Ruff lint/format passed
+for 217 Python files; repository structure and diff whitespace checks passed.
+Fourteen new synthetic cases exercise twelve-component aggregation, ordered
+tie breaks, missing/duplicate/wrong-source trials, no constant fallback,
+selection-gated fitting, convergence failure, full-development refit,
+standalone reload, dynamic 2/9 conversion, grouped reconstruction, tampering,
+CLI gates and deterministic selection/model reuse. The shared typed XC fixture
+moved to conftest; the previous training tests still pass. All fitting in this
+implementation unit was synthetic. No real select, final fit, prediction,
+download, T-022 replay or SQLite write was performed by the agent.
+
+**Next owner-run checkpoint:** run only selection from the repository root:
+
+```powershell
+uv run --project services/ml --locked xc-probability select `
+  --study-id 0eda3e7d8e582d97e52a76eaf110b92b8209855785dd3a1664334963a1ceab2b `
+  --trial-id 6179a5a6f9878c00b30611390189f687eb4a9fb22fc968b5e8ee7c4e69024d57 `
+  --trial-id 829b1b7e266d397854d3f87f1f1ca366fe5207c4b0e688338948c62eefd5e89e
+```
+
+Review the returned selection ID, all nine scores, twelve-component means,
+tie-break winner, baseline comparison, parents and measured time/bytes.
+After that review, provide the already implemented train-final command using
+the actual selection ID. Expect 960/480 final fit rows and computed 3/42.
+Do not run either real command for the owner. Only after the real final model
+is reviewed proceed to planned retained-GFS prediction implementation. T-023
+remains In Progress. All three temporary T-023 notes remain uncommitted and
+intact; the earlier 2023 review update is included with this implementation.
+
+## Owner-run trial 2023 review — 2026-11-05
+
+The owner ran the first real `train-trials` stage successfully on implementation
+commit `a237c9a`. Trial ID:
+`6179a5a6f9878c00b30611390189f687eb4a9fb22fc968b5e8ee7c4e69024d57`.
+Parent study:
+`0eda3e7d8e582d97e52a76eaf110b92b8209855785dd3a1664334963a1ceab2b`.
+Owner-measured elapsed time: **2.133453 s**; published bytes: **1,270,006**.
+
+Read-only compact reload passed manifest/file hashes, numerical versions,
+parent identity, training-only scalers/references/support, stored sklearn
+probes, all validation predictions, recomputed diagnostics and report. The
+review explicitly blocked classifier fitting, SQLite/network access and the
+joined-weather verifier. An independent calculation also matched all 54
+per-candidate/horizon/threshold Brier components and the nine fold means
+within absolute 1e-15. No real training was rerun by the agent.
+
+Verified counts: six fits, nine combinations, 282 training/318 validation
+rows and 2,862 prediction records. p100 fits used 94 unique site-days and
+normalized weight sum 94; q200 used 43 positive-100+ site-days, 10 positive
+200+ outcomes and normalized weight sum 43. Iterations for C=0.03/0.1/0.3
+were 22/38/53 for p100 and 18/23/36 for q200. The pooled conversion is
+unsupported 0/10. Every p300 prediction and every 300+ score is missing with
+insufficient_300_support; no zero substitute entered evaluation.
+
+All nine combinations have lower mean weighted development Brier than the
+training-only constant comparator (**0.13356361513739132**, log loss
+**0.41775464108426236**). The lowest fold Brier is
+**0.1216948099846877**, with log loss **0.37016326132742217**, at
+C100=0.1/C200=0.03. This is a single-fold diagnostic, not final selection or
+independent model validation. Keep the predeclared grid, low confidence and
+uncalibrated baseline semantics. The 2025 reserve remains untouched.
+
+**Next owner-run checkpoint:** the already implemented second trial:
+
+```powershell
+uv run --project services/ml --locked xc-probability train-trials `
+  --study-id 0eda3e7d8e582d97e52a76eaf110b92b8209855785dd3a1664334963a1ceab2b `
+  --fold 2024
+```
+
+Expect six fits, nine combinations, 600 training/360 validation rows,
+3,240 prediction records and supported training k/n=2/23. Review that artifact
+after the owner reports execution, then implement the next planned
+selection/final-model unit. Do not run the command on the owner's behalf.
+No implementation change was needed in this review; the previous full-suite
+result remains 633 passed. T-023 remains In Progress. This operational update
+can accompany the next planned implementation commit; the three local
+temporary T-023 documents remain uncommitted and intact.
+
 ## T-023 implementation checkpoint — 2026-11-02
 
 Implemented the first three planned units on `feature/T-023-baseline-XC-model`:

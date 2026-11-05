@@ -8,9 +8,10 @@ unless they explicitly require `--allow-live-network`.
 ## T-023 XC probability baseline (implementation in progress)
 
 The `predictions/xc_probability` module implements study preparation,
-chronological trial training and frozen source/JSON contracts. Selection,
-final fitting and prediction are not implemented yet. DEC-070 records the accepted
-scope; no fitted XC model or measured forecast accuracy is available.
+chronological trials, recipe selection and final JSON-model fitting/loading.
+Retained-GFS prediction is not implemented yet. DEC-070 records the accepted
+scope. Both owner-run trials passed artifact review; the real final model has
+not yet been fitted and independent forecast accuracy remains unverified.
 
 The packaged `xc-probability-policy-v1.json` explicitly maps 43 daily, 11
 0–1500 m layer and 13 1500–3000 m layer inputs to weather policy v5, including
@@ -160,8 +161,76 @@ current elapsed time and published bytes. Expect six fits, nine candidates,
 600/360 rows and 3,240 records for fold 2024. Repetition verifies existing
 content and preserves the original publication metadata. Reload recomputes
 predictions/diagnostics and verifies training-only scalers/references without
-refitting an estimator. Real trial compatibility, convergence, timings and
-model quality remain pending until the owner runs these commands.
+refitting an estimator. Both owner-run trials passed compact reload, numerical,
+support and diagnostic review. All nine candidates improve the mean development
+Brier comparator in each fold. These results do not establish independent
+final-model quality; exact IDs/timings are retained in the handoff.
+
+### Select the recipe and fit the final model
+
+After reviewing both trials, the owner runs:
+
+```powershell
+uv run --project services/ml --locked xc-probability select `
+  --study-id 0eda3e7d8e582d97e52a76eaf110b92b8209855785dd3a1664334963a1ceab2b `
+  --trial-id 6179a5a6f9878c00b30611390189f687eb4a9fb22fc968b5e8ee7c4e69024d57 `
+  --trial-id 829b1b7e266d397854d3f87f1f1ca366fe5207c4b0e688338948c62eefd5e89e
+```
+
+Exactly two distinct trial IDs for the same study/policy/environment are
+required, with one fold each for 2023 and 2024. Argument order is immaterial.
+The command reloads the compact study and trials and verifies their saved
+predictions and diagnostics. It performs no fitting, weather-history traversal,
+SQLite access or network operation.
+
+`selection.json` retains all nine candidates and their twelve equally weighted
+100+/final-200+ components (two folds, three horizons, two thresholds), plus
+the training-only constant comparator. Minimize mean weighted Brier. Candidates
+within absolute 1e-12 of the global minimum are tied; choose the lower analogous
+mean log loss, then smaller C100, then smaller C200. 300+ never enters selection.
+The deterministic `report.md` summarizes that comparison and the development
+limitations. If no candidate improves the constant comparator, the selected
+logistic recipe is retained and the lack of demonstrated benefit is explicit.
+The command returns `selection_id`, chosen `c100`/`c200`, scores, counts, path,
+elapsed time and published bytes in one stdout JSON object.
+
+Only after reviewing the selection artifact, the owner runs:
+
+```powershell
+uv run --project services/ml --locked xc-probability train-final `
+  --study-id 0eda3e7d8e582d97e52a76eaf110b92b8209855785dd3a1664334963a1ceab2b `
+  --selection-id <verified-selection-id>
+```
+
+Both commands accept optional `--project-root <path>`. Final fitting requires
+a valid selection and verifies both referenced trials before fitting. There
+are no manual C arguments or skip-selection mode. Fit p100 from scratch on
+all 960 development rows and q200 on the 480 positive-100+ rows. Use the final
+frozen weight partitions; temporary chronological purges do not apply.
+Compute unique training-site-day k/n again for this fit and store the expected
+3/42, support and lineage. Inference later uses those saved counts/ratio.
+No extra calibrator, bootstrap, model family or 2025 data is introduced.
+
+The final bundle contains `manifest.json`, `policy.json` and `model.json`, with
+no redundant Markdown report. It retains ordered input/coordinate/category
+identities, each stage's means/scales, coefficients/intercept, weighted
+reference, baseline logit, support, numerical probes, final-row digests and
+conversion counts. It also freezes driver groups, templates and per-threshold
+low-confidence reasons, along with method/library and policy identities.
+
+An embedded selection snapshot and its stable manifest identity bind the
+chosen recipe to the original selection bytes and parent IDs. Creation/time
+metadata is excluded from that evidence. Model loading verifies the snapshot,
+policy, dimensions, finite numbers, support, self-check probabilities and
+baseline-logit/group-contribution reconstruction, without opening a study,
+trial, dataset or database. Pure inference uses the loaded numerical state.
+No pickle/joblib serialization is used. The development scores remain separate
+from final refit support; no accuracy claim is based on the fit's own rows.
+
+Final stdout returns `model_id`, source IDs, chosen C values, 960/480 fit row
+counts, source seasons, actual stored k/n and measured time/bytes. Predictions
+remain baseline, uncalibrated and low confidence. Real select/final-fit
+compatibility and measurements remain pending until the owner runs the stages.
 
 ## T-022 offline cloudbase baseline
 

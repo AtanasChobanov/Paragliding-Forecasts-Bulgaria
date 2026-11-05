@@ -126,6 +126,33 @@ def predict_stage(parameters: StageParameters, encoded: np.ndarray) -> np.ndarra
         return expit(logits)
 
 
+def grouped_contributions(
+    parameters: StageParameters, encoded: np.ndarray, coordinate_group_ids: tuple[str, ...]
+) -> dict[str, np.ndarray]:
+    """Faithful local logit contributions around the stored training reference."""
+    if len(coordinate_group_ids) != 82 or len(set(coordinate_group_ids)) != 15:
+        raise ValueError("XC contributions require one of fifteen groups per coordinate.")
+    standardized = standardize(encoded, parameters.means, parameters.scales)
+    contributions = (standardized - np.asarray(parameters.reference)) * np.asarray(
+        parameters.coefficients
+    )
+    result = {
+        group: np.sum(
+            contributions[:, [i for i, value in enumerate(coordinate_group_ids) if value == group]],
+            axis=1,
+        )
+        for group in sorted(set(coordinate_group_ids))
+    }
+    reconstructed = parameters.baseline_logit + np.sum(np.asarray(list(result.values())), axis=0)
+    with threadpool_limits(limits=1):
+        logits = standardized @ np.asarray(parameters.coefficients) + parameters.intercept
+    if not np.allclose(reconstructed, logits, atol=1e-12, rtol=0):
+        raise ValueError(
+            "Grouped XC contributions fail to reconstruct the stage decision function."
+        )
+    return result
+
+
 class StageCheck(AtmosphericContract):
     source_row_id: Sha256
     encoded: tuple[FiniteFloat, ...] = Field(min_length=82, max_length=82)

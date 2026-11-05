@@ -1,0 +1,327 @@
+"""Deterministic recipe selection from exactly two verified development trials."""
+
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass
+from pathlib import Path
+from time import perf_counter
+from typing import Literal
+
+from pydantic import Field, FiniteFloat, model_validator
+
+from ...ingestion.atmosphere.contracts import AtmosphericContract
+from ...ingestion.weather.serialization import pretty_json_bytes
+from .artifacts import artifact_directory, identity, publish_bundle, read_bundle
+from .models import ArtifactParent, Probability, Sha256
+from .policy import load_policy
+from .study import LoadedStudy, load_study
+from .trials import CValue, LoadedTrial, load_trial
+
+
+class Choice(AtmosphericContract):
+    c100: CValue
+    c200: CValue
+
+
+class ScoreComponent(AtmosphericContract):
+    fold: Literal[2023, 2024]
+    horizon: Literal[1, 2, 3]
+    threshold: Literal[100, 200]
+    brier: Probability
+    log_loss: FiniteFloat = Field(ge=0)
+
+
+class CandidateScore(Choice):
+    components: tuple[ScoreComponent, ...] = Field(min_length=12, max_length=12)
+    mean_brier: Probability
+    mean_log_loss: FiniteFloat = Field(ge=0)
+
+
+class TrialReference(AtmosphericContract):
+    fold: Literal[2023, 2024]
+    trial_id: Sha256
+
+
+class SelectionMetadata(AtmosphericContract):
+    schema_version: Literal["xc-probability-selection/1"] = "xc-probability-selection/1"
+    study_id: Sha256
+    dataset_id: Sha256
+    trials: tuple[TrialReference, TrialReference]
+    candidates: tuple[CandidateScore, ...] = Field(min_length=9, max_length=9)
+    constant_components: tuple[ScoreComponent, ...] = Field(min_length=12, max_length=12)
+    constant_mean_brier: Probability
+    constant_mean_log_loss: FiniteFloat = Field(ge=0)
+    winner: Choice
+    improves_constant_brier: bool
+    brier_tie_tolerance: Literal[1e-12] = 1e-12
+    validation_status: Literal["development_only"] = "development_only"
+    calibration_status: Literal["not_calibrated"] = "not_calibrated"
+
+    @model_validator(mode="after")
+    def frozen_scores_follow_recipe(self) -> SelectionMetadata:
+        policy, _ = load_policy()
+        if (
+            tuple(ref.fold for ref in self.trials) != (2023, 2024)
+            or len({ref.trial_id for ref in self.trials}) != 2
+        ):
+            raise ValueError("Selection requires two distinct trial IDs for folds 2023 and 2024.")
+        grid = tuple((a, b) for a in policy.regularization_grid for b in policy.regularization_grid)
+        if tuple((score.c100, score.c200) for score in self.candidates) != grid:
+            raise ValueError("Selection candidate grid differs from the predeclared nine pairs.")
+        expected_keys = tuple(
+            (fold, horizon, threshold)
+            for fold in (2023, 2024)
+            for horizon in (1, 2, 3)
+            for threshold in (100, 200)
+        )
+        for components, brier, loss in (
+            *((c.components, c.mean_brier, c.mean_log_loss) for c in self.candidates),
+            (self.constant_components, self.constant_mean_brier, self.constant_mean_log_loss),
+        ):
+            if tuple((c.fold, c.horizon, c.threshold) for c in components) != expected_keys:
+                raise ValueError("Selection scores must retain exactly twelve ordered components.")
+            if (
+                brier != math.fsum(c.brier for c in components) / 12
+                or loss != math.fsum(c.log_loss for c in components) / 12
+            ):
+                raise ValueError(
+                    "Selection means differ from their twelve equal-weight components."
+                )
+        winner = choose_candidate(self.candidates, self.brier_tie_tolerance)
+        if self.winner != Choice(c100=winner.c100, c200=winner.c200) or (
+            self.improves_constant_brier != (winner.mean_brier < self.constant_mean_brier)
+        ):
+            raise ValueError("Selection winner or baseline comparison violates the frozen recipe.")
+        return self
+
+
+def choose_candidate(
+    candidates: tuple[CandidateScore, ...], tolerance: float = 1e-12
+) -> CandidateScore:
+    if not candidates:
+        raise ValueError("Selection requires candidates.")
+    minimum = min(candidate.mean_brier for candidate in candidates)
+    tied = [
+        candidate for candidate in candidates if abs(candidate.mean_brier - minimum) <= tolerance
+    ]
+    return min(
+        tied, key=lambda candidate: (candidate.mean_log_loss, candidate.c100, candidate.c200)
+    )
+
+
+def selection_parents(metadata: SelectionMetadata) -> tuple[ArtifactParent, ...]:
+    return (
+        ArtifactParent(kind="study", artifact_id=metadata.study_id),
+        *(ArtifactParent(kind="trial", artifact_id=ref.trial_id) for ref in metadata.trials),
+    )
+
+
+def build_selection(
+    study: LoadedStudy, study_id: str, trials: dict[int, tuple[str, LoadedTrial]]
+) -> SelectionMetadata:
+    if set(trials) != {2023, 2024}:
+        raise ValueError("Selection requires both chronological folds exactly once.")
+
+    def components(c100=None, c200=None):
+        result = []
+        for fold in (2023, 2024):
+            trial = trials[fold][1]
+            if (
+                trial.metadata.fold != fold
+                or trial.metadata.study_id != study_id
+                or trial.metadata.dataset_id != study.metadata.dataset_id
+            ):
+                raise ValueError(
+                    "Selection trials differ from the consumed study or fold identity."
+                )
+            candidate = (
+                trial.evaluation.constant
+                if c100 is None
+                else next(
+                    candidate
+                    for candidate in trial.evaluation.candidates
+                    if (candidate.c100, candidate.c200) == (c100, c200)
+                )
+            )
+            for horizon in (1, 2, 3):
+                for threshold in (100, 200):
+                    metric = next(
+                        metric
+                        for metric in candidate.by_horizon[str(horizon)]
+                        if metric.threshold_km == threshold
+                    )
+                    if metric.scores is None:
+                        raise ValueError(
+                            "Selection cannot omit a required 100+/200+ score component."
+                        )
+                    result.append(
+                        ScoreComponent(
+                            fold=fold,
+                            horizon=horizon,
+                            threshold=threshold,
+                            brier=metric.scores.brier,
+                            log_loss=metric.scores.log_loss,
+                        )
+                    )
+        return tuple(result)
+
+    policy, _ = load_policy()
+    candidates = []
+    for c100 in policy.regularization_grid:
+        for c200 in policy.regularization_grid:
+            parts = components(c100, c200)
+            candidates.append(
+                CandidateScore(
+                    c100=c100,
+                    c200=c200,
+                    components=parts,
+                    mean_brier=math.fsum(c.brier for c in parts) / 12,
+                    mean_log_loss=math.fsum(c.log_loss for c in parts) / 12,
+                )
+            )
+    winner = choose_candidate(tuple(candidates))
+    constant = components()
+    baseline_brier = math.fsum(c.brier for c in constant) / 12
+    return SelectionMetadata(
+        study_id=study_id,
+        dataset_id=study.metadata.dataset_id,
+        trials=tuple(TrialReference(fold=fold, trial_id=trials[fold][0]) for fold in (2023, 2024)),
+        candidates=tuple(candidates),
+        constant_components=constant,
+        constant_mean_brier=baseline_brier,
+        constant_mean_log_loss=math.fsum(c.log_loss for c in constant) / 12,
+        winner=Choice(c100=winner.c100, c200=winner.c200),
+        improves_constant_brier=winner.mean_brier < baseline_brier,
+    )
+
+
+def selection_report(metadata: SelectionMetadata) -> bytes:
+    return (
+        "\n".join(
+            [
+                "# XC development recipe selection",
+                "",
+                "Exactly twelve equally weighted components: two thresholds (100+/final 200+),",
+                "three horizons and two chronological development trials. 300+ never selects the recipe.",
+                "",
+                "| C100 | C200 | Mean weighted Brier | Mean weighted log loss | Brier minus constant |",
+                "| ---: | ---: | ---: | ---: | ---: |",
+                *[
+                    f"| {c.c100} | {c.c200} | {c.mean_brier:.12g} | {c.mean_log_loss:.12g} | {c.mean_brier - metadata.constant_mean_brier:+.12g} |"
+                    for c in metadata.candidates
+                ],
+                "",
+                f"Selected C100={metadata.winner.c100}, C200={metadata.winner.c200}.",
+                "Brier ties are candidates within absolute 1e-12 of the minimum; ties use lower mean log loss,",
+                "then smaller C100, then smaller C200. Trial argument order does not affect selection.",
+                f"Constant comparator: Brier {metadata.constant_mean_brier:.12g}, log loss {metadata.constant_mean_log_loss:.12g}.",
+                (
+                    "The selected candidate improves the development Brier comparator."
+                    if metadata.improves_constant_brier
+                    else "No demonstrated added benefit in development validation; the selected logistic recipe is retained."
+                ),
+                "",
+                "These data selected the recipe. Scores are development evidence, not independent final-model accuracy.",
+                "Confidence remains low and probabilities are uncalibrated. 2025 remains reserved for T-026.",
+                "Final fitting starts from scratch on all eligible 2022–2024 rows; temporary fold purges do not carry over.",
+            ]
+        )
+        + "\n"
+    ).encode("utf-8")
+
+
+def validate_selection_payload(
+    payloads: dict[str, bytes],
+    *,
+    study: LoadedStudy,
+    study_id: str,
+    trials: dict[int, tuple[str, LoadedTrial]],
+) -> SelectionMetadata:
+    if set(payloads) != {"policy.json", "selection.json", "report.md"}:
+        raise ValueError("Selection bundle has unexpected or missing files.")
+    metadata = SelectionMetadata.model_validate_json(payloads["selection.json"])
+    if metadata != build_selection(study, study_id, trials) or payloads[
+        "report.md"
+    ] != selection_report(metadata):
+        raise ValueError(
+            "Selection content differs from the two verified trial scores and fixed recipe."
+        )
+    return metadata
+
+
+@dataclass(frozen=True)
+class LoadedSelection:
+    metadata: SelectionMetadata
+    content_identity: dict
+
+
+def load_selection(
+    *, selection_id: str, study_id: str, study: LoadedStudy, project_root: Path
+) -> LoadedSelection:
+    manifest, payloads = read_bundle(
+        artifact_directory(project_root, "selection", selection_id),
+        kind="selection",
+        artifact_id=selection_id,
+    )
+    metadata = SelectionMetadata.model_validate_json(payloads["selection.json"])
+    if metadata.study_id != study_id or manifest.parents != selection_parents(metadata):
+        raise ValueError("Selection manifest parents differ from the consumed study/trials.")
+    trials = {
+        ref.fold: (
+            ref.trial_id,
+            load_trial(
+                trial_id=ref.trial_id, study_id=study_id, study=study, project_root=project_root
+            ),
+        )
+        for ref in metadata.trials
+    }
+    metadata = validate_selection_payload(payloads, study=study, study_id=study_id, trials=trials)
+    return LoadedSelection(metadata, identity(manifest))
+
+
+def select_recipe(*, study_id: str, trial_ids: list[str], project_root: Path) -> dict:
+    started_at = perf_counter()
+    if len(trial_ids) != 2 or len(set(trial_ids)) != 2:
+        raise ValueError("Pass exactly two distinct --trial-id values.")
+    study = load_study(study_id=study_id, project_root=project_root)
+    trials = {}
+    for trial_id in trial_ids:
+        trial = load_trial(
+            trial_id=trial_id, study_id=study_id, study=study, project_root=project_root
+        )
+        if trial.metadata.fold in trials:
+            raise ValueError("Selection requires two different chronological folds.")
+        trials[trial.metadata.fold] = trial_id, trial
+    metadata = build_selection(study, study_id, trials)
+    result = publish_bundle(
+        root=project_root.resolve(),
+        kind="selection",
+        started_at=started_at,
+        parents=selection_parents(metadata),
+        payloads={
+            "selection.json": pretty_json_bytes(metadata),
+            "report.md": selection_report(metadata),
+        },
+        validate_payload=lambda contents: validate_selection_payload(
+            contents, study=study, study_id=study_id, trials=trials
+        ),
+    )
+    winner = next(
+        c
+        for c in metadata.candidates
+        if (c.c100, c.c200) == (metadata.winner.c100, metadata.winner.c200)
+    )
+    return {
+        **result,
+        "study_id": study_id,
+        "candidate_count": 9,
+        "component_count": 12,
+        **metadata.winner.model_dump(),
+        "mean_brier": winner.mean_brier,
+        "mean_log_loss": winner.mean_log_loss,
+        "constant_mean_brier": metadata.constant_mean_brier,
+        "constant_mean_log_loss": metadata.constant_mean_log_loss,
+        "improves_constant_brier": metadata.improves_constant_brier,
+        "validation_status": "development_only",
+    }
