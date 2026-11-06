@@ -29,6 +29,15 @@ from .learning import (
 from .metrics import MetricSummary, evaluate_metric
 from .models import ArtifactParent, ConversionSupport, Probability, Sha256
 from .policy import XcPolicy, load_policy
+from .scoring_layout import (
+    EVALUATED_THRESHOLDS_KM,
+    FORECAST_HORIZONS,
+    MODEL_STAGES,
+    REGULARIZATION_CANDIDATE_COUNT,
+    SELECTION_THRESHOLDS_KM,
+    TRIAL_FIT_COUNT,
+    TRIAL_SCORE_COMPONENT_COUNT,
+)
 from .study import LoadedStudy, StudyRow, load_study, summarize
 
 CValue = Literal[0.03, 0.1, 0.3]
@@ -69,7 +78,9 @@ class CandidateEvaluation(AtmosphericContract):
 
 class TrialEvaluation(AtmosphericContract):
     schema_version: Literal["xc-probability-trial-metrics/1"] = "xc-probability-trial-metrics/1"
-    candidates: tuple[CandidateEvaluation, ...] = Field(min_length=9, max_length=9)
+    candidates: tuple[CandidateEvaluation, ...] = Field(
+        min_length=REGULARIZATION_CANDIDATE_COUNT, max_length=REGULARIZATION_CANDIDATE_COUNT
+    )
     constant: CandidateEvaluation
     constant_training_rates: dict[str, Probability | None]
 
@@ -82,7 +93,7 @@ class TrialMetadata(AtmosphericContract):
     exclusive_training_cutoff: str
     training_summary: dict[str, JsonValue]
     validation_summary: dict[str, JsonValue]
-    models: tuple[FittedStage, ...] = Field(min_length=6, max_length=6)
+    models: tuple[FittedStage, ...] = Field(min_length=TRIAL_FIT_COUNT, max_length=TRIAL_FIT_COUNT)
     conversion: ConversionSupport
     algorithm: dict[str, JsonValue]
     logistic_arguments: dict[str, JsonValue]
@@ -119,7 +130,7 @@ def validation_predictions(
     site_ids: tuple[int, ...],
     policy: XcPolicy,
 ) -> tuple[ValidationPrediction, ...]:
-    grid = tuple((stage, c) for stage in ("p100", "q200") for c in policy.regularization_grid)
+    grid = tuple((stage, c) for stage in MODEL_STAGES for c in policy.regularization_grid)
     if (
         tuple((model.parameters.stage, model.parameters.regularization_c) for model in models)
         != grid
@@ -190,22 +201,22 @@ def evaluate_candidate(
                 if probabilities[str(t)][0] is None
                 else None,
             )
-            for t in (100, 200, 300)
+            for t in EVALUATED_THRESHOLDS_KM
         )
 
     by_horizon = {
         str(horizon): metrics_for(
             [index for index, row in enumerate(rows) if row.inputs.horizon_days == horizon]
         )
-        for horizon in (1, 2, 3)
+        for horizon in FORECAST_HORIZONS
     }
     primary = [
         summary.scores
         for metrics in by_horizon.values()
         for summary in metrics
-        if summary.threshold_km in (100, 200)
+        if summary.threshold_km in SELECTION_THRESHOLDS_KM
     ]
-    if len(primary) != 6 or any(scores is None for scores in primary):
+    if len(primary) != TRIAL_SCORE_COMPONENT_COUNT or any(scores is None for scores in primary):
         raise ValueError(
             "Trial candidate selection components must cover both thresholds and all three horizons."
         )
@@ -214,8 +225,9 @@ def evaluate_candidate(
         c200=c200,
         by_horizon=by_horizon,
         pooled=metrics_for(list(range(len(rows)))),
-        mean_brier=math.fsum(scores.brier for scores in primary) / 6,
-        mean_log_loss=math.fsum(scores.log_loss for scores in primary) / 6,
+        mean_brier=math.fsum(scores.brier for scores in primary) / TRIAL_SCORE_COMPONENT_COUNT,
+        mean_log_loss=math.fsum(scores.log_loss for scores in primary)
+        / TRIAL_SCORE_COMPONENT_COUNT,
     )
 
 
@@ -234,7 +246,9 @@ def evaluate_trial(
                 raise ValueError(
                     "Trial predictions must cover each validation row once per grid pair."
                 )
-            values = {str(t): [getattr(row, f"p{t}") for row in subset] for t in (100, 200, 300)}
+            values = {
+                str(t): [getattr(row, f"p{t}") for row in subset] for t in EVALUATED_THRESHOLDS_KM
+            }
             candidates.append(evaluate_candidate(validation, values, c100=c100, c200=c200))
     rates = constant_rates(training, conversion)
     return TrialEvaluation(
@@ -242,7 +256,7 @@ def evaluate_trial(
         constant_training_rates=rates,
         constant=evaluate_candidate(
             validation,
-            {str(t): [rates[f"p{t}"]] * len(validation) for t in (100, 200, 300)},
+            {str(t): [rates[f"p{t}"]] * len(validation) for t in EVALUATED_THRESHOLDS_KM},
             c100=None,
             c200=None,
         ),
@@ -427,7 +441,7 @@ def train_trials(*, study_id: str, fold: int, project_root: Path) -> dict:
     by_id = {row.row_id: row for row in training}
     models = []
     with threadpool_limits(limits=1):
-        for stage in ("p100", "q200"):
+        for stage in MODEL_STAGES:
             weights = next(
                 part
                 for part in study.weights
@@ -486,8 +500,8 @@ def train_trials(*, study_id: str, fold: int, project_root: Path) -> dict:
     return {
         **result,
         "fold": fold,
-        "fit_count": 6,
-        "candidate_count": 9,
+        "fit_count": len(models),
+        "candidate_count": len(evaluation.candidates),
         "training_row_count": len(training),
         "validation_row_count": len(validation),
         "validation_prediction_count": len(predictions),

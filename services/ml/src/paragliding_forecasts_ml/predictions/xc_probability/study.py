@@ -19,6 +19,7 @@ from .artifacts import artifact_directory, json_lines, publish_bundle, read_bund
 from .inputs import ForecastInput, joined_input, validate_features
 from .models import Sha256
 from .policy import Stage, XcPolicy, coordinate_groups, coordinate_ids, load_policy
+from .scoring_layout import FORECAST_HORIZONS, MODEL_STAGES, VALIDATION_SEASONS
 
 
 class StudyRow(AtmosphericContract):
@@ -86,7 +87,9 @@ class StudyMetadata(AtmosphericContract):
     feature_ids: tuple[str, ...] = Field(min_length=67, max_length=67)
     coordinate_ids: tuple[str, ...] = Field(min_length=82, max_length=82)
     coordinate_groups: tuple[str, ...] = Field(min_length=82, max_length=82)
-    folds: tuple[Fold, Fold]
+    folds: tuple[Fold, ...] = Field(
+        min_length=len(VALIDATION_SEASONS), max_length=len(VALIDATION_SEASONS)
+    )
     summary: dict[str, JsonValue]
 
 
@@ -142,7 +145,7 @@ def adapt_joined_rows(
                 cohort_row_sha256=sha256_bytes(canonical_json_bytes(selected_row)),
             )
         )
-    expected = {(site, target, horizon) for site, target in cohort for horizon in (1, 2, 3)}
+    expected = {(site, target, horizon) for site, target in cohort for horizon in FORECAST_HORIZONS}
     actual = {
         (row.inputs.site_id, row.inputs.target_local_date, row.inputs.horizon_days)
         for row in result
@@ -177,7 +180,7 @@ def validate_rows(rows: tuple[StudyRow, ...], policy: XcPolicy) -> None:
     if any(len(seasons) != 1 for seasons in seasons_by_date.values()):
         raise ValueError("All sites/horizons on one target date must have the same source season.")
     for group in groups.values():
-        if sorted(row.inputs.horizon_days for row in group) != [1, 2, 3]:
+        if sorted(row.inputs.horizon_days for row in group) != list(FORECAST_HORIZONS):
             raise ValueError("Every training site-day must retain exactly three horizons.")
         signatures = {
             (
@@ -197,9 +200,9 @@ def validate_rows(rows: tuple[StudyRow, ...], policy: XcPolicy) -> None:
             )
 
 
-def make_folds(rows: tuple[StudyRow, ...]) -> tuple[Fold, Fold]:
+def make_folds(rows: tuple[StudyRow, ...]) -> tuple[Fold, ...]:
     folds = []
-    for validation_season in (2023, 2024):
+    for validation_season in VALIDATION_SEASONS:
         validation = [row for row in rows if row.source_season == validation_season]
         training = [row for row in rows if row.source_season < validation_season]
         if not validation or not training:
@@ -230,7 +233,9 @@ def training_weights(rows: tuple[StudyRow, ...], scope: str, stage: Stage) -> Fi
         training_scope=scope,
         stage=stage,
         row_ids=tuple(row.row_id for row in eligible),
-        row_weights=tuple(row.sampling_weight / mean_weight / 3 for row in eligible),
+        row_weights=tuple(
+            row.sampling_weight / mean_weight / len(FORECAST_HORIZONS) for row in eligible
+        ),
     )
 
 
@@ -248,7 +253,7 @@ def summarize(rows: tuple[StudyRow, ...]) -> dict:
             row.sampling_weight for row in unique.values()
         ),
         "rows_by_horizon": {
-            str(h): sum(row.inputs.horizon_days == h for row in rows) for h in (1, 2, 3)
+            str(h): sum(row.inputs.horizon_days == h for row in rows) for h in FORECAST_HORIZONS
         },
     }
 
@@ -259,7 +264,7 @@ def compile_study(rows: tuple[StudyRow, ...], *, lineage: dict, policy: XcPolicy
     by_id = {row.row_id: row for row in rows}
     weights = []
     for fold in folds:
-        for stage in ("p100", "q200"):
+        for stage in MODEL_STAGES:
             weights.append(
                 training_weights(
                     tuple(by_id[key] for key in fold.training_row_ids),
@@ -267,7 +272,7 @@ def compile_study(rows: tuple[StudyRow, ...], *, lineage: dict, policy: XcPolicy
                     stage,
                 )
             )
-    weights.extend(training_weights(rows, "final", stage) for stage in ("p100", "q200"))
+    weights.extend(training_weights(rows, "final", stage) for stage in MODEL_STAGES)
     categories = tuple(sorted({(row.inputs.site_id, row.inputs.site_slug) for row in rows}))
     summary = {
         **summarize(rows),

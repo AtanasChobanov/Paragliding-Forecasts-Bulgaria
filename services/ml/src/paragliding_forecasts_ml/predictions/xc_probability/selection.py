@@ -15,6 +15,14 @@ from ...ingestion.weather.serialization import pretty_json_bytes
 from .artifacts import artifact_directory, identity, publish_bundle, read_bundle
 from .models import ArtifactParent, Probability, Sha256
 from .policy import load_policy
+from .scoring_layout import (
+    FORECAST_HORIZONS,
+    REGULARIZATION_CANDIDATE_COUNT,
+    SELECTION_COMPONENT_KEYS,
+    SELECTION_SCORE_COMPONENT_COUNT,
+    SELECTION_THRESHOLDS_KM,
+    VALIDATION_SEASONS,
+)
 from .study import LoadedStudy, load_study
 from .trials import CValue, LoadedTrial, load_trial
 
@@ -33,7 +41,9 @@ class ScoreComponent(AtmosphericContract):
 
 
 class CandidateScore(Choice):
-    components: tuple[ScoreComponent, ...] = Field(min_length=12, max_length=12)
+    components: tuple[ScoreComponent, ...] = Field(
+        min_length=SELECTION_SCORE_COMPONENT_COUNT, max_length=SELECTION_SCORE_COMPONENT_COUNT
+    )
     mean_brier: Probability
     mean_log_loss: FiniteFloat = Field(ge=0)
 
@@ -47,9 +57,15 @@ class SelectionMetadata(AtmosphericContract):
     schema_version: Literal["xc-probability-selection/1"] = "xc-probability-selection/1"
     study_id: Sha256
     dataset_id: Sha256
-    trials: tuple[TrialReference, TrialReference]
-    candidates: tuple[CandidateScore, ...] = Field(min_length=9, max_length=9)
-    constant_components: tuple[ScoreComponent, ...] = Field(min_length=12, max_length=12)
+    trials: tuple[TrialReference, ...] = Field(
+        min_length=len(VALIDATION_SEASONS), max_length=len(VALIDATION_SEASONS)
+    )
+    candidates: tuple[CandidateScore, ...] = Field(
+        min_length=REGULARIZATION_CANDIDATE_COUNT, max_length=REGULARIZATION_CANDIDATE_COUNT
+    )
+    constant_components: tuple[ScoreComponent, ...] = Field(
+        min_length=SELECTION_SCORE_COMPONENT_COUNT, max_length=SELECTION_SCORE_COMPONENT_COUNT
+    )
     constant_mean_brier: Probability
     constant_mean_log_loss: FiniteFloat = Field(ge=0)
     winner: Choice
@@ -61,32 +77,29 @@ class SelectionMetadata(AtmosphericContract):
     @model_validator(mode="after")
     def frozen_scores_follow_recipe(self) -> SelectionMetadata:
         policy, _ = load_policy()
-        if (
-            tuple(ref.fold for ref in self.trials) != (2023, 2024)
-            or len({ref.trial_id for ref in self.trials}) != 2
-        ):
+        if tuple(ref.fold for ref in self.trials) != VALIDATION_SEASONS or len(
+            {ref.trial_id for ref in self.trials}
+        ) != len(VALIDATION_SEASONS):
             raise ValueError("Selection requires two distinct trial IDs for folds 2023 and 2024.")
         grid = tuple((a, b) for a in policy.regularization_grid for b in policy.regularization_grid)
         if tuple((score.c100, score.c200) for score in self.candidates) != grid:
             raise ValueError("Selection candidate grid differs from the predeclared nine pairs.")
-        expected_keys = tuple(
-            (fold, horizon, threshold)
-            for fold in (2023, 2024)
-            for horizon in (1, 2, 3)
-            for threshold in (100, 200)
-        )
+        expected_keys = SELECTION_COMPONENT_KEYS
         for components, brier, loss in (
             *((c.components, c.mean_brier, c.mean_log_loss) for c in self.candidates),
             (self.constant_components, self.constant_mean_brier, self.constant_mean_log_loss),
         ):
             if tuple((c.fold, c.horizon, c.threshold) for c in components) != expected_keys:
-                raise ValueError("Selection scores must retain exactly twelve ordered components.")
+                raise ValueError(
+                    f"Selection scores must retain exactly {SELECTION_SCORE_COMPONENT_COUNT} ordered components."
+                )
             if (
-                brier != math.fsum(c.brier for c in components) / 12
-                or loss != math.fsum(c.log_loss for c in components) / 12
+                brier != math.fsum(c.brier for c in components) / SELECTION_SCORE_COMPONENT_COUNT
+                or loss
+                != math.fsum(c.log_loss for c in components) / SELECTION_SCORE_COMPONENT_COUNT
             ):
                 raise ValueError(
-                    "Selection means differ from their twelve equal-weight components."
+                    f"Selection means differ from their {SELECTION_SCORE_COMPONENT_COUNT} equal-weight components."
                 )
         winner = choose_candidate(self.candidates, self.brier_tie_tolerance)
         if self.winner != Choice(c100=winner.c100, c200=winner.c200) or (
@@ -120,12 +133,12 @@ def selection_parents(metadata: SelectionMetadata) -> tuple[ArtifactParent, ...]
 def build_selection(
     study: LoadedStudy, study_id: str, trials: dict[int, tuple[str, LoadedTrial]]
 ) -> SelectionMetadata:
-    if set(trials) != {2023, 2024}:
+    if set(trials) != set(VALIDATION_SEASONS):
         raise ValueError("Selection requires both chronological folds exactly once.")
 
     def components(c100=None, c200=None):
         result = []
-        for fold in (2023, 2024):
+        for fold in VALIDATION_SEASONS:
             trial = trials[fold][1]
             if (
                 trial.metadata.fold != fold
@@ -144,8 +157,8 @@ def build_selection(
                     if (candidate.c100, candidate.c200) == (c100, c200)
                 )
             )
-            for horizon in (1, 2, 3):
-                for threshold in (100, 200):
+            for horizon in FORECAST_HORIZONS:
+                for threshold in SELECTION_THRESHOLDS_KM:
                     metric = next(
                         metric
                         for metric in candidate.by_horizon[str(horizon)]
@@ -176,21 +189,25 @@ def build_selection(
                     c100=c100,
                     c200=c200,
                     components=parts,
-                    mean_brier=math.fsum(c.brier for c in parts) / 12,
-                    mean_log_loss=math.fsum(c.log_loss for c in parts) / 12,
+                    mean_brier=math.fsum(c.brier for c in parts) / SELECTION_SCORE_COMPONENT_COUNT,
+                    mean_log_loss=math.fsum(c.log_loss for c in parts)
+                    / SELECTION_SCORE_COMPONENT_COUNT,
                 )
             )
     winner = choose_candidate(tuple(candidates))
     constant = components()
-    baseline_brier = math.fsum(c.brier for c in constant) / 12
+    baseline_brier = math.fsum(c.brier for c in constant) / SELECTION_SCORE_COMPONENT_COUNT
     return SelectionMetadata(
         study_id=study_id,
         dataset_id=study.metadata.dataset_id,
-        trials=tuple(TrialReference(fold=fold, trial_id=trials[fold][0]) for fold in (2023, 2024)),
+        trials=tuple(
+            TrialReference(fold=fold, trial_id=trials[fold][0]) for fold in VALIDATION_SEASONS
+        ),
         candidates=tuple(candidates),
         constant_components=constant,
         constant_mean_brier=baseline_brier,
-        constant_mean_log_loss=math.fsum(c.log_loss for c in constant) / 12,
+        constant_mean_log_loss=math.fsum(c.log_loss for c in constant)
+        / SELECTION_SCORE_COMPONENT_COUNT,
         winner=Choice(c100=winner.c100, c200=winner.c200),
         improves_constant_brier=winner.mean_brier < baseline_brier,
     )
@@ -282,7 +299,7 @@ def load_selection(
 
 def select_recipe(*, study_id: str, trial_ids: list[str], project_root: Path) -> dict:
     started_at = perf_counter()
-    if len(trial_ids) != 2 or len(set(trial_ids)) != 2:
+    if len(trial_ids) != len(VALIDATION_SEASONS) or len(set(trial_ids)) != len(VALIDATION_SEASONS):
         raise ValueError("Pass exactly two distinct --trial-id values.")
     study = load_study(study_id=study_id, project_root=project_root)
     trials = {}
@@ -315,8 +332,8 @@ def select_recipe(*, study_id: str, trial_ids: list[str], project_root: Path) ->
     return {
         **result,
         "study_id": study_id,
-        "candidate_count": 9,
-        "component_count": 12,
+        "candidate_count": len(metadata.candidates),
+        "component_count": len(winner.components),
         **metadata.winner.model_dump(),
         "mean_brier": winner.mean_brier,
         "mean_log_loss": winner.mean_log_loss,

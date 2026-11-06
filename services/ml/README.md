@@ -183,6 +183,16 @@ The command reloads the compact study and trials and verifies their saved
 predictions and diagnostics. It performs no fitting, weather-history traversal,
 SQLite access or network operation.
 
+Scoring dimensions are named centrally in `scoring_layout.py`. Horizons and
+validation seasons come from the packaged policy; the selection thresholds
+are explicitly 100+/final 200+, keeping 300+ outside recipe selection. Component,
+grid and fit counts are computed from these axes, not literal divisors/counts:
+currently 2*3*2=12 selection components, 3*2=6 per trial and 3*3=9 candidates.
+The helper also produces the exact ordered component keys used for validation.
+The v1 input/model contracts and packaged policy remain frozen; adding a
+supported horizon/season still requires compatible contracts and artifacts.
+Existing v1 report wording remains byte-compatible with published artifacts.
+
 `selection.json` retains all nine candidates and their twelve equally weighted
 100+/final-200+ components (two folds, three horizons, two thresholds), plus
 the training-only constant comparator. Minimize mean weighted Brier. Candidates

@@ -9,6 +9,7 @@ from pydantic import Field, FiniteFloat, field_validator, model_validator
 
 from ...ingestion.atmosphere.contracts import AtmosphericContract, validate_utc_timestamp
 from .policy import GroupId, Stage
+from .scoring_layout import FORECAST_HORIZONS
 
 Sha256 = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 Probability = Annotated[FiniteFloat, Field(ge=0, le=1)]
@@ -75,7 +76,7 @@ class TrainingSupport(AtmosphericContract):
 
     @model_validator(mode="after")
     def support_counts_agree(self) -> TrainingSupport:
-        if self.row_count != 3 * self.site_day_count:
+        if self.row_count != len(FORECAST_HORIZONS) * self.site_day_count:
             raise ValueError("Training must retain exactly three horizons per site-day.")
         if not self.positive_site_day_count < self.site_day_count:
             raise ValueError("Each learned stage requires both outcome classes.")

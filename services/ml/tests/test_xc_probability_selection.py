@@ -28,6 +28,17 @@ from paragliding_forecasts_ml.predictions.xc_probability.learning import (
     standardize,
 )
 from paragliding_forecasts_ml.predictions.xc_probability.policy import load_policy
+from paragliding_forecasts_ml.predictions.xc_probability.scoring_layout import (
+    FORECAST_HORIZONS,
+    REGULARIZATION_CANDIDATE_COUNT,
+    SELECTION_COMPONENT_KEYS,
+    SELECTION_SCORE_COMPONENT_COUNT,
+    SELECTION_THRESHOLDS_KM,
+    TRIAL_FIT_COUNT,
+    TRIAL_SCORE_COMPONENT_COUNT,
+    VALIDATION_SEASONS,
+    score_component_keys,
+)
 from paragliding_forecasts_ml.predictions.xc_probability.selection import (
     CandidateScore,
     ScoreComponent,
@@ -38,17 +49,28 @@ from paragliding_forecasts_ml.predictions.xc_probability.selection import (
 def score(c100, c200, brier, loss):
     components = tuple(
         ScoreComponent(fold=fold, horizon=horizon, threshold=threshold, brier=brier, log_loss=loss)
-        for fold in (2023, 2024)
-        for horizon in (1, 2, 3)
-        for threshold in (100, 200)
+        for fold, horizon, threshold in SELECTION_COMPONENT_KEYS
     )
     return CandidateScore(
         c100=c100,
         c200=c200,
         components=components,
-        mean_brier=math.fsum(part.brier for part in components) / 12,
-        mean_log_loss=math.fsum(part.log_loss for part in components) / 12,
+        mean_brier=math.fsum(part.brier for part in components) / len(components),
+        mean_log_loss=math.fsum(part.log_loss for part in components) / len(components),
     )
+
+
+def test_scoring_counts_follow_axes_and_component_keys_are_complete():
+    assert (
+        SELECTION_SCORE_COMPONENT_COUNT
+        == len(VALIDATION_SEASONS) * len(FORECAST_HORIZONS) * len(SELECTION_THRESHOLDS_KM)
+        == 12
+    )
+    assert TRIAL_SCORE_COMPONENT_COUNT == len(FORECAST_HORIZONS) * len(SELECTION_THRESHOLDS_KM) == 6
+    assert REGULARIZATION_CANDIDATE_COUNT == 9 and TRIAL_FIT_COUNT == 6
+    expanded = score_component_keys((2023, 2024, 2026), (1, 2, 3, 4), (100, 200, 300))
+    assert len(expanded) == len(set(expanded)) == 36
+    assert (2026, 4, 300) in expanded
 
 
 @pytest.mark.parametrize(

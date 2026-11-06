@@ -13,6 +13,7 @@ from ...datasets.weather_cohort import CohortPlanError
 from ...datasets.weather_join import WeatherJoinError
 from ...storage.sqlite import repository_root
 from .model_io import train_final
+from .scoring_layout import VALIDATION_SEASONS
 from .selection import select_recipe
 from .study import prepare_study
 from .trials import train_trials
@@ -32,7 +33,7 @@ def main(arguments: Sequence[str] | None = None) -> int:
         "train-trials", help="Fit six stage variants and evaluate nine chronological candidates."
     )
     trial.add_argument("--study-id", required=True)
-    trial.add_argument("--fold", type=int, choices=(2023, 2024), required=True)
+    trial.add_argument("--fold", type=int, choices=VALIDATION_SEASONS, required=True)
     trial.add_argument("--project-root", type=Path, default=repository_root())
     selection = commands.add_parser(
         "select", help="Select a recipe from both verified chronological trials."

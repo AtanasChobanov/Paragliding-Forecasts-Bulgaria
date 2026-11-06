@@ -1,5 +1,34 @@
 # Project Handoff
 
+## Requested scoring-count refactor — 2026-11-06
+
+The owner requested plain-language explanations of model selection and a code
+change removing unexplained numeric component counts. Added scoring_layout.py:
+named policy-derived horizons, validation seasons, C grid and model stages,
+explicit evaluated/selection threshold sets, an ordered Cartesian component-key
+builder, and derived component/candidate/fit counts. Selection schemas and
+arithmetic now use the derived 12-component count; trial schemas/means use
+the derived six-component count and nine-candidate count. CLI fold choices,
+study grouping/folds and horizon weight allocation use the same named axes.
+No C grid, scoring policy, probability calculation, input contract or artifact
+version was expanded. Existing report wording is preserved for byte identity.
+
+The current axes still give twelve selection components. A permanent test
+checks a changed 3-season/4-horizon/3-threshold layout yields 36 distinct keys,
+in addition to current-axis and existing aggregation/gating tests. The model
+and weather v1 contracts deliberately retain their version-specific supported
+categories/shapes; future extensions need compatible versions and training.
+No real product command, selection, fit, download or prediction was run.
+The real select stage remains the owner-run checkpoint described below.
+
+Validation: **648 tests passed in 57.12 s**; Ruff lint/format passed for
+218 Python files; repo:check and diff whitespace checks passed. Read-only
+reload of the real study and both trial IDs passed again with fitting blocked,
+including exact report/hash compatibility. Confirmed development population
+weight 736 and positive weight totals 212/42/3 for explanatory examples.
+The focused follow-up commit is `T-023 derive scoring counts from configured axes`;
+temporary planning notes remain excluded.
+
 ## Owner-run trial 2024 review and selection/final implementation — 2026-11-05
 
 The second owner-run trial passed review. Trial ID:
