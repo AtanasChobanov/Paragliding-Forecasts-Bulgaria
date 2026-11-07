@@ -21,6 +21,7 @@ from paragliding_forecasts_ml.ingestion.weather.serialization import (
     sha256_bytes,
 )
 from paragliding_forecasts_ml.predictions.xc_probability import cli, model_io, selection, trials
+from paragliding_forecasts_ml.predictions.xc_probability.experiment import experiment_payloads
 from paragliding_forecasts_ml.predictions.xc_probability.learning import (
     encode_inputs,
     grouped_contributions,
@@ -67,7 +68,7 @@ def test_scoring_counts_follow_axes_and_component_keys_are_complete():
         == 12
     )
     assert TRIAL_SCORE_COMPONENT_COUNT == len(FORECAST_HORIZONS) * len(SELECTION_THRESHOLDS_KM) == 6
-    assert REGULARIZATION_CANDIDATE_COUNT == 9 and TRIAL_FIT_COUNT == 6
+    assert REGULARIZATION_CANDIDATE_COUNT == 81 and TRIAL_FIT_COUNT == 18
     expanded = score_component_keys((2023, 2024, 2026), (1, 2, 3, 4), (100, 200, 300))
     assert len(expanded) == len(set(expanded)) == 36
     assert (2026, 4, 300) in expanded
@@ -132,12 +133,22 @@ def fake_trials(study, *, constant=0.25):
         )
         trial = SimpleNamespace(
             metadata=SimpleNamespace(
-                fold=fold, study_id="a" * 64, dataset_id=study.metadata.dataset_id
+                fold=fold,
+                study_id="a" * 64,
+                dataset_id=study.metadata.dataset_id,
+                experiment_version=1,
             ),
             evaluation=SimpleNamespace(candidates=tuple(candidates), constant=comparator),
         )
         result[fold] = (str(fold)[-1] * 64, trial)
     return result
+
+
+def test_selection_rejects_mixed_experiment_versions(synthetic_study):
+    mixed = fake_trials(synthetic_study)
+    mixed[2024][1].metadata.experiment_version = 2
+    with pytest.raises(ValueError, match="cannot mix"):
+        selection.build_selection(synthetic_study, "a" * 64, mixed)
 
 
 def test_selection_uses_twelve_equal_components_and_retains_logistic_without_skill(synthetic_study):
@@ -198,13 +209,19 @@ def test_final_fit_cannot_start_without_valid_selection(tmp_path, monkeypatch, s
     assert not (tmp_path / "data/processed/xc-probability/model").exists()
 
 
+@pytest.mark.parametrize("experiment_version,candidate_count", [(1, 9), (2, 81)])
 def test_verified_selection_final_refit_and_model_only_reload(
-    tmp_path, monkeypatch, synthetic_study
+    tmp_path, monkeypatch, synthetic_study, experiment_version, candidate_count
 ):
     for module in (selection, trials, model_io):
         monkeypatch.setattr(module, "load_study", lambda **kwargs: synthetic_study)
     trial_ids = [
-        trials.train_trials(study_id="a" * 64, fold=fold, project_root=tmp_path)["trial_id"]
+        trials.train_trials(
+            study_id="a" * 64,
+            fold=fold,
+            project_root=tmp_path,
+            experiment_version=experiment_version,
+        )["trial_id"]
         for fold in (2023, 2024)
     ]
     with patch.object(LogisticRegression, "fit", blocked):
@@ -215,7 +232,8 @@ def test_verified_selection_final_refit_and_model_only_reload(
             study_id="a" * 64, trial_ids=trial_ids[::-1], project_root=tmp_path
         )
     assert selected["selection_id"] == repeat["selection_id"] and repeat["reused"]
-    assert selected["component_count"] == 12 and selected["candidate_count"] == 9
+    assert selected["component_count"] == 12 and selected["candidate_count"] == candidate_count
+    assert selected["experiment_version"] == experiment_version
 
     def nonconvergent(*args, **kwargs):
         warnings.warn("synthetic final failure", ConvergenceWarning, stacklevel=2)
@@ -249,7 +267,7 @@ def test_verified_selection_final_refit_and_model_only_reload(
         "model.json",
         "policy.json",
         "manifest.json",
-    }
+    } | set(experiment_payloads(experiment_version))
     original_manifest = (model_directory / "manifest.json").read_bytes()
     policy, _ = load_policy()
     with monkeypatch.context() as guard:
@@ -263,6 +281,7 @@ def test_verified_selection_final_refit_and_model_only_reload(
         loaded.available_confidence_level == "low" and loaded.calibration_status == "not_calibrated"
     )
     assert loaded.selection_id == selected["selection_id"]
+    assert loaded.selection_snapshot.experiment_version == experiment_version
     assert sha256_bytes(canonical_json_bytes(loaded.selection_identity)) == loaded.selection_id
     encoded = encode_inputs(
         tuple(row.inputs for row in synthetic_study.rows),
@@ -288,6 +307,16 @@ def test_verified_selection_final_refit_and_model_only_reload(
 
     payload = json.loads((model_directory / "model.json").read_bytes())
     policy_bytes = (model_directory / "policy.json").read_bytes()
+    if experiment_version == 2:
+        with pytest.raises(ValueError, match="experiment.json"):
+            model_io.validate_model_payload(
+                {
+                    "model.json": pretty_json_bytes(payload),
+                    "policy.json": policy_bytes,
+                }
+            )
+    else:
+        assert "experiment_version" not in payload["selection_snapshot"]
     for change in (
         "selected_c",
         "group",
@@ -320,7 +349,11 @@ def test_verified_selection_final_refit_and_model_only_reload(
             changed["selection_snapshot"]["constant_mean_brier"] += 0.01
         with pytest.raises(ValueError):
             model_io.validate_model_payload(
-                {"model.json": pretty_json_bytes(changed), "policy.json": policy_bytes}
+                {
+                    **experiment_payloads(experiment_version),
+                    "model.json": pretty_json_bytes(changed),
+                    "policy.json": policy_bytes,
+                }
             )
     second = model_io.train_final(
         study_id="a" * 64, selection_id=selected["selection_id"], project_root=tmp_path

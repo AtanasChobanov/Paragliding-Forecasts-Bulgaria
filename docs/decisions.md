@@ -3130,5 +3130,21 @@ additional smoothing assumptions. Jeffreys and other prior choices remain
 unselected alternatives. Implementation does not authorize weather acquisition,
 SQLite mutation, T-022 replay, a calibrator or later-ticket work.
 
+**C-search expansion accepted 2026-11-07 (T-023):** The owner approved nine
+predeclared values for each stage: {0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1, 3,
+10}. This supersedes the three-value search for new runs, as regularization
+experiment 2: 18 fits and 81 pairs per chronological trial, 36 trial fits plus
+two final fits overall. Retain experiment 1 and its exact published bytes/IDs
+for reproduction. Keep the feature/method policy and existing study unchanged;
+freeze the expanded grid in a separately versioned, hashed experiment.json
+alongside trials, selections and final models. Missing experiment metadata in
+legacy artifacts means experiment 1. New training defaults to experiment 2;
+an explicit --experiment-version 1 reproduces the old search. Selection must
+consume both folds of the same experiment; final fitting inherits that version.
+Splits, weights, inputs, model family, score/tie rules, confidence and the
+reserved 2025 evaluation remain unchanged. The owner runs the new 2023 trial,
+then 2024 after review; selection uses their new IDs. This is a fixed wider
+development search, not an adaptive loop until a preferred score appears.
+
 **Related files:** [`../services/ml/README.md`](../services/ml/README.md) and
 [`handoff.md`](handoff.md).

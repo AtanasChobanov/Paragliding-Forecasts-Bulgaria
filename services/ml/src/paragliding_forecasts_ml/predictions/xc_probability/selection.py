@@ -13,18 +13,23 @@ from pydantic import Field, FiniteFloat, model_validator
 from ...ingestion.atmosphere.contracts import AtmosphericContract
 from ...ingestion.weather.serialization import pretty_json_bytes
 from .artifacts import artifact_directory, identity, publish_bundle, read_bundle
+from .experiment import (
+    CValue,
+    ExperimentVersion,
+    experiment_payloads,
+    regularization_values,
+    validate_experiment_payload,
+)
 from .models import ArtifactParent, Probability, Sha256
-from .policy import load_policy
 from .scoring_layout import (
     FORECAST_HORIZONS,
-    REGULARIZATION_CANDIDATE_COUNT,
     SELECTION_COMPONENT_KEYS,
     SELECTION_SCORE_COMPONENT_COUNT,
     SELECTION_THRESHOLDS_KM,
     VALIDATION_SEASONS,
 )
 from .study import LoadedStudy, load_study
-from .trials import CValue, LoadedTrial, load_trial
+from .trials import LoadedTrial, load_trial
 
 
 class Choice(AtmosphericContract):
@@ -55,14 +60,13 @@ class TrialReference(AtmosphericContract):
 
 class SelectionMetadata(AtmosphericContract):
     schema_version: Literal["xc-probability-selection/1"] = "xc-probability-selection/1"
+    experiment_version: ExperimentVersion = Field(default=1, exclude_if=lambda value: value == 1)
     study_id: Sha256
     dataset_id: Sha256
     trials: tuple[TrialReference, ...] = Field(
         min_length=len(VALIDATION_SEASONS), max_length=len(VALIDATION_SEASONS)
     )
-    candidates: tuple[CandidateScore, ...] = Field(
-        min_length=REGULARIZATION_CANDIDATE_COUNT, max_length=REGULARIZATION_CANDIDATE_COUNT
-    )
+    candidates: tuple[CandidateScore, ...] = Field(min_length=1)
     constant_components: tuple[ScoreComponent, ...] = Field(
         min_length=SELECTION_SCORE_COMPONENT_COUNT, max_length=SELECTION_SCORE_COMPONENT_COUNT
     )
@@ -76,14 +80,14 @@ class SelectionMetadata(AtmosphericContract):
 
     @model_validator(mode="after")
     def frozen_scores_follow_recipe(self) -> SelectionMetadata:
-        policy, _ = load_policy()
+        values = regularization_values(self.experiment_version)
         if tuple(ref.fold for ref in self.trials) != VALIDATION_SEASONS or len(
             {ref.trial_id for ref in self.trials}
         ) != len(VALIDATION_SEASONS):
             raise ValueError("Selection requires two distinct trial IDs for folds 2023 and 2024.")
-        grid = tuple((a, b) for a in policy.regularization_grid for b in policy.regularization_grid)
+        grid = tuple((a, b) for a in values for b in values)
         if tuple((score.c100, score.c200) for score in self.candidates) != grid:
-            raise ValueError("Selection candidate grid differs from the predeclared nine pairs.")
+            raise ValueError("Selection candidate grid differs from its declared experiment.")
         expected_keys = SELECTION_COMPONENT_KEYS
         for components, brier, loss in (
             *((c.components, c.mean_brier, c.mean_log_loss) for c in self.candidates),
@@ -135,6 +139,11 @@ def build_selection(
 ) -> SelectionMetadata:
     if set(trials) != set(VALIDATION_SEASONS):
         raise ValueError("Selection requires both chronological folds exactly once.")
+    versions = {trial.metadata.experiment_version for _, trial in trials.values()}
+    if len(versions) != 1:
+        raise ValueError("Selection cannot mix regularization experiment versions across folds.")
+    experiment_version = versions.pop()
+    values = regularization_values(experiment_version)
 
     def components(c100=None, c200=None):
         result = []
@@ -179,10 +188,9 @@ def build_selection(
                     )
         return tuple(result)
 
-    policy, _ = load_policy()
     candidates = []
-    for c100 in policy.regularization_grid:
-        for c200 in policy.regularization_grid:
+    for c100 in values:
+        for c200 in values:
             parts = components(c100, c200)
             candidates.append(
                 CandidateScore(
@@ -198,6 +206,7 @@ def build_selection(
     constant = components()
     baseline_brier = math.fsum(c.brier for c in constant) / SELECTION_SCORE_COMPONENT_COUNT
     return SelectionMetadata(
+        experiment_version=experiment_version,
         study_id=study_id,
         dataset_id=study.metadata.dataset_id,
         trials=tuple(
@@ -219,6 +228,14 @@ def selection_report(metadata: SelectionMetadata) -> bytes:
             [
                 "# XC development recipe selection",
                 "",
+                *(
+                    [
+                        f"Regularization experiment {metadata.experiment_version}: {len(metadata.candidates)} candidate pairs.",
+                        "",
+                    ]
+                    if metadata.experiment_version != 1
+                    else []
+                ),
                 "Exactly twelve equally weighted components: two thresholds (100+/final 200+),",
                 "three horizons and two chronological development trials. 300+ never selects the recipe.",
                 "",
@@ -255,9 +272,12 @@ def validate_selection_payload(
     study_id: str,
     trials: dict[int, tuple[str, LoadedTrial]],
 ) -> SelectionMetadata:
-    if set(payloads) != {"policy.json", "selection.json", "report.md"}:
-        raise ValueError("Selection bundle has unexpected or missing files.")
     metadata = SelectionMetadata.model_validate_json(payloads["selection.json"])
+    validate_experiment_payload(payloads, metadata.experiment_version)
+    if set(payloads) != {"policy.json", "selection.json", "report.md"} | set(
+        experiment_payloads(metadata.experiment_version)
+    ):
+        raise ValueError("Selection bundle has unexpected or missing files.")
     if metadata != build_selection(study, study_id, trials) or payloads[
         "report.md"
     ] != selection_report(metadata):
@@ -317,6 +337,7 @@ def select_recipe(*, study_id: str, trial_ids: list[str], project_root: Path) ->
         started_at=started_at,
         parents=selection_parents(metadata),
         payloads={
+            **experiment_payloads(metadata.experiment_version),
             "selection.json": pretty_json_bytes(metadata),
             "report.md": selection_report(metadata),
         },
@@ -332,6 +353,7 @@ def select_recipe(*, study_id: str, trial_ids: list[str], project_root: Path) ->
     return {
         **result,
         "study_id": study_id,
+        "experiment_version": metadata.experiment_version,
         "candidate_count": len(metadata.candidates),
         "component_count": len(winner.components),
         **metadata.winner.model_dump(),

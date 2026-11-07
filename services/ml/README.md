@@ -10,8 +10,10 @@ unless they explicitly require `--allow-live-network`.
 The `predictions/xc_probability` module implements study preparation,
 chronological trials, recipe selection and final JSON-model fitting/loading.
 Retained-GFS prediction is not implemented yet. DEC-070 records the accepted
-scope. Both owner-run trials passed artifact review; the real final model has
-not yet been fitted and independent forecast accuracy remains unverified.
+scope. Both original experiment-1 owner-run trials passed artifact review.
+The owner approved a broader experiment-2 C search; its real trials are pending.
+The real final model has not yet been fitted and independent forecast accuracy
+remains unverified.
 
 The packaged `xc-probability-policy-v1.json` explicitly maps 43 daily, 11
 0–1500 m layer and 13 1500–3000 m layer inputs to weather policy v5, including
@@ -82,9 +84,8 @@ this compact bundle's schemas, hashes, numerical compatibility, folds and
 weights without retraversing the weather acquisition history.
 
 Synthetic checks cover the full 960-row regression inventory and source
-projection errors. Real retained-source compatibility remains pending until
-the owner runs the command above; synthetic success does not validate model
-quality. The owner's first study completed in 23.08 s with 46,694,941 bytes;
+projection errors; synthetic success does not validate model quality.
+The owner's first study completed in 23.08 s with 46,694,941 bytes;
 artifact `0eda3e7d8e582d97e52a76eaf110b92b8209855785dd3a1664334963a1ceab2b`
 passed read-only compact reload, hashes, fold/support and training-weight review.
 It has 736 total original site-day weight. No classifier was fitted in that review.
@@ -96,13 +97,14 @@ The owner runs each fold separately after reviewing the previous result:
 ```powershell
 uv run --project services/ml --locked xc-probability train-trials `
   --study-id 0eda3e7d8e582d97e52a76eaf110b92b8209855785dd3a1664334963a1ceab2b `
-  --fold 2023
+  --fold 2023 --experiment-version 2
 ```
 
 Use `--fold 2024` only for the next trial after reviewing the 2023 artifact.
-Both accept optional `--project-root <path>`. This loads/revalidates the frozen
-study; it does not repeat the joined-weather verifier, open SQLite or download
-anything. Training reads only its fold's eligible development rows. Source
+Both accept optional `--project-root <path>`. Experiment 2 is the default.
+It reuses and revalidates the already prepared study; do not rerun prepare for
+this expansion. It does not repeat the joined-weather verifier, open SQLite or
+download anything. Training reads only its fold's eligible development rows. Source
 season 2025 is excluded from study fitting and is reserved for T-026.
 
 The 67 physical inputs become 70 coordinates by replacing three wind
@@ -113,8 +115,17 @@ training subset. The first 72 coordinates are standardized; one-hot values
 stay unchanged. Exact constant columns use scale one. q200 fits only positive
 100+ site-days and has its own normalized weights, scaler and reference.
 
-Each command fits three p100 and three q200 L2 logistic variants at
-`C={0.03, 0.1, 0.3}`, then evaluates all nine combinations using p200=p100*q200.
+Each experiment-2 command fits nine p100 and nine q200 L2 logistic variants at
+`C={0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1, 3, 10}`, then evaluates all 81
+combinations using p200=p100*q200. Each stage variant is fitted once, then
+reused across pairs. The fixed grid is packaged in
+`xc-regularization-experiment-v2.json` and retained as hashed `experiment.json`
+in trial, selection and final-model bundles. It overrides only the original
+C grid in policy.json; the feature/study policy bytes remain unchanged.
+`--experiment-version 1` reproduces the original `{0.03, 0.1, 0.3}` search
+(six fits/nine pairs). Old bundles without experiment metadata mean version 1
+and retain their exact JSON/report bytes and IDs. The selection and final fit
+inherit the trial experiment; mixing experiment versions across folds is rejected.
 The pinned scikit-learn 1.9.1 API expresses pure L2 with `l1_ratio=0.0`;
 `lbfgs`, intercept, `max_iter=5000`, `tol=1e-8`, no class balancing and one
 numerical thread remain fixed. Missing classes or convergence warnings fail
@@ -131,9 +142,9 @@ supported 300+ conversion; validation outcome frequency is never its forecast.
 
 The immutable trial bundle contains:
 
-- `trial.json`: six fitted stage states, weighted references/support,
+- `trial.json`: experiment version and 18 fitted stage states, weighted references/support,
   numerical probes, algorithm arguments, fold boundary and pooled conversion.
-- `validation_predictions.jsonl`: all nine candidates' per-row p100, q200,
+- `validation_predictions.jsonl`: all 81 candidates' per-row p100, q200,
   final p200 and available/missing p300, linked to frozen study row IDs.
 - `metrics.json`: original-weight Brier, log loss, ROC-AUC, average precision,
   raw/weighted confusion counts and weighted precision/recall at diagnostic
@@ -144,7 +155,7 @@ The immutable trial bundle contains:
 - `report.md`: concise candidate comparison against the training-only constant,
   support limitations and the distinction between development and independent
   evaluation. It contains no execution time and does not select a final model.
-- `policy.json` and `manifest.json`: frozen method policy, study parent,
+- `experiment.json`, `policy.json` and `manifest.json`: frozen experiment/method policy, study parent,
   content hashes, numerical versions and separate execution metadata.
 
 Each candidate's mean score gives equal weight to 100+ and final 200+ at
@@ -156,15 +167,16 @@ does not set alert thresholds. Repeated horizons are not independent events.
 
 Stdout returns one JSON object with `trial_id`, absolute `output_directory`,
 fit/candidate/row/prediction counts, stored k/n support, constant mean scores,
-current elapsed time and published bytes. Expect six fits, nine candidates,
-282 training/318 validation rows and 2,862 prediction records for fold 2023;
-600/360 rows and 3,240 records for fold 2024. Repetition verifies existing
+current elapsed time and published bytes. Experiment 2 expects 18 fits, 81 candidates,
+282 training/318 validation rows and 25,758 prediction records for fold 2023;
+600/360 rows and 29,160 records for fold 2024. Repetition verifies existing
 content and preserves the original publication metadata. Reload recomputes
 predictions/diagnostics and verifies training-only scalers/references without
-refitting an estimator. Both owner-run trials passed compact reload, numerical,
-support and diagnostic review. All nine candidates improve the mean development
-Brier comparator in each fold. These results do not establish independent
-final-model quality; exact IDs/timings are retained in the handoff.
+refitting an estimator. Both experiment-1 owner-run trials passed compact reload,
+numerical, support and diagnostic review; their nine candidates improved the
+mean development Brier comparator in each fold. Those results do not establish
+independent final-model quality or the outcome of the expanded experiment.
+Exact legacy IDs/timings are retained in the handoff.
 
 ### Select the recipe and fit the final model
 
@@ -173,12 +185,13 @@ After reviewing both trials, the owner runs:
 ```powershell
 uv run --project services/ml --locked xc-probability select `
   --study-id 0eda3e7d8e582d97e52a76eaf110b92b8209855785dd3a1664334963a1ceab2b `
-  --trial-id 6179a5a6f9878c00b30611390189f687eb4a9fb22fc968b5e8ee7c4e69024d57 `
-  --trial-id 829b1b7e266d397854d3f87f1f1ca366fe5207c4b0e688338948c62eefd5e89e
+  --trial-id <verified-experiment-2-trial-2023-id> `
+  --trial-id <verified-experiment-2-trial-2024-id>
 ```
 
 Exactly two distinct trial IDs for the same study/policy/environment are
-required, with one fold each for 2023 and 2024. Argument order is immaterial.
+required, with one fold each for 2023 and 2024 and the same experiment version.
+Use the two new IDs returned by experiment 2. Argument order is immaterial.
 The command reloads the compact study and trials and verifies their saved
 predictions and diagnostics. It performs no fitting, weather-history traversal,
 SQLite access or network operation.
@@ -187,13 +200,15 @@ Scoring dimensions are named centrally in `scoring_layout.py`. Horizons and
 validation seasons come from the packaged policy; the selection thresholds
 are explicitly 100+/final 200+, keeping 300+ outside recipe selection. Component,
 grid and fit counts are computed from these axes, not literal divisors/counts:
-currently 2*3*2=12 selection components, 3*2=6 per trial and 3*3=9 candidates.
+currently 2*3*2=12 selection components, 3*2=6 per trial and 9*9=81 candidates
+with 9*2=18 fits per trial for the current experiment. Artifact validators
+derive the grid and fit counts from each artifact's declared experiment version.
 The helper also produces the exact ordered component keys used for validation.
-The v1 input/model contracts and packaged policy remain frozen; adding a
-supported horizon/season still requires compatible contracts and artifacts.
+The v1 input dimensions and packaged feature/method policy remain frozen;
+adding a supported horizon/season still requires compatible contracts and artifacts.
 Existing v1 report wording remains byte-compatible with published artifacts.
 
-`selection.json` retains all nine candidates and their twelve equally weighted
+`selection.json` retains all candidates and their twelve equally weighted
 100+/final-200+ components (two folds, three horizons, two thresholds), plus
 the training-only constant comparator. Minimize mean weighted Brier. Candidates
 within absolute 1e-12 of the global minimum are tied; choose the lower analogous
@@ -221,7 +236,8 @@ Compute unique training-site-day k/n again for this fit and store the expected
 3/42, support and lineage. Inference later uses those saved counts/ratio.
 No extra calibrator, bootstrap, model family or 2025 data is introduced.
 
-The final bundle contains `manifest.json`, `policy.json` and `model.json`, with
+The final bundle contains `manifest.json`, `policy.json`, `experiment.json`
+(experiment 2 only) and `model.json`, with
 no redundant Markdown report. It retains ordered input/coordinate/category
 identities, each stage's means/scales, coefficients/intercept, weighted
 reference, baseline logit, support, numerical probes, final-row digests and

@@ -8,6 +8,7 @@ from typing import Annotated, Literal
 from pydantic import Field, FiniteFloat, field_validator, model_validator
 
 from ...ingestion.atmosphere.contracts import AtmosphericContract, validate_utc_timestamp
+from .experiment import CValue
 from .policy import GroupId, Stage
 from .scoring_layout import FORECAST_HORIZONS
 
@@ -119,7 +120,7 @@ class ConversionSupport(AtmosphericContract):
 
 class StageParameters(AtmosphericContract):
     stage: Stage
-    regularization_c: Literal[0.03, 0.1, 0.3]
+    regularization_c: CValue
     means: tuple[FiniteFloat, ...] = Field(min_length=72, max_length=72)
     scales: tuple[Annotated[FiniteFloat, Field(gt=0)], ...] = Field(min_length=72, max_length=72)
     coefficients: tuple[FiniteFloat, ...] = Field(min_length=82, max_length=82)

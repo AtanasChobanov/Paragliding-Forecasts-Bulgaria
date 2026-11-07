@@ -1,5 +1,55 @@
 # Project Handoff
 
+## Owner-approved expanded C search — 2026-11-07
+
+This checkpoint supersedes the older next-select instructions below. The owner
+approved expanding each stage's fixed C grid to
+`{0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1, 3, 10}`. Implemented regularization
+experiment 2: nine p100 and nine q200 fits, 81 combinations per fold; 36 trial
+fits and two final fits overall. Scores still average the same twelve
+fold/horizon/threshold components. Inputs, weights, temporal splits, model
+family, confidence, support handling and reserved 2025 evaluation are unchanged.
+
+Keep the existing study and packaged feature/method policy byte-identical.
+The new resource xc-regularization-experiment-v2.json overrides only the
+legacy policy C grid. Trial/selection/model bundles freeze its exact bytes as
+hashed experiment.json. New trial metadata declares experiment_version=2;
+selection and the final model's embedded selection snapshot inherit it.
+The CLI defaults to 2 and accepts explicit --experiment-version 1 for legacy
+reproduction. Missing metadata means 1; serialization omits that legacy default
+to preserve old JSON/report bytes and IDs. Trial and selection validation
+derive exact ordered grids from the declared version. Mixing versions across
+folds is rejected. Final model loading verifies the frozen experiment and
+selection identity without reading the original study/trials.
+
+Validation: **659 Python tests passed in 117.44 s**; Ruff lint/format passed
+for 220 Python files; repo:check, CLI train-trials --help and diff whitespace
+checks passed. Synthetic cases exercise both complete trial/selection/final
+pipelines, reuse, model-only reload, 18/81 counts, out-of-grid C rejection,
+missing/tampered experiment config and mixed-version rejection. Read-only reload
+of the actual 960-row study and both original trials passed all hash/report
+checks and exact trial.json roundtrips with fitting/network/SQLite blocked.
+No real trial, selection, final fit, prediction or download was run by the agent.
+
+**Next owner-run checkpoint:** run only the expanded 2023 trial from repository root:
+
+```powershell
+uv run --project services/ml --locked xc-probability train-trials `
+  --study-id 0eda3e7d8e582d97e52a76eaf110b92b8209855785dd3a1664334963a1ceab2b `
+  --fold 2023 --experiment-version 2
+```
+
+Expect experiment_version=2, 18 fits, 81 candidates, 282/318 training/validation
+rows, 25,758 prediction records and unchanged 0/10 conversion support (300+
+missing). Review the returned new ID, parameters, hashes, scores, timings and
+bytes before giving fold 2024. That next trial uses the same study and experiment
+version, expects 600/360 rows, 29,160 records and 2/23 conversion. Do not rerun
+prepare. Selection must use the two NEW experiment-2 trial IDs. The old trial
+IDs below remain valid legacy evidence, not the next expanded selection inputs.
+Then review selection and final fitting before implementing the retained-GFS
+prediction unit. T-023 remains In Progress. The three temporary T-023 planning
+documents, including the updated implementation plan, stay local and uncommitted.
+
 ## Requested scoring-count refactor — 2026-11-06
 
 The owner requested plain-language explanations of model selection and a code

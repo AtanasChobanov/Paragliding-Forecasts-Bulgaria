@@ -1,4 +1,4 @@
-"""Six fits per chronological trial, nine conditional combinations and diagnostics."""
+"""Versioned chronological stage searches, conditional combinations and diagnostics."""
 
 from __future__ import annotations
 
@@ -16,6 +16,14 @@ from threadpoolctl import threadpool_limits
 from ...ingestion.atmosphere.contracts import AtmosphericContract
 from ...ingestion.weather.serialization import canonical_json_bytes, pretty_json_bytes
 from .artifacts import artifact_directory, json_lines, publish_bundle, read_bundle
+from .experiment import (
+    CURRENT_EXPERIMENT_VERSION,
+    CValue,
+    ExperimentVersion,
+    experiment_payloads,
+    regularization_values,
+    validate_experiment_payload,
+)
 from .learning import (
     LOGISTIC_ARGUMENTS,
     FittedStage,
@@ -33,14 +41,10 @@ from .scoring_layout import (
     EVALUATED_THRESHOLDS_KM,
     FORECAST_HORIZONS,
     MODEL_STAGES,
-    REGULARIZATION_CANDIDATE_COUNT,
     SELECTION_THRESHOLDS_KM,
-    TRIAL_FIT_COUNT,
     TRIAL_SCORE_COMPONENT_COUNT,
 )
 from .study import LoadedStudy, StudyRow, load_study, summarize
-
-CValue = Literal[0.03, 0.1, 0.3]
 
 
 class ValidationPrediction(AtmosphericContract):
@@ -78,22 +82,21 @@ class CandidateEvaluation(AtmosphericContract):
 
 class TrialEvaluation(AtmosphericContract):
     schema_version: Literal["xc-probability-trial-metrics/1"] = "xc-probability-trial-metrics/1"
-    candidates: tuple[CandidateEvaluation, ...] = Field(
-        min_length=REGULARIZATION_CANDIDATE_COUNT, max_length=REGULARIZATION_CANDIDATE_COUNT
-    )
+    candidates: tuple[CandidateEvaluation, ...] = Field(min_length=1)
     constant: CandidateEvaluation
     constant_training_rates: dict[str, Probability | None]
 
 
 class TrialMetadata(AtmosphericContract):
     schema_version: Literal["xc-probability-trial/1"] = "xc-probability-trial/1"
+    experiment_version: ExperimentVersion = Field(default=1, exclude_if=lambda value: value == 1)
     study_id: Sha256
     dataset_id: Sha256
     fold: Literal[2023, 2024]
     exclusive_training_cutoff: str
     training_summary: dict[str, JsonValue]
     validation_summary: dict[str, JsonValue]
-    models: tuple[FittedStage, ...] = Field(min_length=TRIAL_FIT_COUNT, max_length=TRIAL_FIT_COUNT)
+    models: tuple[FittedStage, ...] = Field(min_length=1)
     conversion: ConversionSupport
     algorithm: dict[str, JsonValue]
     logistic_arguments: dict[str, JsonValue]
@@ -102,6 +105,20 @@ class TrialMetadata(AtmosphericContract):
     data_status: Literal["baseline"] = "baseline"
     calibration_status: Literal["not_calibrated"] = "not_calibrated"
     confidence_policy_version: Literal["xc-confidence/1"] = "xc-confidence/1"
+
+    @model_validator(mode="after")
+    def models_follow_experiment(self) -> TrialMetadata:
+        expected = tuple(
+            (stage, c)
+            for stage in MODEL_STAGES
+            for c in regularization_values(self.experiment_version)
+        )
+        if (
+            tuple((m.parameters.stage, m.parameters.regularization_c) for m in self.models)
+            != expected
+        ):
+            raise ValueError("Trial requires the ordered stage/C fits of its declared experiment.")
+        return self
 
 
 @dataclass(frozen=True)
@@ -129,13 +146,15 @@ def validation_predictions(
     conversion: ConversionSupport,
     site_ids: tuple[int, ...],
     policy: XcPolicy,
+    experiment_version: ExperimentVersion = 1,
 ) -> tuple[ValidationPrediction, ...]:
-    grid = tuple((stage, c) for stage in MODEL_STAGES for c in policy.regularization_grid)
+    values = regularization_values(experiment_version)
+    grid = tuple((stage, c) for stage in MODEL_STAGES for c in values)
     if (
         tuple((model.parameters.stage, model.parameters.regularization_c) for model in models)
         != grid
     ):
-        raise ValueError("Trial requires the ordered six predeclared stage/C fits.")
+        raise ValueError("Trial requires the ordered predeclared stage/C fits.")
     encoded = encode_inputs(tuple(row.inputs for row in rows), site_ids, policy)
     stage_values = {
         (model.parameters.stage, model.parameters.regularization_c): predict_stage(
@@ -145,8 +164,8 @@ def validation_predictions(
     }
     supported = conversion.support_state == "supported"
     result = []
-    for c100 in policy.regularization_grid:
-        for c200 in policy.regularization_grid:
+    for c100 in values:
+        for c200 in values:
             for index, row in enumerate(rows):
                 p100 = float(stage_values["p100", c100][index])
                 q200 = float(stage_values["q200", c200][index])
@@ -237,10 +256,12 @@ def evaluate_trial(
     predictions: tuple[ValidationPrediction, ...],
     conversion: ConversionSupport,
     policy: XcPolicy,
+    experiment_version: ExperimentVersion = 1,
 ) -> TrialEvaluation:
     candidates = []
-    for c100 in policy.regularization_grid:
-        for c200 in policy.regularization_grid:
+    c_values = regularization_values(experiment_version)
+    for c100 in c_values:
+        for c200 in c_values:
             subset = tuple(row for row in predictions if (row.c100, row.c200) == (c100, c200))
             if tuple(row.row_id for row in subset) != tuple(row.row_id for row in validation):
                 raise ValueError(
@@ -284,7 +305,11 @@ def trial_report(metadata: TrialMetadata, evaluation: TrialEvaluation) -> bytes:
             f"validation: {metadata.validation_summary['row_count']} rows / {metadata.validation_summary['site_day_count']} site-days."
         ),
         "",
-        "Six weighted L2 logistic fits produce the nine combinations below. Mean scores give equal weight to",
+        (
+            "Six weighted L2 logistic fits produce the nine combinations below. Mean scores give equal weight to"
+            if metadata.experiment_version == 1
+            else f"Experiment {metadata.experiment_version}: {len(metadata.models)} weighted L2 logistic fits produce {len(evaluation.candidates)} combinations. Mean scores give equal weight to"
+        ),
         "100+ and final 200+ at each of three horizons (six components). 300+ does not enter this comparison.",
         "",
         "| C100 | C200 | Mean weighted Brier | Mean weighted log loss | Brier minus constant |",
@@ -296,7 +321,7 @@ def trial_report(metadata: TrialMetadata, evaluation: TrialEvaluation) -> bytes:
         ],
         "",
         f"Training-only constant comparator: Brier {constant.mean_brier:.12g}; log loss {constant.mean_log_loss:.12g}.",
-        f"Candidates with lower development Brier than constant: {improvement_count}/9.",
+        f"Candidates with lower development Brier than constant: {improvement_count}/{len(evaluation.candidates)}.",
         *(
             ["No demonstrated added benefit in this development trial."]
             if improvement_count == 0
@@ -318,16 +343,17 @@ def trial_report(metadata: TrialMetadata, evaluation: TrialEvaluation) -> bytes:
 def validate_trial_payload(
     payloads: dict[str, bytes], *, study: LoadedStudy, study_id: str
 ) -> LoadedTrial:
+    metadata = TrialMetadata.model_validate_json(payloads["trial.json"])
+    validate_experiment_payload(payloads, metadata.experiment_version)
     if set(payloads) != {
         "policy.json",
         "trial.json",
         "validation_predictions.jsonl",
         "metrics.json",
         "report.md",
-    }:
+    } | set(experiment_payloads(metadata.experiment_version)):
         raise ValueError("Trial bundle has unexpected or missing files.")
     policy, _ = load_policy()
-    metadata = TrialMetadata.model_validate_json(payloads["trial.json"])
     if (
         metadata.study_id != study_id
         or metadata.dataset_id != study.metadata.dataset_id
@@ -390,6 +416,7 @@ def validate_trial_payload(
         conversion=metadata.conversion,
         site_ids=site_ids,
         policy=policy,
+        experiment_version=metadata.experiment_version,
     )
     json_lines(payloads["validation_predictions.jsonl"])
     predictions = tuple(
@@ -413,7 +440,9 @@ def validate_trial_payload(
     ):
         raise ValueError("Trial validation predictions differ from the saved conditional stages.")
     evaluation = TrialEvaluation.model_validate_json(payloads["metrics.json"])
-    if evaluation != evaluate_trial(training, validation, predictions, metadata.conversion, policy):
+    if evaluation != evaluate_trial(
+        training, validation, predictions, metadata.conversion, policy, metadata.experiment_version
+    ):
         raise ValueError(
             "Trial diagnostics differ from validation predictions and original sampling weights."
         )
@@ -432,8 +461,15 @@ def load_trial(
     return validate_trial_payload(payloads, study=study, study_id=study_id)
 
 
-def train_trials(*, study_id: str, fold: int, project_root: Path) -> dict:
+def train_trials(
+    *,
+    study_id: str,
+    fold: int,
+    project_root: Path,
+    experiment_version: ExperimentVersion = CURRENT_EXPERIMENT_VERSION,
+) -> dict:
     started_at = perf_counter()
+    values = regularization_values(experiment_version)
     study = load_study(study_id=study_id, project_root=project_root)
     policy, _ = load_policy()
     training, validation = fold_rows(study, fold)
@@ -448,7 +484,7 @@ def train_trials(*, study_id: str, fold: int, project_root: Path) -> dict:
                 if part.training_scope == str(fold) and part.stage == stage
             )
             eligible = tuple(by_id[key] for key in weights.row_ids)
-            for c in policy.regularization_grid:
+            for c in values:
                 models.append(
                     fit_stage(
                         eligible,
@@ -457,14 +493,23 @@ def train_trials(*, study_id: str, fold: int, project_root: Path) -> dict:
                         site_ids=site_ids,
                         policy=policy,
                         check_rows=validation,
+                        experiment_version=experiment_version,
                     )
                 )
         conversion = conversion_support(training, study_id=study_id)
         predictions = validation_predictions(
-            tuple(models), validation, conversion=conversion, site_ids=site_ids, policy=policy
+            tuple(models),
+            validation,
+            conversion=conversion,
+            site_ids=site_ids,
+            policy=policy,
+            experiment_version=experiment_version,
         )
-        evaluation = evaluate_trial(training, validation, predictions, conversion, policy)
+        evaluation = evaluate_trial(
+            training, validation, predictions, conversion, policy, experiment_version
+        )
     metadata = TrialMetadata(
+        experiment_version=experiment_version,
         study_id=study_id,
         dataset_id=study.metadata.dataset_id,
         fold=fold,
@@ -482,6 +527,7 @@ def train_trials(*, study_id: str, fold: int, project_root: Path) -> dict:
         threadpoolctl_version=version("threadpoolctl"),
     )
     payloads = {
+        **experiment_payloads(experiment_version),
         "trial.json": pretty_json_bytes(metadata),
         "metrics.json": pretty_json_bytes(evaluation),
         "validation_predictions.jsonl": b"".join(canonical_json_bytes(row) for row in predictions),
@@ -500,6 +546,7 @@ def train_trials(*, study_id: str, fold: int, project_root: Path) -> dict:
     return {
         **result,
         "fold": fold,
+        "experiment_version": experiment_version,
         "fit_count": len(models),
         "candidate_count": len(evaluation.candidates),
         "training_row_count": len(training),

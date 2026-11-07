@@ -14,6 +14,7 @@ from pydantic import Field, JsonValue
 from ...ingestion.atmosphere.contracts import AtmosphericContract
 from ...ingestion.weather.serialization import canonical_json_bytes, pretty_json_bytes, sha256_bytes
 from .artifacts import artifact_directory, identity, numerical_versions, publish_bundle, read_bundle
+from .experiment import experiment_payloads, validate_experiment_payload
 from .learning import (
     LOGISTIC_ARGUMENTS,
     FittedStage,
@@ -59,9 +60,13 @@ class FinalModel(AtmosphericContract):
 
 
 def validate_model_payload(payloads: dict[str, bytes]) -> FinalModel:
-    if set(payloads) != {"policy.json", "model.json"}:
-        raise ValueError("Final model bundle has unexpected or missing files.")
     model = FinalModel.model_validate_json(payloads["model.json"])
+    experiment_version = model.selection_snapshot.experiment_version
+    validate_experiment_payload(payloads, experiment_version)
+    if set(payloads) != {"policy.json", "model.json"} | set(
+        experiment_payloads(experiment_version)
+    ):
+        raise ValueError("Final model bundle has unexpected or missing files.")
     policy, policy_sha = load_policy()
     if (
         model.policy_sha256 != policy_sha
@@ -111,6 +116,7 @@ def validate_model_payload(payloads: dict[str, bytes]) -> FinalModel:
     ):
         raise ValueError("Final model frozen selection identity or parents differ.")
     selection_payloads = {
+        **experiment_payloads(experiment_version),
         "selection.json": pretty_json_bytes(snapshot),
         "report.md": selection_report(snapshot),
         "policy.json": files(__package__).joinpath("resources", POLICY_RESOURCE).read_bytes(),
@@ -220,7 +226,14 @@ def train_final(*, study_id: str, selection_id: str, project_root: Path) -> dict
         )
         rows = tuple(by_id[key] for key in weights.row_ids)
         models.append(
-            fit_stage(rows, weights, regularization_c=c, site_ids=site_ids, policy=policy)
+            fit_stage(
+                rows,
+                weights,
+                regularization_c=c,
+                site_ids=site_ids,
+                policy=policy,
+                experiment_version=selection.metadata.experiment_version,
+            )
         )
         row_hashes[stage] = sha256_bytes(canonical_json_bytes({"row_ids": list(weights.row_ids)}))
     model = FinalModel(
@@ -254,13 +267,17 @@ def train_final(*, study_id: str, selection_id: str, project_root: Path) -> dict
             ArtifactParent(kind="study", artifact_id=study_id),
             ArtifactParent(kind="selection", artifact_id=selection_id),
         ),
-        payloads={"model.json": pretty_json_bytes(model)},
+        payloads={
+            **experiment_payloads(selection.metadata.experiment_version),
+            "model.json": pretty_json_bytes(model),
+        },
         validate_payload=validate_model_payload,
     )
     return {
         **result,
         "study_id": study_id,
         "selection_id": selection_id,
+        "experiment_version": selection.metadata.experiment_version,
         **selection.metadata.winner.model_dump(),
         "training_row_count": len(study.rows),
         "conditional_training_row_count": model.models[1].parameters.support.row_count,

@@ -15,6 +15,7 @@ from sklearn.linear_model import LogisticRegression
 from threadpoolctl import threadpool_limits
 
 from ...ingestion.atmosphere.contracts import AtmosphericContract
+from .experiment import ExperimentVersion, regularization_values
 from .inputs import ForecastInput, validate_features
 from .models import ConversionSupport, Probability, Sha256, StageParameters, TrainingSupport
 from .policy import XcPolicy, coordinate_ids
@@ -181,8 +182,9 @@ def fit_stage(
     site_ids: tuple[int, ...],
     policy: XcPolicy,
     check_rows: tuple[StudyRow, ...] = (),
+    experiment_version: ExperimentVersion = 1,
 ) -> FittedStage:
-    if regularization_c not in policy.regularization_grid:
+    if regularization_c not in regularization_values(experiment_version):
         raise ValueError("XC regularization must come from the predeclared grid.")
     if tuple(row.row_id for row in rows) != weights.row_ids:
         raise ValueError("XC fit rows differ from their frozen ordered weights.")

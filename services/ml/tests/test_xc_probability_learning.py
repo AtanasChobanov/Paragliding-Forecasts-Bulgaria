@@ -274,8 +274,17 @@ def test_undefined_metrics_and_unsupported_300_are_explicit(synthetic_study):
 
 
 @pytest.mark.parametrize("fold,expected_k,expected_n", [(2023, 0, 3), (2024, 1, 6)])
-def test_trial_six_fits_nine_candidates_saved_predictions_metrics_and_reuse(
-    tmp_path, monkeypatch, synthetic_study, fold, expected_k, expected_n
+@pytest.mark.parametrize("experiment_version,fit_count,candidate_count", [(1, 6, 9), (2, 18, 81)])
+def test_versioned_trial_saved_predictions_metrics_and_reuse(
+    tmp_path,
+    monkeypatch,
+    synthetic_study,
+    fold,
+    expected_k,
+    expected_n,
+    experiment_version,
+    fit_count,
+    candidate_count,
 ):
     monkeypatch.setattr(trials, "load_study", lambda **kwargs: synthetic_study)
     original_fit = LogisticRegression.fit
@@ -289,14 +298,18 @@ def test_trial_six_fits_nine_candidates_saved_predictions_metrics_and_reuse(
         return original_fit(estimator, x, y, sample_weight=sample_weight)
 
     monkeypatch.setattr(LogisticRegression, "fit", fit)
-    first = trials.train_trials(study_id="a" * 64, fold=fold, project_root=tmp_path)
-    assert len(fitted_estimators) == first["fit_count"] == 6
-    assert first["candidate_count"] == 9 and first["validation_prediction_count"] == 9 * 42
+    first = trials.train_trials(
+        study_id="a" * 64, fold=fold, project_root=tmp_path, experiment_version=experiment_version
+    )
+    assert len(fitted_estimators) == first["fit_count"] == fit_count
+    assert first["candidate_count"] == candidate_count
+    assert first["validation_prediction_count"] == candidate_count * 42
     assert first["conversion"]["k"] == expected_k and first["conversion"]["n"] == expected_n
     loaded = trials.load_trial(
         trial_id=first["trial_id"], study_id="a" * 64, study=synthetic_study, project_root=tmp_path
     )
-    assert len(fitted_estimators) == 6  # reload validates compact parameters; it never refits.
+    assert len(fitted_estimators) == fit_count  # Reload never refits.
+    assert loaded.metadata.experiment_version == experiment_version
     for fitted, (estimator, encoded, _) in zip(
         loaded.metadata.models, fitted_estimators, strict=True
     ):
@@ -332,11 +345,32 @@ def test_trial_six_fits_nine_candidates_saved_predictions_metrics_and_reuse(
             assert all(values[2].scores is None for values in candidate.by_horizon.values())
     directory = Path(first["output_directory"])
     original_manifest = (directory / "manifest.json").read_bytes()
-    second = trials.train_trials(study_id="a" * 64, fold=fold, project_root=tmp_path)
+    second = trials.train_trials(
+        study_id="a" * 64, fold=fold, project_root=tmp_path, experiment_version=experiment_version
+    )
     assert second["trial_id"] == first["trial_id"] and second["reused"]
     assert (directory / "manifest.json").read_bytes() == original_manifest
-    assert len(fitted_estimators) == 12
+    assert len(fitted_estimators) == 2 * fit_count
     _, payloads = read_bundle(directory, kind="trial", artifact_id=first["trial_id"])
+    saved_metadata = json.loads(payloads["trial.json"])
+    if experiment_version == 1:
+        assert "experiment_version" not in saved_metadata and "experiment.json" not in payloads
+    else:
+        assert saved_metadata["experiment_version"] == 2
+        with pytest.raises(ValueError, match="experiment.json"):
+            trials.validate_trial_payload(
+                {name: raw for name, raw in payloads.items() if name != "experiment.json"},
+                study=synthetic_study,
+                study_id="a" * 64,
+            )
+    altered = json.loads(payloads["trial.json"])
+    altered["models"][0]["parameters"]["regularization_c"] = 0.002
+    with pytest.raises(ValueError, match="ordered stage/C"):
+        trials.validate_trial_payload(
+            {**payloads, "trial.json": pretty_json_bytes(altered)},
+            study=synthetic_study,
+            study_id="a" * 64,
+        )
     metrics = json.loads(payloads["metrics.json"])
     metrics["candidates"][0]["mean_brier"] += 0.01
     with pytest.raises(ValueError, match="diagnostics differ"):
@@ -381,7 +415,9 @@ def test_cli_trial_options_and_json(tmp_path, monkeypatch, capsys):
         )
         == 0
     )
-    assert calls == [{"study_id": "b" * 64, "fold": 2023, "project_root": tmp_path}]
+    assert calls == [
+        {"study_id": "b" * 64, "fold": 2023, "project_root": tmp_path, "experiment_version": 2}
+    ]
     assert json.loads(capsys.readouterr().out) == {"trial_id": "a" * 64}
     with pytest.raises(SystemExit):
         cli.main(["train-trials", "--study-id", "b" * 64, "--fold", "2025"])
