@@ -10,10 +10,8 @@ unless they explicitly require `--allow-live-network`.
 The `predictions/xc_probability` module implements study preparation,
 chronological trials, recipe selection and final JSON-model fitting/loading.
 Retained-GFS prediction is not implemented yet. DEC-070 records the accepted
-scope. Both original experiment-1 owner-run trials passed artifact review.
-The owner approved a broader experiment-2 C search; its real trials are pending.
-The real final model has not yet been fitted and independent forecast accuracy
-remains unverified.
+scope. Both experiment-2 trials, selection and the final model passed artifact
+review. Independent forecast accuracy remains unverified.
 
 The packaged `xc-probability-policy-v1.json` explicitly maps 43 daily, 11
 0–1500 m layer and 13 1500–3000 m layer inputs to weather policy v5, including
@@ -236,7 +234,9 @@ Compute unique training-site-day k/n again for this fit and store the expected
 3/42, support and lineage. Inference later uses those saved counts/ratio.
 No extra calibrator, bootstrap, model family or 2025 data is introduced.
 
-The final bundle contains `manifest.json`, `policy.json`, `experiment.json`
+Final models are published and loaded by ID under
+`data/models/xc-probability/<model_id>/`. The final bundle contains
+`manifest.json`, `policy.json`, `experiment.json`
 (experiment 2 only) and `model.json`, with
 no redundant Markdown report. It retains ordered input/coordinate/category
 identities, each stage's means/scales, coefficients/intercept, weighted
@@ -255,8 +255,8 @@ from final refit support; no accuracy claim is based on the fit's own rows.
 
 Final stdout returns `model_id`, source IDs, chosen C values, 960/480 fit row
 counts, source seasons, actual stored k/n and measured time/bytes. Predictions
-remain baseline, uncalibrated and low confidence. Real select/final-fit
-compatibility and measurements remain pending until the owner runs the stages.
+remain baseline, uncalibrated and low confidence. See the handoff for the
+verified selection and final model IDs, metrics and timings.
 
 ## T-022 offline cloudbase baseline
 

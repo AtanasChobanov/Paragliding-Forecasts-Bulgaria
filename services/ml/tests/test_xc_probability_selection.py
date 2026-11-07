@@ -206,7 +206,7 @@ def test_final_fit_cannot_start_without_valid_selection(tmp_path, monkeypatch, s
     monkeypatch.setattr(model_io, "load_study", lambda **kwargs: synthetic_study)
     with patch.object(LogisticRegression, "fit", blocked), pytest.raises(FileNotFoundError):
         model_io.train_final(study_id="a" * 64, selection_id="b" * 64, project_root=tmp_path)
-    assert not (tmp_path / "data/processed/xc-probability/model").exists()
+    assert not (tmp_path / "data/models/xc-probability").exists()
 
 
 @pytest.mark.parametrize("experiment_version,candidate_count", [(1, 9), (2, 81)])
@@ -245,7 +245,7 @@ def test_verified_selection_final_refit_and_model_only_reload(
         model_io.train_final(
             study_id="a" * 64, selection_id=selected["selection_id"], project_root=tmp_path
         )
-    assert not (tmp_path / "data/processed/xc-probability/model").exists()
+    assert not (tmp_path / "data/models/xc-probability").exists()
 
     original_fit = LogisticRegression.fit
     fitted_estimators = []
@@ -263,6 +263,7 @@ def test_verified_selection_final_refit_and_model_only_reload(
     assert first["conversion"]["k"] == 2 and first["conversion"]["n"] == 9
     assert first["source_seasons"] == [2022, 2023, 2024]
     model_directory = Path(first["output_directory"])
+    assert model_directory == tmp_path.resolve() / "data/models/xc-probability" / first["model_id"]
     assert {path.name for path in model_directory.iterdir()} == {
         "model.json",
         "policy.json",

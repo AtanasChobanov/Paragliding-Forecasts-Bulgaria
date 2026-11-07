@@ -3146,5 +3146,11 @@ reserved 2025 evaluation remain unchanged. The owner runs the new 2023 trial,
 then 2024 after review; selection uses their new IDs. This is a fixed wider
 development search, not an adaptive loop until a preferred score appears.
 
+**Final model storage accepted 2026-11-07 (T-023).** Store final XC model
+bundles in `data/models/xc-probability/<model_id>/`, following the trained
+model zone in `data/README.md`. Use that location for publication and loading.
+Studies, trials, selections and predictions use `data/processed/xc-probability/`.
+Move the existing final bundle intact to retain its content ID.
+
 **Related files:** [`../services/ml/README.md`](../services/ml/README.md) and
 [`handoff.md`](handoff.md).

@@ -1,8 +1,131 @@
 # Project Handoff
 
+## Final model verified and moved to the model zone — 2026-11-07
+
+The owner ran `train-final` for experiment 2 and published model
+`5c469fdfebd87261f2070af6d0479cfbe8177d29982fc858cea27af1687e3cbc`
+in **7.703 s**, with **282,825 bytes**. The package contains `model.json`,
+`policy.json`, `experiment.json`, and `manifest.json`. Standalone reload
+verified the hashes, frozen selection, and numerical probes with fitting,
+study and selection loading, publication, SQLite and network access blocked.
+A separate comparison to the study verified the final row IDs and digests,
+training support, weighted scaling and references, and both probes per stage.
+Both stages use C=0.03. The 100+ model uses 960 rows over 320 site-days,
+and the conditional 200+ model uses 480 rows over 160 site-days. Their fits
+took 35 and 25 solver iterations. The stored 300+ conversion is 3/42 from
+unique site-days in source seasons 2022–2024. The model is a frozen baseline
+with low confidence and independent reliability still unverified.
+
+The owner corrected the storage location to follow `data/README.md`.
+Final XC models are now published and loaded under
+`data/models/xc-probability/<model_id>/`. The four files of the existing
+bundle were moved intact and verified with SHA-256 before and after the
+move. Standalone reload passed from the new location with the same model
+ID. Study, trial and selection locations stay under `data/processed`.
+DEC-070 records the correction to section 2.10 of the local plan. The
+owner requested leaving the untracked implementation plan untouched.
+
+Verification for the location change: 659 Python tests passed in 121.80 s.
+Ruff lint/format, repository structure and diff whitespace checks passed.
+The refit tests verify the new publication path, standalone reload and
+reuse in both experiment versions.
+
+The next implementation unit is retained-GFS `predict`, using the verified
+model ID above. The owner runs the real prediction command after the code
+and synthetic tests are ready. T-023 remains In Progress.
+
+## Expanded selection verified — 2026-11-07
+
+The owner ran `select` for the two experiment-2 trials and published
+`bf0224d72b33c73d0b232ad239409908bdabf32e8a1a02b550dc1c7a2b6d89dc`
+in **6.859 s**, with **229,498 bytes**. Read-only reload verified the study,
+both trials, the selection's hashes, lineage, 81 candidates, and 12 score
+components per candidate with fitting, publishing, network and SQLite blocked.
+Each season has six equally weighted horizon/threshold components and
+contributes half of the combined mean.
+
+The strict minimum mean Brier is **0.12054589723192244**, with log loss
+0.36775552114983734 at **C100=0.03, C200=0.03**. Its 2023 and 2024 mean
+Brier scores are 0.12212417120112674 and 0.11896762326271813. The runner-up
+0.03/0.1 scores 0.12060772498121729, outside the tie tolerance. The best pair
+using a value from the expanded grid alone is 0.01/0.1 at 0.12076786439673226.
+The selected pair belongs to the original grid. The constant comparator
+scores 0.13520091855306027, with log loss 0.4236559465172484. The selected
+pair reduces development Brier by approximately 10.84% relative to it.
+
+**Completed owner-run checkpoint:** the final refit used the verified selection.
+
+```powershell
+uv run --project services/ml --locked xc-probability train-final --study-id 0eda3e7d8e582d97e52a76eaf110b92b8209855785dd3a1664334963a1ceab2b --selection-id bf0224d72b33c73d0b232ad239409908bdabf32e8a1a02b550dc1c7a2b6d89dc
+```
+
+Expect experiment 2, C100/C200 of 0.03/0.03, 960 p100 rows, 480 q200 rows,
+and 300+ conversion support 3/42. Verify the resulting standalone model
+bundle before implementing retained-GFS prediction. T-023 remains In Progress.
+
+## Expanded 2024 trial verified — 2026-11-07
+
+The owner ran experiment 2 for fold 2024 and published trial
+`cd43ead72014e4217d3c781bc0d665d8e4d6d2fcb2f297dd377883cc7819ff53`
+in **11.256 s**, with **11,958,655 bytes**. Read-only reload verified both
+expanded trial bundles against the same study with fitting, network and
+SQLite blocked. The 2024 bundle contains 18 fits, 81 candidates, 600 training
+and 360 validation rows, and 29,160 prediction records. The training cutoff
+is 2023-10-02. Every 300+ prediction equals p200 multiplied by 2/23.
+
+Independent recalculation of all 486 horizon/threshold Brier components
+matched the stored scores within 2.78e-17. The six fitted stages, 3,240
+predictions, nine candidate scores and constant comparator that overlap
+with experiment 1 match exactly. All 81 pairs beat the constant mean Brier
+of 0.1368382219687292 on this fold. The lowest 2024 mean Brier is
+**0.11885410818324776**, with mean log loss 0.36493484124595016 at
+**C100=0.03, C200=0.1**, the same best pair as in the original grid.
+
+**Completed owner-run checkpoint:** selection used both expanded trials.
+
+```powershell
+uv run --project services/ml --locked xc-probability select --study-id 0eda3e7d8e582d97e52a76eaf110b92b8209855785dd3a1664334963a1ceab2b --trial-id 1009be3701259bac8aadd084828439aaf1887b8fdd2f9a6c811846b3858a07fb --trial-id cd43ead72014e4217d3c781bc0d665d8e4d6d2fcb2f297dd377883cc7819ff53
+```
+
+Expect experiment version 2, 81 candidates and 12 score components per
+candidate. Verify the resulting selection and winner before providing
+`train-final` with the returned selection ID. T-023 remains In Progress.
+
+## Expanded 2023 trial verified — 2026-11-07
+
+The owner ran experiment 2 for fold 2023 and published trial
+`1009be3701259bac8aadd084828439aaf1887b8fdd2f9a6c811846b3858a07fb`
+in **8.941 s**, with **10,279,945 bytes**. Read-only reload verified the
+manifest, experiment, study lineage, stage parameters, predictions, metrics
+and report with fitting, network and SQLite blocked. The bundle contains 18
+fits, 81 candidates, 282 training and 318 validation rows, and 25,758 prediction
+records. Training cutoff is 2022-09-28. The 300+ estimate is missing on all
+validation predictions with training conversion support 0/10.
+
+Independently recomputed all 486 horizon/threshold Brier components from the
+original sampling weights and saved probabilities. The maximum absolute
+difference was 5.56e-17. The six fitted stages, 2,862 predictions, nine
+candidate scores and constant comparator that overlap with experiment 1
+match exactly. Of the 81 pairs, 62 improve on the constant mean Brier of
+0.13356361513739132. The lowest 2023 mean Brier is **0.12157171917449784**
+at **C100=0.1, C200=0.01**, with mean log loss 0.3701555623010466. The
+original grid's best pair was 0.1/0.03, with Brier 0.1216948099846877.
+The 2023 results are one fold of the recipe comparison.
+
+**Completed owner-run checkpoint:** the expanded 2024 trial used this command.
+
+```powershell
+uv run --project services/ml --locked xc-probability train-trials --study-id 0eda3e7d8e582d97e52a76eaf110b92b8209855785dd3a1664334963a1ceab2b --fold 2024 --experiment-version 2
+```
+
+Expect 18 fits, 81 candidates, 600 training and 360 validation rows, 29,160
+prediction records and 300+ conversion support 2/23. Verify the new 2024
+artifact before providing the `select` command with both experiment-2 IDs.
+T-023 remains In Progress.
+
 ## Owner-approved expanded C search — 2026-11-07
 
-This checkpoint supersedes the older next-select instructions below. The owner
+This records the expansion implemented before the owner ran 2023. The owner
 approved expanding each stage's fixed C grid to
 `{0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1, 3, 10}`. Implemented regularization
 experiment 2: nine p100 and nine q200 fits, 81 combinations per fold; 36 trial
@@ -31,7 +154,7 @@ of the actual 960-row study and both original trials passed all hash/report
 checks and exact trial.json roundtrips with fitting/network/SQLite blocked.
 No real trial, selection, final fit, prediction or download was run by the agent.
 
-**Next owner-run checkpoint:** run only the expanded 2023 trial from repository root:
+**Completed owner-run checkpoint:** the expanded 2023 trial used this command:
 
 ```powershell
 uv run --project services/ml --locked xc-probability train-trials `

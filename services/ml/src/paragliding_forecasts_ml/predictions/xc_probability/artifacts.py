@@ -31,7 +31,11 @@ def identity(manifest: ArtifactManifest) -> dict:
 def artifact_directory(root: Path, kind: ArtifactKind, artifact_id: str) -> Path:
     if len(artifact_id) != 64 or any(char not in "0123456789abcdef" for char in artifact_id):
         raise ValueError("XC artifact ID must be a lowercase SHA-256.")
-    base = (root / "data/processed/xc-probability" / kind).resolve()
+    base = (
+        root / "data/models/xc-probability"
+        if kind == "model"
+        else root / "data/processed/xc-probability" / kind
+    ).resolve()
     directory = (base / artifact_id).resolve()
     if directory.parent != base:
         raise ValueError("XC artifact path escapes its kind directory.")
