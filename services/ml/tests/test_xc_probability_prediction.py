@@ -519,3 +519,16 @@ def test_predict_cli_publishes_and_replays_exact_inputs(
     (directory / "predictions.jsonl").write_bytes(b"tampered")
     with pytest.raises(ValueError, match="payload changed"):
         prediction.load_prediction(prediction_id=result["prediction_id"], project_root=tmp_path)
+
+
+def test_cli_rejects_an_unknown_command_before_prediction(monkeypatch, capsys):
+    def unexpected_prediction(**_kwargs):
+        pytest.fail("An unknown command must not reach prediction")
+
+    monkeypatch.setattr(cli, "predict_runs", unexpected_prediction)
+    with pytest.raises(SystemExit) as error:
+        cli.main(["predcit", "--model-id", "a" * 64, "--run-key", "unused"])
+    assert error.value.code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "invalid choice" in captured.err and "predcit" in captured.err

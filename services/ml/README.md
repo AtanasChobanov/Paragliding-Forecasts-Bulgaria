@@ -305,10 +305,11 @@ inputs are complete. The prediction bundle can be verified and replayed
 from its saved inputs and final model. Repeating an identical run keeps its
 content ID and the original publication metadata.
 
-The smoke run should yield seven rows. Review the recorded source evidence,
-the 67 inputs, the nested probabilities, the 3/42 pooled training ratio,
-and the separate stage drivers. The smoke check verifies the operational
-path. Independent forecast accuracy remains a separate 2025 evaluation.
+The verified owner-run smoke produced seven complete rows and a 458,488-byte
+bundle in 0.288 s. Its exact inputs, nested probabilities, 3/42 pooled training
+ratio, and separate stage drivers passed read-only replay. The smoke check
+verifies the operational path. Independent forecast accuracy remains a
+separate 2025 evaluation. See the handoff for the bundle ID and site results.
 For later forecasts, use a completed GFS ingestion run with the same frozen
 model ID.
 

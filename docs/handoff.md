@@ -1,6 +1,37 @@
 # Project Handoff
 
-## Retained GFS prediction ready for owner review — 2026-11-07
+## T-023 retained GFS prediction verified — 2026-11-07
+
+The owner ran the real smoke check for 2026-10-28 (2026-10-27 06Z, D+1).
+The prediction bundle ID is
+`e59fa683563150a1bbb1bbef2590d37ba8e91505c636ffd82a47be3b56e68902`.
+The command took **0.288 s** and published **458,488 bytes**. All seven
+sites have 67 required inputs and three available, nested probabilities.
+Standalone read-only replay passed with SQLite, fitting, publication,
+training artifacts and network access blocked. A separate read-only source
+check matched all seven saved input records exactly. The 469 saved input
+values also matched the corresponding SQLite daily and profile-layer
+columns. Inference consumes the retained daily-feature artifact. SQLite
+resolves run metadata, the persisted daily snapshot and its linked hours.
+Input hashes, source readiness (2026-10-27T09:54:54Z), the model parent,
+separate p100/q200 grouped
+contributions, low confidence and the stored 3/42 conversion were verified.
+
+| Site | P100 | P200 | P300 |
+| --- | ---: | ---: | ---: |
+| Nevsha | 1.64756% | 0.71953% | 0.05139% |
+| Dobrich region | 1.17350% | 0.48896% | 0.03493% |
+| Shumen | 0.93827% | 0.33423% | 0.02387% |
+| Pastrina | 0.67569% | 0.19545% | 0.01396% |
+| Sopot | 0.64033% | 0.13015% | 0.00930% |
+| Zlatitsa | 0.31090% | 0.07913% | 0.00565% |
+| Vitosha (Kominite) | 0.25611% | 0.04566% | 0.00326% |
+
+Thermal height, solar radiation and wind are the three largest-magnitude
+p100 groups at all seven sites and lower p100 relative to the training
+reference. This operational check does not measure accuracy or calibration.
+The model remains a low-confidence baseline and the 2025 holdout is reserved
+for T-026. The verified training, selection and refit evidence is below.
 
 `xc-probability predict` now loads the verified final model by ID from
 `data/models/xc-probability/`. It checks each explicitly selected GFS run
@@ -19,27 +50,21 @@ corresponding rows. Unsupported 300+ produces null probability and confidence
 for that threshold. Internal `load_prediction` validates and replays a bundle
 from its frozen model and saved inputs.
 
-Verification: **668 Python tests passed in 127.11 s**, including nine new
-synthetic cases covering ledger and receipt lineage, incorrect feature
-versions, tampered evidence, use permission, cutoffs, hourly coverage,
-missingness, prediction, immutable reuse, and offline replay. Ruff lint
-and formatting, repository structure, CLI help and whitespace checks passed.
-A read-only inventory check found all seven retained sites in the frozen
-model, with eleven retained hours per site. No real prediction was run.
+The CLI now dispatches prediction only for `predict`. Unknown commands are
+rejected by argparse before dispatch. **669 Python tests passed in 125.39 s**
+including a regression check for an unknown subcommand. Ruff lint and
+formatting, repository structure and whitespace checks passed. T-023 is Done.
 
-**Next owner-run checkpoint.** From the repository root, run the retained
-GFS smoke check and share its JSON output.
+**Reproduce the completed smoke check** from the repository root.
 
 ```powershell
 uv run --project services/ml --locked xc-probability predict --model-id 5c469fdfebd87261f2070af6d0479cfbe8177d29982fc858cea27af1687e3cbc --run-key 91ae8760-fdc2-4bd6-8f3f-af3bedc00e46
 ```
 
-Expect seven rows for 2026-10-28, horizon D+1, 67 inputs per site, no missing
-thresholds, and pooled training conversion 3/42. Verify the actual bundle
-and replay, provenance and nested probabilities, low confidence and stage
-drivers. Record elapsed time, bytes, and limitations before marking T-023
-Done. T-023 is in Review until the smoke artifact is verified. The three
-temporary planning documents remain local and untracked.
+The three temporary planning documents remain local and untracked. An
+additional forecast for 2026-11-07 is optional. The read-only inventory
+found no persisted GFS run for that target date. Any new collection and
+prediction remain owner-run.
 
 ## Final model verified and moved to the model zone — 2026-11-07
 

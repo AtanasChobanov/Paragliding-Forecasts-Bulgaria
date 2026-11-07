@@ -87,13 +87,15 @@ def main(arguments: Sequence[str] | None = None) -> int:
                 selection_id=args.selection_id,
                 project_root=args.project_root,
             )
-        else:
+        elif args.command == "predict":
             result = predict_runs(
                 model_id=args.model_id,
                 run_keys=tuple(args.run_key),
                 project_root=args.project_root,
                 database_url=args.database_url,
             )
+        else:
+            parser.error(f"unhandled command: {args.command!r}")
     except (
         OSError,
         ValueError,
