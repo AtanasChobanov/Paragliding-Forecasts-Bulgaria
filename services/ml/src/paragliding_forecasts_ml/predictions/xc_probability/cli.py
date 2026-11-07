@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sqlite3
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -11,9 +12,12 @@ from pathlib import Path
 from ...datasets.weather_backfill_cli import BackfillError
 from ...datasets.weather_cohort import CohortPlanError
 from ...datasets.weather_join import WeatherJoinError
-from ...storage.sqlite import repository_root
+from ...ingestion.weather.artifacts import ArtifactError
+from ...ingestion.weather.state import StateError
+from ...storage.sqlite import DatabaseConfigurationError, repository_root
 from .experiment import CURRENT_EXPERIMENT_VERSION, SUPPORTED_EXPERIMENT_VERSIONS
 from .model_io import train_final
+from .prediction import predict_runs
 from .scoring_layout import VALIDATION_SEASONS
 from .selection import select_recipe
 from .study import prepare_study
@@ -55,6 +59,13 @@ def main(arguments: Sequence[str] | None = None) -> int:
     final.add_argument("--study-id", required=True)
     final.add_argument("--selection-id", required=True)
     final.add_argument("--project-root", type=Path, default=repository_root())
+    predict = commands.add_parser(
+        "predict", help="Predict from explicitly selected persisted GFS runs."
+    )
+    predict.add_argument("--model-id", required=True)
+    predict.add_argument("--run-key", action="append", required=True)
+    predict.add_argument("--database-url")
+    predict.add_argument("--project-root", type=Path, default=repository_root())
     args = parser.parse_args(arguments)
     try:
         if args.command == "prepare":
@@ -70,11 +81,18 @@ def main(arguments: Sequence[str] | None = None) -> int:
             result = select_recipe(
                 study_id=args.study_id, trial_ids=args.trial_id, project_root=args.project_root
             )
-        else:
+        elif args.command == "train-final":
             result = train_final(
                 study_id=args.study_id,
                 selection_id=args.selection_id,
                 project_root=args.project_root,
+            )
+        else:
+            result = predict_runs(
+                model_id=args.model_id,
+                run_keys=tuple(args.run_key),
+                project_root=args.project_root,
+                database_url=args.database_url,
             )
     except (
         OSError,
@@ -84,6 +102,10 @@ def main(arguments: Sequence[str] | None = None) -> int:
         BackfillError,
         CohortPlanError,
         WeatherJoinError,
+        ArtifactError,
+        StateError,
+        DatabaseConfigurationError,
+        sqlite3.Error,
     ) as error:
         print(f"XC probability command did not complete: {error}", file=sys.stderr)
         return 1
