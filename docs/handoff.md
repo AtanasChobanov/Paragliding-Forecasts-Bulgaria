@@ -1,5 +1,46 @@
 # Project Handoff
 
+## Retained GFS prediction ready for owner review — 2026-11-07
+
+`xc-probability predict` now loads the verified final model by ID from
+`data/models/xc-probability/`. It checks each explicitly selected GFS run
+through read-only SQLite and retained metadata: successful persistence,
+operational use permission, issue-date 06Z, D+1 through D+3, eleven linked
+site hours, and source readiness by 16:00 Europe/Sofia. The reader follows
+the effective persistence stage to its receipt and the hashed feature
+builder v5 / contract 3 daily and hourly feature batches. It reads only
+raw manifest metadata at the raw boundary.
+
+The prediction bundle contains exact hashed inputs and provenance, row
+predictions, model lineage, training support and pooled conversion.
+Available estimates carry versioned low confidence and separate p100/q200
+group contributions and messages. Missing required features affect only the
+corresponding rows. Unsupported 300+ produces null probability and confidence
+for that threshold. Internal `load_prediction` validates and replays a bundle
+from its frozen model and saved inputs.
+
+Verification: **668 Python tests passed in 127.11 s**, including nine new
+synthetic cases covering ledger and receipt lineage, incorrect feature
+versions, tampered evidence, use permission, cutoffs, hourly coverage,
+missingness, prediction, immutable reuse, and offline replay. Ruff lint
+and formatting, repository structure, CLI help and whitespace checks passed.
+A read-only inventory check found all seven retained sites in the frozen
+model, with eleven retained hours per site. No real prediction was run.
+
+**Next owner-run checkpoint.** From the repository root, run the retained
+GFS smoke check and share its JSON output.
+
+```powershell
+uv run --project services/ml --locked xc-probability predict --model-id 5c469fdfebd87261f2070af6d0479cfbe8177d29982fc858cea27af1687e3cbc --run-key 91ae8760-fdc2-4bd6-8f3f-af3bedc00e46
+```
+
+Expect seven rows for 2026-10-28, horizon D+1, 67 inputs per site, no missing
+thresholds, and pooled training conversion 3/42. Verify the actual bundle
+and replay, provenance and nested probabilities, low confidence and stage
+drivers. Record elapsed time, bytes, and limitations before marking T-023
+Done. T-023 is in Review until the smoke artifact is verified. The three
+temporary planning documents remain local and untracked.
+
 ## Final model verified and moved to the model zone — 2026-11-07
 
 The owner ran `train-final` for experiment 2 and published model
@@ -30,9 +71,7 @@ Ruff lint/format, repository structure and diff whitespace checks passed.
 The refit tests verify the new publication path, standalone reload and
 reuse in both experiment versions.
 
-The next implementation unit is retained-GFS `predict`, using the verified
-model ID above. The owner runs the real prediction command after the code
-and synthetic tests are ready. T-023 remains In Progress.
+The verified model ID above is the parent for the retained GFS smoke check.
 
 ## Expanded selection verified — 2026-11-07
 

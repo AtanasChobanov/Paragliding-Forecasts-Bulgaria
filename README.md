@@ -82,9 +82,8 @@ Python is deliberately limited to ingestion, weather-feature engineering,
 experiments, training, backtesting, and batch prediction work that benefits
 from the scientific Python ecosystem.
 
-The T-023 offline XC training workflow and owner-run checkpoints
+The T-023 offline XC training and prediction workflow and owner-run checkpoints
 are documented in the [ML service README](services/ml/README.md#prepare-the-frozen-development-study).
-XC training and prediction remain in progress.
 
 ## Prerequisites
 

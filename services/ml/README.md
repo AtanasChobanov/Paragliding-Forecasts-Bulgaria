@@ -5,13 +5,13 @@ service. It keeps source collection, offline replay, review, validation, and
 persistence boundaries explicit. Commands below operate only on local artifacts
 unless they explicitly require `--allow-live-network`.
 
-## T-023 XC probability baseline (implementation in progress)
+## T-023 XC probability baseline
 
 The `predictions/xc_probability` module implements study preparation,
-chronological trials, recipe selection and final JSON-model fitting/loading.
-Retained-GFS prediction is not implemented yet. DEC-070 records the accepted
-scope. Both experiment-2 trials, selection and the final model passed artifact
-review. Independent forecast accuracy remains unverified.
+chronological trials, recipe selection, final JSON-model fitting and prediction
+from persisted GFS features. DEC-070 records the accepted scope. Both
+experiment-2 trials, selection and the final model passed artifact review.
+Independent forecast accuracy remains unverified.
 
 The packaged `xc-probability-policy-v1.json` explicitly maps 43 daily, 11
 0–1500 m layer and 13 1500–3000 m layer inputs to weather policy v5, including
@@ -257,6 +257,60 @@ Final stdout returns `model_id`, source IDs, chosen C values, 960/480 fit row
 counts, source seasons, actual stored k/n and measured time/bytes. Predictions
 remain baseline, uncalibrated and low confidence. See the handoff for the
 verified selection and final model IDs, metrics and timings.
+
+### Predict from retained GFS features
+
+For the T-023 smoke check, run from the repository root with the verified
+model ID and the retained 2026-10-27 GFS 06Z D+1 run for 2026-10-28.
+
+```powershell
+uv run --project services/ml --locked xc-probability predict `
+  --model-id 5c469fdfebd87261f2070af6d0479cfbe8177d29982fc858cea27af1687e3cbc `
+  --run-key 91ae8760-fdc2-4bd6-8f3f-af3bedc00e46
+```
+
+Repeat `--run-key` to include more explicitly chosen, already persisted runs.
+Optional `--project-root` selects the artifact root. `--database-url` selects
+the existing local SQLite file, with `DATABASE_URL` and
+`file:./data/local/paragliding.db` as fallbacks. The reader opens SQLite
+read-only. It checks permitted operational use, GFS 06Z and D+1/D+2/D+3
+identity, all eleven local flying-window hours and source readiness by 16:00
+Europe/Sofia. It checks the effective persistence stage, receipt, and hashed
+retained feature batches from builder v5 / contract 3. It reads raw manifest
+metadata only. Prediction uses the saved model without fitting or reading
+flight labels, the training dataset, or any raw GRIB payloads.
+
+Stdout reports `prediction_id`, `output_directory`, run keys, row and missing
+metric counts, saved training support and 300+ conversion, elapsed seconds,
+published bytes, and `reused`. A single immutable bundle is published under
+`data/processed/xc-probability/prediction/<prediction_id>/`.
+
+- `inputs.jsonl` stores the 67 exact physical input values per run/site in
+  policy order, with units, quality states, forecast times, and provenance
+  references. Each canonical record has a SHA-256 link from its prediction.
+- `predictions.jsonl` stores nested 100+, 200+, and 300+ probabilities in
+  0–1 units, with baseline status, per-threshold low confidence and reason
+  codes. Available rows include 15 grouped logit contributions per stage,
+  up to three ranked drivers per stage, and deterministic English messages.
+  The 200+ explanation references the separate p100 and q200 stages.
+  The 300+ explanation applies the saved pooled conversion to p200.
+- `prediction.json` summarizes the run keys, training support, pooled
+  conversion, output counts and confidence/explanation policy versions.
+  `manifest.json` binds the final model parent and payload hashes.
+  `policy.json` retains the exact model policy.
+
+A missing required input yields null probabilities and null confidence for
+that row. An unsupported pooled conversion makes only 300+ missing when its
+inputs are complete. The prediction bundle can be verified and replayed
+from its saved inputs and final model. Repeating an identical run keeps its
+content ID and the original publication metadata.
+
+The smoke run should yield seven rows. Review the recorded source evidence,
+the 67 inputs, the nested probabilities, the 3/42 pooled training ratio,
+and the separate stage drivers. The smoke check verifies the operational
+path. Independent forecast accuracy remains a separate 2025 evaluation.
+For later forecasts, use a completed GFS ingestion run with the same frozen
+model ID.
 
 ## T-022 offline cloudbase baseline
 
