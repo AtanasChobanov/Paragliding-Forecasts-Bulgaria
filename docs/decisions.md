@@ -82,6 +82,7 @@ consequences. Temporary progress and Git state belong in
 | DEC-067     | Bound negative reconstructed GFS downward shortwave radiation                 | Accepted   | 2026-10-06 |
 | DEC-068     | Store GFS source readiness per valid hour and guard weather graph identity   | Accepted   | 2026-10-06 |
 | DEC-069     | Correct joined thermal features through an immutable derived layer          | Accepted   | 2026-10-21 |
+| DEC-070     | Develop XC models chronologically and pool the sparse 300+ conversion rate | Accepted | 2026-10-31 |
 
 ## Individual decisions
 
@@ -3019,3 +3020,137 @@ do not change the GFS join.
 
 **Related files:** [`handoff.md`](handoff.md) and
 [`../services/ml/README.md`](../services/ml/README.md).
+
+### DEC-070 - Develop XC models chronologically and pool the sparse 300+ conversion rate
+
+**Status:** Accepted. The owner selected the unsmoothed conversion on
+2026-10-31 and instructed implementation of the consolidated scope on 2026-11-02.
+
+**Date:** 2026-10-31
+
+**Context:** The owner approved temporary chronological training/validation and
+regularization comparisons before fitting all development seasons, and asked
+the agent to select and justify the 300+ orientation method and its constants.
+There are three positive 300+ site-days among 42 positive 200+ site-days;
+all 42 are mandatory development inclusions with sampling weight one.
+
+**Decision:** Compare a small predeclared regularization grid using temporary
+2022 fit / 2023 validation and 2022+2023 fit / 2024 validation. Keep target-date
+sites/horizons grouped and purge future training outcomes at fold boundaries.
+These are separate trial fits, not a requirement to incrementally update one
+model. Freeze the recipe and refit all eligible 2022–2024 development data.
+2025 remains independent evaluation, not calibration fitting or recipe tuning.
+
+For the initial 300+ orientation, use the pooled empirical conditional rate
+q=k/n across all seven sites and all three horizons, counting each training
+site-day once. The owner explicitly selected this unsmoothed method on
+2026-10-31, superseding the earlier delegated Jeffreys smoothing selection.
+No prior or additive constants apply. The final development counts give
+q=3/42≈0.071429 and p300(site,date,horizon)=p200(site,date,horizon)*q.
+Trial fits use their training-fold counts only; 2025 never contributes.
+Empty or unsupported evidence retains explicit insufficient-support handling;
+a zero observed success count is not proof of zero population probability.
+
+The shared q is a pooling assumption, not evidence of identical local rates.
+p200 supplies site/date/horizon variation; no separate exceptional-day signature
+is learned. Site-specific rates remain deferred. The output remains baseline,
+exploratory and low confidence: empirical frequency does not establish exactness
+or calibration. Serialize the method, training counts and input identity.
+
+**Implementation scope accepted 2026-11-02:** Use the corrected joined v4
+dataset `5e88d13ff67e201ce8b0f23ed2d517d5af188e6185cd1496cab8798316bf7394`.
+Freeze all 67 available physical inputs (43 daily, 11 lower-layer, 13
+upper-layer) with explicit source paths/units. All are required; exclude
+structural-null provider cloud base and lower-layer vertical velocity. Do not
+add T-022 output, raw hourly predictors or IGRA observations. Three wind
+directions become sin/cos; seasonal sin/cos plus seven site and three horizon
+one-hot coordinates produce 82 coordinates. Fit weighted means/scales for the
+72 continuous coordinates on each stage's training subset only.
+
+Fit p100 and q200=P(200+|100+) with L2 logistic regression, lbfgs, intercept,
+max_iter=5000, tol=1e-8 and one numerical thread. Pin scikit-learn 1.9.1 through
+uv. Compare C100/C200 in {0.03, 0.1, 0.3}; convergence warnings fail the fit.
+Normalize inverse-inclusion weights across eligible unique training site-days
+to mean one, then divide each across its three horizons without renormalizing
+rows. Each conditional stage owns its scaler/reference/subset. Select by the
+equal mean weighted Brier score over two thresholds, three horizons and two
+chronological trials; use log loss then smaller C100/C200 for ties (absolute
+score tolerance 1e-12). Evaluate against training-only constant rates. Missing
+improvement does not switch model families or block technical completion.
+
+The final outputs are p100, p200=p100*q200 and p300=p200*(k/n), with the
+conversion computed from unique training site-days, stored with its counts and
+lineage, and never reread from labels during inference. Either k=0 or n=0
+makes p300 missing with insufficient_300_support; observed 0/n may remain in
+diagnostics. Do not smooth it or publish an unsupported certain zero.
+
+The versioned initial confidence policy is low for every available threshold,
+with per-threshold reasons and training support. It is not an uncertainty
+interval or a function of probability magnitude/input completeness. Explain
+p100 and q200 separately using coefficient times deviation from each stage's
+weighted training reference; group all 82 coordinates into 12 weather and
+three context groups. Store all contributions and at most three ranked groups
+per stage. Contributions are logits, not percentage points or causal effects.
+For 300+, explain the pooled conversion rather than inventing a weather model.
+T-025 owns API/UI presentation; T-026 owns independent 2025 evaluation. Neither
+confidence promotion nor a fitted calibrator is included in T-023.
+
+The accepted batch workflow is prepare, train-trials for 2023 and 2024,
+select, train-final and predict. Preparation reuses the existing joined-dataset
+verifier once; later commands validate their compact consumed artifacts.
+Prediction takes explicit persisted GFS run keys and publishes exact inputs,
+lineage and estimates in one immutable bundle, with read-only SQLite and no
+flight-label access, downloads or training. Accept operational feature builder
+v5/contract 3; do not silently substitute uncorrected v4. Use verified JSON
+numerical serialization and reload checks, never pickle/joblib. No additional
+prepare-inputs or generic verify CLI is introduced.
+
+**Completion gate:** Passing synthetic tests is necessary but insufficient.
+The agent runs dependency setup and technical checks. The owner runs every
+real study/trial/selection/final-fit/prediction command. Verify those artifacts
+and the seven-row retained-GFS smoke before Done; code ready with owner
+execution pending is Review. Record measured
+metrics, times/sizes and limitations. Lack of demonstrated development benefit
+must be explicit and is not evidence of a validated forecast model.
+
+**Artifact/report clarification accepted 2026-11-02:** JSON manifests and
+payloads remain authoritative. Do not generate Markdown reports that merely
+repeat study inputs, serialized model state or prediction records. Retain a
+short deterministic report for chronological trial/selection comparisons,
+where it helps assess candidates, baseline comparisons and limitations.
+Any retained report is hashed like other payloads. Variable execution timing
+belongs in stdout and manifest execution metadata outside content identity,
+alongside creation metadata. Record pre-publication elapsed time in the
+manifest and total command time/actual published bytes in stdout. Reusing
+an existing bundle preserves its original publication metadata and reports
+the current execution time on stdout.
+
+**Consequences:** Owner preference prioritizes transparent observed counts over
+additional smoothing assumptions. Jeffreys and other prior choices remain
+unselected alternatives. Implementation does not authorize weather acquisition,
+SQLite mutation, T-022 replay, a calibrator or later-ticket work.
+
+**C-search expansion accepted 2026-11-07 (T-023):** The owner approved nine
+predeclared values for each stage: {0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1, 3,
+10}. This supersedes the three-value search for new runs, as regularization
+experiment 2: 18 fits and 81 pairs per chronological trial, 36 trial fits plus
+two final fits overall. Retain experiment 1 and its exact published bytes/IDs
+for reproduction. Keep the feature/method policy and existing study unchanged;
+freeze the expanded grid in a separately versioned, hashed experiment.json
+alongside trials, selections and final models. Missing experiment metadata in
+legacy artifacts means experiment 1. New training defaults to experiment 2;
+an explicit --experiment-version 1 reproduces the old search. Selection must
+consume both folds of the same experiment; final fitting inherits that version.
+Splits, weights, inputs, model family, score/tie rules, confidence and the
+reserved 2025 evaluation remain unchanged. The owner runs the new 2023 trial,
+then 2024 after review; selection uses their new IDs. This is a fixed wider
+development search, not an adaptive loop until a preferred score appears.
+
+**Final model storage accepted 2026-11-07 (T-023).** Store final XC model
+bundles in `data/models/xc-probability/<model_id>/`, following the trained
+model zone in `data/README.md`. Use that location for publication and loading.
+Studies, trials, selections and predictions use `data/processed/xc-probability/`.
+Move the existing final bundle intact to retain its content ID.
+
+**Related files:** [`../services/ml/README.md`](../services/ml/README.md) and
+[`handoff.md`](handoff.md).

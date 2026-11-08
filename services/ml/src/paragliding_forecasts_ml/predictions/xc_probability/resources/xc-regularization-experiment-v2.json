@@ -1,0 +1,5 @@
+{
+  "schema_version": "xc-regularization-experiment/1",
+  "experiment_version": 2,
+  "regularization_grid": [0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0]
+}
