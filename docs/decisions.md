@@ -2491,6 +2491,25 @@ Later expert and observed labels may justify one, but it must be compared with
 this reproducible baseline. The final numerical policy still belongs to T-024
 and must be reviewed before that task is marked complete.
 
+**Owner follow-up, 2026-11-09:** For the retained deterministic GFS source,
+use forecast precipitation amount in place of precipitation probability in
+the first policy. The accepted critical evidence is any one-hour amount of
+at least 2.5 mm, a window total of at least 5 mm, or a joint signal in one
+hour with surface CAPE at least 1000 J/kg, surface CIN magnitude at most
+50 J/kg and precipitation at least 1 mm. Retain the separate wind override
+for the maximum GFS 10 m wind speed strictly above 10 m/s. Evaluate the
+10:00–20:00 Europe/Sofia flying window. Wind remains an explicit reason in
+the daily OD and related weather-limitations assessment.
+
+T-024 delivers the documented offline `uv` command and its versioned daily
+output. T-025 owns connecting that output to the forecast API and displaying
+the level and reasons in the UI. The integration storage design is open.
+Use one daily sum with 35 points for precipitation (the greater of the hourly
+peak and window total ramps), 35 for the strongest same-time surface CAPE/CIN
+pair and 30 for mean low cloud and mean 2 m RH. The medium and high boundaries
+are 25 and 65 points. Hourly evidence establishes the inputs and overrides.
+Incomplete evidence yields a missing level unless it proves an override.
+
 **Related files:** [`tasks.md`](tasks.md), [`architecture.md`](architecture.md),
 [`project-brief.md`](project-brief.md), and [`handoff.md`](handoff.md).
 
@@ -2621,7 +2640,7 @@ collection remains separately owner-authorized.
 
 | Question                                                                                                                  | Options / constraints                                                                                                                                                                                                                                              | Resolve by                                                               |
 | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
-| Which task owns the persisted prediction schema and SQLite forecast adapter?                                              | The backlog has flight and weather schema tasks but no explicit owner for storing T-022-T-024 outputs and replacing the T-002 mock adapter. Public units/status/provenance must be mapped deliberately.                                                            | Backlog planning before real predictions are connected to the API.       |
+| How should batch predictions be stored and served by the forecast adapter?                                              | T-025 owns OD output integration with the forecast API and UI. The choice of a persisted prediction schema and storage mechanism remains open. Public units, status and provenance must be mapped deliberately.                                                     | Before connecting real predictions to the API.                          |
 | What are the final coordinates, aliases, and catchment radii for each site?                                               | Current map points are provisional; Pastrina and the Dobrich regional model need particular confirmation.                                                                                                                                                          | T-009.                                                                   |
 | What retention, attribution, licensing, and rate limits apply beyond the current XCContest browser workflow?              | T-013 has a project-owner-confirmed ordinary low-volume UI workflow; do not extend it to bulk/commercial use or SkyNomad without explicit terms.                                                                                                                   | Before broader collection or product use.                                |
 | What final production attribution, retention, and archive-operation wording is required for the selected weather sources? | T-018 uses direct NOAA GFS. T-038 may add CDS ERA5 only after its evidence gate; preserve source/permission evidence and the applicable Copernicus/ECMWF attribution if it does. Confirm final product wording and retention operations before commercial release. | Before a commercial release.                                             |
