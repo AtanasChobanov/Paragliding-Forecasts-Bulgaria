@@ -1,7 +1,14 @@
 """Synthetic S06 evidence and persisted readiness for OD prediction."""
 
+import json
+import shutil
+import socket
 import sqlite3
+import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
+from pathlib import Path
+from threading import Barrier
 from types import SimpleNamespace
 
 import pytest
@@ -26,6 +33,8 @@ from paragliding_forecasts_ml.ingestion.weather.validation import (
     AcceptedWeatherSamples,
     ValidationSnapshot,
 )
+from paragliding_forecasts_ml.predictions.overdevelopment import cli, retained
+from paragliding_forecasts_ml.predictions.overdevelopment.artifacts import load_prediction
 from paragliding_forecasts_ml.predictions.overdevelopment.models import FIELD_UNITS
 from paragliding_forecasts_ml.predictions.overdevelopment.retained import (
     SELECTORS,
@@ -455,3 +464,119 @@ def test_sofia_windows_keep_same_local_hours_in_both_seasons():
     assert winter.interval_start_utc == "2024-01-01T08:00:00Z"
     assert WINDOW.interval_start_utc == "2024-06-02T07:00:00Z"
     assert len(winter.expected_instants_utc) == len(WINDOW.expected_instants_utc) == 11
+
+
+def _cli_args(source, *keys):
+    return [
+        "--project-root",
+        str(source.root),
+        "--database-url",
+        f"file:./{DB}",
+        *(argument for key in keys for argument in ("--run-key", key)),
+    ]
+
+
+def test_real_console_entry_point(od_source):
+    executable = shutil.which("overdevelopment-predict")
+    assert executable is not None, "Install the project entry point with uv sync."
+    result = subprocess.run(
+        [executable, *_cli_args(od_source, RUN)], check=True, capture_output=True, text=True
+    )
+    summary = json.loads(result.stdout)
+    assert summary["daily_count"] == 1
+    assert summary["risk_counts"] == {"low": 0, "medium": 0, "high": 1}
+    assert summary["reused"] is False
+
+
+@pytest.mark.parametrize(
+    "args", [[], ["--run-key", "unknown"], ["--run-key", RUN, "--run-key", RUN]]
+)
+def test_invalid_arguments_exit_two(args):
+    with pytest.raises(SystemExit) as error:
+        cli.main(args)
+    assert error.value.code == 2
+
+
+def test_cli_help_exits_zero(capsys):
+    with pytest.raises(SystemExit) as error:
+        cli.main(["--help"])
+    assert error.value.code == 0
+    assert "--run-key" in capsys.readouterr().out
+
+
+def test_cli_reuse_and_standalone_replay(od_source, capsys, monkeypatch):
+    def denied(*args, **kwargs):
+        raise AssertionError("Unexpected access outside the saved OD bundle.")
+
+    monkeypatch.setattr(socket, "create_connection", denied)
+    monkeypatch.setattr(socket.socket, "connect", denied)
+    original_database = od_source.database.read_bytes()
+    args = _cli_args(od_source, RUN)
+    assert cli.main(args) == 0
+    first = json.loads(capsys.readouterr().out)
+    directory = Path(first["output_directory"])
+    manifest_bytes = (directory / "manifest.json").read_bytes()
+    assert cli.main(args) == 0
+    second = json.loads(capsys.readouterr().out)
+    assert first["prediction_id"] == second["prediction_id"]
+    assert second["reused"]
+    assert manifest_bytes == (directory / "manifest.json").read_bytes()
+    assert original_database == od_source.database.read_bytes()
+
+    monkeypatch.setattr(sqlite3, "connect", denied)
+    monkeypatch.setattr(WeatherArtifactStore, "verify_reference", denied)
+    saved = load_prediction(first["prediction_id"], project_root=od_source.root)
+    assert saved.daily_count == 1
+    (directory / "predictions.jsonl").write_bytes(b"modified\n")
+    with pytest.raises(ValueError, match="payload changed"):
+        load_prediction(first["prediction_id"], project_root=od_source.root)
+
+
+def test_cli_validation_is_all_or_nothing(od_source, capsys):
+    unknown = "22222222-2222-4222-8222-222222222222"
+    assert cli.main(_cli_args(od_source, RUN, unknown)) == 1
+    captured = capsys.readouterr()
+    assert not captured.out and "Unknown persisted OD run" in captured.err
+    assert not (od_source.root / "data/processed/overdevelopment").exists()
+
+
+def test_reader_resolves_run_keys_in_stable_order(od_source, monkeypatch):
+    second = "22222222-2222-4222-8222-222222222222"
+    calls = []
+
+    def record(connection, root, database_identity, key):
+        calls.append(key)
+        return [], {"run_key": key}
+
+    monkeypatch.setattr(retained, "_read_run", record)
+    _, sources = read_inputs(
+        [second, RUN], project_root=od_source.root, database_url=f"file:./{DB}"
+    )
+    assert calls == [RUN, second]
+    assert sources == [{"run_key": RUN}, {"run_key": second}]
+
+
+def test_concurrent_publication_reuses_one_valid_bundle(od_source, monkeypatch):
+    from paragliding_forecasts_ml.predictions.overdevelopment.artifacts import publish_prediction
+    from paragliding_forecasts_ml.predictions.overdevelopment.policy import load_policy
+
+    days, sources = read(od_source)
+    policy, policy_bytes = load_policy()
+    rename = Path.rename
+    barrier = Barrier(2, timeout=5)
+
+    def race(path, destination):
+        if path.name == "bundle":
+            barrier.wait()
+        return rename(path, destination)
+
+    monkeypatch.setattr(Path, "rename", race)
+
+    def publish():
+        return publish_prediction(od_source.root, days, sources, policy, policy_bytes)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first, second = pool.submit(publish), pool.submit(publish)
+        a, b = first.result(timeout=10), second.result(timeout=10)
+    assert a[:2] == b[:2]
+    assert {a[2], b[2]} == {True, False}
