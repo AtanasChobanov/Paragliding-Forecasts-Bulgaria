@@ -313,6 +313,80 @@ separate 2025 evaluation. See the handoff for the bundle ID and site results.
 For later forecasts, use a completed GFS ingestion run with the same frozen
 model ID.
 
+## T-024 offline overdevelopment baseline
+
+From the repository root, select one or more retained GFS forecasts:
+
+```powershell
+uv run --project services/ml --locked overdevelopment-predict --run-key 91ae8760-fdc2-4bd6-8f3f-af3bedc00e46
+```
+
+Repeat `--run-key` for additional unique run UUIDs. `--project-root` selects
+the artifact root. `--database-url` selects an existing SQLite file beneath
+`data/`, defaulting to `DATABASE_URL` or `file:./data/local/paragliding.db`.
+The reader requires operational-use-authorized, succeeded GFS 06Z D+1 through
+D+3 runs and per-hour source readiness by 16:00 Europe/Sofia on the issue date.
+It verifies the effective ledger, raw manifest metadata, validator accepted
+samples, feature builder v4 or v5 / contract 3 lineage and persistence receipt.
+Each builder version must match its packaged policy and recorded hash. The
+daily feature snapshot supplies lineage checks. OD uses the weather values
+in the validator samples.
+The SQLite connection is read-only. The command runs offline from retained
+metadata and samples, so archived GRIB payloads can stay on cold storage.
+
+The fixed 10:00–20:00 Europe/Sofia window has ten one-hour APCP intervals and
+eleven instantaneous forecast times. Match APCP to the surface CAPE/CIN at
+each interval start. Wind, low-cloud cover and 2 m relative humidity include
+20:00. One daily score combines the maximum of the hourly and accumulated
+precipitation ramps (35 points), strongest paired surface CAPE/CIN signal
+(35 points), and mean low-cloud cover with mean humidity (30 points).
+`medium` starts at 25 points and `high` starts at 65.
+
+The versioned `overdevelopment-policy-v1.json` resource sets all ramps,
+weights and thresholds. Three critical rules independently set daily `high`:
+
+- At least 2.5 mm in one hour or at least 5 mm in the window.
+- Surface CAPE at least 1000 J/kg, CIN magnitude at most 50 J/kg and at least
+  1 mm precipitation in the same interval.
+- GFS 10 m wind strictly greater than 10 m/s in the window.
+
+Missing required evidence produces a null level, score and confidence unless
+available evidence proves a critical rule. A proven override on partial
+evidence produces `high`, low confidence and a null score. Complete baseline
+results always have low confidence. CIN is only required for slots with CAPE
+above the policy ramp floor. The result is an ordinal screening signal for
+OD and related weather limitations around the sampled site. Its thresholds
+are uncalibrated and the grid limits resolution of local storms and launch
+gusts. The score is informational for planning and a low result carries no
+assurance of flyability.
+
+Stdout reports the prediction ID, directory, selected run keys, row and risk
+counts, partial/missing coverage, reuse, elapsed time and published bytes.
+The immutable bundle under `data/processed/overdevelopment/<prediction_id>/`
+contains `policy.json`, `inputs.jsonl`, `predictions.jsonl` and `manifest.json`.
+Each forecast run/site/date has one result with evidence times, coverage,
+contributions, overrides and up to three concise reasons. Repeating the same
+batch, including with reordered run keys, reuses the original bundle. An
+invalid argument exits 2 and a source or publication failure exits 1.
+
+Verify and replay a saved bundle from the repository root:
+
+```powershell
+uv run --project services/ml --locked python -c "from pathlib import Path; from paragliding_forecasts_ml.predictions.overdevelopment.artifacts import load_prediction; print(load_prediction('<prediction_id>', project_root=Path.cwd()).model_dump_json(indent=2))"
+```
+
+Replay reads the bundle alone and compares fresh evaluation of its exact
+saved inputs and policy with the stored predictions. T-025 owns connecting
+this daily output to the forecast API and dashboard.
+
+The owner verified the mixed v4/v5 batch
+`dd62d58df9fdfefc0209b19398e818ba1e86e0238356f8d10e38b031f188bcb8`.
+It contains 28 complete site-days across D+1 through D+3 (11 low, 14 medium,
+3 high). A read-only audit matched all 1,764 saved observations to the
+validator samples and recalculated the scores and overrides. The reverse-order
+invocation returned the same ID with `reused: true`. Standalone replay verified
+all 28 results. These checks establish reproducibility on the retained forecasts.
+
 ## T-022 offline cloudbase baseline
 
 `cloudbase-predict` processes explicitly selected, already persisted GFS 06Z

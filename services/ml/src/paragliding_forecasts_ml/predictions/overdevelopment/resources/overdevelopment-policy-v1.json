@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "policy_version": "overdevelopment-policy/1",
+  "medium_threshold": 25,
+  "high_threshold": 65,
+  "rain_weight": 35,
+  "instability_weight": 35,
+  "cloud_weight": 30,
+  "rain_peak": {"lower": 0.1, "upper": 2.5},
+  "rain_total": {"lower": 1, "upper": 5},
+  "cape": {"lower": 250, "upper": 1250},
+  "cin": {"lower": 25, "upper": 100},
+  "low_cloud": {"lower": 50, "upper": 85},
+  "humidity": {"lower": 75, "upper": 95},
+  "cin_discount": 0.6,
+  "humidity_weight": 0.5,
+  "override_hourly_rain_mm": 2.5,
+  "override_total_rain_mm": 5,
+  "override_convective_cape_j_per_kg": 1000,
+  "override_convective_cin_j_per_kg": 50,
+  "override_convective_rain_mm": 1,
+  "override_wind_m_s": 10
+}
