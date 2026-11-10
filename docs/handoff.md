@@ -1,5 +1,54 @@
 # Project Handoff
 
+## T-024 owner acceptance
+
+On 2026-11-10 the owner ran the four-key command. It stopped at the feature
+lineage check. A read-only audit confirmed that the three historical examples
+have effective builder v4 / contract 3, while the shared 2026 smoke run has
+builder v5 / contract 3. All four match their validator input and SQLite
+feature-manifest reference. The owner approved v4 support for OD. The reader
+now verifies contract 3 and the packaged policy hash for the manifest's
+explicitly supported builder version (v4 or v5). A read-only input check
+loaded all four runs and 28 site-days with no missing observations.
+
+The owner published that v5 smoke bundle
+`1f353d75c7b737288bd6062d4215465715b1ff2f25a1fcd793038816f261292e`.
+Read-only payload hash and size checks passed. It has seven results
+(two low, five medium, zero high, zero missing).
+All 705 distinct runs referenced by the frozen XC development dataset have
+effective feature builder v4. The retained v4 D+3 run
+`582c0173-2443-4b38-af9f-18d9aa03d2c8` for 2024-06-24 is a candidate for
+the high-rain override at Vitosha (Kominite), with a peak of 8.81 mm in one
+hour and 17.45 mm across the window. The owner published the mixed-version
+bundle `dd62d58df9fdfefc0209b19398e818ba1e86e0238356f8d10e38b031f188bcb8`
+with 28 complete site-days (11 low, 14 medium, 3 high). A read-only audit
+verified all payload and source hashes, matched all 1,764 saved observations
+to the validator samples and independently recalculated contributions, levels
+and triggered rules. Vitosha and Zlatitsa triggered rain and convection
+overrides, and Sopot triggered convection, all on 2024-06-24. The owner
+repeated the batch with reversed run keys and reported the same ID,
+`reused: true`, 702,607 published bytes and 0.387 seconds. Standalone replay
+verified the same prediction ID and all 28 results.
+
+Automated verification passed: 719 Python tests, including v4/v5 policy hash
+checks, the synthetic installed CLI, concurrent publication and standalone
+replay. Ruff lint and formatting, repository structure and whitespace checks
+also passed.
+
+Reproduce the four-run batch from the repository root:
+
+```powershell
+uv run --project services/ml --locked overdevelopment-predict `
+  --run-key 91ae8760-fdc2-4bd6-8f3f-af3bedc00e46 `
+  --run-key 55476291-4e2f-49a2-bdf9-86c6d863de35 `
+  --run-key 6df60d46-a176-4906-8272-1b95ca3f4920 `
+  --run-key 582c0173-2443-4b38-af9f-18d9aa03d2c8
+```
+
+The [ML workflow](../services/ml/README.md#t-024-offline-overdevelopment-baseline)
+documents standalone replay. These acceptance checks establish reproducible
+output from retained inputs. Meteorological calibration remains unverified.
+
 ## T-023 retained GFS prediction verified — 2026-11-07
 
 The owner ran the real smoke check for 2026-10-28 (2026-10-27 06Z, D+1).
