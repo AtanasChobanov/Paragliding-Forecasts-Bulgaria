@@ -379,6 +379,14 @@ Replay reads the bundle alone and compares fresh evaluation of its exact
 saved inputs and policy with the stored predictions. T-025 owns connecting
 this daily output to the forecast API and dashboard.
 
+The owner verified the mixed v4/v5 batch
+`dd62d58df9fdfefc0209b19398e818ba1e86e0238356f8d10e38b031f188bcb8`.
+It contains 28 complete site-days across D+1 through D+3 (11 low, 14 medium,
+3 high). A read-only audit matched all 1,764 saved observations to the
+validator samples and recalculated the scores and overrides. The reverse-order
+invocation returned the same ID with `reused: true`. Standalone replay verified
+all 28 results. These checks establish reproducibility on the retained forecasts.
+
 ## T-022 offline cloudbase baseline
 
 `cloudbase-predict` processes explicitly selected, already persisted GFS 06Z
