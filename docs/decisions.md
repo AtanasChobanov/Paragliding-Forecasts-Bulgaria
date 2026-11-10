@@ -2510,6 +2510,11 @@ pair and 30 for mean low cloud and mean 2 m RH. The medium and high boundaries
 are 25 and 65 points. Hourly evidence establishes the inputs and overrides.
 Incomplete evidence yields a missing level unless it proves an override.
 
+**Owner follow-up, 2026-11-10:** T-024 accepts verified feature builder v4 and
+v5 with feature contract 3 and the exact packaged policy hash for each version.
+The daily snapshot establishes lineage. OD uses the retained validator values,
+including wind speed, so the v5 wind-direction change does not enter the score.
+
 **Related files:** [`tasks.md`](tasks.md), [`architecture.md`](architecture.md),
 [`project-brief.md`](project-brief.md), and [`handoff.md`](handoff.md).
 

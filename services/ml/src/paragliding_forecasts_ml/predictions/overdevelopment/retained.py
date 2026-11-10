@@ -32,6 +32,11 @@ from ...storage.sqlite import (
 )
 from .models import FIELD_UNITS, FieldKey, ForecastDay, Observation, observation_layout
 
+FEATURE_POLICY_RESOURCES = {
+    "weather-feature-builder/4": "weather-feature-policy-v4.json",
+    "weather-feature-builder/5": "weather-feature-policy-v5.json",
+}
+
 SELECTORS = {
     ("precipitation_amount_mm", "interval", None): ("rain", {"apcp"}),
     ("convective_available_potential_energy_j_per_kg", "convection", "surface"): (
@@ -225,7 +230,11 @@ def _retained_batches(
         raise ValueError("OD accepted samples and validation lineage disagree.")
 
     feature_ref, feature = stage("features_built", "feature_builder")
-    weather_policy, weather_sha = load_feature_policy("weather-feature-policy-v5.json")
+    # OD reads weather values from S06. Both S07 versions provide contract 3 identity.
+    policy_resource = FEATURE_POLICY_RESOURCES.get(feature.producer_version)
+    if policy_resource is None:
+        raise ValueError(f"Unsupported OD feature builder: {feature.producer_version}.")
+    weather_policy, weather_sha = load_feature_policy(policy_resource)
     expected_config = {
         "feature_builder_version": weather_policy.feature_builder_version,
         "feature_contract_version": weather_policy.feature_contract_version,
@@ -241,7 +250,7 @@ def _retained_batches(
         or (feature_ref.relative_path, feature_ref.sha256)
         != (run["feature_manifest_path"], run["feature_manifest_sha256"])
     ):
-        raise ValueError("OD requires the effective v5/contract 3 feature lineage.")
+        raise ValueError("OD requires verified v4 or v5 feature lineage with contract 3.")
     daily = DailyFeatureSnapshotBatch.model_validate_json(
         read(output(feature, "daily_feature_snapshot_batch"))
     )

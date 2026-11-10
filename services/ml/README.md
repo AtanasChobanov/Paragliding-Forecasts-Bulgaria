@@ -327,7 +327,10 @@ the artifact root. `--database-url` selects an existing SQLite file beneath
 The reader requires operational-use-authorized, succeeded GFS 06Z D+1 through
 D+3 runs and per-hour source readiness by 16:00 Europe/Sofia on the issue date.
 It verifies the effective ledger, raw manifest metadata, validator accepted
-samples, feature builder v5 / contract 3 lineage and persistence receipt.
+samples, feature builder v4 or v5 / contract 3 lineage and persistence receipt.
+Each builder version must match its packaged policy and recorded hash. The
+daily feature snapshot supplies lineage checks. OD uses the weather values
+in the validator samples.
 The SQLite connection is read-only. The command runs offline from retained
 metadata and samples, so archived GRIB payloads can stay on cold storage.
 

@@ -104,7 +104,7 @@ def make_samples():
 
 
 @pytest.fixture
-def od_source(tmp_path):
+def od_source(tmp_path, request):
     store = WeatherArtifactStore.create_fresh(RUN, project_root=tmp_path)
     ledger = RunStateLedger(store)
     ledger.initialize(occurred_at_utc=READY)
@@ -226,7 +226,8 @@ def od_source(tmp_path):
         validator_dir, "validator", "validated", "synthetic/1", [spatial], [accepted, validation]
     )
 
-    policy, policy_sha = load_feature_policy("weather-feature-policy-v5.json")
+    builder, hash_override = getattr(request, "param", (5, None))
+    policy, policy_sha = load_feature_policy(f"weather-feature-policy-v{builder}.json")
     feature_version = policy.feature_builder_version
     contract = policy.feature_contract_version
     feature_dir = store.begin_stage("feature_builder", feature_version, "a" * 64)
@@ -281,7 +282,7 @@ def od_source(tmp_path):
             "feature_builder_version": feature_version,
             "feature_contract_version": contract,
             "policy_version": policy.policy_version,
-            "policy_sha256": policy_sha,
+            "policy_sha256": hash_override or policy_sha,
             "validator_manifest_sha256": validator.sha256,
         },
     )
@@ -381,6 +382,7 @@ def read(source):
     return read_inputs([RUN], project_root=source.root, database_url=f"file:./{DB}")
 
 
+@pytest.mark.parametrize("od_source", [(4, None), (5, None)], indirect=True)
 def test_retained_reader_needs_only_verified_evidence(od_source):
     records, sources = read(od_source)
     assert len(records) == len(sources) == 1
@@ -392,6 +394,12 @@ def test_retained_reader_needs_only_verified_evidence(od_source):
     assert rain[-1].interval_end_utc == WINDOW.interval_end_utc
     assert len([item for item in day.observations if item.key == "wind"]) == 11
     assert od_source.database.is_file()
+
+
+@pytest.mark.parametrize("od_source", [(4, "0" * 64), (5, "0" * 64)], indirect=True)
+def test_retained_reader_requires_the_matching_policy_hash(od_source):
+    with pytest.raises(ValueError, match="verified v4 or v5 feature lineage"):
+        read(od_source)
 
 
 @pytest.mark.parametrize(
