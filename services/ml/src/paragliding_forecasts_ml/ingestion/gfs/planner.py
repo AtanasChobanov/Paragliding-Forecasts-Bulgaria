@@ -138,8 +138,13 @@ class GfsPlanner:
                     "network_failure", f"GFS inventory returned HTTP {head.status}/{index.status}."
                 )
             try:
-                length = int(head.header("Content-Length") or "")
                 entries = parse_index(index.body)
+            except InventoryError as error:
+                raise GfsPlanningError(
+                    "source_contract_mismatch", f"GFS f{lead:03d} index is invalid: {error}"
+                ) from error
+            try:
+                length = int(head.header("Content-Length") or "")
                 ranges = select_ranges(
                     entries,
                     content_length=length,

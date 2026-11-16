@@ -145,6 +145,8 @@ def test_resumable_collector_skips_verified_range_after_interruption(tmp_path) -
         def __init__(self) -> None:
             self.fail_second = True
             self.head_etag = '"fixture"'
+            self.index_body = index_body
+            self.range_status = 206
             self.range_calls: list[str] = []
 
         def request(self, url: str, *, method: str = "GET", headers=None) -> HttpResponse:
@@ -160,14 +162,17 @@ def test_resumable_collector_skips_verified_range_after_interruption(tmp_path) -
                 )
             if url == index_url:
                 return HttpResponse(
-                    200, {"Last-Modified": "Fri, 01 Aug 2025 01:00:01 GMT"}, index_body
+                    200, {"Last-Modified": "Fri, 01 Aug 2025 01:00:01 GMT"}, self.index_body
                 )
             value = headers["Range"]
+            assert headers["If-Match"] == self.head_etag
             self.range_calls.append(value)
             if value == "bytes=4-7" and self.fail_second:
                 raise GfsTransportError("simulated disconnect")
             payload = b"GRIB" if value == "bytes=0-3" else b"DATA"
-            return HttpResponse(206, {"Content-Range": f"{value.replace('=', ' ')}/100"}, payload)
+            return HttpResponse(
+                self.range_status, {"Content-Range": f"{value.replace('=', ' ')}/100"}, payload
+            )
 
     transport = InterruptingTransport()
     store = WeatherArtifactStore.create_fresh(run_key, project_root=tmp_path)
@@ -182,6 +187,17 @@ def test_resumable_collector_skips_verified_range_after_interruption(tmp_path) -
         collector.fetch_resumable(plan, store)
     assert transport.range_calls == ["bytes=0-3", "bytes=4-7"]
     transport.head_etag = '"fixture"'
+    transport.index_body = b"replacement"
+    with pytest.raises(GfsCollectionError, match="index changed"):
+        collector.fetch_resumable(plan, store)
+    assert transport.range_calls == ["bytes=0-3", "bytes=4-7"]
+    transport.index_body = index_body
+    transport.range_status = 412
+    with pytest.raises(GfsCollectionError) as failure:
+        collector.fetch_resumable(plan, store)
+    assert failure.value.kind == "source_changed"
+    assert not (store.raw_dir / "manifest.json").exists()
+    transport.range_status = 206
     reference = collector.fetch_resumable(plan, store)
     assert store.verify_raw_manifest(reference).status == "complete"
-    assert transport.range_calls == ["bytes=0-3", "bytes=4-7", "bytes=4-7"]
+    assert transport.range_calls == ["bytes=0-3", "bytes=4-7", "bytes=4-7", "bytes=4-7"]

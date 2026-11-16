@@ -303,6 +303,10 @@ class GfsCollector:
             if item.object_etag is not None:
                 request_headers["If-Match"] = item.object_etag
             response = self._get(item.grib_url, headers=request_headers)
+            if response.status in {404, 412}:
+                raise GfsCollectionError(
+                    "source_changed", "Pinned GFS range is no longer available."
+                )
             if (
                 response.status != 206
                 or response.header("Content-Range")
