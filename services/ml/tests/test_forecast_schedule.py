@@ -364,3 +364,19 @@ def test_recover_completed_predictor_after_crash_before_checkpoint(tmp_path, mon
     )
     assert verified == [("xc", artifact_id, key, MODEL, tmp_path)]
     assert checkpoints.load_prediction(key, MODEL, "xc") == artifact_id
+
+
+def test_fresh_xc_worker_uses_prediction_id_from_publisher(tmp_path, monkeypatch):
+    key = run_key(ForecastHorizon(TODAY, 1))
+    artifact_id = "d" * 64
+    checkpoints = Checkpoints(tmp_path / "checkpoint")
+    monkeypatch.setattr(predictors, "predict_runs", lambda **_: {"prediction_id": artifact_id})
+    verified = []
+    monkeypatch.setattr(predictors, "_verify", lambda *args: verified.append(args))
+
+    assert predictors.run_predictor("xc", key, MODEL, tmp_path, "fake", checkpoints) == (
+        artifact_id,
+        False,
+    )
+    assert verified == [("xc", artifact_id, key, MODEL, tmp_path)]
+    assert checkpoints.load_prediction(key, MODEL, "xc") == artifact_id

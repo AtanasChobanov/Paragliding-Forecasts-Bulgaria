@@ -77,7 +77,7 @@ def run_predictor(
             result = predict_runs(
                 model_id=model_id, run_keys=(run_key,), project_root=root, database_url=database_url
             )
-            artifact_id = result["artifact_id"]
+            artifact_id = result["prediction_id"]
         elif kind == "cloudbase":
             result = build_predictions([run_key], project_root=root, database_url=database_url)
             artifact_id = result["artifact_id"]
