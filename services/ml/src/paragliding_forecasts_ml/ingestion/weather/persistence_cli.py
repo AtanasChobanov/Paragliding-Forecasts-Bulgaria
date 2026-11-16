@@ -10,6 +10,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from ...storage.environment import file_environment
+from ...storage.file_lock import LockBusyError, locked_weather_run
 from ...storage.sqlite import DatabaseConfigurationError, configured_database_url
 from .artifacts import ArtifactError
 from .persistence import WeatherPersistenceError
@@ -42,13 +43,15 @@ def main(arguments: Sequence[str] | None = None) -> int:
         database_url = (
             args.database_url or os.environ.get("DATABASE_URL") or file_values.get("DATABASE_URL")
         )
-        context = WeatherRunContext.open(
-            args.run_key,
-            project_root=root,
-            database_url=configured_database_url(database_url),
-        )
-        result, context.snapshot = persist_run(context, args.policy_file)
+        with locked_weather_run(root, args.run_key):
+            context = WeatherRunContext.open(
+                args.run_key,
+                project_root=root,
+                database_url=configured_database_url(database_url),
+            )
+            result, context.snapshot = persist_run(context, args.policy_file)
     except (
+        LockBusyError,
         ArtifactError,
         DatabaseConfigurationError,
         OSError,

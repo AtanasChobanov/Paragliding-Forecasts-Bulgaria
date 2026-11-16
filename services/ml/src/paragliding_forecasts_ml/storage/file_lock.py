@@ -4,7 +4,11 @@ import errno
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager
+from contextvars import ContextVar
+from functools import wraps
 from pathlib import Path
+
+_run_locks: ContextVar[frozenset[Path]] = ContextVar("weather_run_locks", default=frozenset())
 
 
 class LockBusyError(RuntimeError):
@@ -52,3 +56,31 @@ def weather_run_lock(root: Path, run_key: str) -> Path:
     if UUID_V4_PATTERN.fullmatch(run_key) is None:
         raise ValueError("Weather run lock requires a lowercase UUID v4.")
     return root / "data" / "local" / "weather-run-locks" / f"{run_key}.lock"
+
+
+@contextmanager
+def locked_weather_run(root: Path, run_key: str) -> Iterator[None]:
+    """Serialize raw file use, including nested audits in the same thread."""
+    path = weather_run_lock(root.resolve(), run_key)
+    active = _run_locks.get()
+    if path in active:
+        yield
+        return
+    with file_lock(path):
+        token = _run_locks.set(active | {path})
+        try:
+            yield
+        finally:
+            _run_locks.reset(token)
+
+
+def lock_weather_run(function):
+    """Hold a per-run lock for a command boundary that takes a run key and root."""
+
+    @wraps(function)
+    def locked(run_key, *args, **kwargs):
+        root = kwargs.get("project_root") or Path.cwd()
+        with locked_weather_run(root, run_key):
+            return function(run_key, *args, **kwargs)
+
+    return locked

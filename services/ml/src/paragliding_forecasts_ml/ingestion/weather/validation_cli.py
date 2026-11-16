@@ -10,6 +10,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from ...storage.environment import file_environment
+from ...storage.file_lock import LockBusyError, locked_weather_run
 from ...storage.sqlite import configured_database_url
 from .artifacts import ArtifactError
 from .services import WeatherRunContext, validate_run
@@ -35,13 +36,21 @@ def main(arguments: Sequence[str] | None = None) -> int:
         namespace.database_url or os.environ.get("DATABASE_URL") or file_values.get("DATABASE_URL")
     )
     try:
-        context = WeatherRunContext.open(
-            namespace.run_key,
-            project_root=project_root,
-            database_url=configured_database_url(database_url),
-        )
-        result, context.snapshot = validate_run(context)
-    except (ArtifactError, OSError, StateError, ValueError, WeatherValidationError) as error:
+        with locked_weather_run(namespace.project_root, namespace.run_key):
+            context = WeatherRunContext.open(
+                namespace.run_key,
+                project_root=project_root,
+                database_url=configured_database_url(database_url),
+            )
+            result, context.snapshot = validate_run(context)
+    except (
+        LockBusyError,
+        ArtifactError,
+        OSError,
+        StateError,
+        ValueError,
+        WeatherValidationError,
+    ) as error:
         print(f"Weather validation failed: {error}", file=sys.stderr)
         return 1
     print(

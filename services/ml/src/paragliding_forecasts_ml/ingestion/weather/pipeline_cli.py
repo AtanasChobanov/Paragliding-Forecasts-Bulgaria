@@ -8,6 +8,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from ...storage.file_lock import LockBusyError
 from .pipeline import WeatherPipelineError, fresh_run, resume_run
 
 
@@ -63,7 +64,7 @@ def main(arguments: Sequence[str] | None = None) -> int:
                 database_url=args.database_url,
                 project_root=args.project_root,
             )
-    except WeatherPipelineError as error:
+    except (LockBusyError, ValueError, WeatherPipelineError) as error:
         print(f"Weather ingestion did not complete: {error}", file=sys.stderr)
         return 1
     print(json.dumps(result, indent=2, sort_keys=True))

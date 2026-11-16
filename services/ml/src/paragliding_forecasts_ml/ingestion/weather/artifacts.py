@@ -35,9 +35,11 @@ class WeatherArtifactStore:
         project_root: Path | None = None,
         create: bool = False,
         verification_session: ArtifactVerificationSession | None = None,
+        pruned_raw: tuple[ArtifactReference, ...] = (),
     ) -> None:
         self.project_root = (project_root or repository_root()).resolve()
         self.run_key = run_key
+        self.pruned_raw = pruned_raw
         self.verification = verification_session or ArtifactVerificationSession(
             project_root=self.project_root,
             run_key=run_key,
@@ -176,6 +178,8 @@ class WeatherArtifactStore:
         except Exception as error:
             raise ArtifactError("Request plan does not satisfy its versioned contract.") from error
         for artifact in manifest.artifacts:
+            if artifact in self.pruned_raw:
+                continue
             self.verify_reference(
                 artifact,
                 expected_root=self.raw_dir,
@@ -383,6 +387,7 @@ class WeatherArtifactStore:
                     ),
                 )
                 for artifact in manifest.artifacts
+                if artifact not in self.pruned_raw
             )
         elif reference.artifact_key != "stage_manifest":
             path = self.verify_reference(reference)

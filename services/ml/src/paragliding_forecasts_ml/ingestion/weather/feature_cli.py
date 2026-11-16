@@ -8,6 +8,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from ...storage.file_lock import LockBusyError, locked_weather_run
 from .artifacts import ArtifactError
 from .feature_stage import WeatherFeatureBuildError
 from .services import WeatherRunContext, build_features
@@ -24,12 +25,20 @@ def build_parser() -> argparse.ArgumentParser:
 def main(arguments: Sequence[str] | None = None) -> int:
     namespace = build_parser().parse_args(arguments)
     try:
-        context = WeatherRunContext.open(
-            namespace.run_key,
-            project_root=namespace.project_root.resolve(),
-        )
-        result, context.snapshot = build_features(context)
-    except (ArtifactError, OSError, StateError, ValueError, WeatherFeatureBuildError) as error:
+        with locked_weather_run(namespace.project_root, namespace.run_key):
+            context = WeatherRunContext.open(
+                namespace.run_key,
+                project_root=namespace.project_root.resolve(),
+            )
+            result, context.snapshot = build_features(context)
+    except (
+        LockBusyError,
+        ArtifactError,
+        OSError,
+        StateError,
+        ValueError,
+        WeatherFeatureBuildError,
+    ) as error:
         print(f"Weather feature build failed: {error}", file=sys.stderr)
         return 1
     print(

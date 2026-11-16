@@ -5,21 +5,24 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Literal
 
+from ...storage.file_lock import lock_weather_run
 from .artifacts import WeatherArtifactStore
 from .state import RunStateLedger
 
 AuditScope = Literal["effective", "all"]
 
 
+@lock_weather_run
 def audit_weather_artifacts(
     run_key: str,
     *,
     scope: AuditScope,
     project_root: Path | None = None,
+    pruned_raw=(),
 ) -> dict[str, Any]:
     """Verify only the requested ledger evidence scope and return a safe report."""
 
-    store = WeatherArtifactStore(run_key, project_root=project_root)
+    store = WeatherArtifactStore(run_key, project_root=project_root, pruned_raw=pruned_raw)
     snapshot = RunStateLedger(store).load_state()
     events = snapshot.evidence_events(scope=scope)
     verified: list[dict[str, Any]] = []

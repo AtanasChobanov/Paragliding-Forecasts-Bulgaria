@@ -20,6 +20,7 @@ dependencies = [
 
 [project.scripts]
 forecast-publish = "paragliding_forecasts_ml.predictions.publication.cli:main"
+forecast-prune = "paragliding_forecasts_ml.predictions.publication.prune:main"
 xc-probability = "paragliding_forecasts_ml.predictions.xc_probability.cli:main"
 cloudbase-predict = "paragliding_forecasts_ml.predictions.cloudbase.cli:main"
 overdevelopment-predict = "paragliding_forecasts_ml.predictions.overdevelopment.cli:main"
