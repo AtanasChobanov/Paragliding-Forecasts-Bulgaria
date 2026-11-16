@@ -1766,3 +1766,299 @@ export const weatherFieldProvenance = sqliteTable(
     ),
   ],
 );
+
+export const predictionRuns = sqliteTable(
+  "prediction_runs",
+  {
+    id: integer("id").primaryKey(),
+    weatherIngestionRunId: integer("weather_ingestion_run_id")
+      .notNull()
+      .references(() => weatherIngestionRuns.id, { onDelete: "restrict" }),
+    createdAtUtc: text("created_at_utc").notNull(),
+    xcModelId: text("xc_model_id").notNull(),
+    cloudbaseMethodVersion: text("cloudbase_method_version").notNull(),
+    overdevelopmentPolicyVersion: text("overdevelopment_policy_version").notNull(),
+  },
+  (table) => [
+    unique("prediction_runs_weather_model_unique").on(table.weatherIngestionRunId, table.xcModelId),
+    check(
+      "prediction_runs_created_at_utc_check",
+      sql`${table.createdAtUtc} GLOB '${sql.raw(utcTimestampGlob)}'`,
+    ),
+    check(
+      "prediction_runs_model_versions_check",
+      sql`length(trim(${table.xcModelId})) > 0
+        AND length(trim(${table.cloudbaseMethodVersion})) > 0
+        AND length(trim(${table.overdevelopmentPolicyVersion})) > 0`,
+    ),
+  ],
+);
+
+export const predictions = sqliteTable(
+  "predictions",
+  {
+    id: integer("id").primaryKey(),
+    predictionRunId: integer("prediction_run_id")
+      .notNull()
+      .references(() => predictionRuns.id, { onDelete: "restrict" }),
+    dailyFeatureSnapshotId: integer("daily_feature_snapshot_id")
+      .notNull()
+      .references(() => weatherDailyFeatureSnapshots.id, { onDelete: "restrict" }),
+    p100km: real("p_100km"),
+    p200km: real("p_200km"),
+    p300km: real("p_300km"),
+    overdevelopmentRisk: text("overdevelopment_risk"),
+    overdevelopmentScore: real("overdevelopment_score"),
+    cloudbaseSummaryState: text("cloudbase_summary_state").notNull(),
+    cloudbaseMaxAtUtc: text("cloudbase_max_at_utc"),
+    conditionalLclMaxAtUtc: text("conditional_lcl_max_at_utc"),
+  },
+  (table) => [
+    unique("predictions_run_snapshot_unique").on(
+      table.predictionRunId,
+      table.dailyFeatureSnapshotId,
+    ),
+    index("predictions_snapshot_index").on(table.dailyFeatureSnapshotId),
+    check(
+      "predictions_probability_check",
+      sql`(${table.p100km} IS NULL OR ${table.p100km} BETWEEN 0 AND 1)
+        AND (${table.p200km} IS NULL OR
+          (${table.p100km} IS NOT NULL AND ${table.p200km} BETWEEN 0 AND ${table.p100km}))
+        AND (${table.p300km} IS NULL OR
+          (${table.p200km} IS NOT NULL AND ${table.p300km} BETWEEN 0 AND ${table.p200km}))`,
+    ),
+    check(
+      "predictions_overdevelopment_check",
+      sql`(${table.overdevelopmentRisk} IS NULL AND ${table.overdevelopmentScore} IS NULL)
+        OR (${table.overdevelopmentRisk} IS NOT NULL
+          AND ${table.overdevelopmentRisk} IN ('low', 'medium', 'high')
+          AND ((${table.overdevelopmentScore} IS NOT NULL
+            AND ${table.overdevelopmentScore} BETWEEN 0 AND 100)
+          OR (${table.overdevelopmentRisk} = 'high' AND ${table.overdevelopmentScore} IS NULL)))`,
+    ),
+    check(
+      "predictions_cloudbase_summary_check",
+      sql`${table.cloudbaseSummaryState} IN (
+          'cloudbase_available', 'potential_base_available', 'blue', 'other_cloud',
+          'indeterminate', 'missing'
+        )
+        AND (${table.cloudbaseSummaryState} = 'cloudbase_available') =
+          (${table.cloudbaseMaxAtUtc} IS NOT NULL)
+        AND (${table.cloudbaseSummaryState} <> 'potential_base_available'
+          OR ${table.conditionalLclMaxAtUtc} IS NOT NULL)
+        AND (${table.conditionalLclMaxAtUtc} IS NULL
+          OR ${table.cloudbaseSummaryState} IN ('cloudbase_available', 'potential_base_available'))`,
+    ),
+    check(
+      "predictions_cloudbase_max_times_check",
+      sql`(${table.cloudbaseMaxAtUtc} IS NULL
+          OR ${table.cloudbaseMaxAtUtc} GLOB '${sql.raw(utcTimestampGlob)}')
+        AND (${table.conditionalLclMaxAtUtc} IS NULL
+          OR ${table.conditionalLclMaxAtUtc} GLOB '${sql.raw(utcTimestampGlob)}')`,
+    ),
+  ],
+);
+
+export const predictionCloudbaseHours = sqliteTable(
+  "prediction_cloudbase_hours",
+  {
+    predictionId: integer("prediction_id")
+      .notNull()
+      .references(() => predictions.id, { onDelete: "restrict" }),
+    validAtUtc: text("valid_at_utc").notNull(),
+    regime: text("regime").notNull(),
+    estimatedCloudbaseMslM: real("estimated_cloudbase_msl_m"),
+    estimatedCloudbaseModelAglM: real("estimated_cloudbase_model_agl_m"),
+    estimatedCloudbaseSiteAglM: real("estimated_cloudbase_site_agl_m"),
+    confidenceLevel: text("confidence_level"),
+    reasonCode: text("reason_code").notNull(),
+    note: text("note"),
+  },
+  (table) => [
+    primaryKey({
+      name: "prediction_cloudbase_hours_pk",
+      columns: [table.predictionId, table.validAtUtc],
+    }),
+    check(
+      "prediction_cloudbase_hours_valid_at_utc_check",
+      sql`${table.validAtUtc} GLOB '${sql.raw(utcTimestampGlob)}'`,
+    ),
+    check(
+      "prediction_cloudbase_hours_regime_check",
+      sql`${table.regime} IN ('cumulus', 'blue', 'other_cloud', 'indeterminate', 'missing')`,
+    ),
+    check(
+      "prediction_cloudbase_hours_heights_check",
+      sql`(
+          ${table.regime} <> 'cumulus'
+          AND ${table.estimatedCloudbaseMslM} IS NULL
+          AND ${table.estimatedCloudbaseModelAglM} IS NULL
+          AND ${table.estimatedCloudbaseSiteAglM} IS NULL
+        ) OR (
+          ${table.regime} IN ('cumulus', 'indeterminate')
+          AND ${table.estimatedCloudbaseMslM} IS NOT NULL
+          AND ${table.estimatedCloudbaseModelAglM} IS NOT NULL
+          AND ${table.estimatedCloudbaseModelAglM} >= 0
+          AND ${table.estimatedCloudbaseSiteAglM} IS NOT NULL
+        )`,
+    ),
+    check(
+      "prediction_cloudbase_hours_confidence_check",
+      sql`(${table.confidenceLevel} IS NULL
+          OR ${table.confidenceLevel} IN ('low', 'medium', 'high'))
+        AND (${table.regime} <> 'missing' OR ${table.confidenceLevel} IS NULL)`,
+    ),
+    check("prediction_cloudbase_hours_reason_check", sql`length(trim(${table.reasonCode})) > 0`),
+  ],
+);
+
+export const predictionMetricDetails = sqliteTable(
+  "prediction_metric_details",
+  {
+    predictionId: integer("prediction_id")
+      .notNull()
+      .references(() => predictions.id, { onDelete: "restrict" }),
+    metricCode: text("metric_code").notNull(),
+    dataStatus: text("data_status").notNull(),
+    confidenceLevel: text("confidence_level"),
+    confidenceNote: text("confidence_note"),
+    missingReasonCode: text("missing_reason_code"),
+    limitationsNote: text("limitations_note"),
+  },
+  (table) => [
+    primaryKey({
+      name: "prediction_metric_details_pk",
+      columns: [table.predictionId, table.metricCode],
+    }),
+    check(
+      "prediction_metric_details_metric_check",
+      sql`${table.metricCode} IN ('p100', 'p200', 'p300', 'overdevelopment', 'cloudbase')`,
+    ),
+    check(
+      "prediction_metric_details_status_check",
+      sql`(
+          ${table.dataStatus} = 'missing'
+          AND ${table.confidenceLevel} IS NULL
+          AND ${table.missingReasonCode} IS NOT NULL
+          AND length(trim(${table.missingReasonCode})) > 0
+        ) OR (
+          ${table.dataStatus} = 'baseline'
+          AND ${table.confidenceLevel} IS NOT NULL
+          AND ${table.confidenceLevel} IN ('low', 'medium', 'high')
+          AND ${table.missingReasonCode} IS NULL
+        )`,
+    ),
+  ],
+);
+
+export const predictionDrivers = sqliteTable(
+  "prediction_drivers",
+  {
+    id: integer("id").primaryKey(),
+    predictionId: integer("prediction_id").notNull(),
+    metricCode: text("metric_code").notNull(),
+    rank: integer("rank").notNull(),
+    kind: text("kind").notNull(),
+    code: text("code").notNull(),
+    message: text("message").notNull(),
+    xcStage: text("xc_stage"),
+    direction: text("direction"),
+    contributionLogit: real("contribution_logit"),
+    scorePoints: real("score_points"),
+    supportSuccesses: integer("support_successes"),
+    supportTotal: integer("support_total"),
+  },
+  (table) => [
+    foreignKey({
+      name: "prediction_drivers_metric_fk",
+      columns: [table.predictionId, table.metricCode],
+      foreignColumns: [predictionMetricDetails.predictionId, predictionMetricDetails.metricCode],
+    }).onDelete("restrict"),
+    unique("prediction_drivers_metric_rank_unique").on(
+      table.predictionId,
+      table.metricCode,
+      table.rank,
+    ),
+    check("prediction_drivers_rank_check", sql`${table.rank} BETWEEN 1 AND 3`),
+    check(
+      "prediction_drivers_message_check",
+      sql`length(trim(${table.code})) > 0 AND length(trim(${table.message})) > 0`,
+    ),
+    check(
+      "prediction_drivers_kind_check",
+      sql`(
+          ${table.kind} = 'xc_contribution'
+          AND ${table.xcStage} IS NOT NULL
+          AND ((${table.metricCode} = 'p100' AND ${table.xcStage} = 'p100')
+            OR (${table.metricCode} = 'p200' AND ${table.xcStage} = 'q200'))
+          AND ${table.direction} IS NOT NULL
+          AND ${table.direction} IN ('raises', 'lowers', 'zero')
+          AND ${table.contributionLogit} IS NOT NULL
+        ) OR (
+          ((${table.metricCode} = 'p300' AND ${table.kind} = 'pooled_conversion')
+            OR (${table.metricCode} = 'overdevelopment'
+              AND ${table.kind} IN ('od_override', 'od_score_component'))
+            OR (${table.metricCode} = 'cloudbase' AND ${table.kind} = 'cloudbase_reason'))
+          AND ${table.xcStage} IS NULL
+          AND ${table.direction} IS NULL
+          AND ${table.contributionLogit} IS NULL
+        )`,
+    ),
+    check(
+      "prediction_drivers_score_points_check",
+      sql`${table.scorePoints} IS NULL
+        OR (${table.kind} = 'od_score_component' AND ${table.scorePoints} BETWEEN 0 AND 100)`,
+    ),
+    check(
+      "prediction_drivers_support_check",
+      sql`(
+          ${table.kind} <> 'pooled_conversion'
+          AND ${table.supportSuccesses} IS NULL
+          AND ${table.supportTotal} IS NULL
+        ) OR (
+          ${table.kind} = 'pooled_conversion'
+          AND ${table.supportSuccesses} IS NOT NULL
+          AND ${table.supportTotal} IS NOT NULL
+          AND ${table.supportTotal} > 0
+          AND ${table.supportSuccesses} BETWEEN 0 AND ${table.supportTotal}
+        )`,
+    ),
+  ],
+);
+
+export const predictionDriverInputs = sqliteTable(
+  "prediction_driver_inputs",
+  {
+    predictionDriverId: integer("prediction_driver_id")
+      .notNull()
+      .references(() => predictionDrivers.id, { onDelete: "restrict" }),
+    inputOrdinal: integer("input_ordinal").notNull(),
+    inputKey: text("input_key").notNull(),
+    validAtUtc: text("valid_at_utc"),
+    intervalEndUtc: text("interval_end_utc"),
+    weatherFieldProvenanceId: integer("weather_field_provenance_id").references(
+      () => weatherFieldProvenance.id,
+      { onDelete: "restrict" },
+    ),
+  },
+  (table) => [
+    primaryKey({
+      name: "prediction_driver_inputs_pk",
+      columns: [table.predictionDriverId, table.inputOrdinal],
+    }),
+    index("prediction_driver_inputs_provenance_index").on(table.weatherFieldProvenanceId),
+    check(
+      "prediction_driver_inputs_input_check",
+      sql`${table.inputOrdinal} >= 1 AND length(trim(${table.inputKey})) > 0`,
+    ),
+    check(
+      "prediction_driver_inputs_window_check",
+      sql`(${table.validAtUtc} IS NULL OR ${table.validAtUtc} GLOB '${sql.raw(utcTimestampGlob)}')
+        AND (${table.intervalEndUtc} IS NULL OR (
+          ${table.intervalEndUtc} GLOB '${sql.raw(utcTimestampGlob)}'
+          AND ${table.validAtUtc} IS NOT NULL
+          AND ${table.intervalEndUtc} > ${table.validAtUtc}
+        ))`,
+    ),
+  ],
+);

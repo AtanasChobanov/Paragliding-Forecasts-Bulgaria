@@ -562,14 +562,99 @@ read; it is not automatically a second HTTP service.
 From the repository root:
 
 ```powershell
-uv sync --project services/ml
+uv sync --project services/ml --locked
+uv run --project services/ml --locked python -m eccodes selfcheck
 ```
 
-`uv` reads this project's `.python-version` and creates a local virtual
-environment. The first successful dependency resolution should produce
-`services/ml/uv.lock`; commit that lockfile for reproducible development.
+`uv` reads this project's `.python-version` and creates `services/ml/.venv`.
+Python 3.12.10 matches the retained frozen XC model's numerical environment;
+the model reader checks the exact Python, NumPy, SciPy, scikit-learn and
+Pydantic versions. Use the committed `uv.lock` with `--locked` for setup and
+commands. Do not copy a virtual environment or `node_modules` from another
+computer; recreate them using uv and npm.
 
-Add dependencies through uv rather than editing an activated environment:
+The Python `eccodes==2.47.0` bindings need a native ecCodes library. The project
+explicitly locks `eccodeslib==2.47.3.23` for macOS/Linux because the inherited
+lockfile omitted that platform dependency. The wheel supplies the native
+library and its definitions; Homebrew and manual library-path exports are not
+needed for this setup. Windows continues to use its existing bindings wheel.
+The self-check above must find the library and report that the system is ready.
+Ruff success alone does not check imports or native libraries.
+
+#### VS Code
+
+Open the repository root and install Microsoft's Python and Pylance extensions.
+After syncing, run **Python: Select Interpreter**, choose **Enter interpreter
+path**, and select `services/ml/.venv/bin/python` on macOS/Linux or
+`services/ml/.venv/Scripts/python.exe` on Windows. Then run **Developer: Reload
+Window** and open a new terminal. Running `uv run` in a terminal does not select
+the interpreter used by Pylance.
+
+The ignored local `.vscode/settings.json` can aid discovery:
+
+```json
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/services/ml/.venv",
+  "python-envs.defaultEnvManager": "ms-python.python:venv",
+  "python-envs.workspaceSearchPaths": ["./services/ml/.venv"],
+  "python.testing.pytestEnabled": true,
+  "python.testing.pytestArgs": ["services/ml/tests"]
+}
+```
+
+Explicitly select the interpreter even if a different environment was previously
+saved for this workspace. Avoid installing packages into system Python to clear
+editor diagnostics.
+
+#### Fresh GFS and predictions on a new machine
+
+An empty database created by the documented npm migrator is sufficient; old
+flight/weather rows and the historical development dataset are not needed for
+new inference with the retained final XC model. Keep the reviewed local
+`data/local/gfs-usage-policy.json` and the intact model directory
+`data/models/xc-probability/5c469fdfebd87261f2070af6d0479cfbe8177d29982fc858cea27af1687e3cbc/`.
+The migrations supply the reviewed sites, elevations and sampling configuration.
+
+The owner runs the following from the repository root. These are **zsh/bash**
+templates: replace the quoted placeholders before execution. PowerShell
+examples elsewhere use backticks; zsh/bash uses a backslash for continuation.
+
+```bash
+uv run --project services/ml --locked weather-ingest fresh \
+  --purpose operational_forecast \
+  --explicit-run-at '<issue-date>T06:00:00Z' \
+  --local-date '<target-date-YYYY-MM-DD>' \
+  --maximum-total-mib '<reviewed-daily-cap-MiB>' \
+  --allow-live-network
+
+uv run --project services/ml --locked xc-probability predict \
+  --model-id 5c469fdfebd87261f2070af6d0479cfbe8177d29982fc858cea27af1687e3cbc \
+  --run-key '<new-successful-run-key>'
+uv run --project services/ml --locked cloudbase-predict --run-key '<new-successful-run-key>'
+uv run --project services/ml --locked overdevelopment-predict --run-key '<new-successful-run-key>'
+```
+
+Choose the issue-date 06Z cycle and a target date at D+1, D+2 or D+3. Prediction
+requires source readiness by 16:00 Europe/Sofia on the issue date; a later
+download does not replace that evidence. Review the acquisition byte cap for
+the chosen daily scope using the existing [collection workflow](#gfs-raw-planning-and-collection-t-018s03).
+`gfs-collect` alone only collects raw evidence; `weather-ingest fresh` also
+parses, samples, validates, builds features and persists the completed run.
+Use its new successful run key for inference, rather than historical example
+keys from the handoff. Retain the resulting manifests, ledger, interim batches
+and SQLite together. Cloudbase also needs the compact grid matrices.
+
+Verify the local environment without downloading weather or writing real
+predictions:
+
+```bash
+uv run --project services/ml --locked pytest services/ml/tests -q
+uv run --project services/ml --locked ruff check services/ml
+uv run --project services/ml --locked ruff format --check services/ml
+```
+
+Only add a dependency when a task requires a new one; this is not a setup step.
+Use uv rather than editing an activated environment. For example:
 
 ```powershell
 uv add --project services/ml pandas

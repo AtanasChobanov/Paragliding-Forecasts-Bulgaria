@@ -111,6 +111,12 @@ For a lockfile-exact JavaScript install, use `npm.cmd ci`. On macOS/Linux, use
 `npm` and `cp .env.example .env`. npm manages only the TypeScript workspaces;
 uv manages only `services/ml`.
 
+For a new macOS/Linux machine, use the [ML environment and fresh-start
+instructions](services/ml/README.md#environment-setup), including the ecCodes
+native-library self-check and VS Code interpreter selection. A newly migrated
+empty database supports new GFS ingestion; old prediction run keys require
+their original retained data.
+
 ## Run the API
 
 Start watch mode from the repository root:

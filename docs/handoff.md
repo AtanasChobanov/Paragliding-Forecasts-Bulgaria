@@ -2,9 +2,10 @@
 
 ## Where to resume
 
-T-020 through T-023 are Done. The current branch is
-`feature/T-024-baseline-overdevelopment-risk`, based on the completed T-023
-baseline. Use [tasks.md](tasks.md) for
+T-020 through T-023 are Done. The current local branch is
+`feature/T-025-UI-data-integration`, with the T-024 baseline available.
+The 2026-11-11 environment repair did not implement T-025 or change ticket statuses.
+Use [tasks.md](tasks.md) for
 status and [decisions.md](decisions.md) for accepted policy. Work on the
 next requested ticket on top of the branch that supplies its dependencies.
 
@@ -21,6 +22,11 @@ next requested ticket on top of the branch that supplies its dependencies.
   available threshold, separate grouped contributions for P100 and conditional
   Q200, and a pooled 300+ conversion note. Contributions describe model
   calculations relative to the training reference.
+  The [T-025 implementation plan](Т-025-implementation-plan.md) covers the ML
+  and SQLite portion. It specifies `forecast-publish` with the existing 16:00
+  Sofia source cutoff and a separate one-shot `forecast-prune` command for
+  eligible operational GRIB files at least 48 hours after publication.
+  Implementation and validation are pending.
 - **T-026 independent backtest.** Use the frozen XC model on the untouched
   **2025 source season**. The cohort reserves 242 site-days on 131 target
   dates. Inventory retained weather first. DEC-066 deferred 2025 acquisition
@@ -32,6 +38,44 @@ next requested ticket on top of the branch that supplies its dependencies.
 - **Later alerts.** DEC-065 and DEC-066 set the prior-evening timing. Thresholds,
   channel, and deduplication belong to T-027 through T-031. Forecast guidance
   is informational and carries source and confidence limitations.
+
+## Local macOS fresh start — 2026-11-11
+
+The owner intentionally migrated a new empty SQLite database instead of
+restoring historical data. Its GFS offline preflight passes, including the
+current schema, reviewed site elevations/sampling and local usage policy.
+There are zero weather runs and no `data/interim/weather` in this checkout.
+The historical run keys and prediction bundles below are prior acceptance
+references, not available inference inputs on this machine. New inference
+requires a new successful `weather-ingest fresh` run; restoring the old database
+or rebuilding the training study is unnecessary.
+
+The inherited uv lockfile omitted the native ecCodes library on macOS/Linux.
+Explicitly locked `eccodeslib==2.47.3.23` for those platforms while preserving
+`eccodes==2.47.0` and all existing numerical package versions. Removed the
+unnecessary direct pandas addition; it remains installed transitively.
+Pinned `.python-version` to 3.12.10 and recreated `services/ml/.venv` with uv
+to match the retained frozen XC model exactly. The model's manifest, payload
+hashes, packaged policy and numerical environment all pass `read_bundle`.
+No model or real weather data was modified. The test migration fixture now
+uses `npm` on macOS/Linux and `npm.cmd` on Windows.
+
+The ignored local `.vscode/settings.json` now discovers `services/ml/.venv`
+instead of preferring system Python. Actual editor interpreter selection was
+not verified through the UI. If diagnostics remain, use **Python: Select
+Interpreter** → `services/ml/.venv/bin/python`, then **Developer: Reload Window**.
+See the [ML environment setup](../services/ml/README.md#environment-setup) for
+repeatable setup, checks and zsh/bash fresh-ingestion/prediction templates.
+
+Verification on Apple Silicon macOS: **719 Python tests passed**; Ruff lint
+and formatting (232 files), npm repository check, database migration metadata
+check, TypeScript typecheck and `git diff --check` passed. ecCodes self-check
+finds native API 2.47.3 in the uv environment. GFS and all three prediction
+CLI help commands load successfully. A single HTTPS HEAD to the official NOAA
+GFS S3 endpoint returned 200 using the managed Python's certificate trust.
+No live weather collection, training or real prediction was run; those remain
+owner-run operations. Full tests required escaping the agent sandbox because
+tsx opens a local IPC socket for disposable test-database migrations.
 
 ## Reusable local inputs and outputs
 

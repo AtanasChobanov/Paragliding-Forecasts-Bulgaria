@@ -1501,6 +1501,13 @@ or source identity.
 [`normalizer.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/normalizer.py),
 [`handoff.md`](handoff.md).
 
+**Portability implementation (2026-11-11):** Keep the accepted Python bindings
+at 2.47.0. Explicitly lock `eccodeslib==2.47.3.23` on macOS/Linux so uv installs
+the native library omitted by the inherited lockfile; Windows retains its
+existing bundled bindings wheel. The parser already records the native API
+version in its artifacts and input fingerprint. See the ML environment setup
+for the native-library self-check.
+
 ### DEC-036 - Use reviewed site coordinates with bilinear points and radius evidence
 
 **Status:** Accepted

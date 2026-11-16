@@ -258,7 +258,7 @@ describe("database foundation migrations", () => {
 
     expect(sqlite.prepare("PRAGMA foreign_keys").get()).toEqual({ foreign_keys: 1 });
     expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({
-      count: 19,
+      count: 20,
     });
 
     if (databaseUrl === undefined) {
@@ -268,7 +268,7 @@ describe("database foundation migrations", () => {
     runMigrations(databaseUrl);
 
     expect(sqlite.prepare("SELECT count(*) AS count FROM __drizzle_migrations").get()).toEqual({
-      count: 19,
+      count: 20,
     });
     expect(
       sqlite
@@ -867,8 +867,133 @@ describe("database foundation migrations", () => {
 const migrationsDirectory = fileURLToPath(new URL("../drizzle/", import.meta.url));
 const weatherMigrationDirectory = "20260820160216_create_weather_foundation";
 const dailyWeatherMigrationDirectory = "20260908181331_refactor_daily_weather_persistence";
+const insertPublication = (id: number, weatherId: number, model: string): void => {
+  activeConnection()
+    .sqlite.prepare(
+      `INSERT INTO prediction_runs (
+         id, weather_ingestion_run_id, xc_model_id, created_at_utc,
+         cloudbase_method_version, overdevelopment_policy_version
+       ) VALUES (?, ?, ?, '2026-08-20T14:00:00Z', 'cloudbase/2', 'overdevelopment/1')`,
+    )
+    .run(id, weatherId, model);
+};
+
+describe("prediction publication schema", () => {
+  it("creates exactly six new STRICT prediction tables", () => {
+    expect(
+      activeConnection()
+        .sqlite.prepare(
+          "SELECT name, strict FROM pragma_table_list WHERE name GLOB 'prediction*' ORDER BY name",
+        )
+        .all(),
+    ).toEqual(
+      [
+        "prediction_cloudbase_hours",
+        "prediction_driver_inputs",
+        "prediction_drivers",
+        "prediction_metric_details",
+        "prediction_runs",
+        "predictions",
+      ].map((name) => ({ name, strict: 1 })),
+    );
+  });
+
+  it("allows two models for one run and protects snapshot identity from inserts and updates", () => {
+    insertWeatherGraph();
+    const sqlite = activeConnection().sqlite;
+    sqlite.exec(`
+      INSERT INTO weather_ingestion_runs (
+        id, run_key, product_run_id, target_local_date, ingestion_method, request_purpose,
+        status, source_url, permission_basis, permission_reference, raw_manifest_path,
+        raw_manifest_sha256, pipeline_version, started_at_utc
+      ) SELECT 11, 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', product_run_id, target_local_date,
+        ingestion_method, request_purpose, 'running', source_url, permission_basis,
+        permission_reference, raw_manifest_path, raw_manifest_sha256, pipeline_version, started_at_utc
+      FROM weather_ingestion_runs WHERE id = 10;
+      INSERT INTO weather_daily_feature_snapshots (
+        id, ingestion_run_id, point_footprint_id, neighbourhood_footprint_id, feature_contract_version
+      ) VALUES (11, 11, 10, 11, 'weather-features-v1');
+    `);
+    insertPublication(1, 10, "model-a");
+    expect(() => insertPublication(2, 10, "model-a")).toThrow();
+    insertPublication(2, 10, "model-b");
+    insertPublication(3, 11, "model-a");
+    sqlite.exec(`
+      INSERT INTO predictions (id, prediction_run_id, daily_feature_snapshot_id, cloudbase_summary_state)
+      VALUES (1, 1, 10, 'blue'), (2, 2, 10, 'blue'), (3, 3, 11, 'blue');
+    `);
+    expectSqlFailure(`
+      INSERT INTO predictions (prediction_run_id, daily_feature_snapshot_id, cloudbase_summary_state)
+      VALUES (1, 11, 'blue')
+    `);
+    expectSqlFailure("UPDATE predictions SET daily_feature_snapshot_id = 11 WHERE id = 1");
+    expectSqlFailure("UPDATE prediction_runs SET weather_ingestion_run_id = 11 WHERE id = 1");
+    expect(() =>
+      sqlite.exec("UPDATE weather_daily_feature_snapshots SET ingestion_run_id = 10 WHERE id = 11"),
+    ).toThrow("Weather snapshot update breaks prediction run identity");
+  });
+
+  it("rejects invalid values and lets the writer roll back an entire publication", () => {
+    insertWeatherGraph();
+    const sqlite = activeConnection().sqlite;
+    sqlite.exec("BEGIN");
+    insertPublication(1, 10, "model-a");
+    for (const [p100, p200, p300] of [
+      [-0.1, null, null],
+      [0.5, 0.6, null],
+      [null, 0.5, null],
+      [0.5, 0.4, 0.45],
+    ] as const) {
+      expect(() =>
+        sqlite
+          .prepare(
+            `INSERT INTO predictions (
+                id, prediction_run_id, daily_feature_snapshot_id, cloudbase_summary_state,
+                p_100km, p_200km, p_300km
+             ) VALUES (1, 1, 10, 'blue', ?, ?, ?)`,
+          )
+          .run(p100, p200, p300),
+      ).toThrow();
+    }
+    sqlite.exec(`
+      INSERT INTO predictions (
+        id, prediction_run_id, daily_feature_snapshot_id, cloudbase_summary_state,
+        p_100km, p_200km, p_300km, overdevelopment_risk
+      ) VALUES (1, 1, 10, 'blue', 0.5, 0.4, 0.1, 'high');
+      INSERT INTO prediction_metric_details (prediction_id, metric_code, data_status, confidence_level)
+      VALUES (1, 'cloudbase', 'baseline', 'low');
+      INSERT INTO prediction_drivers (id, prediction_id, metric_code, rank, kind, code, message)
+      VALUES (1, 1, 'cloudbase', 1, 'cloudbase_reason', 'blue', 'No local cumulus expected.');
+    `);
+    for (const regime of ["fog", null]) {
+      expect(() =>
+        sqlite
+          .prepare(
+            `INSERT INTO prediction_cloudbase_hours (prediction_id, valid_at_utc, regime, reason_code)
+             VALUES (1, '2026-08-20T07:00:00Z', ?, 'test')`,
+          )
+          .run(regime),
+      ).toThrow();
+    }
+    expectSqlFailure(`
+      INSERT INTO prediction_driver_inputs (prediction_driver_id, input_ordinal, input_key)
+      VALUES (1, 1, NULL)
+    `);
+    expectSqlFailure(`
+      UPDATE prediction_drivers SET kind = 'pooled_conversion', support_successes = 3, support_total = 42
+      WHERE id = 1
+    `);
+    sqlite.exec("ROLLBACK");
+    expect(sqlite.prepare("SELECT * FROM prediction_runs").all()).toEqual([]);
+    expect(sqlite.prepare("SELECT * FROM predictions").all()).toEqual([]);
+    expect(sqlite.prepare("SELECT * FROM prediction_drivers").all()).toEqual([]);
+    expect(sqlite.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+  });
+});
+
 const copernicusElevationMigrationDirectory = "20260824184712_set_copernicus_site_elevations";
 const hourlyTimingMigrationDirectory = "20261006194824_t020_gfs_hourly_source_timing";
+const prePublicationMigrationDirectory = "20261006203210_t020_drop_product_available_at";
 
 let upgradeConnection: DatabaseConnection | undefined;
 let upgradeTestDirectory: string | undefined;
@@ -884,6 +1009,33 @@ afterEach(() => {
 });
 
 describe("weather foundation upgrade", () => {
+  it("adds forecast publications to a populated weather database", () => {
+    mkdirSync(dataLocalDirectory, { recursive: true });
+    upgradeTestDirectory = mkdtempSync(join(dataLocalDirectory, "t025-publication-upgrade-test-"));
+    const oldMigrationsDirectory = join(upgradeTestDirectory, "old-migrations");
+    mkdirSync(oldMigrationsDirectory);
+    for (const entry of readdirSync(migrationsDirectory, { withFileTypes: true })) {
+      if (entry.isDirectory() && entry.name <= prePublicationMigrationDirectory) {
+        cpSync(join(migrationsDirectory, entry.name), join(oldMigrationsDirectory, entry.name), {
+          recursive: true,
+        });
+      }
+    }
+    const databaseUrl = `file:./data/local/${basename(upgradeTestDirectory)}/upgrade.db`;
+    upgradeConnection = openDatabase(databaseUrl);
+    migrate(upgradeConnection.db, { migrationsFolder: oldMigrationsDirectory });
+    insertWeatherGraph(upgradeConnection);
+    const sqlite = upgradeConnection.sqlite;
+    const before = sqlite.prepare("SELECT * FROM weather_daily_feature_snapshots").all();
+
+    runMigrations(databaseUrl);
+    runMigrations(databaseUrl);
+
+    expect(sqlite.prepare("SELECT * FROM weather_daily_feature_snapshots").all()).toEqual(before);
+    expect(sqlite.prepare("SELECT * FROM prediction_runs").all()).toEqual([]);
+    expect(sqlite.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+  });
+
   it("removes product timing without losing populated hourly timing or foreign keys", () => {
     mkdirSync(dataLocalDirectory, { recursive: true });
     upgradeTestDirectory = mkdtempSync(join(dataLocalDirectory, "t020-timing-upgrade-test-"));

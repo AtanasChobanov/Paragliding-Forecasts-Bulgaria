@@ -194,7 +194,7 @@ def migrated_database():
     environment = {**os.environ, "DATABASE_URL": database_url}
     subprocess.run(
         [
-            "npm.cmd",
+            "npm.cmd" if os.name == "nt" else "npm",
             "run",
             "db:migrate",
             "--workspace",

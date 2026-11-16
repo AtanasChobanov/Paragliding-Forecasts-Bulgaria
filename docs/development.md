@@ -21,7 +21,16 @@ PowerShell may block `npm.ps1`; `npm.cmd` avoids that wrapper. On macOS/Linux,
 use `npm` and `cp`. CI and clean-verification runs should use `npm ci` to
 install exactly the committed JavaScript lockfile.
 
+For Python on a new machine, follow the [ML environment setup](../services/ml/README.md#environment-setup):
+use `uv sync --project services/ml --locked`, run the ecCodes self-check, and
+select `services/ml/.venv` in VS Code. The ML README also documents the zsh/bash
+fresh-GFS-to-prediction flow with a newly migrated empty database.
+
 ## Adding dependencies
+
+These are examples for implementation work, not additional clean-checkout
+setup steps. `uv sync` installs the declared Python dependencies; `uv add`
+changes `pyproject.toml` and the lockfile.
 
 Install JavaScript dependencies into the package that owns them:
 
