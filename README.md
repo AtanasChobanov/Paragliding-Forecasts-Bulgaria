@@ -12,37 +12,24 @@ result as an inspectable daily dashboard.
 
 ## Project status
 
-- Delivery phase: **Takt 2**
-- Current ticket: **T-012 - Implement flight record schema** (`Review`)
-- In progress: **T-013 - Ingest first validated flight sample**. The Playwright
-  collector boundary is implemented; parsing, validation, site matching, and
-  database import remain pending T-013 work.
-- Implemented: runnable React/Vite and Node.js/Express workspaces, shared runtime
-  contracts, structured logging and errors, a map-ready seven-site catalog,
-  deterministic date-aware mock forecasts, dashboard summary/day-preview read
-  endpoints, canonical URL selection, forecast overview/comparison cards, an
-  interactive Leaflet site selector, a fixed five-day selector, scoped
-  accessible request states, and a routed detailed site/date forecast view with
-  mock forecast inputs/drivers, and Playwright Chromium smoke coverage for the
-  dashboard-to-detail happy path; and a Drizzle-owned SQLite flight-and-weather data
-  foundation with reviewed, reproducible migrations; and an ignored-raw-artifact
-  XCContest collector for the explicitly allowed browser UI workflow
-- Not implemented: flight parsing/import, API persistence integration, real forecasts, models, and alerts
-
-Displayed mock responses are deliberately identified as `mock`; they are
-development fixtures, not forecasts or flying advice.
+T-025 is in progress. The local publication workflow stores operational GFS
+06Z forecast outputs in SQLite, and the Express API serves those outputs to
+the React home dashboard. The detailed site/date view currently runs in demo
+mode. See [the backlog](docs/tasks.md) and [handoff](docs/handoff.md) for the
+current ticket and verification status.
 
 ## Current dashboard
 
-The dashboard lets a user choose a forecast date and one of the initial
-Bulgarian areas: Sofia - Vitosha (Kominite), Zlatitsa, Sopot, Nevsha, Shumen,
-Pastrina, or the Dobrich region. It shows cloudbase, chances for 100+ km,
-200+ km, and 300+ km flights, and overdevelopment risk. Every value is labelled
-as `mock`, `manual`, `baseline`, `real`, or `missing`. Its detailed action and
-each Other Locations card open `/forecast?site=<slug>&date=YYYY-MM-DD`. The
-detail view exposes all five output values with their own confidence/status,
-mock weather inputs and drivers, and a static previous-run placeholder until
-real model runs exist.
+Choose a location and one of five Sofia calendar dates. The dashboard shows
+100+/200+/300+ km chances, cloudbase or conditional LCL in metres MSL, and
+overdevelopment risk. Published predictions carry the `baseline` status with
+per-metric confidence and limitations. Use the information button on each card
+to inspect the source cycle, publication time, horizon and model versions.
+Dates without a publication are disabled. Reload the page to see newly
+published forecasts or update the five-day window after Sofia midnight.
+
+In explicit `mock` mode, the information buttons identify demo data and
+available cards link to `/forecast?site=<slug>&date=YYYY-MM-DD`.
 
 ## Repository layout
 
@@ -105,6 +92,7 @@ npm.cmd install
 uv sync --project services/ml
 Copy-Item .env.example .env
 npm.cmd run repo:check
+npm.cmd run db:migrate --workspace @paragliding-forecasts/database
 ```
 
 For a lockfile-exact JavaScript install, use `npm.cmd ci`. On macOS/Linux, use
@@ -128,7 +116,9 @@ Start watch mode from the repository root:
 npm.cmd run dev:api
 ```
 
-The default address is `http://127.0.0.1:3000`. Available endpoints are:
+The default address is `http://127.0.0.1:3000`. SQLite mode requires a migrated
+database at `DATABASE_URL`. A migrated database with no forecast publications
+returns the site catalog and unavailable dates. Available endpoints are:
 
 ```text
 GET /health
@@ -159,20 +149,26 @@ error, and data limitations.
 
 Start the API and web development servers together:
 
-```powershell
-npm.cmd run dev
+```sh
+FORECAST_DATA_MODE=sqlite npm run dev
 ```
 
-The dashboard origin is `http://localhost:5173` by default. To run only the
-React/Vite workspace, use `npm.cmd run dev:web`; keep the API running at the
-configured `VITE_API_BASE_URL` to load dashboard data.
+Open `http://localhost:5173`. If a local `.env` still sets
+`FORECAST_DATA_MODE=mock`, the command above overrides it for this session.
+For future runs, set `FORECAST_DATA_MODE=sqlite` in `.env` and use
+`npm run dev`. In PowerShell, use
+`$env:FORECAST_DATA_MODE = "sqlite"; npm.cmd run dev`.
+
+Use `FORECAST_DATA_MODE=mock npm run dev` for demo forecasts and the current
+detail route. To start only Vite, use `npm run dev:web` and keep the API running
+at the configured `VITE_API_BASE_URL`.
 
 ## Commands
 
 | Command                                                                                             | Purpose                                                                                            |
 | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
 | `npm run dev`                                                                                       | Supervise the API and web development servers together                                             |
-| `npm run dev:api`                                                                                   | Build shared contracts and start the API in watch mode                                             |
+| `npm run dev:api`                                                                                   | Build the contracts and database workspaces and start the API watcher                                             |
 | `npm run dev:web`                                                                                   | Start Vite on the configured strict web port                                                       |
 | `npm run start:api`                                                                                 | Build contracts/API and start compiled JavaScript                                                  |
 | `npm run build`                                                                                     | Build database, contracts, API, and the production web bundle                                      |
@@ -201,13 +197,12 @@ npm.cmd run test:browser:install
 npm.cmd run test:browser
 ```
 
-The smoke suite starts the compiled local API and Vite dashboard on the normal
-`3000` and `5173` ports, so stop a local development session first. The default
-command is headless; use `test:browser:headed` to watch Chromium or
-`test:browser:ui` to inspect and re-run tests interactively. It verifies the
-dashboard's five required forecast outputs, then follows the detailed-forecast
-link and confirms its outputs, inputs, drivers, and return navigation. It is a
-browser end-to-end smoke test, not a visual-regression suite.
+Playwright runs separate mock and SQLite fixtures. The test API ports are
+`3300` and `3301`. The test web ports are `5373` and `5374`. The SQLite
+project migrates a disposable database and verifies November 17–19 forecast
+selection, metadata, layout and map labels with the tile requests intercepted.
+The mock project exercises navigation to the detailed forecast and back.
+Use `test:browser:headed` to watch Chromium or `test:browser:ui` to debug.
 
 ## Configuration and data
 
@@ -215,13 +210,11 @@ Copy `.env.example` to `.env` for local overrides. Vite consumes `WEB_PORT` and
 the browser-exposed `VITE_API_BASE_URL`; the latter is validated as an absolute
 HTTP(S) URL before React renders. If `WEB_PORT` changes, `CORS_ORIGIN` must use
 the same dashboard origin. The API consumes `NODE_ENV`, `LOG_LEVEL`, `API_HOST`,
-`API_PORT`, `CORS_ORIGIN`, and `FORECAST_DATA_MODE=mock`.
-
-The API starts with safe defaults when `.env` is absent.
-The logger defaults to `info`; `.env.example` opts local development into
-`debug` explicitly.
-`DATABASE_URL` and `MODEL_ARTIFACT_DIR` are reserved for future persistence and
-model work and are not read by the current API.
+`API_PORT`, `CORS_ORIGIN`, `FORECAST_DATA_MODE`, and `DATABASE_URL`.
+The SQLite default is `file:./data/local/paragliding.db`. The path must be
+repository-relative under `data/`. See the
+[API setup](apps/api/README.md#configuration) for startup errors and mode
+behavior.
 
 Never commit `.env`, credentials, private pilot data, large weather files,
 trained model artifacts, generated output, or local databases. See

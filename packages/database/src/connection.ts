@@ -62,7 +62,7 @@ export const openDatabase = (
   const sqlite = new DatabaseSync(databasePath, {
     readOnly,
     enableForeignKeyConstraints: true,
-    timeout: 5_000,
+    timeout: readOnly ? 5_000 : 0,
   });
 
   return {

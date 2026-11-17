@@ -14,10 +14,10 @@ next requested ticket on top of the branch that supplies its dependencies.
   verifies retained GFS lineage, publishes an immutable day-level bundle and
   supports read-only replay. T-024 is in Review after owner-run acceptance,
   reverse-order reuse and standalone replay.
-- **T-025 confidence and drivers in the UI.** Connect the T-024 daily OD
-  output to the forecast API and UI. The API currently serves mock forecast
-  data. The ML phase stores validated forecasts in SQLite. Preserve
-  units, provenance, missing states and confidence. Cloudbase has separate
+- **T-025 confidence and drivers in the UI.** The home dashboard reads
+  published forecasts, including T-024 daily OD, through the SQLite-backed
+  API. The ML phase stores validated forecasts in SQLite. The dashboard
+  preserves units, provenance, missing states and confidence. Cloudbase has separate
   estimated and conditional LCL maxima. XC exposes low confidence for each
   available threshold, separate grouped contributions for P100 and conditional
   Q200, and a pooled 300+ conversion note. Contributions describe model
@@ -60,7 +60,7 @@ next requested ticket on top of the branch that supplies its dependencies.
   whitespace checks passed. HTTP tests require local sockets and passed
   outside the sandbox. Prune's 48-hour boundary and interrupted cleanup
   were tested with disposable inputs.
-  T-025 remains In Progress. The API and dashboard still use mock forecasts.
+  T-025 remains In Progress. Resume at the dashboard checkpoint below.
 - **T-026 independent backtest.** Use the frozen XC model on the untouched
   **2025 source season**. The cohort reserves 242 site-days on 131 target
   dates. Inventory retained weather first. DEC-066 deferred 2025 acquisition
@@ -72,6 +72,41 @@ next requested ticket on top of the branch that supplies its dependencies.
 - **Later alerts.** DEC-065 and DEC-066 set the prior-evening timing. Thresholds,
   channel, and deduplication belong to T-027 through T-031. Forecast guidance
   is informational and carries source and confidence limitations.
+
+## T-025 home dashboard checkpoint — 2026-11-17
+
+The home route reads the active SQLite site catalog and selects one published
+forecast per site and exact Sofia date. It displays per-metric confidence and
+limitations in the information panels, keeps unavailable date slots disabled
+and fits the overview, comparison cards, date strip and Leaflet map in one
+viewport. Mock mode serves the existing detail flow. See
+[DEC-072](decisions.md#dec-072---read-published-sqlite-forecasts-on-the-home-dashboard).
+
+Automated verification passed for 268 npm tests and 13 Playwright tests.
+Chromium covered 1440×900, 1366×768, 1280×720, 1280×600, 1024×768, 390×844,
+and 125% text at 1280×720 and 390×844. The integration gates include
+typecheck, lint, build, formatting, repo and Drizzle checks, and
+`git diff --check`. The separate root coverage command stopped at the
+database workspace's 90% thresholds. Commit `52420d6` also fails those
+thresholds with 65.35% lines and 36.84% functions.
+The contracts, API and web workspaces passed their coverage thresholds.
+
+Read-only SQL verified seven local publications per date on November 17–19
+from the November 16 06Z cycle. They were written at 01:05:14 Sofia time on
+November 17. The next checkpoint is the owner-run browser check of this
+database. From the repository root on macOS:
+
+```sh
+FORECAST_DATA_MODE=sqlite npm run dev
+```
+
+Open [the dashboard for November 17](http://localhost:5173/?site=sofia-vitosha-kominite&date=2026-11-17).
+On the November 17 Sofia date window, the 15th and 16th are disabled and the
+17th through 19th are available. Vitosha shows 1.57% P100, Conditional LCL
+2,062 m MSL and Low OD risk. Pastrina shows Blue on the 17th. The information
+panel should show the GFS cycle and publication time above. The shell prefix
+overrides the existing local `.env` mock setting for this launch. Set
+`FORECAST_DATA_MODE=sqlite` in `.env` to make that choice persistent.
 
 ## Local macOS fresh start — 2026-11-11
 

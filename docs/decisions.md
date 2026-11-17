@@ -85,6 +85,7 @@ consequences. Temporary progress and Git state belong in
 | DEC-070     | Develop XC models chronologically and pool the sparse 300+ conversion rate | Accepted | 2026-10-31 |
 
 | DEC-071     | Publish operational 06Z forecasts to SQLite and retain compact evidence | Accepted | 2026-11-17 |
+| DEC-072     | Read published SQLite forecasts on the home dashboard | Accepted | 2026-11-17 |
 
 ## Individual decisions
 
@@ -3195,6 +3196,27 @@ cold archive workflow continues under DEC-066.
 
 **Related files:** [T-025 implementation plan](Т-025-implementation-plan.md)
 and [operational workflow](../services/ml/README.md#publish-and-retain-operational-forecasts-t-025).
+
+### DEC-072 - Read published SQLite forecasts on the home dashboard
+
+**Status:** Accepted in the owner-approved T-025 implementation plan.
+
+**Date:** 2026-11-17
+
+**Decision:** Default the API to read-only SQLite for the active site catalog
+and home forecast publications. Rank eligible GFS 06Z cycles first, then
+publication time and IDs for the same site and exact Sofia target date.
+Expose publication availability independently from metric availability. Keep
+each selected publication's confidence, limitations, cloudbase regime,
+timestamp and model metadata together.
+
+DEC-015's dashboard routes and query parameters remain the transport for the
+new summary and days response schemas. The local API and browser adopt these
+schemas together. The home route selects only published dates and refreshes on
+page reload. Explicit mock mode serves the demo and current detail route.
+
+**Related files:** [T-025 implementation plan](Т-025-implementation-plan.md),
+[HTTP API](../apps/api/README.md), [web dashboard](../apps/web/README.md).
 
 ## Open decisions
 

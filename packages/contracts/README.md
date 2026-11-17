@@ -4,8 +4,8 @@
 
 T-002 established the strict Zod browser/API boundary. T-003-T-005 extend it
 with map coordinates, batched dashboard summaries, and the fixed five-day
-selected-site preview. The package emits ESM JavaScript and declarations so the
-future React workspace and API consume one executable source of truth.
+selected-site preview. The package emits ESM JavaScript and declarations for the React workspace
+and API.
 
 ## Owned contracts
 
@@ -27,16 +27,19 @@ owned by the later model/UI ticket.
 
 The summaries query converts one CSV query value into one through seven unique
 site slugs. Its response contains one ID-ordered `available` or `missing` item
-per requested site. The days response always contains exactly five consecutive
-dates from `todayDate - 2` through `todayDate + 2`, declares
-`Europe/Sofia`, and exposes only the 100+ km metric for each date slot.
+per requested site. Available summaries include issue metadata, per-metric
+confidence and limitations, and a cloudbase union with estimated and
+conditional heights in metres MSL. The days response contains five
+`Europe/Sofia` dates from `todayDate - 2` through `todayDate + 2`, with
+publication availability independent of the 100+ km metric. The detail
+response retains its own outputs schema.
 
 `dataStatusSchema` is the canonical five-state schema: `mock`, `manual`,
 `baseline`, `real`, or `missing`. `availableDataStatusSchema` is derived from it
 with `dataStatusSchema.exclude(["missing"])`; it is not a second independent
-status definition. Forecast metrics use a discriminated union so a non-missing
-status requires a value and confidence, while `missing` requires `null` for
-both plus an explicit `missingReason`.
+status definition. Numeric and OD metrics use a discriminated union. Available metrics carry
+a value and confidence. Missing metrics carry null value and confidence
+fields with an explicit reason.
 
 ## Contract rules
 

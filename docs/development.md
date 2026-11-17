@@ -15,6 +15,7 @@ npm.cmd install
 uv sync --project services/ml
 Copy-Item .env.example .env
 npm.cmd run repo:check
+npm.cmd run db:migrate --workspace @paragliding-forecasts/database
 ```
 
 PowerShell may block `npm.ps1`; `npm.cmd` avoids that wrapper. On macOS/Linux,
@@ -85,9 +86,9 @@ The runnable workspaces implement these root commands:
 | Command | Contract |
 | --- | --- |
 | `npm run dev` | Supervise the API and Vite watchers; stop the sibling when either exits |
-| `npm run dev:api` | Build contracts and start the TypeScript API watcher |
+| `npm run dev:api` | Build contracts and database workspace and start the API watcher |
 | `npm run dev:web` | Start Vite on the configured strict port |
-| `npm run start:api` | Build contracts/API and start compiled JavaScript |
+| `npm run start:api` | Build API and its workspace dependencies and start compiled JavaScript |
 | `npm run build` | Build database, contracts/API, and emit the production Vite bundle |
 | `npm run typecheck` | Strictly type-check database/contracts/API/web without emitting |
 | `npm run lint` | Lint TypeScript and TSX source/tests, including database |
@@ -95,7 +96,7 @@ The runnable workspaces implement these root commands:
 | `npm test` | Run database, contract, API, and web unit/integration/component suites |
 | `npm run test:coverage` | Run V8 coverage for database/contracts/API/web and enforce thresholds |
 | `npm run test:browser:install` | Download the Playwright Chromium binary used by browser smoke tests |
-| `npm run test:browser` | Start local API/Vite processes and run browser smoke tests headlessly |
+| `npm run test:browser` | Run local mock and disposable SQLite browser fixtures headlessly |
 | `npm run test:browser:headed` | Run the same smoke tests with visible Chromium |
 | `npm run test:browser:ui` | Run browser smoke tests through Playwright's interactive UI |
 | `npm run db:generate --workspace @paragliding-forecasts/database -- --name <lower_snake_case_name>` | Generate a named migration for review |

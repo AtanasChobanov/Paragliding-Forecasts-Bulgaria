@@ -42,12 +42,11 @@ and date, calls the API, and renders forecast values with their status,
 confidence, units, provenance, loading state, and error state. It does not read
 SQLite or calculate prediction probabilities.
 
-For the initial dashboard, route-level React state owns request orchestration.
-It fetches the site catalog once, makes one deduplicated multi-site summary
-request for the selected date, and makes one fixed five-day preview request for
-the selected site. Presentational cards consume those results as props rather
-than issuing per-component requests. The detailed page later owns the existing
-single-site/date forecast request.
+The home route loads the site catalog and the selected site's five-day preview
+before picking an available date. One deduplicated multi-site summary request
+supplies the overview and comparison cards. The page caches these results
+until manual reload. The detail route owns the single-site/date request in
+mock mode.
 
 ## Express API
 
@@ -59,8 +58,8 @@ run without binding ports or depending on live sources.
 T-002 adopts a feature-oriented modular structure. Each feature keeps its
 controller, service, repository port, and current adapter together; shared HTTP
 middleware, startup configuration, and observability remain cross-cutting
-folders. `main.ts` is the composition root and wires dependencies manually.
-`app.ts` constructs Express without listening, while `server.ts` owns TCP
+folders. `bootstrap.ts` wires the configured repositories and constructs
+the app. `main.ts` owns startup and data-source lifetime. `server.ts` owns TCP
 startup and graceful closure.
 
 This is dependency injection without a container. A container should be added
@@ -69,17 +68,18 @@ bindings justify it.
 
 The HTTP boundary uses strict Zod schemas from `packages/contracts`, Pino for
 structured/redacted logs and request correlation, and
-`application/problem+json` for globally handled errors. The current sites and
-forecasts adapters are in-memory/mock implementations for Takt 1 UI work.
+`application/problem+json` for globally handled errors. The default data
+source opens the migrated SQLite file read-only through the database workspace.
+The site catalog uses active `sites` rows. Dashboard forecasts select whole
+publications by site and exact Sofia target date, ranking GFS cycle first and
+publication time and IDs second. Metric metadata and cloudbase maxima come
+from the winning prediction.
 
-The forecast feature exposes three read shapes with intentional missing-data
-semantics: a detailed lookup fails with `FORECAST_NOT_FOUND`, batched summaries
-keep a missing site item, and the fixed Sofia-calendar preview keeps a missing
-metric in its date slot. Repository ports support nullable single reads,
-multi-site reads for one date, and inclusive date-range reads for one site.
-Pure response mapping lives in a stateless feature module rather than in the
-service class or a state-free helper class; the service remains responsible for
-use-case orchestration and dependency-backed behavior.
+Batched summaries retain one missing item per unpublished site/date. The
+fixed Sofia-calendar preview distinguishes a missing publication from a
+missing P100. The detailed lookup currently serves explicit mock mode and
+returns `FORECAST_NOT_FOUND` in SQLite mode. See
+[DEC-072](decisions.md#dec-072---read-published-sqlite-forecasts-on-the-home-dashboard).
 
 ## Python data and ML pipeline
 
