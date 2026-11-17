@@ -8,8 +8,8 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build --workspace @paragliding-forecasts/database && npm run build --workspace @paragliding-forecasts/api && npm run build --workspace @paragliding-forecasts/web",
-    "predev": "npm run build --workspace @paragliding-forecasts/contracts",
+    "build": "npm run build --workspace @paragliding-forecasts/api && npm run build --workspace @paragliding-forecasts/web",
+    "predev": "npm run dependencies:build --workspace @paragliding-forecasts/api",
     "dev": "node ./scripts/dev.mjs",
     "dev:api": "npm run dev --workspace @paragliding-forecasts/api",
     "dev:web": "npm run dev --workspace @paragliding-forecasts/web",

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-import { provenanceSchema } from "./data-status.js";
-import { chancePctMetricSchema, forecastDateSchema, forecastOutputsSchema } from "./forecast.js";
+import { availableDataStatusSchema, confidenceSchema, provenanceSchema } from "./data-status.js";
+import { forecastDateSchema, validateNestedChances } from "./forecast.js";
 import { siteIdSchema, siteSlugSchema } from "./sites.js";
 
 const MAX_SUMMARY_SITES = 7;
@@ -32,11 +32,72 @@ const forecastSummaryIdentitySchema = z.strictObject({
   forecastDate: forecastDateSchema,
 });
 
+const textSchema = z.string().trim().min(1);
+
+const availableMetricFields = {
+  dataStatus: availableDataStatusSchema,
+  confidence: confidenceSchema.partial({ note: true }),
+  limitationsNote: textSchema.optional(),
+};
+const missingMetricFields = {
+  dataStatus: z.literal("missing"),
+  confidence: z.null(),
+  missingReason: textSchema,
+  confidenceNote: textSchema.optional(),
+  limitationsNote: textSchema.optional(),
+};
+
+const missingMetricSchema = z.strictObject({ ...missingMetricFields, value: z.null() });
+const chanceMetricSchema = z.discriminatedUnion("dataStatus", [
+  z.strictObject({ ...availableMetricFields, value: z.number().min(0).max(100) }),
+  missingMetricSchema,
+]);
+const overdevelopmentMetricSchema = z.discriminatedUnion("dataStatus", [
+  z.strictObject({
+    ...availableMetricFields,
+    value: z.enum(["low", "medium", "high"]),
+    score: z.number().min(0).max(100).optional(),
+  }),
+  missingMetricSchema,
+]);
+const heightFields = { ...availableMetricFields, valueMslM: z.number() };
+const dashboardCloudbaseSchema = z.discriminatedUnion("kind", [
+  z.strictObject({ ...heightFields, kind: z.literal("estimated") }),
+  z.strictObject({ ...heightFields, kind: z.literal("conditional_lcl") }),
+  z.strictObject({
+    ...availableMetricFields,
+    kind: z.enum(["blue", "other_cloud", "indeterminate"]),
+  }),
+  z.strictObject({ ...missingMetricFields, kind: z.literal("missing") }),
+]);
+const dashboardOutputsSchema = z
+  .strictObject({
+    chance100KmPct: chanceMetricSchema,
+    chance200KmPct: chanceMetricSchema,
+    chance300KmPct: chanceMetricSchema,
+    overdevelopmentRisk: overdevelopmentMetricSchema,
+    cloudbase: dashboardCloudbaseSchema,
+  })
+  .superRefine(validateNestedChances);
+const dashboardMetadataSchema = z.discriminatedUnion("mode", [
+  provenanceSchema.extend({ mode: z.literal("mock") }),
+  z.strictObject({
+    mode: z.literal("sqlite"),
+    source: z.literal("NOAA GFS"),
+    cycleAtUtc: z.iso.datetime(),
+    horizonDays: z.literal([1, 2, 3]),
+    xcModelId: textSchema,
+    cloudbaseMethodVersion: textSchema,
+    overdevelopmentPolicyVersion: textSchema,
+    fromPreviousIssue: z.boolean(),
+  }),
+]);
+
 const availableForecastSummarySchema = forecastSummaryIdentitySchema.extend({
   availability: z.literal("available"),
   generatedAt: z.iso.datetime(),
-  provenance: provenanceSchema,
-  outputs: forecastOutputsSchema,
+  metadata: dashboardMetadataSchema,
+  outputs: dashboardOutputsSchema,
 });
 
 const missingForecastSummarySchema = forecastSummaryIdentitySchema.extend({
@@ -102,10 +163,19 @@ export const forecastDaysQuerySchema = z.strictObject({
   siteSlug: siteSlugSchema,
 });
 
-export const forecastDaySchema = z.strictObject({
-  forecastDate: forecastDateSchema,
-  chance100KmPct: chancePctMetricSchema,
-});
+export const forecastDaySchema = z.discriminatedUnion("availability", [
+  z.strictObject({
+    availability: z.literal("available"),
+    forecastDate: forecastDateSchema,
+    chance100KmPct: chanceMetricSchema,
+  }),
+  z.strictObject({
+    availability: z.literal("missing"),
+    forecastDate: forecastDateSchema,
+    chance100KmPct: missingMetricSchema,
+    missingReason: textSchema,
+  }),
+]);
 
 const addUtcDays = (date: string, offsetDays: number): string => {
   const [year, month, day] = date.split("-").map(Number) as [number, number, number];
@@ -138,6 +208,9 @@ export const forecastDaysResponseSchema = z
 
 export type ForecastSummariesQuery = z.infer<typeof forecastSummariesQuerySchema>;
 export type ForecastSummary = z.infer<typeof forecastSummarySchema>;
+export type AvailableForecastSummary = z.infer<typeof availableForecastSummarySchema>;
+export type DashboardForecastOutputs = z.infer<typeof dashboardOutputsSchema>;
+export type DashboardCloudbase = z.infer<typeof dashboardCloudbaseSchema>;
 export type ForecastSummariesResponse = z.infer<typeof forecastSummariesResponseSchema>;
 export type ForecastDaysQuery = z.infer<typeof forecastDaysQuerySchema>;
 export type ForecastDay = z.infer<typeof forecastDaySchema>;

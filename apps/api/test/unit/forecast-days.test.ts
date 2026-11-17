@@ -44,7 +44,7 @@ describe("forecast day preview service", () => {
       "2026-07-19",
     ]);
     expect(days.days.map((day) => day.chance100KmPct.value)).toEqual([55, 60, 65, 73, 62]);
-    expect(days.days.every((day) => Object.keys(day).length === 2)).toBe(true);
+    expect(days.days.every((day) => day.availability === "available")).toBe(true);
     expect(now).toHaveBeenCalledOnce();
   });
 

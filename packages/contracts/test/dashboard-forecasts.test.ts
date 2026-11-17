@@ -7,7 +7,7 @@ import {
   forecastSummariesResponseSchema,
   problemDetailsSchema,
   type ForecastDaysResponse,
-  type ForecastOutputs,
+  type DashboardForecastOutputs,
   type ForecastSummariesResponse,
 } from "../src/index.js";
 
@@ -39,8 +39,8 @@ const requireItem = <Value>(values: readonly Value[], index: number): Value => {
   return value;
 };
 
-const createOutputs = (): ForecastOutputs => ({
-  cloudbaseMslM: availableMetric(2_400),
+const createOutputs = (): DashboardForecastOutputs => ({
+  cloudbase: { dataStatus: "mock", confidence, kind: "estimated", valueMslM: 2_400 },
   chance100KmPct: availableMetric(65),
   chance200KmPct: availableMetric(35),
   chance300KmPct: availableMetric(12),
@@ -56,7 +56,8 @@ const createSummariesResponse = (): ForecastSummariesResponse => ({
       siteSlug: "sofia-vitosha-kominite",
       forecastDate: "2026-07-21",
       generatedAt: "2026-07-20T20:00:00.000Z",
-      provenance: {
+      metadata: {
+        mode: "mock",
         source: "t-003-t-005-mock-provider",
         version: "mock-v2",
       },
@@ -78,11 +79,16 @@ const createDaysResponse = (): ForecastDaysResponse => ({
   timeZone: "Europe/Sofia",
   todayDate: "2026-07-21",
   days: [
-    { forecastDate: "2026-07-19", chance100KmPct: availableMetric(45) },
-    { forecastDate: "2026-07-20", chance100KmPct: availableMetric(55) },
-    { forecastDate: "2026-07-21", chance100KmPct: availableMetric(65) },
-    { forecastDate: "2026-07-22", chance100KmPct: availableMetric(73) },
-    { forecastDate: "2026-07-23", chance100KmPct: missingMetric },
+    { availability: "available", forecastDate: "2026-07-19", chance100KmPct: availableMetric(45) },
+    { availability: "available", forecastDate: "2026-07-20", chance100KmPct: availableMetric(55) },
+    { availability: "available", forecastDate: "2026-07-21", chance100KmPct: availableMetric(65) },
+    { availability: "available", forecastDate: "2026-07-22", chance100KmPct: availableMetric(73) },
+    {
+      availability: "missing",
+      forecastDate: "2026-07-23",
+      chance100KmPct: missingMetric,
+      missingReason: missingMetric.missingReason,
+    },
   ],
 });
 
@@ -172,11 +178,32 @@ describe("dashboard forecast contracts", () => {
     const response = createDaysResponse();
     response.todayDate = "2026-01-01";
     response.days = [
-      { forecastDate: "2025-12-30", chance100KmPct: availableMetric(45) },
-      { forecastDate: "2025-12-31", chance100KmPct: availableMetric(55) },
-      { forecastDate: "2026-01-01", chance100KmPct: availableMetric(65) },
-      { forecastDate: "2026-01-02", chance100KmPct: availableMetric(73) },
-      { forecastDate: "2026-01-03", chance100KmPct: missingMetric },
+      {
+        availability: "available",
+        forecastDate: "2025-12-30",
+        chance100KmPct: availableMetric(45),
+      },
+      {
+        availability: "available",
+        forecastDate: "2025-12-31",
+        chance100KmPct: availableMetric(55),
+      },
+      {
+        availability: "available",
+        forecastDate: "2026-01-01",
+        chance100KmPct: availableMetric(65),
+      },
+      {
+        availability: "available",
+        forecastDate: "2026-01-02",
+        chance100KmPct: availableMetric(73),
+      },
+      {
+        availability: "missing",
+        forecastDate: "2026-01-03",
+        chance100KmPct: missingMetric,
+        missingReason: missingMetric.missingReason,
+      },
     ];
 
     expect(forecastDaysResponseSchema.parse(response)).toBeDefined();

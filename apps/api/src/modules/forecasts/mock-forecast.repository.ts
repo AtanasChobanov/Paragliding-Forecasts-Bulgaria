@@ -1,7 +1,11 @@
-import type { ForecastDate, ForecastInputs, SiteId } from "@paragliding-forecasts/contracts";
+import type { ForecastDate, ForecastInputs, Site, SiteId } from "@paragliding-forecasts/contracts";
 
 import { addForecastDays, toForecastDate } from "./forecast-date.js";
 import type { ForecastPrediction, OverdevelopmentRisk } from "./forecast-prediction.js";
+import {
+  mapPredictionToForecastDay,
+  mapPredictionToForecastSummary,
+} from "./forecast-response.mapper.js";
 import type { ForecastRepository } from "./forecast.repository.js";
 
 interface MockForecastProfile {
@@ -258,6 +262,23 @@ export class MockForecastRepository implements ForecastRepository {
   find(siteId: SiteId, date: ForecastDate): Promise<ForecastPrediction | undefined> {
     const prediction = this.#predictions.get(predictionKey(siteId, date));
     return Promise.resolve(prediction === undefined ? undefined : clonePrediction(prediction));
+  }
+
+  async listSummaries(sites: readonly Site[], date: ForecastDate) {
+    const slugs = new Map(sites.map(({ id, slug }) => [id, slug]));
+    const predictions = await this.listBySiteIdsAndDate([...slugs.keys()], date);
+    return predictions.map((prediction) => {
+      const slug = slugs.get(prediction.siteId);
+      if (slug === undefined) {
+        throw new Error("Mock prediction does not match a requested site.");
+      }
+      return mapPredictionToForecastSummary(prediction, slug);
+    });
+  }
+
+  async listDays(siteId: SiteId, fromDate: ForecastDate, throughDate: ForecastDate) {
+    const predictions = await this.listBySiteAndDateRange(siteId, fromDate, throughDate);
+    return predictions.map(mapPredictionToForecastDay);
   }
 
   listBySiteIdsAndDate(

@@ -95,6 +95,47 @@ export const forecastInputsSchema = z.strictObject({
   convergenceSignal: createForecastInputMetricSchema(convergenceSignalSchema),
 });
 
+interface ChanceMetrics {
+  chance100KmPct: { value: number | null };
+  chance200KmPct: { value: number | null };
+  chance300KmPct: { value: number | null };
+}
+
+export const validateNestedChances = (outputs: ChanceMetrics, context: z.RefinementCtx): void => {
+  const chance100 = outputs.chance100KmPct;
+  const chance200 = outputs.chance200KmPct;
+  const chance300 = outputs.chance300KmPct;
+
+  if (chance100.value !== null && chance200.value !== null && chance100.value < chance200.value) {
+    context.addIssue({
+      code: "custom",
+      message: "The 100+ km chance cannot be lower than the 200+ km chance.",
+      path: ["chance100KmPct", "value"],
+    });
+  }
+
+  if (chance200.value !== null && chance300.value !== null && chance200.value < chance300.value) {
+    context.addIssue({
+      code: "custom",
+      message: "The 200+ km chance cannot be lower than the 300+ km chance.",
+      path: ["chance200KmPct", "value"],
+    });
+  }
+
+  if (
+    chance200.value === null &&
+    chance100.value !== null &&
+    chance300.value !== null &&
+    chance100.value < chance300.value
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "The 100+ km chance cannot be lower than the 300+ km chance.",
+      path: ["chance100KmPct", "value"],
+    });
+  }
+};
+
 export const forecastOutputsSchema = z
   .strictObject({
     cloudbaseMslM: cloudbaseMslMMetricSchema,
@@ -103,48 +144,7 @@ export const forecastOutputsSchema = z
     chance300KmPct: chancePctMetricSchema,
     overdevelopmentRisk: overdevelopmentRiskMetricSchema,
   })
-  .superRefine((outputs, context) => {
-    const chance100 = outputs.chance100KmPct;
-    const chance200 = outputs.chance200KmPct;
-    const chance300 = outputs.chance300KmPct;
-
-    if (
-      chance100.dataStatus !== "missing" &&
-      chance200.dataStatus !== "missing" &&
-      chance100.value < chance200.value
-    ) {
-      context.addIssue({
-        code: "custom",
-        message: "The 100+ km chance cannot be lower than the 200+ km chance.",
-        path: ["chance100KmPct", "value"],
-      });
-    }
-
-    if (
-      chance200.dataStatus !== "missing" &&
-      chance300.dataStatus !== "missing" &&
-      chance200.value < chance300.value
-    ) {
-      context.addIssue({
-        code: "custom",
-        message: "The 200+ km chance cannot be lower than the 300+ km chance.",
-        path: ["chance200KmPct", "value"],
-      });
-    }
-
-    if (
-      chance200.dataStatus === "missing" &&
-      chance100.dataStatus !== "missing" &&
-      chance300.dataStatus !== "missing" &&
-      chance100.value < chance300.value
-    ) {
-      context.addIssue({
-        code: "custom",
-        message: "The 100+ km chance cannot be lower than the 300+ km chance.",
-        path: ["chance100KmPct", "value"],
-      });
-    }
-  });
+  .superRefine(validateNestedChances);
 
 export const forecastResponseSchema = z.strictObject({
   siteId: siteIdSchema,
