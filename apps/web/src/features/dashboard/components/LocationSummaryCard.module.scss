@@ -1,22 +1,11 @@
-.cardLink {
-  display: block;
-  min-width: 0;
-  color: inherit;
-  text-decoration: none;
-
-  &:focus-visible {
-    border-radius: var(--radius-control);
-  }
-}
-
 .card {
-  --location-title-metric-gap: clamp(1.7rem, 2vh, 2rem);
-
+  position: relative;
   display: flex;
+  width: 100%;
+  height: 100%;
   min-width: 0;
   min-height: 0;
   flex-direction: column;
-  overflow: hidden;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
   background: var(--color-surface);
@@ -24,17 +13,19 @@
   h3 {
     display: flex;
     min-width: 0;
+    flex: 1;
     align-items: center;
-    gap: var(--space-2);
+    gap: var(--dashboard-gap);
     margin: 0;
     color: var(--color-heading);
-    font-size: 0.95rem;
+    font-size: var(--dashboard-body);
     font-weight: 600;
+    line-height: 1.2;
     overflow-wrap: anywhere;
 
     svg {
-      width: 1.25rem;
-      flex: 0 0 1.25rem;
+      width: var(--dashboard-icon);
+      flex: 0 0 var(--dashboard-icon);
       fill: var(--color-primary);
       stroke: var(--color-surface);
       stroke-width: 1.5;
@@ -46,15 +37,30 @@
   display: flex;
   min-width: 0;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  padding: 0.75rem var(--space-3) 0;
+  gap: 0.18rem;
+  padding: 0.15em var(--dashboard-inline-space) 0;
+}
+
+.cardHeader button {
+  z-index: 1;
+}
+
+.cardLink {
+  display: flex;
+  color: inherit;
+  text-decoration: none;
+
+  &::after {
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radius-control);
+    content: "";
+  }
 }
 
 .chevron {
-  width: 1.15rem;
-  height: 1.15rem;
-  flex: 0 0 auto;
+  width: var(--dashboard-icon);
+  height: var(--dashboard-icon);
   fill: none;
   stroke: var(--color-heading);
   stroke-linecap: round;
@@ -63,66 +69,47 @@
 }
 
 .primaryMetric {
-  display: flex;
-  padding: var(--location-title-metric-gap) var(--space-3) var(--space-2);
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0.375rem;
+  display: grid;
+  gap: 0.25em;
+  padding: var(--dashboard-gap) var(--dashboard-inline-space) 0;
+  font-size: var(--dashboard-caption);
 
   strong {
     color: var(--color-primary);
-    font-size: 2rem;
+    font-size: var(--dashboard-number);
     font-weight: 600;
     line-height: 1;
   }
-
-  > .metricLabel {
-    color: var(--color-text-secondary);
-    font-size: 0.72rem;
-  }
-
-  p {
-    margin: 0;
-    color: var(--color-text-secondary);
-    font-size: 0.7rem;
-  }
 }
 
-.valueRow {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
+.metricLabel {
+  order: 1;
+  color: var(--color-text-secondary);
+  line-height: 1.2;
 }
 
 .secondaryMetrics {
   display: grid;
-  padding: clamp(0.45rem, 0.9vh, 0.75rem) var(--space-3);
+  padding: var(--dashboard-gap) var(--dashboard-inline-space);
   margin: 0;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-
-  > div {
-    min-width: 0;
-
-    & + div {
-      justify-self: end;
-    }
-  }
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.25em;
+  font-size: var(--dashboard-caption);
 
   dd {
     display: flex;
     align-items: center;
-    gap: clamp(0.35rem, 0.5vw, 0.55rem);
+    gap: 0.3em;
     margin: 0;
     color: var(--color-heading);
-    font-size: clamp(0.72rem, 0.8vw, 0.82rem);
     font-weight: 500;
-    white-space: nowrap;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
 
     svg {
-      width: clamp(1.05rem, 1.2vw, 1.3rem);
-      height: clamp(1.05rem, 1.2vw, 1.3rem);
+      width: var(--dashboard-icon);
+      height: var(--dashboard-icon);
       flex: 0 0 auto;
       fill: none;
       stroke: var(--color-text-secondary);
@@ -133,71 +120,41 @@
   }
 }
 
-.riskMetric {
-  dd svg {
-    stroke: var(--color-primary);
-  }
+.cloudbaseLabel {
+  display: block;
+  color: var(--color-text-secondary);
+  font-size: inherit;
+}
+
+.riskMetric dd svg {
+  stroke: var(--color-primary);
 }
 
 .confidence {
-  padding: clamp(0.45rem, 0.8vh, 0.7rem) var(--space-3);
+  padding: calc(var(--dashboard-gap) * 0.5) var(--dashboard-inline-space);
   margin-top: auto;
   border-top: 1px solid var(--color-border);
+  border-radius: 0 0 var(--radius-control) var(--radius-control);
   background: var(--color-surface-subtle);
 }
 
 .missingSummary {
-  display: flex;
-  min-height: 10rem;
+  display: grid;
   flex: 1;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: var(--space-2);
-  padding: var(--space-4);
+  align-content: center;
+  padding: var(--dashboard-gap) var(--dashboard-inline-space);
   color: var(--color-text-secondary);
-
-  strong {
-    color: var(--color-heading);
-    font-size: 0.9rem;
-  }
-
-  p {
-    margin: 0;
-    font-size: 0.75rem;
-  }
+  font-size: var(--dashboard-caption);
 }
 
 .unavailable {
   color: var(--color-text-secondary);
-  font-size: 0.75rem;
   font-weight: 600;
 }
 
-@media (min-width: 70rem) {
-  .cardHeader {
-    padding-top: clamp(0.45rem, 0.8vh, 0.7rem);
-  }
-
-  .metricLabel {
+@media (max-width: 42rem) {
+  .card h3 svg,
+  .secondaryMetrics svg {
     display: none;
-  }
-
-  .secondaryMetrics {
-    padding-block: clamp(0.3rem, 0.7vh, 0.5rem);
-  }
-}
-
-@media (min-width: 70rem) and (max-height: 52rem) {
-  .card {
-    --location-title-metric-gap: clamp(0.5rem, 1vh, 0.75rem);
-  }
-
-  .cardHeader {
-    padding-top: var(--space-2);
-  }
-
-  .primaryMetric strong {
-    font-size: 1.65rem;
   }
 }

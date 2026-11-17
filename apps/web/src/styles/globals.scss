@@ -40,6 +40,11 @@ body {
   background: var(--color-background);
 }
 
+html:has([data-dashboard]),
+body:has([data-dashboard]) {
+  min-width: 0;
+}
+
 #root {
   height: 100%;
 }
@@ -101,14 +106,14 @@ p {
 }
 
 @media (max-width: 42rem) {
-  html,
-  body {
+  html:not(:has([data-dashboard])),
+  body:not(:has([data-dashboard])) {
     height: auto;
     min-height: 100%;
     overflow: auto;
   }
 
-  #root {
+  #root:not(:has([data-dashboard])) {
     height: auto;
     min-height: 100dvh;
   }

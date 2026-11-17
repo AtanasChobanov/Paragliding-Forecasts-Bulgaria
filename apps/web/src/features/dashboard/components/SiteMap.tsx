@@ -1,5 +1,11 @@
 import type { Site, SiteSlug } from "@paragliding-forecasts/contracts";
-import { divIcon, latLngBounds, type LeafletEventHandlerFnMap, type LatLngBounds } from "leaflet";
+import {
+  divIcon,
+  latLngBounds,
+  type LeafletEventHandlerFnMap,
+  type LatLngBounds,
+  type PointTuple,
+} from "leaflet";
 import { useEffect, useMemo, useState } from "react";
 import { MapContainer, Marker, TileLayer, Tooltip, useMap } from "react-leaflet";
 
@@ -16,6 +22,9 @@ export interface SiteMapProps {
 
 export const createSiteBounds = (sites: readonly Site[]): LatLngBounds =>
   latLngBounds(sites.map((site) => [site.latitude, site.longitude]));
+
+const allSitesPadding: PointTuple = [82, 24];
+const selectedSitePadding: PointTuple = [28, 28];
 
 const usePrefersReducedMotion = (): boolean => {
   const [reducedMotion, setReducedMotion] = useState(
@@ -56,12 +65,25 @@ const MapViewportController = ({
     .join("|");
 
   useEffect(() => {
-    map.fitBounds(createSiteBounds(viewportMode === "selected-site" ? [selectedSite] : sites), {
-      animate: false,
-      maxZoom: viewportMode === "selected-site" ? 10 : 8,
-      padding: [28, 28],
-    });
-    map.invalidateSize();
+    const selectedOnly = viewportMode === "selected-site";
+    const bounds = createSiteBounds(selectedOnly ? [selectedSite] : sites);
+    const fit = () => {
+      map.invalidateSize({ pan: false });
+      map.fitBounds(bounds, {
+        animate: false,
+        maxZoom: selectedOnly ? 10 : 8,
+        padding: selectedOnly ? selectedSitePadding : allSitesPadding,
+      });
+    };
+    fit();
+
+    if (!selectedOnly && typeof ResizeObserver !== "undefined") {
+      const observer = new ResizeObserver(fit);
+      observer.observe(map.getContainer());
+      return () => {
+        observer.disconnect();
+      };
+    }
   }, [map, selectedSite, siteSignature, sites, viewportMode]);
 
   useEffect(() => {
@@ -170,11 +192,15 @@ export const SiteMap = ({
         <MapContainer
           attributionControl
           bounds={bounds}
-          boundsOptions={{ maxZoom: 8, padding: [28, 28] }}
+          boundsOptions={{
+            maxZoom: 8,
+            padding: viewportMode === "all-sites" ? allSitesPadding : selectedSitePadding,
+          }}
           className={styles.map ?? ""}
           keyboard={false}
           maxZoom={12}
-          minZoom={6}
+          minZoom={viewportMode === "all-sites" ? 4 : 6}
+          zoomSnap={viewportMode === "all-sites" ? 0.5 : 1}
           scrollWheelZoom={false}
           zoomControl
         >

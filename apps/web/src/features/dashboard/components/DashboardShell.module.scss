@@ -1,7 +1,21 @@
 @use "../../../styles/mixins";
 
 .main {
+  --dashboard-heading: clamp(1rem, min(2.2vw, 3.3dvh), 1.75rem);
+  --dashboard-number: clamp(0.95rem, min(2.05vw, 3.75dvh), 1.8rem);
+  --dashboard-body: clamp(0.74rem, min(1.1vw, 2.55dvh), 1rem);
+  --dashboard-caption: clamp(0.625rem, min(0.95vw, 2.1dvh), 0.8rem);
+  --dashboard-icon: clamp(0.86rem, min(1.65vw, 2.9dvh), 1.65rem);
+  --dashboard-gap: clamp(0.25rem, min(0.6vw, 0.9dvh), 0.65rem);
+  --dashboard-inline-space: clamp(0.26rem, min(0.65vw, 1.2dvh), 0.8rem);
+  --forecast-info-size: clamp(1.35rem, min(2.25vw, 4.75dvh), 1.85rem);
+  --forecast-info-icon: clamp(0.9rem, min(1.4vw, 2.7dvh), 1.2rem);
+  --layout-panel-padding: clamp(0.4rem, min(1vw, 1.65dvh), 1rem);
+  --layout-row-gap: clamp(0.38rem, 1.15dvh, 1rem);
+  --location-selector-height: clamp(1.8rem, 4.65dvh, 2.6rem);
+
   display: grid;
+  height: 100%;
   min-width: 0;
   min-height: 0;
   flex: 1;
@@ -11,9 +25,10 @@
     "other"
     "dates";
   grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto auto auto;
   gap: var(--layout-row-gap);
   padding: var(--layout-row-gap) 0;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .location {
@@ -35,7 +50,6 @@
 
 @include mixins.wide {
   .main {
-    height: 100%;
     grid-template-areas:
       "overview location"
       "other location"
@@ -47,12 +61,6 @@
       22vh;
     column-gap: var(--layout-column-gap);
     row-gap: var(--layout-row-gap);
-    padding: var(--layout-row-gap) 0;
-    overflow: hidden;
-  }
-
-  .dates {
-    padding: var(--layout-panel-padding);
   }
 
   .locationHeader {
@@ -72,6 +80,10 @@
 
 @media (min-width: 70rem) and (max-height: 52rem) {
   .main {
+    --dashboard-number: clamp(0.95rem, min(1.8vw, 3.35dvh), 1.65rem);
+    --dashboard-gap: clamp(0.2rem, min(0.55vw, 0.73dvh), 0.55rem);
+    --layout-panel-padding: clamp(0.35rem, min(0.85vw, 1.25dvh), 0.8rem);
+
     grid-template-rows:
       minmax(0, 1.1fr)
       minmax(0, 0.9fr)
@@ -81,6 +93,15 @@
 
 @include mixins.compact {
   .main {
-    padding: var(--layout-row-gap) 0;
+    --dashboard-gap: clamp(0.2rem, min(0.6vw, 0.65dvh), 0.5rem);
+    --layout-row-gap: clamp(0.28rem, 0.9dvh, 0.75rem);
+
+    padding-inline: var(--layout-row-gap);
+  }
+
+  .locationHeader {
+    width: 34%;
+    min-height: var(--location-selector-height);
+    align-items: center;
   }
 }

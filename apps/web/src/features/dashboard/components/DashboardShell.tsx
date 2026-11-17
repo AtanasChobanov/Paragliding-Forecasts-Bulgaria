@@ -26,7 +26,7 @@ export const DashboardShell = ({
   overview,
   overviewBusy = false,
 }: DashboardShellProps) => (
-  <main aria-label="XC Forecast dashboard" className={styles.main}>
+  <main aria-label="XC Forecast dashboard" className={styles.main} data-dashboard>
     <DashboardPanel
       busy={overviewBusy}
       className={styles.overview}

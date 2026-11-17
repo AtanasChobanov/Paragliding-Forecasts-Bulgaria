@@ -1,7 +1,7 @@
 .progress {
   width: 100%;
-  min-width: 5rem;
-  height: 0.48rem;
+  min-width: 0;
+  height: clamp(0.25rem, 0.78dvh, 0.48rem);
   overflow: hidden;
   border-radius: var(--radius-pill);
   background: var(--color-border);

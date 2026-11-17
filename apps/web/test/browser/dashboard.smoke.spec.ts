@@ -1,24 +1,6 @@
-import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
-const apiOrigin = "http://127.0.0.1:3000";
-
-const waitForApi = async (request: APIRequestContext): Promise<void> => {
-  await expect
-    .poll(
-      async () => {
-        try {
-          return (await request.get(`${apiOrigin}/health`)).ok();
-        } catch {
-          return false;
-        }
-      },
-      { timeout: 15_000 },
-    )
-    .toBe(true);
-};
-
-const openDashboard = async (page: Page, request: APIRequestContext): Promise<void> => {
-  await waitForApi(request);
+const openDashboard = async (page: Page): Promise<void> => {
   await page.route("https://tile.openstreetmap.org/**", async (route) => {
     await route.abort();
   });
@@ -53,8 +35,8 @@ const expectDashboardForecast = async (page: Page): Promise<void> => {
   await expect(page.getByText("Mock data").first()).toBeVisible();
 };
 
-test("loads the dashboard with the required forecast cards", async ({ page, request }) => {
-  await openDashboard(page, request);
+test("loads the dashboard with the required forecast cards", async ({ page }) => {
+  await openDashboard(page);
   await expectDashboardForecast(page);
   await expect(
     page.getByRole("link", { name: "View detailed forecast", exact: true }),
@@ -63,9 +45,8 @@ test("loads the dashboard with the required forecast cards", async ({ page, requ
 
 test("opens the detailed forecast from the dashboard and returns with the selection", async ({
   page,
-  request,
 }) => {
-  await openDashboard(page, request);
+  await openDashboard(page);
   await expectDashboardForecast(page);
 
   const dashboardUrl = new URL(page.url());

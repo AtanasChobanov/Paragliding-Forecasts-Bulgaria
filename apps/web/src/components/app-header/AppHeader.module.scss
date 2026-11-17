@@ -78,12 +78,13 @@
   .header {
     min-height: auto;
     flex-wrap: wrap;
-    gap: var(--space-3);
-    padding: var(--space-3);
+    gap: var(--compact-header-gap, var(--space-3));
+    padding: var(--compact-header-padding, var(--space-3));
   }
 
   .brand {
-    font-size: 1.3rem;
+    gap: var(--compact-header-gap, var(--space-3));
+    font-size: var(--compact-header-brand, 1.3rem);
   }
 
   .mark {
@@ -95,8 +96,12 @@
     height: 1.75rem;
   }
 
-  .currentSection::after {
-    bottom: -0.7rem;
+  .currentSection {
+    font-size: var(--compact-header-section, 1.05rem);
+
+    &::after {
+      bottom: calc(0.1rem - var(--compact-header-padding, 0.8rem));
+    }
   }
 
   .bell {

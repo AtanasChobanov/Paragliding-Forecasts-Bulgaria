@@ -85,3 +85,17 @@
     content: "";
   }
 }
+
+:global([data-dashboard]) .field {
+  width: clamp(12rem, 20vw, 20rem);
+
+  select {
+    font-size: var(--dashboard-body);
+  }
+}
+
+@media (max-width: 42rem) {
+  :global([data-dashboard]) .field {
+    width: 100%;
+  }
+}
