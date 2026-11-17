@@ -1,4 +1,8 @@
 .metric {
+  --compact-badge-height: auto;
+  --compact-badge-padding: 0.12em 0.3em;
+  --compact-badge-white-space: normal;
+
   display: grid;
   min-width: 0;
   grid-template-rows: auto 1fr auto;
@@ -10,6 +14,31 @@
 
   & + .metric {
     border-left: 1px solid var(--color-border);
+  }
+}
+
+@media (min-width: 70rem) {
+  .metric {
+    padding-block: clamp(0.15em, calc(3dvh - 1rem), 0.65rem);
+  }
+}
+
+.metricHeader {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2em;
+
+  > :last-child {
+    max-width: 100%;
+    font-size: clamp(0.5rem, min(0.65vw, 1.35dvh), 0.6rem);
+  }
+}
+
+@media (max-width: 42rem) {
+  .metricHeader > :last-child {
+    font-size: clamp(0.4rem, 1.9vw, 0.5rem);
   }
 }
 

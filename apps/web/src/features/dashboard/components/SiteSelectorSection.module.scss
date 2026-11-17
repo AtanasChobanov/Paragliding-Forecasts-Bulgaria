@@ -66,14 +66,17 @@
   .mapFallback {
     min-height: 0;
   }
-}
 
-@media (max-width: 42rem) {
-  :global([data-dashboard]) .controls {
+  .controls {
     position: absolute;
     z-index: 600;
     top: var(--layout-panel-padding);
     right: var(--layout-panel-padding);
+  }
+}
+
+@media (max-width: 42rem) {
+  :global([data-dashboard]) .controls {
     width: calc(66% - var(--layout-panel-padding));
   }
 }

@@ -71,19 +71,37 @@
 .primaryMetric {
   display: grid;
   gap: 0.25em;
-  padding: var(--dashboard-gap) var(--dashboard-inline-space) 0;
+  padding: calc(var(--dashboard-gap) + 0.25rem) var(--dashboard-inline-space) 0;
+  margin-top: auto;
   font-size: var(--dashboard-caption);
+}
+
+.valueRow {
+  --dashboard-caption: clamp(0.56rem, min(0.78vw, 1.6dvh), 0.67rem);
+  --compact-badge-height: auto;
+  --compact-badge-padding: 0.14em 0.3em;
+  --compact-badge-white-space: normal;
+
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25em;
+
+  > :last-child {
+    white-space: nowrap;
+  }
 
   strong {
     color: var(--color-primary);
     font-size: var(--dashboard-number);
     font-weight: 600;
     line-height: 1;
+    white-space: nowrap;
   }
 }
 
 .metricLabel {
-  order: 1;
   color: var(--color-text-secondary);
   line-height: 1.2;
 }
@@ -132,7 +150,6 @@
 
 .confidence {
   padding: calc(var(--dashboard-gap) * 0.5) var(--dashboard-inline-space);
-  margin-top: auto;
   border-top: 1px solid var(--color-border);
   border-radius: 0 0 var(--radius-control) var(--radius-control);
   background: var(--color-surface-subtle);
@@ -156,5 +173,19 @@
   .card h3 svg,
   .secondaryMetrics svg {
     display: none;
+  }
+
+  .valueRow {
+    --dashboard-caption: clamp(0.51rem, 2.35vw, 0.65rem);
+    --compact-badge-padding: 0.14em 0.18em;
+    --compact-badge-transform: none;
+
+    strong {
+      font-size: clamp(0.78rem, 3.75vw, 1rem);
+    }
+  }
+
+  .secondaryMetrics {
+    font-size: clamp(0.55rem, 2.5vw, 0.72rem);
   }
 }

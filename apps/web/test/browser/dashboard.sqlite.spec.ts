@@ -54,6 +54,61 @@ for (const { width, height, text } of layouts) {
     for (const card of await dates(page).getByRole("button").all()) {
       await seeFullyWithinViewport(card);
     }
+    const comparison = page.getByRole("region", { name: "Other locations for this date" });
+    const comparisonBox = await comparison.boundingBox();
+    const overviewBox = await overview(page).boundingBox();
+    expect(comparisonBox?.height).toBeLessThanOrEqual(overviewBox?.height ?? 0);
+    const cardSpacing = await comparison.getByRole("article").evaluateAll((cards) =>
+      cards.map((card) => {
+        const [header, primary, secondary, confidence] = Array.from(card.children);
+        if (!header || !primary || !secondary || !confidence) {
+          throw new Error("Expected the four comparison card rows.");
+        }
+        return {
+          aboveChance: primary.getBoundingClientRect().top - header.getBoundingClientRect().bottom,
+          aboveConfidence:
+            confidence.getBoundingClientRect().top - secondary.getBoundingClientRect().bottom,
+        };
+      }),
+    );
+    for (const spacing of cardSpacing) {
+      expect(spacing.aboveChance).toBeGreaterThanOrEqual(-1);
+      expect(Math.abs(spacing.aboveConfidence)).toBeLessThanOrEqual(1);
+    }
+
+    const map = page.locator(".leaflet-container");
+    await expect(map.locator(".leaflet-marker-icon")).toHaveCount(7);
+    await expect(map.locator(".leaflet-tooltip")).toHaveCount(7);
+    await expect
+      .poll(() =>
+        map.evaluate((element) => {
+          const frame = element.getBoundingClientRect();
+          return Array.from(
+            element.querySelectorAll(
+              innerWidth >= 1120
+                ? ".leaflet-marker-icon > span, .leaflet-tooltip"
+                : ".leaflet-marker-icon > span",
+            ),
+          ).flatMap((feature) => {
+            const rect = feature.getBoundingClientRect();
+            return rect.left >= frame.left - 1 &&
+              rect.right <= frame.right + 1 &&
+              rect.top >= frame.top - 1 &&
+              rect.bottom <= frame.bottom + 1
+              ? []
+              : [feature.textContent || feature.parentElement?.getAttribute("title")];
+          });
+        }),
+      )
+      .toEqual([]);
+
+    if (width >= 1120) {
+      const span = await map.locator(".leaflet-marker-icon").evaluateAll((pins) => {
+        const positions = pins.map((pin) => pin.getBoundingClientRect().left);
+        return Math.max(...positions) - Math.min(...positions);
+      });
+      expect(span).toBeGreaterThan(width * 0.25);
+    }
 
     const layout = await dashboard(page).evaluate((main) => {
       const targets = [
@@ -120,7 +175,11 @@ test("shows SQLite values and keeps unavailable dates out of selection", async (
   await expect(
     overview(page).getByRole("group", { name: "100+ km confidence. Low confidence" }),
   ).toBeVisible();
-  await expect(page.getByRole("article", { name: "Zlatitsa" })).toContainText("0%");
+  const zlatitsaP100 = page
+    .getByRole("article", { name: "Zlatitsa" })
+    .getByRole("group", { name: "100+ km chance" });
+  await expect(zlatitsaP100).toContainText("0%");
+  await expect(zlatitsaP100).toContainText("Baseline");
   await expect(page.getByRole("article", { name: "Sopot" })).toContainText("<0.01%");
 
   const tomorrow = dates(page).getByRole("button", { name: "2026-11-18" });

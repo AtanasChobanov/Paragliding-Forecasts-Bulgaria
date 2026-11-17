@@ -22,10 +22,12 @@ next requested ticket on top of the branch that supplies its dependencies.
   available threshold, separate grouped contributions for P100 and conditional
   Q200, and a pooled 300+ conversion note. Contributions describe model
   calculations relative to the training reference.
-  The [T-025 implementation plan](Т-025-implementation-plan.md) covers the ML
-  and SQLite portion. It specifies `forecast-publish` with the existing 16:00
-  Sofia source cutoff and a separate one-shot `forecast-prune` command for
-  eligible operational GRIB files at least 48 hours after publication.
+  The [T-025 implementation plan](Т-025-implementation-plan.md) now covers
+  SQLite-backed summaries and dates on the home dashboard, metadata,
+  responsive layout, and the selected map label. The detailed forecast page
+  is the following iteration. The completed ML phase provides
+  `forecast-publish` with the 16:00 Sofia source cutoff and one-shot
+  `forecast-prune` for eligible GRIB files at least 48 hours after publication.
   The SQLite schema, transactional batch writer and `forecast-publish`
   orchestration are implemented. The owner applied the migration on the
   local macOS database. A read-only inspection found six new STRICT tables,
@@ -93,8 +95,8 @@ The contracts, API and web workspaces passed their coverage thresholds.
 
 Read-only SQL verified seven local publications per date on November 17–19
 from the November 16 06Z cycle. They were written at 01:05:14 Sofia time on
-November 17. The next checkpoint is the owner-run browser check of this
-database. From the repository root on macOS:
+November 17. The owner ran the dashboard command and accepted the initial
+SQLite integration, then requested the presentation refinements below. From the repository root on macOS:
 
 ```sh
 FORECAST_DATA_MODE=sqlite npm run dev
@@ -107,6 +109,36 @@ On the November 17 Sofia date window, the 15th and 16th are disabled and the
 panel should show the GFS cycle and publication time above. The shell prefix
 overrides the existing local `.env` mock setting for this launch. Set
 `FORECAST_DATA_MODE=sqlite` in `.env` to make that choice persistent.
+
+## T-025 owner presentation refinements — 2026-11-17
+
+The owner accepted the SQLite dashboard and requested a closer initial map,
+the P100 status badge beside its percentage, more space below comparison
+headings and a slightly taller Other locations section.
+
+The map now uses asymmetric bounds padding and quarter-step zoom fitting.
+Browser checks verify all seven pins stay inside the map at every tested
+size and the labels fit at desktop sizes. Comparison badges use the P100
+metric's own status with compact Baseline/Mock labels. Missing P100 carries
+an Unavailable badge and retains the metric's reason. After the owner's screenshot review, the comparison card's flexible free
+space sits between the header and percentage row. The confidence footer
+follows the cloudbase/OD row directly. Wide grid rows give comparisons
+more height while keeping them shorter than overview. The stacked layouts
+also retain the viewport fit.
+
+Verification passed for 126 web tests, 13 Playwright tests, strict web
+typechecking/build, repository-wide lint, formatting, repo checks and
+whitespace checks. Playwright covers the previous eight viewport/text settings,
+the comparison/overview height relationship, and all seven map pins.
+The owner also requested individual status badges on all five overview
+metrics. Each metric now shows its own compact uppercase status beside its icon,
+including Unavailable for a missing metric. The owner then requested more
+vertical breathing room. Overview metric cards now increase their top and
+bottom padding on wide screens in proportion to viewport height. Mixed-status component coverage
+and all 13 browser checks passed after this addition.
+
+T-025 remains In Progress for the following detail/explanation iteration.
+Reload the owner's running dashboard to inspect these presentation changes.
 
 ## Local macOS fresh start — 2026-11-11
 

@@ -17,6 +17,7 @@
   min-height: var(--compact-badge-height, 1.5rem);
   padding: var(--compact-badge-padding, 0.15rem 0.45rem);
   font-size: var(--dashboard-caption, 0.65rem);
+  text-transform: var(--compact-badge-transform, uppercase);
   white-space: var(--compact-badge-white-space, nowrap);
 }
 

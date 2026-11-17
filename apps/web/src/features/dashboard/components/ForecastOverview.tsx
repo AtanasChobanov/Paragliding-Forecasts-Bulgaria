@@ -63,6 +63,7 @@ const AvailableOverview = ({ forecastDate, siteName, summary }: AvailableOvervie
   ): ForecastMetricProps => ({
     label,
     icon,
+    dataStatus: metric.dataStatus,
     missingReason: metric.dataStatus === "missing" ? metric.missingReason : undefined,
     value: metric.value === null ? "Unavailable" : formatChancePercent(metric.value),
   });
@@ -71,6 +72,7 @@ const AvailableOverview = ({ forecastDate, siteName, summary }: AvailableOvervie
     { ...chance("100+ km chance", outputs.chance100KmPct, <OpportunityIcon />), primary: true },
     {
       icon: <CloudbaseIcon />,
+      dataStatus: outputs.cloudbase.dataStatus,
       ...presentCloudbase(outputs.cloudbase),
       missingReason:
         outputs.cloudbase.kind === "missing" ? outputs.cloudbase.missingReason : undefined,
@@ -80,6 +82,7 @@ const AvailableOverview = ({ forecastDate, siteName, summary }: AvailableOvervie
     {
       icon: <OverdevelopmentIcon />,
       label: "OD risk",
+      dataStatus: risk.dataStatus,
       missingReason: risk.dataStatus === "missing" ? risk.missingReason : undefined,
       value: risk.value === null ? "Unavailable" : formatRisk(risk.value),
     },

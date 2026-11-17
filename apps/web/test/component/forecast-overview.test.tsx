@@ -52,6 +52,7 @@ describe("ForecastOverview", () => {
     expect(screen.queryByText("Mock data")).not.toBeInTheDocument();
     const metrics = screen.getByRole("list", { name: "Forecast metrics" });
     expect(within(metrics).getAllByRole("listitem")).toHaveLength(5);
+    expect(within(metrics).getAllByText("Mock")).toHaveLength(5);
     expect(metrics.querySelectorAll("svg")).toHaveLength(5);
     expect(within(metrics).getByText("2,400")).toBeVisible();
     expect(within(metrics).getByText("m MSL")).toBeVisible();
@@ -80,6 +81,7 @@ describe("ForecastOverview", () => {
     const available = getAvailableSummary();
     const outputs: DashboardForecastOutputs = {
       ...available.outputs,
+      chance100KmPct: { value: 65, dataStatus: "baseline", confidence: { level: "low" } },
       chance200KmPct: missingMetric,
     };
 
@@ -93,11 +95,19 @@ describe("ForecastOverview", () => {
 
     const metrics = screen.getByRole("list", { name: "Forecast metrics" });
     expect(within(metrics).getByText("2,400")).toBeVisible();
-    expect(within(metrics).getByText("Unavailable")).toBeVisible();
-    expect(within(metrics).getByText("Unavailable")).toHaveAttribute(
+    expect(within(metrics).getAllByText("Unavailable")).toHaveLength(2);
+    expect(within(metrics).getByTitle(missingMetric.missingReason)).toHaveAttribute(
       "title",
       missingMetric.missingReason,
     );
+    const cards = within(metrics).getAllByRole("listitem");
+    for (const [index, card] of cards.entries()) {
+      const expected = ["Baseline", "Mock", "Unavailable", "Mock", "Mock"][index];
+      if (expected === undefined) {
+        throw new Error("Expected five metric cards.");
+      }
+      expect(within(card).getAllByText(expected).length).toBeGreaterThanOrEqual(1);
+    }
     expect(within(metrics).queryByText("0")).not.toBeInTheDocument();
   });
 

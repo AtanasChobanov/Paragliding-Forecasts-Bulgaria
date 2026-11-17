@@ -72,6 +72,13 @@
   overflow-wrap: anywhere;
 }
 
+@media (width < 70rem) {
+  .card {
+    min-height: clamp(3.7rem, 9.4dvh, 5.1rem);
+    gap: clamp(0.12rem, 0.3dvh, 0.3rem);
+  }
+}
+
 @media (max-width: 42rem) {
   .card {
     --dashboard-caption: clamp(0.56rem, min(2.8vw, 1.72dvh), 0.65rem);
@@ -79,6 +86,6 @@
     --confidence-segments-width: 1.75em;
     --confidence-segments-gap: 0.12em;
 
-    min-height: clamp(3.7rem, 10dvh, 5rem);
+    padding-block: 0.16rem;
   }
 }

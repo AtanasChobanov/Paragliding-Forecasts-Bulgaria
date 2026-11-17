@@ -9,6 +9,7 @@ import {
   presentCloudbase,
 } from "../forecast-presentation.js";
 import { ConfidenceIndicator } from "./ConfidenceIndicator.js";
+import { DataStatusBadge } from "./DataStatusBadge.js";
 import { ForecastChanceProgress } from "./ForecastChanceProgress.js";
 import { ForecastInformation } from "./ForecastInformation.js";
 import styles from "./LocationSummaryCard.module.scss";
@@ -85,20 +86,28 @@ export const LocationSummaryCard = ({ forecastDate, site, summary }: LocationSum
         <ForecastInformation key={forecastDate} siteName={site.name} summary={summary} />
       </div>
       <div className={styles.primaryMetric}>
-        <span className={styles.metricLabel}>100+ km chance</span>
-        {chance100KmPct.dataStatus === "missing" ? (
-          <span className={styles.unavailable} title={chance100KmPct.missingReason}>
-            Unavailable
-          </span>
-        ) : (
-          <>
+        <div
+          aria-label="100+ km chance"
+          className={styles.valueRow}
+          role="group"
+          title={chance100KmPct.dataStatus === "missing" ? chance100KmPct.missingReason : undefined}
+        >
+          {chance100KmPct.dataStatus === "missing" ? (
+            <span aria-hidden="true" className={styles.unavailable}>
+              —
+            </span>
+          ) : (
             <strong>{formatChancePercent(chance100KmPct.value)}</strong>
-            <ForecastChanceProgress
-              label="chance of 100 kilometres or more"
-              value={chance100KmPct.value}
-            />
-          </>
-        )}
+          )}
+          <DataStatusBadge compact short status={chance100KmPct.dataStatus} />
+        </div>
+        {chance100KmPct.dataStatus !== "missing" ? (
+          <ForecastChanceProgress
+            label="chance of 100 kilometres or more"
+            value={chance100KmPct.value}
+          />
+        ) : null}
+        <span className={styles.metricLabel}>100+ km chance</span>
       </div>
       <dl className={styles.secondaryMetrics}>
         <div>

@@ -89,12 +89,18 @@
   }
 }
 
-@media (min-width: 70rem) and (max-height: 42rem) {
+@media (max-height: 52rem), (width < 70rem) {
   .metrics {
     padding-block: 0;
   }
 
   .detailAction {
     margin-top: 0.15rem;
+  }
+}
+
+@media (max-width: 42rem) {
+  .detailAction {
+    min-height: clamp(1.65rem, 3.65dvh, 2.25rem);
   }
 }

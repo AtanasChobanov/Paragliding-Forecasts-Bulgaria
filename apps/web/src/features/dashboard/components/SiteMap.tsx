@@ -4,7 +4,7 @@ import {
   latLngBounds,
   type LeafletEventHandlerFnMap,
   type LatLngBounds,
-  type PointTuple,
+  type FitBoundsOptions,
 } from "leaflet";
 import { useEffect, useMemo, useState } from "react";
 import { MapContainer, Marker, TileLayer, Tooltip, useMap } from "react-leaflet";
@@ -23,8 +23,13 @@ export interface SiteMapProps {
 export const createSiteBounds = (sites: readonly Site[]): LatLngBounds =>
   latLngBounds(sites.map((site) => [site.latitude, site.longitude]));
 
-const allSitesPadding: PointTuple = [82, 24];
-const selectedSitePadding: PointTuple = [28, 28];
+// Vitosha's label extends west of the catalog bounds. The easternmost
+// location's label points inward, so it only needs room for its pin.
+const allSitesPadding = {
+  paddingTopLeft: [86, 58],
+  paddingBottomRight: [26, 20],
+} satisfies FitBoundsOptions;
+const selectedSitePadding = { padding: [28, 28] } satisfies FitBoundsOptions;
 
 const usePrefersReducedMotion = (): boolean => {
   const [reducedMotion, setReducedMotion] = useState(
@@ -72,7 +77,7 @@ const MapViewportController = ({
       map.fitBounds(bounds, {
         animate: false,
         maxZoom: selectedOnly ? 10 : 8,
-        padding: selectedOnly ? selectedSitePadding : allSitesPadding,
+        ...(selectedOnly ? selectedSitePadding : allSitesPadding),
       });
     };
     fit();
@@ -94,7 +99,7 @@ const MapViewportController = ({
     map.panInside([selectedSite.latitude, selectedSite.longitude], {
       animate: !reducedMotion,
       duration: reducedMotion ? 0 : 0.25,
-      padding: [44, 44],
+      ...allSitesPadding,
     });
   }, [map, reducedMotion, selectedSite.latitude, selectedSite.longitude, viewportMode]);
 
@@ -194,13 +199,13 @@ export const SiteMap = ({
           bounds={bounds}
           boundsOptions={{
             maxZoom: 8,
-            padding: viewportMode === "all-sites" ? allSitesPadding : selectedSitePadding,
+            ...(viewportMode === "all-sites" ? allSitesPadding : selectedSitePadding),
           }}
           className={styles.map ?? ""}
           keyboard={false}
           maxZoom={12}
-          minZoom={viewportMode === "all-sites" ? 4 : 6}
-          zoomSnap={viewportMode === "all-sites" ? 0.5 : 1}
+          minZoom={viewportMode === "all-sites" ? 1 : 6}
+          zoomSnap={viewportMode === "all-sites" ? 0.25 : 1}
           scrollWheelZoom={false}
           zoomControl
         >

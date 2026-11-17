@@ -50,9 +50,19 @@ describe("OtherLocationsSection", () => {
     const sofia = requireSite("sofia-vitosha-kominite");
     const dobrich = requireSite("dobrich-region");
     const sites = [zlatitsa, sofia, dobrich];
+    const zlatitsaSummary = summaryFor(zlatitsa);
     const summaries = new Map<SiteSlug, ForecastSummary>([
       [dobrich.slug, summaryFor(dobrich)],
-      [zlatitsa.slug, summaryFor(zlatitsa)],
+      [
+        zlatitsa.slug,
+        {
+          ...zlatitsaSummary,
+          outputs: {
+            ...zlatitsaSummary.outputs,
+            chance100KmPct: { value: 65, dataStatus: "baseline", confidence: { level: "low" } },
+          },
+        },
+      ],
       [sofia.slug, summaryFor(sofia)],
     ]);
 
@@ -66,12 +76,15 @@ describe("OtherLocationsSection", () => {
       "sofia-vitosha-kominite",
       "dobrich-region",
     ]);
-    expect(screen.queryByText("Mock data")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Mock")).toHaveLength(2);
     expect(screen.getAllByRole("progressbar")).toHaveLength(3);
     expect(screen.getAllByText("Conf.")).toHaveLength(3);
     expect(screen.getAllByRole("link", { name: /View detailed forecast for/i })).toHaveLength(3);
     expect(screen.getAllByRole("button", { name: "Forecast information" })).toHaveLength(3);
     const zlatitsaCard = screen.getByRole("article", { name: "Zlatitsa" });
+    const p100 = within(zlatitsaCard).getByRole("group", { name: "100+ km chance" });
+    expect(within(p100).getByText("65%")).toBeVisible();
+    expect(within(p100).getByText("Baseline")).toBeVisible();
     const info = within(zlatitsaCard).getByRole("button", { name: "Forecast information" });
     expect(info.closest("a")).toBeNull();
     fireEvent.pointerEnter(info, { pointerType: "mouse" });
@@ -105,8 +118,9 @@ describe("OtherLocationsSection", () => {
       />,
     );
 
-    expect(screen.getAllByText("Unavailable").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("Unavailable")).toHaveAttribute("title", missingMetric.missingReason);
+    const p100 = screen.getByRole("group", { name: "100+ km chance" });
+    expect(within(p100).getByText("Unavailable")).toBeVisible();
+    expect(p100).toHaveAttribute("title", missingMetric.missingReason);
     expect(screen.getByText("Confidence unavailable")).toBeVisible();
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
     expect(screen.queryByText("0")).not.toBeInTheDocument();
