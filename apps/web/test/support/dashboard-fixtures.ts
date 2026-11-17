@@ -6,6 +6,7 @@ import {
   sitesResponseSchema,
   type Confidence,
   type ForecastDaysResponse,
+  type DashboardForecastOutputs,
   type ForecastResponse,
   type ForecastOutputs,
   type ForecastSummariesResponse,
@@ -43,6 +44,27 @@ export const createForecastOutputs = (): ForecastOutputs => ({
   chance300KmPct: availableMetric(12),
   overdevelopmentRisk: availableMetric("medium" as const),
 });
+
+export const createDashboardOutputs = (): DashboardForecastOutputs => {
+  const { cloudbaseMslM, ...outputs } = createForecastOutputs();
+  return {
+    ...outputs,
+    cloudbase:
+      cloudbaseMslM.dataStatus === "missing"
+        ? {
+            kind: "missing",
+            dataStatus: "missing",
+            confidence: null,
+            missingReason: cloudbaseMslM.missingReason,
+          }
+        : {
+            kind: "estimated",
+            dataStatus: cloudbaseMslM.dataStatus,
+            confidence: cloudbaseMslM.confidence,
+            valueMslM: cloudbaseMslM.value,
+          },
+  };
+};
 
 export const createSitesResponse = (): SitesResponse =>
   sitesResponseSchema.parse({
@@ -116,11 +138,12 @@ export const createForecastSummariesResponse = (): ForecastSummariesResponse =>
         siteSlug: "sopot",
         forecastDate: "2026-07-18",
         generatedAt: "2026-07-17T20:00:00.000Z",
-        provenance: {
+        metadata: {
+          mode: "mock",
           source: "t-003-t-005-mock-provider",
           version: "mock-v2",
         },
-        outputs: createForecastOutputs(),
+        outputs: createDashboardOutputs(),
       },
     ],
   });
@@ -132,11 +155,32 @@ export const createForecastDaysResponse = (): ForecastDaysResponse =>
     timeZone: "Europe/Sofia",
     todayDate: "2026-07-18",
     days: [
-      { forecastDate: "2026-07-16", chance100KmPct: availableMetric(45) },
-      { forecastDate: "2026-07-17", chance100KmPct: availableMetric(55) },
-      { forecastDate: "2026-07-18", chance100KmPct: availableMetric(65) },
-      { forecastDate: "2026-07-19", chance100KmPct: availableMetric(73) },
-      { forecastDate: "2026-07-20", chance100KmPct: missingMetric },
+      {
+        availability: "available",
+        forecastDate: "2026-07-16",
+        chance100KmPct: availableMetric(45),
+      },
+      {
+        availability: "available",
+        forecastDate: "2026-07-17",
+        chance100KmPct: availableMetric(55),
+      },
+      {
+        availability: "available",
+        forecastDate: "2026-07-18",
+        chance100KmPct: availableMetric(65),
+      },
+      {
+        availability: "available",
+        forecastDate: "2026-07-19",
+        chance100KmPct: availableMetric(73),
+      },
+      {
+        availability: "missing",
+        forecastDate: "2026-07-20",
+        chance100KmPct: missingMetric,
+        missingReason: missingMetric.missingReason,
+      },
     ],
   });
 

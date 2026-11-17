@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  forecastDaySchema,
   forecastDaysQuerySchema,
   forecastDaysResponseSchema,
   forecastSummariesQuerySchema,
   forecastSummariesResponseSchema,
+  forecastSummarySchema,
   problemDetailsSchema,
   type ForecastDaysResponse,
   type DashboardForecastOutputs,
@@ -170,6 +172,40 @@ describe("dashboard forecast contracts", () => {
       forecastSummariesResponseSchema.safeParse({
         ...response,
         summaries: [],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("requires cloudbase heights only for numeric regimes and separates dates from P100", () => {
+    const available = requireItem(createSummariesResponse().summaries, 0);
+    if (available.availability !== "available") {
+      throw new Error("Expected an available fixture.");
+    }
+    const summary = (cloudbase: unknown) => ({
+      ...available,
+      outputs: { ...available.outputs, cloudbase },
+    });
+    const blue = { kind: "blue", dataStatus: "baseline", confidence: { level: "low" } };
+    expect(forecastSummarySchema.safeParse(summary(blue)).success).toBe(true);
+    expect(forecastSummarySchema.safeParse(summary({ ...blue, valueMslM: 2000 })).success).toBe(
+      false,
+    );
+    expect(
+      forecastSummarySchema.safeParse(summary({ ...blue, kind: "conditional_lcl" })).success,
+    ).toBe(false);
+
+    const publishedDay = {
+      availability: "available",
+      forecastDate: "2026-07-23",
+      chance100KmPct: missingMetric,
+    };
+    expect(forecastDaySchema.safeParse(publishedDay).success).toBe(true);
+    expect(
+      forecastDaySchema.safeParse({
+        ...publishedDay,
+        availability: "missing",
+        chance100KmPct: availableMetric(0),
+        missingReason: "No publication",
       }).success,
     ).toBe(false);
   });

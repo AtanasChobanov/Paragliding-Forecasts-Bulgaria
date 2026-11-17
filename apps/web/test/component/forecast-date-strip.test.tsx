@@ -79,30 +79,28 @@ describe("ForecastDateStrip", () => {
     expect(onSelectDate).toHaveBeenCalledWith("2026-07-16");
   });
 
-  it("keeps a missing slot selectable and explains it without substituting zero", async () => {
+  it("disables a slot without a published forecast", async () => {
     const response = createForecastDaysResponse();
     const onSelectDate = vi.fn();
     render(
       <ForecastDateStrip
         days={response.days}
         onSelectDate={onSelectDate}
-        selectedDate="2026-07-20"
+        selectedDate="2026-07-19"
         todayDate={response.todayDate}
       />,
     );
 
     const missingDate = screen.getByRole("button", { name: "2026-07-20" });
-    expect(missingDate).toHaveAttribute("aria-pressed", "true");
-    expect(within(missingDate).getAllByText("Unavailable")).toHaveLength(2);
-    expect(
-      within(missingDate).getByText("No forecast run is available for this site and date."),
-    ).toBeVisible();
+    expect(missingDate).toBeDisabled();
+    expect(missingDate).toHaveAttribute("aria-pressed", "false");
+    expect(within(missingDate).getByText("Unavailable")).toBeVisible();
     expect(missingDate).toHaveAccessibleDescription(
       "100 or more kilometre chance unavailable. No forecast run is available for this site and date.",
     );
     expect(within(missingDate).queryByText("0%")).not.toBeInTheDocument();
 
     await userEvent.click(missingDate);
-    expect(onSelectDate).toHaveBeenCalledWith("2026-07-20");
+    expect(onSelectDate).not.toHaveBeenCalled();
   });
 });

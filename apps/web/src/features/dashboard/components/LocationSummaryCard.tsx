@@ -1,17 +1,17 @@
 import type { ForecastDate, ForecastSummary, Site } from "@paragliding-forecasts/contracts";
 import { Link } from "react-router-dom";
 
+import { createForecastDetailPath } from "../../forecast-details/forecast-detail-navigation.js";
 import {
-  formatInteger,
+  formatChancePercent,
   formatRisk,
-  summarizeConfidence,
-  summarizeDataStatus,
+  p100Confidence,
+  presentCloudbase,
 } from "../forecast-presentation.js";
 import { ConfidenceIndicator } from "./ConfidenceIndicator.js";
-import { DataStatusBadge } from "./DataStatusBadge.js";
 import { ForecastChanceProgress } from "./ForecastChanceProgress.js";
+import { ForecastInformation } from "./ForecastInformation.js";
 import styles from "./LocationSummaryCard.module.scss";
-import { createForecastDetailPath } from "../../forecast-details/forecast-detail-navigation.js";
 
 export interface LocationSummaryCardProps {
   readonly forecastDate: ForecastDate;
@@ -45,135 +45,99 @@ const ChevronIcon = () => (
   </svg>
 );
 
-const UnavailableMetric = ({ reason }: { readonly reason: string }) => (
-  <span className={styles.unavailable} title={reason}>
-    Unavailable
-  </span>
-);
-
 export const LocationSummaryCard = ({ forecastDate, site, summary }: LocationSummaryCardProps) => {
   const headingId = `other-location-${site.slug}`;
-  const detailPath = createForecastDetailPath(site.slug, forecastDate);
+  const heading = (
+    <h3 id={headingId}>
+      <PinIcon />
+      {site.name}
+    </h3>
+  );
 
-  if (summary === undefined) {
+  if (summary?.availability !== "available") {
     return (
-      <Link
-        aria-label={`View detailed forecast for ${site.name}`}
-        className={styles.cardLink}
-        to={detailPath}
-      >
-        <article aria-labelledby={headingId} className={styles.card}>
-          <h3 id={headingId}>
-            <PinIcon />
-            {site.name}
-          </h3>
-          <div className={styles.missingSummary}>
-            <DataStatusBadge compact status="missing" />
-            <strong>No summary returned</strong>
-            <p>The service response omitted this comparison location.</p>
-          </div>
-        </article>
-      </Link>
-    );
-  }
-
-  if (summary.availability === "missing") {
-    return (
-      <Link
-        aria-label={`View detailed forecast for ${site.name}`}
-        className={styles.cardLink}
-        to={detailPath}
-      >
-        <article aria-labelledby={headingId} className={styles.card}>
-          <h3 id={headingId}>
-            <PinIcon />
-            {site.name}
-          </h3>
-          <div className={styles.missingSummary}>
-            <DataStatusBadge compact status="missing" />
-            <strong>Forecast unavailable</strong>
-            <p>{summary.missingReason}</p>
-          </div>
-        </article>
-      </Link>
-    );
-  }
-
-  const { outputs } = summary;
-  const summaryStatus = summarizeDataStatus(outputs);
-  const confidence = summarizeConfidence(outputs);
-  const showMetricStatus = summaryStatus === "mixed";
-  const chance100 = outputs.chance100KmPct;
-  const cloudbase = outputs.cloudbaseMslM;
-  const risk = outputs.overdevelopmentRisk;
-
-  return (
-    <Link
-      aria-label={`View detailed forecast for ${site.name}`}
-      className={styles.cardLink}
-      to={detailPath}
-    >
       <article aria-labelledby={headingId} className={styles.card}>
-        <div className={styles.cardHeader}>
-          <h3 id={headingId}>
-            <PinIcon />
-            {site.name}
-          </h3>
-          <ChevronIcon />
-        </div>
-        <div className={styles.primaryMetric}>
-          {chance100.dataStatus === "missing" ? (
-            <div className={styles.valueRow}>
-              <UnavailableMetric reason={chance100.missingReason} />
-              <DataStatusBadge compact status={summaryStatus} />
-            </div>
-          ) : (
-            <>
-              <div className={styles.valueRow}>
-                <strong>{formatInteger(chance100.value)}%</strong>
-                <DataStatusBadge compact status={summaryStatus} />
-              </div>
-              <ForecastChanceProgress
-                label="chance of 100 kilometres or more"
-                value={chance100.value}
-              />
-            </>
-          )}
-          <span className={styles.metricLabel}>100+ km chance</span>
-          {chance100.dataStatus === "missing" ? (
-            <p>{chance100.missingReason}</p>
-          ) : showMetricStatus ? (
-            <DataStatusBadge compact status={chance100.dataStatus} />
-          ) : null}
-        </div>
-        <dl className={styles.secondaryMetrics}>
-          <div>
-            <dt className="visually-hidden">Cloudbase</dt>
-            <dd>
-              <CloudIcon />
-              {cloudbase.dataStatus === "missing" ? (
-                <UnavailableMetric reason={cloudbase.missingReason} />
-              ) : (
-                `${formatInteger(cloudbase.value)} m MSL`
-              )}
-            </dd>
-          </div>
-          <div className={styles.riskMetric}>
-            <dt className="visually-hidden">OD risk</dt>
-            <dd>
-              <ShieldIcon />
-              {risk.dataStatus === "missing" ? (
-                <UnavailableMetric reason={risk.missingReason} />
-              ) : (
-                formatRisk(risk.value)
-              )}
-            </dd>
-          </div>
-        </dl>
-        <div className={styles.confidence}>
-          <ConfidenceIndicator compact confidence={confidence} label="Conf." />
+        <div className={styles.cardHeader}>{heading}</div>
+        <div className={styles.missingSummary} title={summary?.missingReason}>
+          <strong>{summary === undefined ? "No summary returned" : "Forecast unavailable"}</strong>
+          <span className="visually-hidden">{summary?.missingReason}</span>
         </div>
       </article>
-    </Link>
+    );
+  }
+
+  const { chance100KmPct, cloudbase, overdevelopmentRisk } = summary.outputs;
+  const cloud = presentCloudbase(cloudbase);
+
+  return (
+    <article aria-labelledby={headingId} className={styles.card}>
+      <div className={styles.cardHeader}>
+        {heading}
+        {summary.metadata.mode === "mock" ? (
+          <Link
+            aria-label={`View detailed forecast for ${site.name}`}
+            className={styles.cardLink}
+            to={createForecastDetailPath(site.slug, forecastDate)}
+          >
+            <ChevronIcon />
+          </Link>
+        ) : null}
+        <ForecastInformation key={forecastDate} siteName={site.name} summary={summary} />
+      </div>
+      <div className={styles.primaryMetric}>
+        <span className={styles.metricLabel}>100+ km chance</span>
+        {chance100KmPct.dataStatus === "missing" ? (
+          <span className={styles.unavailable} title={chance100KmPct.missingReason}>
+            Unavailable
+          </span>
+        ) : (
+          <>
+            <strong>{formatChancePercent(chance100KmPct.value)}</strong>
+            <ForecastChanceProgress
+              label="chance of 100 kilometres or more"
+              value={chance100KmPct.value}
+            />
+          </>
+        )}
+      </div>
+      <dl className={styles.secondaryMetrics}>
+        <div>
+          <dt className="visually-hidden">{cloud.label}</dt>
+          <dd title={cloudbase.kind === "missing" ? cloudbase.missingReason : undefined}>
+            <CloudIcon />
+            <span>
+              {cloud.value}
+              {cloud.unit === undefined ? "" : ` ${cloud.unit}`}
+              {cloudbase.kind === "conditional_lcl" ? (
+                <small className={styles.cloudbaseLabel}>Conditional LCL</small>
+              ) : null}
+            </span>
+          </dd>
+        </div>
+        <div className={styles.riskMetric}>
+          <dt className="visually-hidden">OD risk</dt>
+          <dd
+            title={
+              overdevelopmentRisk.dataStatus === "missing"
+                ? overdevelopmentRisk.missingReason
+                : undefined
+            }
+          >
+            <ShieldIcon />
+            {overdevelopmentRisk.value === null
+              ? "Unavailable"
+              : formatRisk(overdevelopmentRisk.value)}
+          </dd>
+        </div>
+      </dl>
+      <div className={styles.confidence}>
+        <ConfidenceIndicator
+          accessibleLabel="100+ km confidence"
+          compact
+          confidence={p100Confidence(chance100KmPct)}
+          label="Conf."
+        />
+      </div>
+    </article>
   );
 };

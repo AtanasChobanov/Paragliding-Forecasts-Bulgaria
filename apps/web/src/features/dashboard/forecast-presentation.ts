@@ -1,5 +1,7 @@
 import type {
   Confidence,
+  DashboardCloudbase,
+  DashboardForecastOutputs,
   DataStatus,
   ForecastDate,
   ForecastOutputs,
@@ -116,3 +118,34 @@ export const formatInteger = (value: number): string =>
 
 export const formatRisk = (value: "low" | "medium" | "high"): string =>
   `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
+
+const chanceFormatter = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 2 });
+
+export const formatChancePercent = (value: number): string =>
+  value > 0 && value < 0.01 ? "<0.01%" : `${chanceFormatter.format(value)}%`;
+
+export const p100Confidence = (
+  metric: DashboardForecastOutputs["chance100KmPct"],
+): DisplayConfidence => {
+  const note = metric.confidence?.note;
+  return { level: metric.confidence?.level ?? "unavailable", notes: note ? [note] : [] };
+};
+
+export const presentCloudbase = (
+  metric: DashboardCloudbase,
+): { label: string; value: string; unit?: string } => {
+  switch (metric.kind) {
+    case "estimated":
+      return { label: "Cloudbase", value: formatInteger(metric.valueMslM), unit: "m MSL" };
+    case "conditional_lcl":
+      return { label: "Conditional LCL", value: formatInteger(metric.valueMslM), unit: "m MSL" };
+    case "blue":
+      return { label: "Cloudbase", value: "Blue" };
+    case "other_cloud":
+      return { label: "Cloudbase", value: "Other cloud" };
+    case "indeterminate":
+      return { label: "Cloudbase", value: "Uncertain" };
+    case "missing":
+      return { label: "Cloudbase", value: "Unavailable" };
+  }
+};
