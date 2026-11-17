@@ -380,3 +380,18 @@ def test_fresh_xc_worker_uses_prediction_id_from_publisher(tmp_path, monkeypatch
     )
     assert verified == [("xc", artifact_id, key, MODEL, tmp_path)]
     assert checkpoints.load_prediction(key, MODEL, "xc") == artifact_id
+
+
+def test_covered_early_morning_returns_without_probing_or_writing(tmp_path, monkeypatch):
+    _, backend, pool, schedule, _ = setup(tmp_path, monkeypatch, "01:07:00")
+    for days in (1, 2, 3):
+        horizon = ForecastHorizon(YESTERDAY, days)
+        publication = Publication(days, "2026-06-01T21:55:14Z", True)
+        backend.preexisting[horizon.target_date] = Admission(
+            run_key(horizon), horizon, publication=publication
+        )
+    status, report = schedule.run(pool, pool, pool)
+    assert status == 0
+    assert [job["status"] for job in report["jobs"]] == ["covered"] * 3
+    assert [entry["id"] for entry in report["visible_publications_at_start"].values()] == [1, 2, 3]
+    assert backend.checks == [] and backend.calls == []

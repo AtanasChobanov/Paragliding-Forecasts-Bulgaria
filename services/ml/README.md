@@ -2793,3 +2793,120 @@ before live acceptance. The owner then successfully ran the reviewed bounded
 `fresh` scope and an offline `resume`: both returned four accepted soundings,
 zero quarantine/missing evidence, exit code `0`, and the identical validated
 manifest SHA-256. T-019 is now in Review.
+
+## Publish and retain operational forecasts (T-025)
+
+Set up the locked uv environment, apply the repository's Drizzle migrations
+with `npm run db:migrate --workspace @paragliding-forecasts/database`, and
+provide the reviewed GFS usage policy and the intact XC model directory under
+`data/models/xc-probability/<xc-model-id>/`. Startup checks the database, the
+GFS registry and operational permission, and the seven configured sites.
+Run the commands from the repository root. Both accept `--project-root` and
+`--database-url` for an existing SQLite database below the project data root.
+Publication also accepts `--policy-file`.
+
+```bash
+uv run --project services/ml --locked forecast-publish \
+  --model-id <xc-model-id> --allow-live-network
+```
+
+Without an explicit scope the command fixes its start date in Europe/Sofia.
+Before 13:00 it fills any gaps for today, tomorrow and the day after from
+yesterday's 06Z. If work continues into 13:00, it begins checking today's 06Z.
+From 13:00 it checks today's 06Z immediately and polls unfinished horizons
+every 15 minutes through 16:00. A start at or after 16:00 checks once. An
+eligible newer horizon takes priority over queued older work for the same
+target date. A morning run with all three visible dates published for the
+chosen model reports `covered` without contacting NOAA or writing forecasts.
+
+`--issue-date YYYY-MM-DD` checks one 06Z cycle immediately for D+1 through
+D+3. Repeat the same dated command without `--allow-live-network` to reuse
+completed SQLite publications or resume from retained inputs. Another offline
+mode accepts repeatable `--run-key UUID` values for exact eligible local runs.
+Each NOAA request requires `--allow-live-network`. Each horizon requires
+eleven hourly inputs from 10:00 to 20:00 Sofia with GRIB and index
+Last-Modified evidence no later than 16:00 Sofia on the issue date. The
+20:00 publication deadline is tracked separately against actual creation time.
+
+The default shared worker limit is five (`--max-workers`). The default selected
+GRIB limit is 2048 MiB per horizon (`--maximum-total-mib`). Each active weather
+job also reserves a 2 GiB processing allowance. Each ready date commits
+independently. A completed weather run and model pair preserves its publication
+ID and creation time on retry. Interrupted work resumes from verified weather,
+range and predictor checkpoints under `data/local/forecast-publications` and
+the original artifact directories. Stdout contains one JSON report. Progress
+goes to stderr. Exit codes are 0 for complete scope, 1 for partial or failed
+scope and 2 for invalid arguments.
+
+```bash
+uv run --project services/ml --locked forecast-prune
+```
+
+This is a separate one-shot offline command. Only managed operational GRIB
+payloads with a verified publication at least 48 hours old are eligible.
+An active per-run lock causes a skip. The command validates the manifest,
+ledger reference, paths, file sizes and hashes and writes a durable removal
+intent before deleting files. It records a receipt after deletion. Retry the
+same command to finish an interrupted prune. The report lists pruned and
+skipped runs, errors and bytes removed in that execution. Exit codes are 0
+for a successful check, 1 for a check or deletion error and 2 for invalid
+arguments.
+
+Schedule a separate daily invocation at 03:00 Europe/Sofia when configuring
+the target machine. Indexes, manifests, ledger, intermediate artifacts,
+predictor packages and SQLite remain available. `weather-artifacts audit
+--scope compact --run-key <run-key>` verifies the operational receipt and
+retained evidence. Full weather replay needs the original GRIB files.
+Predictors can use the retained weather inputs. Historical cold archives
+retain their separate copy, eviction and restore receipts.
+
+Inspect one issued cycle in SQLite. A complete issue has three publication
+rows with seven forecasts and 77 cloudbase hours each. Filter by model ID
+as well when a cycle has been published for multiple models.
+
+```sql
+SELECT r.target_local_date, p.id, p.xc_model_id, p.created_at_utc,
+       w.reference_at_utc, p.cloudbase_method_version, p.overdevelopment_policy_version,
+       count(DISTINCT d.id) AS forecasts, count(h.valid_at_utc) AS cloudbase_hours
+FROM prediction_runs AS p
+JOIN weather_ingestion_runs AS r ON r.id = p.weather_ingestion_run_id
+JOIN weather_product_runs AS w ON w.id = r.product_run_id
+JOIN predictions AS d ON d.prediction_run_id = p.id
+JOIN prediction_cloudbase_hours AS h ON h.prediction_id = d.id
+WHERE w.reference_at_utc = '2026-11-16T06:00:00Z'
+GROUP BY p.id ORDER BY r.target_local_date, p.id;
+
+SELECT p.id, d.id AS prediction_id, s.slug, d.cloudbase_summary_state,
+       d.cloudbase_max_at_utc, base.estimated_cloudbase_msl_m,
+       base.estimated_cloudbase_model_agl_m, base.estimated_cloudbase_site_agl_m,
+       d.conditional_lcl_max_at_utc, lcl.estimated_cloudbase_msl_m AS conditional_lcl_msl_m
+FROM predictions AS d
+JOIN prediction_runs AS p ON p.id = d.prediction_run_id
+JOIN weather_daily_feature_snapshots AS f ON f.id = d.daily_feature_snapshot_id
+JOIN weather_sampling_footprints AS w ON w.id = f.point_footprint_id
+JOIN sites AS s ON s.id = w.site_id
+LEFT JOIN prediction_cloudbase_hours AS base
+  ON base.prediction_id = d.id AND base.valid_at_utc = d.cloudbase_max_at_utc
+LEFT JOIN prediction_cloudbase_hours AS lcl
+  ON lcl.prediction_id = d.id AND lcl.valid_at_utc = d.conditional_lcl_max_at_utc
+WHERE p.id = 1 ORDER BY s.slug;
+
+SELECT m.metric_code, m.data_status, m.confidence_level, m.missing_reason_code,
+       d.rank, d.xc_stage, d.kind, d.message, d.contribution_logit,
+       d.support_successes, d.support_total,
+       i.input_key, i.valid_at_utc, i.interval_end_utc, w.field_code, w.field_variant
+FROM prediction_metric_details AS m
+LEFT JOIN prediction_drivers AS d
+  ON d.prediction_id = m.prediction_id AND d.metric_code = m.metric_code
+LEFT JOIN prediction_driver_inputs AS i ON i.prediction_driver_id = d.id
+LEFT JOIN weather_field_provenance AS w ON w.id = i.weather_field_provenance_id
+WHERE m.prediction_id = 1 ORDER BY m.metric_code, d.rank, i.input_ordinal;
+
+PRAGMA foreign_key_check;
+```
+
+XC contributions describe P100 and conditional Q200 logits relative to their
+training references. The 300+ driver records pooled empirical support.
+Cloudbase heights retain model MSL and AGL reference frames and signed site
+AGL. The conditional LCL stays distinguishable by its indeterminate hourly
+regime. These are informational baseline forecasts with uncalibrated outputs.

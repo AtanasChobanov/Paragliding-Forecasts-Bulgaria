@@ -117,6 +117,9 @@ native-library self-check and VS Code interpreter selection. A newly migrated
 empty database supports new GFS ingestion; old prediction run keys require
 their original retained data.
 
+For local GFS 06Z publication to SQLite and operational GRIB retention, use
+the [forecast publication workflow](services/ml/README.md#publish-and-retain-operational-forecasts-t-025).
+
 ## Run the API
 
 Start watch mode from the repository root:

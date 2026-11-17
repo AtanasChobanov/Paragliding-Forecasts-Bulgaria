@@ -915,7 +915,9 @@ describe("prediction publication schema", () => {
       ) VALUES (11, 11, 10, 11, 'weather-features-v1');
     `);
     insertPublication(1, 10, "model-a");
-    expect(() => insertPublication(2, 10, "model-a")).toThrow();
+    expect(() => {
+      insertPublication(2, 10, "model-a");
+    }).toThrow();
     insertPublication(2, 10, "model-b");
     insertPublication(3, 11, "model-a");
     sqlite.exec(`
@@ -928,9 +930,9 @@ describe("prediction publication schema", () => {
     `);
     expectSqlFailure("UPDATE predictions SET daily_feature_snapshot_id = 11 WHERE id = 1");
     expectSqlFailure("UPDATE prediction_runs SET weather_ingestion_run_id = 11 WHERE id = 1");
-    expect(() =>
-      sqlite.exec("UPDATE weather_daily_feature_snapshots SET ingestion_run_id = 10 WHERE id = 11"),
-    ).toThrow("Weather snapshot update breaks prediction run identity");
+    expect(() => {
+      sqlite.exec("UPDATE weather_daily_feature_snapshots SET ingestion_run_id = 10 WHERE id = 11");
+    }).toThrow("Weather snapshot update breaks prediction run identity");
   });
 
   it("rejects invalid values and lets the writer roll back an entire publication", () => {

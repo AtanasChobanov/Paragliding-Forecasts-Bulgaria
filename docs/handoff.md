@@ -16,7 +16,7 @@ next requested ticket on top of the branch that supplies its dependencies.
   reverse-order reuse and standalone replay.
 - **T-025 confidence and drivers in the UI.** Connect the T-024 daily OD
   output to the forecast API and UI. The API currently serves mock forecast
-  data. Resolve the storage design for real predictions during integration. Preserve
+  data. The ML phase stores validated forecasts in SQLite. Preserve
   units, provenance, missing states and confidence. Cloudbase has separate
   estimated and conditional LCL maxima. XC exposes low confidence for each
   available threshold, separate grouped contributions for P100 and conditional
@@ -26,7 +26,41 @@ next requested ticket on top of the branch that supplies its dependencies.
   and SQLite portion. It specifies `forecast-publish` with the existing 16:00
   Sofia source cutoff and a separate one-shot `forecast-prune` command for
   eligible operational GRIB files at least 48 hours after publication.
-  Implementation and validation are pending.
+  The SQLite schema, transactional batch writer and `forecast-publish`
+  orchestration are implemented. The owner applied the migration on the
+  local macOS database. A read-only inspection found six new STRICT tables,
+  20 applied migrations and an empty `PRAGMA foreign_key_check` result.
+  At the publication checkpoint, 729 ML pytest tests, database tests and
+  typecheck, `db:check`, repository structure and Ruff checks passed.
+  For issue date 2026-11-16 the owner completed weather ingestion for all
+  three horizons in a 793-second smoke attempt. The XC worker read the
+  wrong return key after writing its bundle, so zero forecast publications
+  were committed. The worker now reads `prediction_id`, with a regression
+  test. Read-only checks found seven weather snapshots per horizon and
+  verified payload digests and sizes for all nine predictor bundles.
+  The owner retried offline in 1.38 seconds and reused all weather and
+  predictor packages. Read-only SQLite confirmed publication IDs 1, 2 and
+  3 for November 17–19, seven forecasts and 77 cloudbase hours each, and no
+  foreign-key violations. All three were created at 01:05:14 Sofia on
+  November 17 and reported the missed 20:00 November 16 deadline.
+  Before 13:00 on November 17, automatic mode finds those three dates
+  covered for the same model and exits without weather or predictor jobs.
+  On November 17 the owner verified both CLI help screens. The dated
+  offline retry took 0.048 seconds and returned the same IDs and creation
+  times as `already_published`. The 09:18 Sofia automatic start took
+  0.036 seconds and reported all three visible dates as `covered`, with
+  no source probes or processing stages. A read-only query confirmed the
+  original counts and timestamps after both retries. The owner also ran
+  `forecast-prune`. It skipped all three runs as younger than 48 hours,
+  freed zero bytes and reported no errors. The first live deletion check
+  is available from 01:05:14 Sofia on November 19.
+  The full 733-test ML suite passed, followed by a passing targeted schedule
+  suite with the additional 01:07 no-op regression. All 255 npm tests,
+  `db:check`, repo check, typecheck, lint, formatting, build, Ruff and
+  whitespace checks passed. HTTP tests require local sockets and passed
+  outside the sandbox. Prune's 48-hour boundary and interrupted cleanup
+  were tested with disposable inputs.
+  T-025 remains In Progress. The API and dashboard still use mock forecasts.
 - **T-026 independent backtest.** Use the frozen XC model on the untouched
   **2025 source season**. The cohort reserves 242 site-days on 131 target
   dates. Inventory retained weather first. DEC-066 deferred 2025 acquisition

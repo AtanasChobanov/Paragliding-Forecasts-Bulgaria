@@ -84,6 +84,8 @@ consequences. Temporary progress and Git state belong in
 | DEC-069     | Correct joined thermal features through an immutable derived layer          | Accepted   | 2026-10-21 |
 | DEC-070     | Develop XC models chronologically and pool the sparse 300+ conversion rate | Accepted | 2026-10-31 |
 
+| DEC-071     | Publish operational 06Z forecasts to SQLite and retain compact evidence | Accepted | 2026-11-17 |
+
 ## Individual decisions
 
 ### DEC-001 — Use one repository with bounded subprojects
@@ -3173,11 +3175,31 @@ Move the existing final bundle intact to retain its content ID.
 **Related files:** [`../services/ml/README.md`](../services/ml/README.md) and
 [`handoff.md`](handoff.md).
 
+### DEC-071 - Publish operational 06Z forecasts to SQLite and retain compact evidence
+
+**Status:** Accepted in the owner-approved T-025 implementation plan.
+
+**Date:** 2026-11-17
+
+**Decision:** Publish each validated GFS 06Z horizon for the selected XC model
+in one SQLite transaction. Keep six Drizzle-owned STRICT tables and the original
+immutable predictor packages. The weather run and XC model identify a
+publication. Its seven snapshots and 77 cloudbase hours retain per-metric
+confidence, limitations and eligible provenance links. The 16:00 Sofia source
+cutoff and the 20:00 delivery deadline retain their distinct meanings.
+
+A separate offline process may delete verified operational GRIB payloads 48
+hours or more after publication under a per-run lock and durable intent and
+receipt. Compact evidence remains available for predictions. The historical
+cold archive workflow continues under DEC-066.
+
+**Related files:** [T-025 implementation plan](Т-025-implementation-plan.md)
+and [operational workflow](../services/ml/README.md#publish-and-retain-operational-forecasts-t-025).
+
 ## Open decisions
 
 | Question                                                                                                                  | Options / constraints                                                                                                                                                                                                                                              | Resolve by                                                               |
 | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
-| How should batch predictions be stored and served by the forecast adapter?                                              | T-025 owns OD output integration with the forecast API and UI. The choice of a persisted prediction schema and storage mechanism remains open. Public units, status and provenance must be mapped deliberately.                                                     | Before connecting real predictions to the API.                          |
 | What are the final coordinates, aliases, and catchment radii for each site?                                               | Current map points are provisional; Pastrina and the Dobrich regional model need particular confirmation.                                                                                                                                                          | T-009.                                                                   |
 | What retention, attribution, licensing, and rate limits apply beyond the current XCContest browser workflow?              | T-013 has a project-owner-confirmed ordinary low-volume UI workflow; do not extend it to bulk/commercial use or SkyNomad without explicit terms.                                                                                                                   | Before broader collection or product use.                                |
 | What final production attribution, retention, and archive-operation wording is required for the selected weather sources? | T-018 uses direct NOAA GFS. T-038 may add CDS ERA5 only after its evidence gate; preserve source/permission evidence and the applicable Copernicus/ECMWF attribution if it does. Confirm final product wording and retention operations before commercial release. | Before a commercial release.                                             |
