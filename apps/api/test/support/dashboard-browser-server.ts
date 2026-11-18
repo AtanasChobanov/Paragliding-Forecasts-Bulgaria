@@ -1,3 +1,4 @@
+import { seedForecastDetailEvidence } from "./forecast-detail-evidence.js";
 import pino from "pino";
 
 import { createConfiguredApp } from "../../src/bootstrap.js";
@@ -23,6 +24,7 @@ const close = () => {
 try {
   if (database !== undefined) {
     seedForecasts(database.sqlite);
+    seedForecastDetailEvidence(database.sqlite);
   }
 
   const config = parseConfig({ ...process.env, DATABASE_URL: database?.databaseUrl });

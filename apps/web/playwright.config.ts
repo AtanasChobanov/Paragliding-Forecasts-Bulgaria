@@ -5,7 +5,12 @@ const repositoryRoot = fileURLToPath(new URL("../../", import.meta.url));
 
 const fixtures = [
   { mode: "mock", apiPort: 3300, webPort: 5373, testMatch: "dashboard.smoke.spec.ts" },
-  { mode: "sqlite", apiPort: 3301, webPort: 5374, testMatch: "dashboard.sqlite.spec.ts" },
+  {
+    mode: "sqlite",
+    apiPort: 3301,
+    webPort: 5374,
+    testMatch: ["dashboard.sqlite.spec.ts", "forecast-details.sqlite.spec.ts"],
+  },
 ].map(({ mode, apiPort, webPort, testMatch }) => ({
   mode,
   apiPort: String(apiPort),

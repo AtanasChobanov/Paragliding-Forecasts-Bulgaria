@@ -9,9 +9,7 @@ const openDashboard = async (page: Page, path = "/") => {
     await route.abort();
   });
   await page.goto(path);
-  await expect(
-    overview(page).getByRole("button", { name: "View detailed forecast" }),
-  ).toBeDisabled();
+  await expect(overview(page).getByRole("link", { name: "View detailed forecast" })).toBeVisible();
   await expect(page.locator(".leaflet-container")).toBeVisible();
   await page.evaluate(async () => {
     await document.fonts.ready;
@@ -46,7 +44,7 @@ for (const { width, height, text } of layouts) {
     await seeFullyWithinViewport(page.getByRole("banner"));
     await seeFullyWithinViewport(overview(page).getByRole("heading", { level: 1 }));
     await seeFullyWithinViewport(
-      overview(page).getByRole("button", { name: "View detailed forecast" }),
+      overview(page).getByRole("link", { name: "View detailed forecast" }),
     );
     await seeFullyWithinViewport(overview(page).locator("[data-forecast-footer]"));
     await seeFullyWithinViewport(page.getByLabel("Location", { exact: true }));
@@ -189,7 +187,7 @@ test("shows SQLite values and keeps unavailable dates out of selection", async (
   await expect(page).toHaveURL(/date=2026-11-18$/u);
   const previousIssue = page.getByRole("article", { name: "Zlatitsa" });
   await expect(previousIssue).toContainText("20%");
-  await expect(previousIssue.getByRole("link")).toHaveCount(0);
+  await expect(previousIssue.getByRole("link")).toHaveCount(1);
   await previousIssue.getByRole("button", { name: "Forecast information" }).hover();
   const panel = page.getByRole("region", { name: "Forecast information for Zlatitsa" });
   await expect(panel).toContainText("From previous issue");

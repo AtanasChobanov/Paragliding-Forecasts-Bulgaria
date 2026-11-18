@@ -26,6 +26,7 @@ export class SqliteForecastInputs {
   readonly inputs: ForecastDetailInputs;
   readonly provenance: readonly SqlRow[];
   readonly resolved: ForecastInputRow[] = [];
+  readonly validTimes = new Map<number, string>();
 
   constructor(database: DatabaseSync, snapshotId: number, date: string) {
     const snapshot = database
@@ -126,6 +127,8 @@ export class SqliteForecastInputs {
           key === "stored_weather_lcl" ? "instantaneous" : null,
         ),
       );
+      for (const field of surface)
+        if (field.provenanceId !== undefined) this.validTimes.set(field.provenanceId, at);
       const low = surface.find((row) => row.key === "low_cloud_percent");
       if (!low) throw new Error("Missing cloud catalogue entry.");
       const odInputs: ForecastInputRow[] = [
@@ -155,14 +158,35 @@ export class SqliteForecastInputs {
       odInputs.unshift(rain);
       for (const [key, label, column, code] of convectionInputs) {
         const spec = { ...base, key, label, unit: "J/kg" };
-        const candidates = convection.filter(
+        const owners = convection.filter(
           (m) =>
             m.weather_point_sample_id === sample.id &&
             m.parcel_method === "surface" &&
-            m.calculation_method === "provider" &&
             m.layer_bottom_pressure_from_ground_pa === null &&
             m.layer_top_pressure_from_ground_pa === null,
         );
+        const exact = owners.filter((owner) =>
+          this.provenance.some(
+            (p) =>
+              p.point_convection_measurement_id === owner.id &&
+              p.field_code === code &&
+              p.field_variant === "surface" &&
+              p.statistic_type === null,
+          ),
+        );
+        const candidates = exact.length ? exact : owners;
+        for (const candidate of end ? candidates : []) {
+          const field = this.resolve(
+            spec,
+            candidate,
+            "point_convection_measurement_id",
+            column,
+            code,
+            "surface",
+            null,
+          );
+          if (field.provenanceId !== undefined) this.validTimes.set(field.provenanceId, at);
+        }
         odInputs.push(
           !end
             ? this.unavailable(spec, "Outside OD interval inputs")

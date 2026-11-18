@@ -48,9 +48,9 @@ describe("forecast detail content", () => {
     if (!third) throw new Error("Missing card");
     expect(within(third).getByText("<0.01%")).toBeVisible();
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
-    expect(screen.getByText("Model confidence").parentElement).toHaveTextContent(
-      "Confidence unavailable",
-    );
+    expect(
+      screen.getByRole("group", { name: "P100 model confidence. Confidence unavailable" }),
+    ).toBeVisible();
   });
   it("paginates all XC groups and exposes canonical input values through information", async () => {
     inputs();

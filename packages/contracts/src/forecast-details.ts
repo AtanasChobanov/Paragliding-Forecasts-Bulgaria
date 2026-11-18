@@ -61,7 +61,14 @@ export const forecastDetailInputsSchema = z
   .superRefine((inputs, ctx) => {
     inputs.xcFeatures.forEach((row, i) => {
       const spec = xcInputInventory[i];
-      if (row.key !== spec?.key || row.unit !== spec.unit || row.scope !== spec.scope) {
+      if (
+        row.key !== spec?.key ||
+        row.unit !== spec.unit ||
+        row.scope !== spec.scope ||
+        row.statistic !== spec.statistic ||
+        ("layerBaseAglM" in spec &&
+          (row.layerBaseAglM !== spec.layerBaseAglM || row.layerTopAglM !== spec.layerTopAglM))
+      ) {
         ctx.addIssue({
           code: "custom",
           path: ["xcFeatures", i],
@@ -90,14 +97,30 @@ export const forecastDriverSchema = z
     supportSuccesses: z.number().int().nonnegative().optional(),
     supportTotal: z.number().int().positive().optional(),
     inputs: z.array(
-      z.strictObject({
-        inputKey: text,
-        validAtUtc: instant.optional(),
-        intervalEndUtc: instant.optional(),
-        provenanceId: z.number().int().positive().optional(),
-        field: forecastInputRowSchema.optional(),
-        unavailableReason: text.optional(),
-      }),
+      z
+        .strictObject({
+          inputKey: text,
+          validAtUtc: instant.optional(),
+          intervalEndUtc: instant.optional(),
+          provenanceId: z.number().int().positive().optional(),
+          field: forecastInputRowSchema.optional(),
+          unavailableReason: text.optional(),
+        })
+        .superRefine((input, ctx) => {
+          if (
+            (input.field === undefined) === (input.unavailableReason === undefined) ||
+            (input.provenanceId !== undefined &&
+              input.field?.provenanceId !== input.provenanceId) ||
+            (input.intervalEndUtc &&
+              (!input.validAtUtc || input.intervalEndUtc <= input.validAtUtc))
+          ) {
+            ctx.addIssue({
+              code: "custom",
+              message:
+                "Driver input requires its exact field or an unavailable reason and a valid locator.",
+            });
+          }
+        }),
     ),
   })
   .superRefine((driver, ctx) => {
@@ -256,6 +279,9 @@ export const forecastResponseSchema = z
         group.metricCode !== metricCodes[i] ||
         group.dataStatus !== metric.dataStatus ||
         group.confidenceLevel !== (metric.confidence?.level ?? null) ||
+        group.confidenceNote !==
+          (metric.dataStatus === "missing" ? metric.confidenceNote : metric.confidence.note) ||
+        group.limitationsNote !== metric.limitationsNote ||
         (metric.dataStatus === "missing" && group.missingReason !== metric.missingReason)
       ) {
         ctx.addIssue({

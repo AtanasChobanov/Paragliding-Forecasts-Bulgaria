@@ -17,18 +17,12 @@ const expectDashboardForecast = async (page: Page): Promise<void> => {
 
   const metrics = page.getByRole("list", { name: "Forecast metrics" });
   await expect(metrics.getByRole("listitem")).toHaveCount(5);
-  await expect(metrics.getByRole("listitem").filter({ hasText: "100+ km chance" })).toContainText(
-    /\d+%/u,
-  );
+  await expect(metrics.getByRole("listitem").filter({ hasText: "100+ km" })).toContainText(/\d+%/u);
   await expect(metrics.getByRole("listitem").filter({ hasText: "Cloudbase" })).toContainText(
     /\d[\d,]*m MSL/u,
   );
-  await expect(metrics.getByRole("listitem").filter({ hasText: "200+ km chance" })).toContainText(
-    /\d+%/u,
-  );
-  await expect(metrics.getByRole("listitem").filter({ hasText: "300+ km chance" })).toContainText(
-    /\d+%/u,
-  );
+  await expect(metrics.getByRole("listitem").filter({ hasText: "200+ km" })).toContainText(/\d+%/u);
+  await expect(metrics.getByRole("listitem").filter({ hasText: "300+ km" })).toContainText(/\d+%/u);
   await expect(metrics.getByRole("listitem").filter({ hasText: "OD risk" })).toContainText(
     /Low|Medium|High/u,
   );
@@ -71,24 +65,17 @@ test("opens the detailed forecast from the dashboard and returns with the select
   await expect(outputs.getByRole("article").filter({ hasText: "Cloudbase" })).toContainText(
     /m MSL/u,
   );
-  await expect(outputs.getByRole("article").filter({ hasText: "100+ km chance" })).toContainText(
-    /\d+%/u,
-  );
-  await expect(outputs.getByRole("article").filter({ hasText: "200+ km chance" })).toContainText(
-    /\d+%/u,
-  );
-  await expect(outputs.getByRole("article").filter({ hasText: "300+ km chance" })).toContainText(
-    /\d+%/u,
-  );
-  await expect(outputs.getByRole("article").filter({ hasText: "Overdevelopment" })).toContainText(
+  await expect(outputs.getByRole("article").filter({ hasText: "100+ km" })).toContainText(/\d+%/u);
+  await expect(outputs.getByRole("article").filter({ hasText: "200+ km" })).toContainText(/\d+%/u);
+  await expect(outputs.getByRole("article").filter({ hasText: "300+ km" })).toContainText(/\d+%/u);
+  await expect(outputs.getByRole("article").filter({ hasText: "OD risk" })).toContainText(
     /Low|Medium|High/u,
   );
-  await expect(detail.getByText("Mock data").first()).toBeVisible();
+  await expect(detail.getByText("Mock", { exact: true }).first()).toBeVisible();
   await expect(detail.getByRole("heading", { name: "Forecast inputs" })).toBeVisible();
-  await expect(detail.getByRole("region", { name: "Forecast input values" })).toBeVisible();
-  await expect(detail.getByText("Surface temperature")).toBeVisible();
+  await expect(detail.getByLabel("XC input group")).toHaveValue("Surface temperature");
   await expect(detail.getByRole("heading", { name: "Why this result" })).toBeVisible();
-  await expect(detail.getByRole("heading", { name: "Compared with previous run" })).toBeVisible();
+  await expect(detail.getByRole("heading", { name: "Compared with previous run" })).toHaveCount(0);
 
   await detail.getByRole("link", { name: "All sites" }).click();
   await expect(page).toHaveURL(new RegExp(`/\\?site=${selectedSite}&date=${selectedDate}$`, "u"));

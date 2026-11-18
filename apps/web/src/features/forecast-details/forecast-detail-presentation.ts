@@ -6,7 +6,8 @@ import type {
 
 const numeric = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 2 });
 export const formatInputValue = (row: ForecastInputRow): string => {
-  if (row.value === null) return "Unavailable";
+  if (row.value === null)
+    return row.missingReason === "Outside OD interval inputs" ? row.missingReason : "Unavailable";
   let value = row.value,
     unit = row.unit;
   if (unit === "K") {

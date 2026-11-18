@@ -1,3 +1,4 @@
+import { seedForecastDetailEvidence } from "../support/forecast-detail-evidence.js";
 import { requirePublishedValue } from "../../src/modules/forecasts/require-published-value.js";
 import {
   forecastDaysResponseSchema,
@@ -206,6 +207,7 @@ describe("SQLite dashboard HTTP integration", () => {
 
   it("returns detail from the same whole publication as summaries, including missing metrics", async () => {
     seedForecasts(database.sqlite);
+    seedForecastDetailEvidence(database.sqlite);
     for (const date of ["2026-11-17", "2026-11-18", "2026-11-19"]) {
       const batch = await request(server.app)
         .get(paths.summaries)
@@ -270,7 +272,7 @@ describe("SQLite dashboard HTTP integration", () => {
       .run(requirePublishedValue(snapshot.id)).lastInsertRowid;
     const cape = database.sqlite
       .prepare(
-        "INSERT INTO weather_point_convection_measurements (weather_point_sample_id,parcel_method,calculation_method,cape_j_per_kg,cin_magnitude_j_per_kg) VALUES (?,'surface','provider',500,20)",
+        "INSERT INTO weather_point_convection_measurements (weather_point_sample_id,parcel_method,calculation_method,calculation_method_version,cape_j_per_kg,cin_magnitude_j_per_kg) VALUES (?,'surface','project_profile','fixture-v1',500,20)",
       )
       .run(requirePublishedValue(sample.id)).lastInsertRowid;
     database.sqlite
@@ -380,6 +382,23 @@ describe("SQLite dashboard HTTP integration", () => {
         )
         .run(interval);
     }
+    const provenance = requirePublishedValue(
+      database.sqlite
+        .prepare(
+          "SELECT id FROM weather_field_provenance WHERE field_code='surface_sensible_heat_flux_upward_w_m2' ORDER BY id LIMIT 1",
+        )
+        .get(),
+    ).id;
+    const driver = database.sqlite
+      .prepare(
+        "INSERT INTO prediction_drivers (prediction_id,metric_code,rank,kind,code,message) VALUES (1,'cloudbase',1,'cloudbase_reason','heating','Published heating input')",
+      )
+      .run().lastInsertRowid;
+    database.sqlite
+      .prepare(
+        "INSERT INTO prediction_driver_inputs VALUES (?,1,'sensible_heat_flux_w_m2','2026-11-17T07:00:00Z','2026-11-17T08:00:00Z',?)",
+      )
+      .run(driver, requirePublishedValue(provenance));
     const response = await request(server.app)
       .get(paths.detail)
       .query({ siteSlug: selected, date: "2026-11-17" })
@@ -395,12 +414,46 @@ describe("SQLite dashboard HTTP integration", () => {
         }),
       ]),
     );
+    expect(
+      forecastResponseSchema.parse(response.body).explanations[4]?.drivers[0]?.inputs[0]?.field,
+    ).toMatchObject({
+      value: 40,
+      unit: "W/m2",
+      intervalStartUtc: "2026-11-17T07:00:00Z",
+      intervalEndUtc: "2026-11-17T08:00:00Z",
+    });
   });
 
-  it.each(["hours", "snapshot inputs", "layers", "foreign driver"])(
+  it.each(["contradictory quality", "duplicated provenance"])(
+    "rejects %s for published weather values",
+    async (broken) => {
+      seedForecasts(database.sqlite);
+      seedForecastDetailEvidence(database.sqlite);
+      if (broken === "contradictory quality")
+        database.sqlite.exec(
+          "UPDATE weather_field_provenance SET quality_state='missing',missing_reason_code='fixture' WHERE daily_feature_snapshot_id=1 AND field_code='air_temperature_k' AND statistic_type='mean'",
+        );
+      else {
+        database.sqlite.exec("DROP INDEX weather_field_provenance_feature_field_unique");
+        database.sqlite.exec(
+          "INSERT INTO weather_field_provenance (daily_feature_snapshot_id,field_code,field_variant,statistic_type,quality_state) VALUES (1,'air_temperature_k','2m','mean','derived')",
+        );
+      }
+      await request(server.app)
+        .get(paths.detail)
+        .query({ siteSlug: selected, date: "2026-11-17" })
+        .expect(500);
+    },
+  );
+
+  it.each(["hours", "snapshot inputs", "layers", "foreign driver", "maximum"])(
     "returns 5xx for a broken %s graph without fallback",
     async (broken) => {
       seedForecasts(database.sqlite);
+      if (broken === "maximum")
+        database.sqlite.exec(
+          "UPDATE predictions SET conditional_lcl_max_at_utc='2026-11-17T08:00:00Z' WHERE id=1",
+        );
       if (broken === "hours")
         database.sqlite.exec(
           "DELETE FROM prediction_cloudbase_hours WHERE prediction_id=1 AND valid_at_utc='2026-11-17T08:00:00Z'",

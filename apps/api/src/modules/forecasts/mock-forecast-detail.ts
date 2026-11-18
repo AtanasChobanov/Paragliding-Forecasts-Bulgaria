@@ -1,4 +1,5 @@
 import { requirePublishedValue } from "./require-published-value.js";
+import { surfaceInputs, heatingInputs } from "./forecast-input-catalogue.js";
 import {
   metricCodes,
   sofiaFlyingHours,
@@ -58,11 +59,82 @@ export const mockForecastDetail = (
       windowEndUtc: requirePublishedValue(hours[10]),
       featureContractVersion: "synthetic-detail/1",
       xcFeatures,
-      hourlyContext: hours.map((validAtUtc) => ({
-        validAtUtc,
-        odInputs: [],
-        cloudbaseContext: [],
-      })),
+      hourlyContext: hours.map((validAtUtc, i) => {
+        const input = (
+          key: string,
+          label: string,
+          unit: string,
+          value: number,
+        ): ForecastInputRow => ({
+          key,
+          label,
+          unit,
+          value,
+          scope: "hourly",
+          group: "Synthetic hourly context",
+          statistic: "instantaneous",
+          dataStatus: "mock",
+          qualityState: "synthetic",
+        });
+        const surface = surfaceInputs.map(([key, label, , , , unit]) =>
+          input(
+            key,
+            label,
+            unit,
+            unit === "K"
+              ? 299.4
+              : unit === "Pa"
+                ? 100800
+                : unit === "kg/kg"
+                  ? 0.007
+                  : unit === "m"
+                    ? 1500
+                    : unit === "%"
+                      ? 24
+                      : 4,
+          ),
+        );
+        const end = hours[i + 1];
+        const odInputs = [
+          input("rain", "Rain accumulation", "mm", 0),
+          input("cape", "Surface parcel CAPE", "J/kg", 600),
+          input("cin", "Surface parcel CIN magnitude", "J/kg", 20),
+          ...surface
+            .filter((row) => ["low_cloud_percent", "humidity", "wind"].includes(row.key))
+            .map((row) => (row.key === "low_cloud_percent" ? { ...row, key: "low_cloud" } : row)),
+        ].map((row) =>
+          !end && ["rain", "cape", "cin"].includes(row.key)
+            ? {
+                ...row,
+                value: null,
+                dataStatus: "missing" as const,
+                qualityState: "missing",
+                missingReason: "Outside OD interval inputs",
+              }
+            : row.key === "rain" && end
+              ? {
+                  ...row,
+                  statistic: "accumulation",
+                  intervalStartUtc: validAtUtc,
+                  intervalEndUtc: end,
+                }
+              : row,
+        );
+        const previous = new Date(Date.parse(validAtUtc) - 3_600_000).toISOString();
+        return {
+          validAtUtc,
+          odInputs,
+          cloudbaseContext: [
+            ...surface.filter((row) => !["humidity", "wind"].includes(row.key)),
+            ...heatingInputs.map(([key, label]) => ({
+              ...input(key, label, "W/m2", 70),
+              statistic: "interval_average",
+              intervalStartUtc: previous,
+              intervalEndUtc: validAtUtc,
+            })),
+          ],
+        };
+      }),
     },
     cloudbaseHours: hours.map((validAtUtc, i) => ({
       validAtUtc,
@@ -80,6 +152,7 @@ export const mockForecastDetail = (
         metricCode,
         dataStatus: metric.dataStatus,
         confidenceLevel: metric.confidence?.level ?? null,
+        ...(metric.confidence?.note ? { confidenceNote: metric.confidence.note } : {}),
         drivers:
           metricCode === "p100"
             ? messages.slice(0, 3).map((message, rank) => ({

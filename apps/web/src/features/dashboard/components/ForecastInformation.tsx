@@ -148,6 +148,7 @@ export const InformationPopover = ({
   const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [open, setOpen] = useState(false);
   const [page, setPage] = useState(0);
+  const currentPage = Math.min(page, Math.max(0, (pages?.length ?? 1) - 1));
   const [pinned, setPinned] = useState(false);
   const [position, setPosition] = useState<CSSProperties>({});
 
@@ -302,26 +303,26 @@ export const InformationPopover = ({
           {open ? (
             pages ? (
               <>
-                <div className={styles.pageContent}>{pages[Math.min(page, pages.length - 1)]}</div>
+                <div className={styles.pageContent}>{pages[currentPage]}</div>
                 {pages.length > 1 ? (
                   <nav className={styles.pagination} aria-label={`${regionLabel} pages`}>
                     <button
                       type="button"
-                      disabled={page === 0}
+                      disabled={currentPage === 0}
                       onClick={() => {
-                        setPage((p) => p - 1);
+                        setPage(currentPage - 1);
                       }}
                     >
                       Previous
                     </button>
                     <span>
-                      {page + 1} / {pages.length}
+                      {currentPage + 1} / {pages.length}
                     </span>
                     <button
                       type="button"
-                      disabled={page >= pages.length - 1}
+                      disabled={currentPage >= pages.length - 1}
                       onClick={() => {
-                        setPage((p) => p + 1);
+                        setPage(currentPage + 1);
                       }}
                     >
                       Next

@@ -85,7 +85,7 @@ const OutputMetric = ({
   readonly metric: Metric;
   readonly value: string;
 }) => (
-  <article aria-label={label} className={styles.outputMetric}>
+  <article aria-label={label} data-status={metric.dataStatus} className={styles.outputMetric}>
     <div className={styles.outputHeader}>
       <span aria-hidden="true" className={styles.outputIcon}>
         {icon}
@@ -102,7 +102,13 @@ const OutputMetric = ({
     </div>
     <strong className={styles.outputValue}>{value}</strong>
     <div className={styles.outputConfidence}>
-      <ConfidenceIndicator compact confidence={p100Confidence(metric)} label={null} />
+      <ConfidenceIndicator
+        compact
+        shortUnavailable
+        accessibleLabel={`${label} confidence`}
+        confidence={p100Confidence(metric)}
+        label={null}
+      />
     </div>
   </article>
 );
@@ -158,6 +164,7 @@ export const ForecastDetailSummary = ({
           <span>Model confidence</span>
           <ConfidenceIndicator
             compact
+            shortUnavailable
             confidence={p100Confidence(chance100)}
             label={null}
             accessibleLabel="P100 model confidence"

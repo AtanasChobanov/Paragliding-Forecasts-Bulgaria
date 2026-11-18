@@ -1,4 +1,3 @@
-import { requirePublishedValue } from "../../../apps/api/src/modules/forecasts/require-published-value.js";
 import {
   metricCodes,
   sofiaFlyingHours,
@@ -45,6 +44,9 @@ export const createForecast = (date = "2026-07-18"): ForecastResponse => {
         dataStatus: "mock",
         qualityState: "synthetic",
         value: 1,
+        ...("layerBaseAglM" in spec
+          ? { layerBaseAglM: spec.layerBaseAglM, layerTopAglM: spec.layerTopAglM }
+          : {}),
       })),
       hourlyContext: hours.map((validAtUtc) => ({
         validAtUtc,
@@ -69,4 +71,9 @@ export const createForecast = (date = "2026-07-18"): ForecastResponse => {
       reasonText: "Synthetic hour.",
     })),
   };
+};
+
+export const requirePublishedValue = <T>(value: T | undefined | null): T => {
+  if (value === undefined || value === null) throw new Error("Fixture evidence missing");
+  return value;
 };

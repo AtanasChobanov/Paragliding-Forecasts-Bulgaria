@@ -1,10 +1,6 @@
 import { z } from "zod";
 
-import {
-  availableDataStatusSchema,
-  createForecastMetricSchema,
-  provenanceSchema,
-} from "./data-status.js";
+import { createForecastMetricSchema } from "./data-status.js";
 import { siteSlugSchema } from "./sites.js";
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -43,57 +39,6 @@ export const chancePctMetricSchema = createForecastMetricSchema(z.number().min(0
 export const overdevelopmentRiskMetricSchema = createForecastMetricSchema(
   z.enum(["low", "medium", "high"]),
 );
-
-export const createForecastInputMetricSchema = <ValueSchema extends z.ZodType>(
-  valueSchema: ValueSchema,
-) =>
-  z.discriminatedUnion("dataStatus", [
-    z.strictObject({
-      value: valueSchema,
-      dataStatus: availableDataStatusSchema,
-    }),
-    z.strictObject({
-      value: z.null(),
-      dataStatus: z.literal("missing"),
-      missingReason: z.string().trim().min(1),
-    }),
-  ]);
-
-const percentageForecastInputSchema = createForecastInputMetricSchema(z.number().min(0).max(100));
-const nonnegativeForecastInputSchema = createForecastInputMetricSchema(z.number().nonnegative());
-const directionDegreesForecastInputSchema = createForecastInputMetricSchema(
-  z.number().min(0).max(360),
-);
-
-export const windAtAltitudeSchema = z.strictObject({
-  altitudeMslM: z.number().nonnegative(),
-  directionDeg: z.number().min(0).max(360),
-  speedKmh: z.number().nonnegative(),
-});
-
-export const convergenceSignalSchema = z.enum(["absent", "weak", "moderate", "strong"]);
-
-export const forecastInputsSchema = z.strictObject({
-  provenance: provenanceSchema,
-  sourceRunAt: z.iso.datetime(),
-  surfaceTemperatureC: createForecastInputMetricSchema(z.number().min(-80).max(70)),
-  dewPointC: createForecastInputMetricSchema(z.number().min(-100).max(70)),
-  boundaryLayerHeightM: nonnegativeForecastInputSchema,
-  thermalStrengthMps: createForecastInputMetricSchema(z.number().min(-10).max(20)),
-  boundaryLayerWindSpeedKmh: nonnegativeForecastInputSchema,
-  boundaryLayerWindDirectionDeg: directionDegreesForecastInputSchema,
-  windByAltitude: createForecastInputMetricSchema(z.array(windAtAltitudeSchema).min(1).max(6)),
-  windShearMpsPerKm: nonnegativeForecastInputSchema,
-  relativeHumidityPct: percentageForecastInputSchema,
-  capeJPerKg: nonnegativeForecastInputSchema,
-  cinJPerKg: nonnegativeForecastInputSchema,
-  lapseRateCPerKm: createForecastInputMetricSchema(z.number().min(-20).max(20)),
-  lowCloudCoverPct: percentageForecastInputSchema,
-  totalCloudCoverPct: percentageForecastInputSchema,
-  precipitationMm: nonnegativeForecastInputSchema,
-  surfacePressureHpa: createForecastInputMetricSchema(z.number().min(800).max(1100)),
-  convergenceSignal: createForecastInputMetricSchema(convergenceSignalSchema),
-});
 
 interface ChanceMetrics {
   chance100KmPct: { value: number | null };
@@ -149,4 +94,3 @@ export const forecastOutputsSchema = z
 export type ForecastDate = z.infer<typeof forecastDateSchema>;
 export type ForecastQuery = z.infer<typeof forecastQuerySchema>;
 export type ForecastOutputs = z.infer<typeof forecastOutputsSchema>;
-export type ForecastInputs = z.infer<typeof forecastInputsSchema>;

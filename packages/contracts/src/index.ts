@@ -13,15 +13,11 @@ export {
 export {
   chancePctMetricSchema,
   cloudbaseMslMMetricSchema,
-  convergenceSignalSchema,
-  createForecastInputMetricSchema,
   forecastDateSchema,
-  forecastInputsSchema,
   forecastOutputsSchema,
   forecastQuerySchema,
   overdevelopmentRiskMetricSchema,
   type ForecastDate,
-  type ForecastInputs,
   type ForecastOutputs,
   type ForecastQuery,
 } from "./forecast.js";
@@ -67,3 +63,8 @@ export {
 
 export * from "./forecast-details.js";
 export { xcInputInventory } from "./xc-input-inventory.js";
+
+export {
+  forecastDetailInputsSchema as forecastInputsSchema,
+  type ForecastDetailInputs as ForecastInputs,
+} from "./forecast-details.js";

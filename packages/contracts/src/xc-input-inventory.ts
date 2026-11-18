@@ -141,7 +141,7 @@ export const xcInputInventory = [
     statistic: "mean",
     unit: "degree",
     group: "Surface wind",
-    label: "Wind direction 10 m mean",
+    label: "Wind direction 10 m mean · from north",
   },
   {
     key: "daily.provider_boundary_layer_height_agl_mean_m",
@@ -152,7 +152,7 @@ export const xcInputInventory = [
     statistic: "mean",
     unit: "m",
     group: "Thermal height",
-    label: "Provider boundary layer height agl mean",
+    label: "Provider boundary layer height agl mean · model AGL",
   },
   {
     key: "daily.provider_boundary_layer_height_agl_max_m",
@@ -163,7 +163,7 @@ export const xcInputInventory = [
     statistic: "max",
     unit: "m",
     group: "Thermal height",
-    label: "Provider boundary layer height agl max",
+    label: "Provider boundary layer height agl max · model AGL",
   },
   {
     key: "daily.mixed_layer_lcl_agl_mean_m",
@@ -174,7 +174,7 @@ export const xcInputInventory = [
     statistic: "mean",
     unit: "m",
     group: "Thermal height",
-    label: "Mixed layer lcl agl mean",
+    label: "Mixed layer lcl agl mean · model AGL",
   },
   {
     key: "daily.mixed_layer_lcl_agl_min_m",
@@ -185,7 +185,7 @@ export const xcInputInventory = [
     statistic: "min",
     unit: "m",
     group: "Thermal height",
-    label: "Mixed layer lcl agl min",
+    label: "Mixed layer lcl agl min · model AGL",
   },
   {
     key: "daily.mixed_layer_lcl_agl_max_m",
@@ -196,7 +196,7 @@ export const xcInputInventory = [
     statistic: "max",
     unit: "m",
     group: "Thermal height",
-    label: "Mixed layer lcl agl max",
+    label: "Mixed layer lcl agl max · model AGL",
   },
   {
     key: "daily.pbl_minus_lcl_mean_m",
@@ -586,7 +586,7 @@ export const xcInputInventory = [
     statistic: "mean",
     unit: "degree",
     group: "Layer 0–1500 m above site",
-    label: "Wind direction mean · 0–1500 m above site",
+    label: "Wind direction mean · 0–1500 m above site · from north",
     layerBaseAglM: 0,
     layerTopAglM: 1500,
   },
@@ -729,7 +729,7 @@ export const xcInputInventory = [
     statistic: "mean",
     unit: "degree",
     group: "Layer 1500–3000 m above site",
-    label: "Wind direction mean · 1500–3000 m above site",
+    label: "Wind direction mean · 1500–3000 m above site · from north",
     layerBaseAglM: 1500,
     layerTopAglM: 3000,
   },

@@ -1,4 +1,3 @@
-import { requirePublishedValue } from "../../../apps/api/src/modules/forecasts/require-published-value.js";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
@@ -7,7 +6,7 @@ import {
   sofiaFlyingHours,
   xcInputInventory,
 } from "../src/index.js";
-import { createForecast } from "./forecast-fixture.js";
+import { createForecast, requirePublishedValue } from "./forecast-fixture.js";
 
 describe("published detail contract", () => {
   it("matches all 67 ML policy fields, owners, units, statistics and order", () => {
@@ -104,7 +103,12 @@ describe("published detail contract", () => {
       heightMslM: 3000,
     };
     expect(forecastResponseSchema.safeParse(f).success).toBe(true);
-    f.outputs.cloudbase = { ...f.outputs.cloudbase, kind: "conditional_lcl", valueMslM: 3000 };
+    f.outputs.cloudbase = {
+      kind: "conditional_lcl",
+      valueMslM: 3000,
+      dataStatus: "mock",
+      confidence: { level: "low" },
+    };
     expect(forecastResponseSchema.safeParse(f).success).toBe(false);
   });
   it("allows conditional-only LCL and signed site AGL but requires confidence and complete height triples", () => {
@@ -123,5 +127,20 @@ describe("published detail contract", () => {
     expect(
       cloudbaseHourSchema.safeParse({ ...f.cloudbaseHours[0], heightModelAglM: null }).success,
     ).toBe(false);
+    expect(
+      cloudbaseHourSchema.safeParse({
+        ...f.cloudbaseHours[0],
+        reasonCode: "potential_base_outside_profile",
+      }).success,
+    ).toBe(false);
+    expect(
+      cloudbaseHourSchema.safeParse({
+        ...f.cloudbaseHours[0],
+        reasonCode: "potential_base_outside_profile",
+        heightMslM: null,
+        heightModelAglM: null,
+        heightSiteAglM: null,
+      }).success,
+    ).toBe(true);
   });
 });

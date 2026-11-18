@@ -66,17 +66,13 @@ export const readExplanations = (
           const field = fields[0];
           if (!field || fields.some((other) => JSON.stringify(other) !== JSON.stringify(field)))
             throw new Error("Driver provenance does not resolve to its exact named input.");
-          const context = weather.inputs.hourlyContext.find((hour) =>
-            [...hour.odInputs, ...hour.cloudbaseContext].some(
-              (f) => f.provenanceId === provenanceId,
-            ),
-          );
           if (
             input.valid_at_utc !== null &&
             (field.intervalStartUtc
               ? field.intervalStartUtc !== input.valid_at_utc ||
                 field.intervalEndUtc !== input.interval_end_utc
-              : context?.validAtUtc !== input.valid_at_utc || input.interval_end_utc !== null)
+              : weather.validTimes.get(provenanceId) !== input.valid_at_utc ||
+                input.interval_end_utc !== null)
           )
             throw new Error("Driver time differs from its exact input owner.");
           return { ...locator, provenanceId, field };

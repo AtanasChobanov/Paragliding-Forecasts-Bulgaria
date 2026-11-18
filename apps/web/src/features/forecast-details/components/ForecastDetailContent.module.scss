@@ -459,3 +459,56 @@
     gap: 0.12rem;
   }
 }
+.detailPanel {
+  --control-min-size: 1.2rem;
+}
+.driverNote {
+  --compact-badge-height: 1rem;
+  --compact-badge-padding: 0.04rem 0.2rem;
+}
+@media (max-width: 69.999rem) {
+  .summary {
+    gap: 0.1rem;
+  }
+  .primaryChance {
+    padding-block: 0.15rem;
+  }
+  .outputMetric {
+    gap: 0;
+    padding-top: 0.1rem;
+  }
+  .outputConfidence {
+    padding-block: 0.1rem;
+  }
+}
+@media (max-width: 42rem) {
+  .summary {
+    gap: 0.05rem;
+  }
+  .primaryChance {
+    padding-block: 0.1rem;
+    > strong {
+      font-size: 1.3rem;
+    }
+  }
+  .primaryConfidence {
+    flex-wrap: nowrap;
+    > div {
+      flex: 1;
+    }
+  }
+  .outputMetric {
+    padding-top: 0;
+  }
+}
+@media (max-width: 42rem) {
+  .outputMetric[data-status="missing"] .outputHeader {
+    gap: 0;
+    --dashboard-caption: 0.39rem;
+    --compact-badge-padding: 0.06rem 0.05rem;
+  }
+  .outputMetric[data-status="missing"] .outputIcon svg {
+    width: 0.5rem;
+    height: 0.5rem;
+  }
+}

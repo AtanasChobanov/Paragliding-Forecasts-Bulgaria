@@ -10,6 +10,7 @@ export interface ConfidenceIndicatorProps {
   readonly label?: string | null;
   /** Whether to render the supplementary confidence note. */
   readonly showNote?: boolean;
+  readonly shortUnavailable?: boolean;
 }
 
 const filledSegmentCount = (level: DisplayConfidence["level"]): number => {
@@ -32,6 +33,7 @@ export const ConfidenceIndicator = ({
   confidence,
   label: prefix = "Confidence",
   showNote = !compact,
+  shortUnavailable = false,
 }: ConfidenceIndicatorProps) => {
   const label = formatConfidence(confidence.level);
   const note = confidence.notes.join(" ");
@@ -54,7 +56,9 @@ export const ConfidenceIndicator = ({
             ))}
           </span>
         )}
-        <span className={styles.label}>{label.replace(" confidence", "")}</span>
+        <span className={styles.label}>
+          {unavailable && shortUnavailable ? "Unavailable" : label.replace(" confidence", "")}
+        </span>
       </div>
       {!showNote || note.length === 0 ? null : <p className={styles.note}>{note}</p>}
     </div>
