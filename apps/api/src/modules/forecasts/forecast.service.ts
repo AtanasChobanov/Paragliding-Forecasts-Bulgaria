@@ -46,13 +46,9 @@ export class ForecastService {
 
   async getForecast(query: ForecastQuery): Promise<ForecastResponse> {
     const site = requireSite(await this.#siteLookup.findSiteBySlug(query.siteSlug), query.siteSlug);
-    if (this.#forecastRepository.find === undefined) {
-      throw new AppError({
-        code: "FORECAST_NOT_FOUND",
-        detail: "Detailed forecasts are not yet available in SQLite mode.",
-      });
-    }
-    const prediction = await this.#forecastRepository.find(site.id, query.date);
+    const prediction = this.#forecastRepository.findDetail
+      ? await this.#forecastRepository.findDetail(site, query.date, toForecastDate(this.#now()))
+      : await this.#forecastRepository.find?.(site.id, query.date);
 
     if (prediction === undefined) {
       throw new AppError({
@@ -61,7 +57,9 @@ export class ForecastService {
       });
     }
 
-    return mapPredictionToForecastResponse(prediction, site.slug);
+    return "metadata" in prediction
+      ? prediction
+      : mapPredictionToForecastResponse(prediction, site.slug);
   }
 
   async getForecastSummaries(query: ForecastSummariesQuery): Promise<ForecastSummariesResponse> {

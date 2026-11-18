@@ -2,6 +2,7 @@ import type {
   AvailableForecastSummary,
   ForecastDate,
   ForecastDay,
+  ForecastResponse,
   Site,
   SiteId,
 } from "@paragliding-forecasts/contracts";
@@ -9,6 +10,11 @@ import type {
 import type { ForecastPrediction } from "./forecast-prediction.js";
 
 export interface ForecastRepository {
+  findDetail?(
+    site: Site,
+    date: ForecastDate,
+    today: ForecastDate,
+  ): Promise<ForecastResponse | undefined>;
   find?(siteId: SiteId, date: ForecastDate): Promise<ForecastPrediction | undefined>;
   listSummaries(
     sites: readonly Site[],

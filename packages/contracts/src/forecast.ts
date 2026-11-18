@@ -5,7 +5,7 @@ import {
   createForecastMetricSchema,
   provenanceSchema,
 } from "./data-status.js";
-import { siteIdSchema, siteSlugSchema } from "./sites.js";
+import { siteSlugSchema } from "./sites.js";
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -146,19 +146,7 @@ export const forecastOutputsSchema = z
   })
   .superRefine(validateNestedChances);
 
-export const forecastResponseSchema = z.strictObject({
-  siteId: siteIdSchema,
-  siteSlug: siteSlugSchema,
-  forecastDate: forecastDateSchema,
-  generatedAt: z.iso.datetime(),
-  provenance: provenanceSchema,
-  outputs: forecastOutputsSchema,
-  forecastInputs: forecastInputsSchema,
-  topDrivers: z.array(z.string().trim().min(1)).min(1),
-});
-
 export type ForecastDate = z.infer<typeof forecastDateSchema>;
 export type ForecastQuery = z.infer<typeof forecastQuerySchema>;
 export type ForecastOutputs = z.infer<typeof forecastOutputsSchema>;
 export type ForecastInputs = z.infer<typeof forecastInputsSchema>;
-export type ForecastResponse = z.infer<typeof forecastResponseSchema>;

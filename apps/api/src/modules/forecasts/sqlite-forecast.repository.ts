@@ -13,6 +13,7 @@ import {
 import type { DatabaseSync, StatementSync } from "node:sqlite";
 import { z } from "zod";
 
+import { readSqliteForecastDetail } from "./sqlite-forecast-detail.js";
 import { toForecastDate } from "./forecast-date.js";
 import type { ForecastRepository } from "./forecast.repository.js";
 
@@ -250,15 +251,19 @@ const mapSummary = (row: SummaryRow, today: ForecastDate): AvailableForecastSumm
 export class SqliteForecastRepository implements ForecastRepository {
   readonly #summaries: StatementSync;
   readonly #days: StatementSync;
+  readonly #database: DatabaseSync;
 
   constructor(database: DatabaseSync) {
+    this.#database = database;
     this.#summaries = database.prepare(`${selectionSql}
       , latest AS (
         SELECT MAX(run.cycleAtUtc) AS cycleAtUtc
         FROM eligible_runs AS run
         WHERE EXISTS (SELECT 1 FROM predictions WHERE prediction_run_id = run.id)
       )
-      SELECT chosen.siteId, chosen.siteSlug, chosen.forecastDate, chosen.cycleAtUtc,
+      SELECT chosen.id AS predictionId, chosen.daily_feature_snapshot_id AS snapshotId,
+             chosen.cloudbase_max_at_utc AS cloudbaseMaxAtUtc, chosen.conditional_lcl_max_at_utc AS conditionalLclMaxAtUtc,
+             chosen.siteId, chosen.siteSlug, chosen.forecastDate, chosen.cycleAtUtc,
              latest.cycleAtUtc AS latestCycleAtUtc, chosen.generatedAt, chosen.xcModelId,
              chosen.cloudbaseMethodVersion, chosen.overdevelopmentPolicyVersion,
              chosen.p_100km AS p100, chosen.p_200km AS p200, chosen.p_300km AS p300,
@@ -284,6 +289,26 @@ export class SqliteForecastRepository implements ForecastRepository {
         AND metric.metric_code = 'p100'
       WHERE chosen.preference = 1
     `);
+  }
+
+  findDetail(site: Site, date: ForecastDate, today: ForecastDate) {
+    this.#database.exec("BEGIN");
+    try {
+      const chosen = this.#summaries.get(JSON.stringify([site.id]), date, date);
+      const result =
+        chosen === undefined
+          ? undefined
+          : readSqliteForecastDetail(
+              this.#database,
+              chosen,
+              mapSummary(summaryRowSchema.parse(chosen), today),
+            );
+      this.#database.exec("COMMIT");
+      return Promise.resolve(result);
+    } catch (error) {
+      this.#database.exec("ROLLBACK");
+      throw error;
+    }
   }
 
   listSummaries(sites: readonly Site[], date: ForecastDate, todayDate: ForecastDate) {

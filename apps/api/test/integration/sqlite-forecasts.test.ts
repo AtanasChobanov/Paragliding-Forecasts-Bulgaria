@@ -1,3 +1,4 @@
+import { requirePublishedValue } from "../../src/modules/forecasts/require-published-value.js";
 import {
   forecastDaysResponseSchema,
   forecastResponseSchema,
@@ -203,12 +204,245 @@ describe("SQLite dashboard HTTP integration", () => {
     expect(problemDetailsSchema.parse(response.body).code).toBe("INTERNAL_SERVER_ERROR");
   });
 
-  it("rejects detail in SQLite mode and serves it in explicitly configured mock mode", async () => {
+  it("returns detail from the same whole publication as summaries, including missing metrics", async () => {
+    seedForecasts(database.sqlite);
+    for (const date of ["2026-11-17", "2026-11-18", "2026-11-19"]) {
+      const batch = await request(server.app)
+        .get(paths.summaries)
+        .query({ siteSlugs: allSites, date })
+        .expect(200);
+      for (const summary of forecastSummariesResponseSchema.parse(batch.body).summaries) {
+        const response = await request(server.app)
+          .get(paths.detail)
+          .query({ siteSlug: summary.siteSlug, date });
+        if (summary.availability === "missing") {
+          expect(response.status).toBe(404);
+          continue;
+        }
+        expect(response.status).toBe(200);
+        const detail = forecastResponseSchema.parse(response.body);
+        expect(detail.outputs).toEqual(summary.outputs);
+        expect(detail.metadata).toEqual(summary.metadata);
+        expect(detail.generatedAt).toBe(summary.generatedAt);
+        expect(detail.forecastInputs.xcFeatures).toHaveLength(67);
+        expect(detail.cloudbaseHours).toHaveLength(11);
+        expect(detail.explanations.map((g) => g.metricCode)).toEqual([
+          "p100",
+          "p200",
+          "p300",
+          "overdevelopment",
+          "cloudbase",
+        ]);
+      }
+    }
+  });
+
+  it("preserves exact weather units, OD start-hour convection and end-sample rain intervals", async () => {
+    seedForecasts(database.sqlite);
+    const snapshot = requirePublishedValue(
+      database.sqlite
+        .prepare("SELECT daily_feature_snapshot_id id FROM predictions WHERE id = 1")
+        .get(),
+    );
+    const sample = requirePublishedValue(
+      database.sqlite
+        .prepare(
+          `SELECT s.id FROM weather_point_samples s JOIN weather_daily_feature_snapshot_inputs i ON i.weather_point_sample_id=s.id JOIN weather_product_valid_times v ON v.id=s.product_valid_time_id WHERE i.daily_feature_snapshot_id=? AND v.valid_at_utc='2026-11-17T08:00:00Z'`,
+        )
+        .get(requirePublishedValue(snapshot.id)),
+    );
+    const endSample = requirePublishedValue(
+      database.sqlite
+        .prepare(
+          `SELECT s.id FROM weather_point_samples s JOIN weather_daily_feature_snapshot_inputs i ON i.weather_point_sample_id=s.id JOIN weather_product_valid_times v ON v.id=s.product_valid_time_id WHERE i.daily_feature_snapshot_id=? AND v.valid_at_utc='2026-11-17T09:00:00Z'`,
+        )
+        .get(requirePublishedValue(snapshot.id)),
+    );
+    database.sqlite
+      .prepare(
+        "UPDATE weather_daily_feature_snapshots SET air_temperature_2m_mean_k=293.123456 WHERE id=?",
+      )
+      .run(requirePublishedValue(snapshot.id));
+    const provenance = database.sqlite
+      .prepare(
+        "INSERT INTO weather_field_provenance (daily_feature_snapshot_id,field_code,field_variant,statistic_type,quality_state) VALUES (?,'air_temperature_k','2m','mean','derived')",
+      )
+      .run(requirePublishedValue(snapshot.id)).lastInsertRowid;
+    const cape = database.sqlite
+      .prepare(
+        "INSERT INTO weather_point_convection_measurements (weather_point_sample_id,parcel_method,calculation_method,cape_j_per_kg,cin_magnitude_j_per_kg) VALUES (?,'surface','provider',500,20)",
+      )
+      .run(requirePublishedValue(sample.id)).lastInsertRowid;
+    database.sqlite
+      .prepare(
+        "INSERT INTO weather_field_provenance (point_convection_measurement_id,field_code,field_variant,quality_state) VALUES (?,'convective_available_potential_energy_j_per_kg','surface','real')",
+      )
+      .run(cape);
+    database.sqlite
+      .prepare(
+        "INSERT INTO weather_field_provenance (point_convection_measurement_id,field_code,field_variant,quality_state) VALUES (?,'convective_inhibition_magnitude_j_per_kg','surface','real')",
+      )
+      .run(cape);
+    database.sqlite
+      .prepare(
+        "INSERT INTO weather_point_convection_measurements (weather_point_sample_id,parcel_method,calculation_method,cape_j_per_kg) VALUES (?,'most_unstable','provider',9999)",
+      )
+      .run(requirePublishedValue(sample.id));
+    const rain = database.sqlite
+      .prepare(
+        "INSERT INTO weather_point_interval_measurements (weather_point_sample_id,field_code,component,interval_start_utc,interval_end_utc,statistic_type,canonical_value) VALUES (?,'precipitation_amount_mm','total','2026-11-17T08:00:00Z','2026-11-17T09:00:00Z','accumulation',1.23456)",
+      )
+      .run(requirePublishedValue(endSample.id)).lastInsertRowid;
+    database.sqlite
+      .prepare(
+        "INSERT INTO weather_field_provenance (point_interval_measurement_id,field_code,statistic_type,quality_state) VALUES (?,'precipitation_amount_mm','accumulation','real')",
+      )
+      .run(rain);
+    const driver = database.sqlite
+      .prepare(
+        "INSERT INTO prediction_drivers (prediction_id,metric_code,rank,kind,code,message,xc_stage,direction,contribution_logit) VALUES (1,'p100',1,'xc_contribution','temperature','Published contribution','p100','lowers',-0.25)",
+      )
+      .run().lastInsertRowid;
+    database.sqlite
+      .prepare(
+        "INSERT INTO prediction_driver_inputs VALUES (?,1,'daily.air_temperature_2m_mean_k',NULL,NULL,?)",
+      )
+      .run(driver, provenance);
+    database.sqlite
+      .prepare("INSERT INTO prediction_driver_inputs VALUES (?,2,'unretained',NULL,NULL,NULL)")
+      .run(driver);
+    const response = await request(server.app)
+      .get(paths.detail)
+      .query({ siteSlug: selected, date: "2026-11-17" })
+      .expect(200);
+    const f = forecastResponseSchema.parse(response.body);
+    expect(f.forecastInputs.xcFeatures[0]).toMatchObject({
+      value: 293.123456,
+      unit: "K",
+      dataStatus: "real",
+      qualityState: "derived",
+      provenanceId: Number(provenance),
+    });
+    expect(f.forecastInputs.hourlyContext[0]?.odInputs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "rain",
+          value: 1.23456,
+          intervalStartUtc: "2026-11-17T08:00:00Z",
+          intervalEndUtc: "2026-11-17T09:00:00Z",
+        }),
+        expect.objectContaining({ key: "cape", value: 500 }),
+        expect.objectContaining({ key: "cin", value: 20 }),
+      ]),
+    );
+    expect(
+      f.forecastInputs.hourlyContext[10]?.odInputs
+        .filter((r) => ["rain", "cape", "cin"].includes(r.key))
+        .every((r) => r.missingReason === "Outside OD interval inputs"),
+    ).toBe(true);
+    expect(f.explanations[0]?.drivers[0]).toMatchObject({
+      rank: 1,
+      direction: "lowers",
+      contributionLogit: -0.25,
+      inputs: [
+        { field: { value: 293.123456, unit: "K" } },
+        { unavailableReason: "Exact input is retained in the ML artifact" },
+      ],
+    });
+    database.sqlite
+      .prepare(
+        "UPDATE prediction_driver_inputs SET input_key='daily.relative_humidity_2m_mean_percent' WHERE prediction_driver_id=? AND input_ordinal=1",
+      )
+      .run(driver);
+    await request(server.app)
+      .get(paths.detail)
+      .query({ siteSlug: selected, date: "2026-11-17" })
+      .expect(500);
+  });
+
+  it("shows ambiguous heating as missing and resolves exact FK intervals independently", async () => {
+    seedForecasts(database.sqlite);
+    const sample = requirePublishedValue(
+      database.sqlite
+        .prepare(
+          "SELECT weather_point_sample_id id FROM weather_daily_feature_snapshot_inputs WHERE daily_feature_snapshot_id=1 LIMIT 1",
+        )
+        .get(),
+    );
+    const add = database.sqlite.prepare(
+      "INSERT INTO weather_point_interval_measurements (weather_point_sample_id,field_code,component,interval_start_utc,interval_end_utc,statistic_type,canonical_value) VALUES (?,'surface_sensible_heat_flux_upward_w_m2','not_applicable',?,'2026-11-17T08:00:00Z','interval_average',40)",
+    );
+    for (const start of ["2026-11-17T07:00:00Z", "2026-11-17T06:00:00Z"]) {
+      const interval = add.run(requirePublishedValue(sample.id), start).lastInsertRowid;
+      database.sqlite
+        .prepare(
+          "INSERT INTO weather_field_provenance (point_interval_measurement_id,field_code,statistic_type,quality_state) VALUES (?,'surface_sensible_heat_flux_upward_w_m2','interval_average','real')",
+        )
+        .run(interval);
+    }
+    const response = await request(server.app)
+      .get(paths.detail)
+      .query({ siteSlug: selected, date: "2026-11-17" })
+      .expect(200);
+    expect(
+      forecastResponseSchema.parse(response.body).forecastInputs.hourlyContext[0]?.cloudbaseContext,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "sensible_heat_flux_w_m2",
+          value: null,
+          missingReason: "Ambiguous retained interval inputs",
+        }),
+      ]),
+    );
+  });
+
+  it.each(["hours", "snapshot inputs", "layers", "foreign driver"])(
+    "returns 5xx for a broken %s graph without fallback",
+    async (broken) => {
+      seedForecasts(database.sqlite);
+      if (broken === "hours")
+        database.sqlite.exec(
+          "DELETE FROM prediction_cloudbase_hours WHERE prediction_id=1 AND valid_at_utc='2026-11-17T08:00:00Z'",
+        );
+      if (broken === "snapshot inputs")
+        database.sqlite.exec(
+          "DELETE FROM weather_daily_feature_snapshot_inputs WHERE daily_feature_snapshot_id=1",
+        );
+      if (broken === "layers")
+        database.sqlite.exec(
+          "DELETE FROM weather_daily_feature_profile_layers WHERE daily_feature_snapshot_id=1",
+        );
+      if (broken === "foreign driver") {
+        const provenance = database.sqlite
+          .prepare(
+            "INSERT INTO weather_field_provenance (daily_feature_snapshot_id,field_code,field_variant,statistic_type,quality_state,missing_reason_code) VALUES (2,'air_temperature_k','2m','mean','missing','fixture')",
+          )
+          .run().lastInsertRowid;
+        const driver = database.sqlite
+          .prepare(
+            "INSERT INTO prediction_drivers (prediction_id,metric_code,rank,kind,code,message,xc_stage,direction,contribution_logit) VALUES (1,'p100',1,'xc_contribution','temperature','Published','p100','zero',0)",
+          )
+          .run().lastInsertRowid;
+        database.sqlite
+          .prepare(
+            "INSERT INTO prediction_driver_inputs VALUES (?,1,'daily.air_temperature_2m_mean_k',NULL,NULL,?)",
+          )
+          .run(driver, provenance);
+      }
+      await request(server.app)
+        .get(paths.detail)
+        .query({ siteSlug: selected, date: "2026-11-17" })
+        .expect(500);
+    },
+  );
+
+  it("reports missing publications in SQLite mode and serves detail in explicitly configured mock mode", async () => {
     const query = { siteSlug: selected, date: "2026-11-17" };
     const unavailable = await request(server.app).get(paths.detail).query(query).expect(404);
     expect(problemDetailsSchema.parse(unavailable.body)).toMatchObject({
       code: "FORECAST_NOT_FOUND",
-      detail: "Detailed forecasts are not yet available in SQLite mode.",
+      detail: `No forecast exists for site '${selected}' on 2026-11-17.`,
     });
     const mock = createConfiguredApp(
       parseConfig({

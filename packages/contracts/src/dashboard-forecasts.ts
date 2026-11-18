@@ -70,7 +70,7 @@ const dashboardCloudbaseSchema = z.discriminatedUnion("kind", [
   }),
   z.strictObject({ ...missingMetricFields, kind: z.literal("missing") }),
 ]);
-const dashboardOutputsSchema = z
+export const dashboardOutputsSchema = z
   .strictObject({
     chance100KmPct: chanceMetricSchema,
     chance200KmPct: chanceMetricSchema,
@@ -79,7 +79,7 @@ const dashboardOutputsSchema = z
     cloudbase: dashboardCloudbaseSchema,
   })
   .superRefine(validateNestedChances);
-const dashboardMetadataSchema = z.discriminatedUnion("mode", [
+export const dashboardMetadataSchema = z.discriminatedUnion("mode", [
   provenanceSchema.extend({ mode: z.literal("mock") }),
   z.strictObject({
     mode: z.literal("sqlite"),

@@ -1,3 +1,5 @@
+import { requirePublishedValue } from "../../src/modules/forecasts/require-published-value.js";
+import { sofiaFlyingHours } from "@paragliding-forecasts/contracts";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { basename, join } from "node:path";
@@ -144,6 +146,43 @@ export const seedForecasts = (sqlite: DatabaseSync) => {
       `,
         )
         .run(weatherId, 2 * siteId, 2 * siteId + 1);
+      const snapshot = requirePublishedValue(
+        sqlite
+          .prepare(
+            "SELECT * FROM weather_daily_feature_snapshots WHERE ingestion_run_id = ? AND point_footprint_id = ?",
+          )
+          .get(weatherId, 2 * siteId),
+      );
+      const snapshotId = Number(snapshot.id);
+      if (
+        !sqlite
+          .prepare(
+            "SELECT id FROM weather_daily_feature_profile_layers WHERE daily_feature_snapshot_id = ?",
+          )
+          .get(snapshotId)
+      ) {
+        for (const base of [0, 1500])
+          sqlite
+            .prepare(
+              "INSERT INTO weather_daily_feature_profile_layers (daily_feature_snapshot_id, layer_base_agl_m, layer_top_agl_m) VALUES (?, ?, ?)",
+            )
+            .run(snapshotId, base, base + 1500);
+        for (const at of sofiaFlyingHours(target)) {
+          sqlite
+            .prepare(
+              "INSERT OR IGNORE INTO weather_product_valid_times (product_run_id, valid_at_utc) SELECT product_run_id, ? FROM weather_ingestion_runs WHERE id = ?",
+            )
+            .run(at, weatherId);
+          const sample = sqlite
+            .prepare(
+              "INSERT INTO weather_point_samples (ingestion_run_id, product_valid_time_id, point_footprint_id, coverage_status) SELECT ?, v.id, ?, 'complete' FROM weather_product_valid_times v JOIN weather_ingestion_runs w ON w.product_run_id = v.product_run_id WHERE w.id = ? AND v.valid_at_utc = ?",
+            )
+            .run(weatherId, 2 * siteId, weatherId, at).lastInsertRowid;
+          sqlite
+            .prepare("INSERT INTO weather_daily_feature_snapshot_inputs VALUES (?, ?)")
+            .run(snapshotId, sample);
+        }
+      }
       const max = cloudbase === "cloudbase_available" ? `${target}T11:00:00Z` : null;
       const lcl =
         max !== null || cloudbase === "potential_base_available" ? `${target}T12:00:00Z` : null;
@@ -176,14 +215,26 @@ export const seedForecasts = (sqlite: DatabaseSync) => {
       const addHour = sqlite.prepare(`
         INSERT INTO prediction_cloudbase_hours (
           prediction_id, valid_at_utc, regime, estimated_cloudbase_msl_m,
-          estimated_cloudbase_model_agl_m, estimated_cloudbase_site_agl_m, reason_code
-        ) VALUES (?, ?, ?, ?, ?, ?, 'fixture')
+          estimated_cloudbase_model_agl_m, estimated_cloudbase_site_agl_m, confidence_level, reason_code
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'fixture')
       `);
       if (max !== null) {
-        addHour.run(prediction, max, "cumulus", 2200, 1500, 1300);
+        addHour.run(prediction, max, "cumulus", 2200, 1500, 1300, "low");
       }
       if (lcl !== null) {
-        addHour.run(prediction, lcl, "indeterminate", 2062.2, 1400, 1200);
+        addHour.run(prediction, lcl, "indeterminate", 2062.2, 1400, -120, "low");
+      }
+      for (const at of sofiaFlyingHours(target)) {
+        if (at === max || at === lcl) continue;
+        const regime =
+          cloudbase === "missing"
+            ? "missing"
+            : cloudbase === "other_cloud"
+              ? "other_cloud"
+              : cloudbase === "indeterminate"
+                ? "indeterminate"
+                : "blue";
+        addHour.run(prediction, at, regime, null, null, null, regime === "missing" ? null : "low");
       }
       const addMetric = sqlite.prepare(`
         INSERT INTO prediction_metric_details (

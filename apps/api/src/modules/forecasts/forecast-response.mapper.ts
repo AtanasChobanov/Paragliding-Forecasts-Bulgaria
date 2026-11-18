@@ -2,7 +2,6 @@ import type {
   AvailableForecastSummary,
   ForecastDate,
   ForecastDay,
-  ForecastOutputs,
   ForecastResponse,
   ForecastSummary,
   DashboardForecastOutputs,
@@ -10,6 +9,7 @@ import type {
   SiteSlug,
 } from "@paragliding-forecasts/contracts";
 
+import { mockForecastDetail } from "./mock-forecast-detail.js";
 import type { ForecastPrediction } from "./forecast-prediction.js";
 
 const mapPredictionMetric = <Value>(prediction: ForecastPrediction, value: Value) => ({
@@ -25,34 +25,11 @@ const mapPredictionChancesAndRisk = (prediction: ForecastPrediction) => ({
   overdevelopmentRisk: mapPredictionMetric(prediction, prediction.overdevelopmentRisk),
 });
 
-const mapPredictionOutputs = (prediction: ForecastPrediction): ForecastOutputs => ({
-  ...mapPredictionChancesAndRisk(prediction),
-  cloudbaseMslM: mapPredictionMetric(prediction, prediction.cloudbasePredictionMslM),
-});
-
 export const mapPredictionToForecastResponse = (
   prediction: ForecastPrediction,
   siteSlug: SiteSlug,
-): ForecastResponse => ({
-  siteId: prediction.siteId,
-  siteSlug,
-  forecastDate: prediction.forecastDate,
-  generatedAt: prediction.generatedAt,
-  provenance: { ...prediction.provenance },
-  outputs: mapPredictionOutputs(prediction),
-  forecastInputs: {
-    ...prediction.forecastInputs,
-    provenance: { ...prediction.forecastInputs.provenance },
-    windByAltitude:
-      prediction.forecastInputs.windByAltitude.dataStatus === "missing"
-        ? { ...prediction.forecastInputs.windByAltitude }
-        : {
-            ...prediction.forecastInputs.windByAltitude,
-            value: prediction.forecastInputs.windByAltitude.value.map((wind) => ({ ...wind })),
-          },
-  },
-  topDrivers: [...prediction.topDrivers],
-});
+): ForecastResponse =>
+  mockForecastDetail(mapPredictionToForecastSummary(prediction, siteSlug), prediction.topDrivers);
 
 export const mapPredictionToForecastSummary = (
   prediction: ForecastPrediction,

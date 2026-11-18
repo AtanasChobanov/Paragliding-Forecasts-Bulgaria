@@ -19,13 +19,11 @@ export {
   forecastInputsSchema,
   forecastOutputsSchema,
   forecastQuerySchema,
-  forecastResponseSchema,
   overdevelopmentRiskMetricSchema,
   type ForecastDate,
   type ForecastInputs,
   type ForecastOutputs,
   type ForecastQuery,
-  type ForecastResponse,
 } from "./forecast.js";
 export {
   forecastDaySchema,
@@ -66,3 +64,6 @@ export {
   type SiteSlug,
   type SitesResponse,
 } from "./sites.js";
+
+export * from "./forecast-details.js";
+export { xcInputInventory } from "./xc-input-inventory.js";
