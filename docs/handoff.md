@@ -14,7 +14,7 @@ next requested ticket on top of the branch that supplies its dependencies.
   verifies retained GFS lineage, publishes an immutable day-level bundle and
   supports read-only replay. T-024 is in Review after owner-run acceptance,
   reverse-order reuse and standalone replay.
-- **T-025 confidence and drivers in the UI.** The home dashboard reads
+- **T-025 confidence and drivers in the UI.** The home dashboard and detailed site/date route read
   published forecasts, including T-024 daily OD, through the SQLite-backed
   API. The ML phase stores validated forecasts in SQLite. The dashboard
   preserves units, provenance, missing states and confidence. Cloudbase has separate
@@ -23,9 +23,9 @@ next requested ticket on top of the branch that supplies its dependencies.
   Q200, and a pooled 300+ conversion note. Contributions describe model
   calculations relative to the training reference.
   The [T-025 implementation plan](Т-025-implementation-plan.md) now covers
-  SQLite-backed summaries and dates on the home dashboard, metadata,
-  responsive layout, and the selected map label. The detailed forecast page
-  is the following iteration. The completed ML phase provides
+  the final detailed forecast iteration, including SQLite weather inputs,
+  metric-specific explanations, the viewport layout and hourly cloudbase
+  regimes. The accepted home dashboard is the starting point. The completed ML phase provides
   `forecast-publish` with the 16:00 Sofia source cutoff and one-shot
   `forecast-prune` for eligible GRIB files at least 48 hours after publication.
   The SQLite schema, transactional batch writer and `forecast-publish`
@@ -62,7 +62,8 @@ next requested ticket on top of the branch that supplies its dependencies.
   whitespace checks passed. HTTP tests require local sockets and passed
   outside the sandbox. Prune's 48-hour boundary and interrupted cleanup
   were tested with disposable inputs.
-  T-025 remains In Progress. Resume at the dashboard checkpoint below.
+  T-025 is in Review pending owner acceptance of the final detail page.
+  Resume at the 2026-11-18 detail checkpoint below.
 - **T-026 independent backtest.** Use the frozen XC model on the untouched
   **2025 source season**. The cohort reserves 242 site-days on 131 target
   dates. Inventory retained weather first. DEC-066 deferred 2025 acquisition
@@ -74,6 +75,85 @@ next requested ticket on top of the branch that supplies its dependencies.
 - **Later alerts.** DEC-065 and DEC-066 set the prior-evening timing. Thresholds,
   channel, and deduplication belong to T-027 through T-031. Forecast guidance
   is informational and carries source and confidence limitations.
+
+## T-025 detailed forecast checkpoint — 2026-11-18
+
+The detailed forecast iteration is implemented and verified. T-025 is
+**Review**, awaiting
+owner acceptance of the real-data detail page. The home dashboard and ML
+publication phases retain their earlier acceptance. No later ticket was started.
+See [DEC-073](decisions.md#dec-073---read-published-details-and-exact-weather-evidence-in-one-viewport)
+and the API/web/contracts READMEs for the new in-place local v1 detail shape.
+
+The detail reader shares whole-publication selection, outputs and metadata
+with summaries. It pins one prediction ID and reads its mandatory graph in a
+short read transaction. The public response contains all 67 fixed XC fields,
+eleven hourly OD/cloudbase contexts, five metric explanation groups and eleven
+cloudbase hours. Exact provenance, quality, intervals, versions and missing
+states survive the boundary. Invalid graphs fail with 5xx instead of mixing
+publications or inventing missing values.
+
+The page has the accepted summary design with per-card badges beside the SVG
+icons, paginated inputs and explanations, and an SVG chart. It has no detail
+map or previous-run placeholder. The chart distinguishes estimated cloudbase,
+conditional LCL, blue, other cloud, uncertain and unavailable hours, separates
+segments/gradients and marks the estimated-first daily maximum. Keyboard and
+touch selection synchronize the hourly inputs. Information and tooltips have
+compact pages. Valid direct dates remain exact outside the days window;
+selectors, independent Retry and session caching until manual reload are covered.
+
+**Verified automated checks:** 307 npm tests (database 38, contracts 27, API 98,
+web 144), all 28 Playwright Chromium tests, repository check, Drizzle `db:check`,
+repository-wide typecheck, lint, formatting, build and whitespace check passed.
+HTTP/socket tests and Playwright ran outside the sandbox against disposable
+fixtures. No product server, ingestion, prediction or replay command was run.
+The build succeeds with Vite's advisory about a minified chunk above 500 kB.
+Coverage was not rerun; the previously documented database coverage thresholds
+remain unchanged.
+
+Browser checks retain the accepted home coverage and exercise detail at
+1440×900, 1366×768, 1280×720, 1280×600, 1024×768 and 390×844, plus 125% text
+at 1280×720 and 390×844. Checks include section/article scroll extents,
+pagination overlap, controls inside the viewport, missing P100/P200/P300,
+missing cloudbase/OD, mixed regimes, mouse/keyboard/touch, Retry and no automatic
+refetch after waiting, focus, visibility or reconnect. Screenshots of the
+short desktop, compact 125% and mixed-regime fixture views were visually inspected.
+
+**Read-only real-data verification:** the local database has nine publications
+and 63 predictions covering 42 distinct site/dates (November 15–20). Every
+selected detail passed its runtime contract and matched summary outputs,
+metadata and publication time. `PRAGMA foreign_key_check` returned no rows.
+For Vitosha on November 17, the selected cycle remains November 16 06Z despite
+the later import of the November 14 cycle. P100 is 1.5651665136263144% (display
+1.57%), OD is Low with score 0, and all 67 XC fields are available. Conditional
+LCL appears at 12:00, 13:00 and 14:00 Sofia: 1922.1425605993536,
+1995.610748742642 and 2062.375082968888 m MSL. The last is the daily maximum,
+268.4460829688878 m site AGL; the other eight hours are blue. Stored P300 support
+is 3/42. For November 18 the winner is November 17 06Z, published at 19:00:42
+Sofia that evening, with P100 0.6974034959506479% and conditional LCL
+1959.0916051993117 m MSL.
+
+**Limits and remaining owner step:** the full consumed T-022 model column is
+artifact-only, including levels below the launch. SQL stored weather LCL is
+separate context. Exact heat-flux intervals are retained as stored; ambiguous
+context stays unavailable while a pinned driver FK may still resolve its exact
+interval. Missing exact driver inputs explain the artifact boundary. Forecast
+calibration and independent evaluation remain outside T-025. The real-data UI
+has not been accepted in the owner's browser yet.
+
+The owner runs product commands. If the development servers are already
+running in SQLite mode, reload the page. Otherwise, from the repository root:
+
+```sh
+FORECAST_DATA_MODE=sqlite npm run dev
+```
+
+Open [Vitosha detail for November 17](http://localhost:5173/forecast?site=sofia-vitosha-kominite&date=2026-11-17).
+Confirm the values/time above, input groups and all five explanations, the
+three conditional hours and blue gaps, hour synchronization, and `All sites`
+return navigation. [November 15](http://localhost:5173/forecast?site=sofia-vitosha-kominite&date=2026-11-15)
+is an available direct date outside November 18's five-day window. No new
+weather acquisition or prediction is required. Mark Done only after acceptance.
 
 ## T-025 home dashboard checkpoint — 2026-11-17
 

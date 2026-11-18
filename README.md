@@ -12,10 +12,9 @@ result as an inspectable daily dashboard.
 
 ## Project status
 
-T-025 is in progress. The local publication workflow stores operational GFS
-06Z forecast outputs in SQLite, and the Express API serves those outputs to
-the React home dashboard. The detailed site/date view currently runs in demo
-mode. See [the backlog](docs/tasks.md) and [handoff](docs/handoff.md) for the
+T-025 connects the operational GFS 06Z publications in SQLite to the React
+home dashboard and detailed site/date view through the Express API. The final
+detail iteration is awaiting owner review. See [the backlog](docs/tasks.md) and [handoff](docs/handoff.md) for the
 current ticket and verification status.
 
 ## Current dashboard
@@ -28,8 +27,11 @@ to inspect the source cycle, publication time, horizon and model versions.
 Dates without a publication are disabled. Reload the page to see newly
 published forecasts or update the five-day window after Sofia midnight.
 
-In explicit `mock` mode, the information buttons identify demo data and
-available cards link to `/forecast?site=<slug>&date=YYYY-MM-DD`.
+Available cards link to `/forecast?site=<slug>&date=YYYY-MM-DD` in both modes.
+Detail shows all 67 XC inputs, metric-specific published drivers and eleven
+cloudbase hours with distinct regimes and height references. Panels paginate
+within one viewport. The information buttons identify synthetic data in
+explicit `mock` mode.
 
 ## Repository layout
 
@@ -159,8 +161,7 @@ For future runs, set `FORECAST_DATA_MODE=sqlite` in `.env` and use
 `npm run dev`. In PowerShell, use
 `$env:FORECAST_DATA_MODE = "sqlite"; npm.cmd run dev`.
 
-Use `FORECAST_DATA_MODE=mock npm run dev` for demo forecasts and the current
-detail route. To start only Vite, use `npm run dev:web` and keep the API running
+Use `FORECAST_DATA_MODE=mock npm run dev` for synthetic demo forecasts. To start only Vite, use `npm run dev:web` and keep the API running
 at the configured `VITE_API_BASE_URL`.
 
 ## Commands
@@ -201,7 +202,8 @@ Playwright runs separate mock and SQLite fixtures. The test API ports are
 `3300` and `3301`. The test web ports are `5373` and `5374`. The SQLite
 project migrates a disposable database and verifies November 17–19 forecast
 selection, metadata, layout and map labels with the tile requests intercepted.
-The mock project exercises navigation to the detailed forecast and back.
+Both projects exercise detail navigation. SQLite detail also covers responsive
+layout, metric explanations, hourly regimes, keyboard/touch and manual refresh.
 Use `test:browser:headed` to watch Chromium or `test:browser:ui` to debug.
 
 ## Configuration and data

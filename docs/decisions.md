@@ -86,6 +86,7 @@ consequences. Temporary progress and Git state belong in
 
 | DEC-071     | Publish operational 06Z forecasts to SQLite and retain compact evidence | Accepted | 2026-11-17 |
 | DEC-072     | Read published SQLite forecasts on the home dashboard | Accepted | 2026-11-17 |
+| DEC-073     | Read published details and exact weather evidence in one viewport | Accepted | 2026-11-18 |
 
 ## Individual decisions
 
@@ -3217,6 +3218,45 @@ page reload. Explicit mock mode serves the demo and current detail route.
 
 **Related files:** [T-025 implementation plan](Т-025-implementation-plan.md),
 [HTTP API](../apps/api/README.md), [web dashboard](../apps/web/README.md).
+
+### DEC-073 - Read published details and exact weather evidence in one viewport
+
+**Status:** Accepted in the owner-approved final T-025 implementation plan.
+
+**Date:** 2026-11-18
+
+**Supersedes:** DEC-018's provisional mock detail contract and DEC-072's
+SQLite-detail-unavailable limitation. Home selection and refresh policy remain
+in force.
+
+**Decision:** Upgrade the existing local `/api/v1/forecasts` shape in API and
+browser together. Reuse summary outputs, metadata and whole-publication ranking.
+Pin one prediction before reading its inputs, drivers and hours in a short
+read-only SQLite transaction. Never substitute a metric or input from another
+publication. No Python execution or artifact-file reads occur at the API boundary.
+
+Expose the fixed 67 XC fields, exact OD intervals, available cloudbase context
+and five ranked published explanation groups. Resolve provenance against the
+owning row, field, variant, statistic and time. Missing exact SQL inputs retain
+names and artifact explanations; the full T-022 profile is not reconstructed
+from older SQL profiles. Conflicting evidence and broken published graphs fail
+with 5xx; missing values retain status and reason.
+
+Keep eleven actual 10:00–20:00 Sofia cloudbase hours, signed site AGL and
+estimated-first maxima. Draw linear segments and separate gradients only across
+adjacent hours of one numeric type. Conditional LCL remains distinct from an
+estimated cloudbase or usable thermal top. Blue has no numeric height or
+clear-sky guarantee. Confidence remains the metric's recorded evidence; the
+shared main meter refers only to P100.
+
+Fit the toolbar, summary, paginated input/explanation panels and SVG chart in
+one viewport. Remove the detail map and previous-run placeholder. Preserve
+exact valid direct dates, availability-aware selectors, explicit Retry and
+session caching until manual reload, including keyboard and touch information.
+
+**Related files:** [T-025 implementation plan](Т-025-implementation-plan.md),
+[HTTP API](../apps/api/README.md), [contracts](../packages/contracts/README.md),
+[web dashboard](../apps/web/README.md).
 
 ## Open decisions
 

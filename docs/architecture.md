@@ -46,7 +46,8 @@ The home route loads the site catalog and the selected site's five-day preview
 before picking an available date. One deduplicated multi-site summary request
 supplies the overview and comparison cards. The page caches these results
 until manual reload. The detail route owns the single-site/date request in
-mock mode.
+both SQLite and mock modes. It paginates exact inputs/explanations and plots published hourly
+cloudbase regimes without a map or browser-side model calculation.
 
 ## Express API
 
@@ -77,9 +78,11 @@ from the winning prediction.
 
 Batched summaries retain one missing item per unpublished site/date. The
 fixed Sofia-calendar preview distinguishes a missing publication from a
-missing P100. The detailed lookup currently serves explicit mock mode and
-returns `FORECAST_NOT_FOUND` in SQLite mode. See
-[DEC-072](decisions.md#dec-072---read-published-sqlite-forecasts-on-the-home-dashboard).
+missing P100. The detailed lookup pins the same winning prediction, then reads
+its weather inputs, metric explanations and eleven cloudbase hours in one read transaction.
+Missing exact dates return `FORECAST_NOT_FOUND`; missing metrics remain valid. See
+[DEC-072](decisions.md#dec-072---read-published-sqlite-forecasts-on-the-home-dashboard)
+and [DEC-073](decisions.md#dec-073---read-published-details-and-exact-weather-evidence-in-one-viewport).
 
 ## Python data and ML pipeline
 
@@ -268,9 +271,11 @@ also retain a maximum conditional LCL over indeterminate hours only, with a
 distinct `potential_base_available` summary when no estimated base exists.
 Estimated bases take priority; blue hours never inflate the potential maximum.
 Timed significant-cloud context does not assert cloud genus from sky coverage.
-`coverage_complete` retains its classification meaning. API/UI integration
-remains deferred; Python regimes
-are separate from the existing public data-status enum described next.
+`coverage_complete` retains its classification meaning. The API/UI reads those
+published hourly regimes and daily maxima from SQLite.
+The full consumed model column remains artifact-only; older SQL profiles are
+not substitutes. Python regimes are separate from the existing public
+data-status enum described next.
 
 The contract models these states from one canonical five-state Zod enum. Its
 available-value subset is derived by excluding `missing` and is used only for

@@ -21,9 +21,9 @@ and API.
 
 The forecast schema validates real calendar dates, percentage ranges, ISO
 timestamps, and the invariant that the 100+ km chance is not below the 200+ km
-chance and the 200+ km chance is not below the 300+ km chance. A forecast must
-also expose at least one top driver; the richer explainability shape remains
-owned by the later model/UI ticket.
+chance and the 200+ km chance is not below the 300+ km chance. Detail
+explanations have five metric groups, each with zero through three
+ranked published drivers. An available metric may have no distinct driver.
 
 The summaries query converts one CSV query value into one through seven unique
 site slugs. Its response contains one ID-ordered `available` or `missing` item
@@ -31,8 +31,8 @@ per requested site. Available summaries include issue metadata, per-metric
 confidence and limitations, and a cloudbase union with estimated and
 conditional heights in metres MSL. The days response contains five
 `Europe/Sofia` dates from `todayDate - 2` through `todayDate + 2`, with
-publication availability independent of the 100+ km metric. The detail
-response retains its own outputs schema.
+publication availability independent of the 100+ km metric. The detail response
+reuses the summaries' outputs and metadata schemas.
 
 `dataStatusSchema` is the canonical five-state schema: `mock`, `manual`,
 `baseline`, `real`, or `missing`. `availableDataStatusSchema` is derived from it
@@ -40,6 +40,34 @@ with `dataStatusSchema.exclude(["missing"])`; it is not a second independent
 status definition. Numeric and OD metrics use a discriminated union. Available metrics carry
 a value and confidence. Missing metrics carry null value and confidence
 fields with an explicit reason.
+
+## Published detail shape (T-025)
+
+`ForecastResponse` contains identity/date, `generatedAt`, `metadata`, `outputs`,
+`forecastInputs`, `explanations` and `cloudbaseHours`. The owner-approved
+[DEC-073](../../docs/decisions.md#dec-073---read-published-details-and-exact-weather-evidence-in-one-viewport)
+replaces the provisional mock detail shape in the existing local `/api/v1`
+endpoint; API and browser upgrade together.
+
+`ForecastInputs` / `ForecastDetailInputs` now describe the fixed 67-row XC
+inventory and eleven hourly OD/cloudbase contexts. Rows preserve canonical
+units, statistics, quality, exact provenance, optional layer/interval bounds
+and explicit missing reasons. Policy-parity tests verify the static inventory;
+the runtime package does not read Python policy files.
+
+Structured drivers preserve kind, code, message, rank, conditional XC stage,
+direction/logit contribution, OD score points or pooled conversion counts where
+applicable. Their ordered inputs have either the resolved exact field or an
+unavailable explanation. Each metric's confidence and limitations match its
+output. Zero drivers is valid; no synthetic explanation is required.
+
+Hourly cloudbase validates complete height triples for cumulus, optional
+conditional triples for indeterminate, and null heights for other regimes.
+Model AGL is nonnegative; site AGL is signed. Missing hours have null confidence.
+A conditional level outside the profile has no usable height. The response
+checks exactly eleven ordered 10:00–20:00 Sofia hours on the target date,
+including DST transitions, and maxima from those same hours. Available
+estimated heights take priority even if a conditional hour is higher.
 
 ## Contract rules
 

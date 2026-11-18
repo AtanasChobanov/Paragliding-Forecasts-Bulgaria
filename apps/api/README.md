@@ -2,9 +2,9 @@
 
 ## Status
 
-The API reads the active site catalog and published forecast summaries and
-days from the local SQLite database. It also supports an explicit mock mode
-for demo forecasts and the current detail route.
+The API reads the active site catalog, forecast summaries, five-day previews
+and detailed forecasts from the local SQLite database. Explicit mock mode
+serves synthetic data through the same public contracts.
 
 ## Run locally
 
@@ -46,16 +46,59 @@ by `id ASC`. In SQLite mode the coordinates are `sites.latitude_deg` and
 ### Detailed forecast
 
 `/api/v1/forecasts` requires one valid `siteSlug` and one real `YYYY-MM-DD`
-calendar date. It returns all five core outputs, per-output confidence/status,
-provenance, mock forecast inputs with their source-run metadata/status, and top
-drivers when the record exists. An unknown site returns `404 SITE_NOT_FOUND`; a known
-site/date with no record returns `404 FORECAST_NOT_FOUND`.
+calendar date, including dates outside the five-day preview. Unknown sites
+return `404 SITE_NOT_FOUND`; unpublished exact site/dates return
+`404 FORECAST_NOT_FOUND`. Missing individual metrics remain a valid response.
 
-The detail view uses this route in mock mode. In SQLite mode a direct
-request for a known site returns `404 FORECAST_NOT_FOUND` with the reason that
-details are unavailable. For a mock example,
-first call `/api/v1/forecasts/days?siteSlug=sopot` and use one of the returned
-`forecastDate` values; the finite fixture window moves with API startup date.
+The response contains `siteId`, `siteSlug`, `forecastDate`, `generatedAt`,
+`metadata`, `outputs`, `forecastInputs`, `explanations` and `cloudbaseHours`.
+Outputs and metadata share the summaries' schemas and selection logic. A
+late import of an older GFS cycle cannot displace a newer cycle. Selection
+pins one prediction ID before any detail joins. A short read transaction
+keeps the bounded batch of SQL reads consistent during publication. It never
+fills a missing metric from another prediction.
+
+`forecastInputs` retains the snapshot feature contract and the UTC endpoints
+of the 10:00–20:00 Sofia window. `xcFeatures` contains all 67 policy fields in
+policy order: 43 daily, 11 lower-layer and 13 upper-layer fields. Each row has
+its canonical unit, statistic, scope, label, quality, data status, nullable
+value, missing reason and eligible exact provenance ID. The static TypeScript
+catalogue is checked against the packaged ML policy in tests. Runtime reads
+SQLite only. Available real/derived GFS inputs carry `real` status; calculated
+forecast outputs retain `baseline` status.
+
+Eleven `hourlyContext` entries separate OD inputs from cloudbase context.
+OD rain uses the exact adjacent interval and its end sample; surface-parcel
+CAPE/CIN use the start sample. At 20:00 those three inputs say `Outside OD
+interval inputs`. Low cloud, humidity and wind retain all eleven hours.
+Cloudbase context includes surface fields, separately labelled stored weather
+LCL and retained heat-flux intervals. Ambiguous intervals remain missing.
+The full consumed T-022 model column is retained only in ML artifacts; the
+API does not substitute the older SQL profile for it.
+
+`explanations` contains the five metric groups in P100/P200/P300/OD/cloudbase
+order. It preserves up to three drivers in their published ranks, their
+metric-specific evidence and ordered input locators. Exact provenance links
+must belong to the selected snapshot or its samples and match the named
+field and time. Missing FK links retain their name/time and explain that the
+exact input is retained in the ML artifact. XC contributions are logits
+relative to the training reference. Q200 is the conditional step; pooled
+P300 support is stored successes/total. OD points and critical overrides
+retain their different meanings.
+
+`cloudbaseHours` contains exactly eleven ordered Sofia hours, with explicit
+regime, MSL/model AGL/signed site AGL heights, confidence, original reason code,
+readable reason and optional note. Blue/other-cloud/missing hours have no
+numeric heights. An indeterminate hour may retain a valid conditional LCL.
+Estimated maxima take priority over conditional maxima. Runtime contracts
+check actual Sofia/DST hours, metric evidence and daily/hourly consistency.
+Broken mandatory graphs, conflicting provenance and corrupt maxima produce
+5xx errors. Missing weather values retain their own missing states.
+
+The adapter does not read raw/interim/prediction files, invoke Python or
+calculate probabilities. Mock detail inputs and hours are explicitly synthetic.
+The browser caches detail by slug/date until manual reload; Retry reissues a
+failed request. See [the detail contract decision](../../docs/decisions.md#dec-073---read-published-details-and-exact-weather-evidence-in-one-viewport).
 
 ### Dashboard summaries
 
@@ -162,7 +205,7 @@ apps/api/src/
 
 Controllers validate transport data. The service coordinates catalog,
 clock and repository reads. The SQLite adapter shares selection logic for the
-summary and days endpoints and executes parameterized batched reads. Startup
+summary, detail and days endpoints and executes parameterized batched reads. Startup
 prepares the statements to verify the required tables and columns.
 
 ## Configuration
