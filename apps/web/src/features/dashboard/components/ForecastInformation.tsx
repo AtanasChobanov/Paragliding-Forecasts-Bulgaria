@@ -2,7 +2,15 @@ import type {
   AvailableForecastSummary,
   DashboardForecastOutputs,
 } from "@paragliding-forecasts/contracts";
-import { type CSSProperties, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  type ReactNode,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 
 import { formatConfidence, formatDataStatus, presentCloudbase } from "../forecast-presentation.js";
@@ -11,6 +19,7 @@ import styles from "./ForecastInformation.module.scss";
 interface ForecastInformationProps {
   readonly siteName: string;
   readonly summary: AvailableForecastSummary;
+  readonly pages?: readonly ReactNode[];
 }
 
 const dateTimeOptions: Intl.DateTimeFormatOptions = {
@@ -112,12 +121,33 @@ const ForecastInformationContent = ({ siteName, summary }: ForecastInformationPr
   );
 };
 
-export const ForecastInformation = ({ siteName, summary }: ForecastInformationProps) => {
+export const ForecastInformation = ({ siteName, summary, pages }: ForecastInformationProps) => (
+  <InformationPopover
+    label="Forecast information"
+    regionLabel={`Forecast information for ${siteName}`}
+    {...(pages ? { pages } : {})}
+  >
+    <ForecastInformationContent siteName={siteName} summary={summary} />
+  </InformationPopover>
+);
+
+export const InformationPopover = ({
+  label,
+  regionLabel,
+  pages,
+  children,
+}: {
+  readonly label: string;
+  readonly regionLabel: string;
+  readonly pages?: readonly ReactNode[];
+  readonly children?: ReactNode;
+}) => {
   const panelId = useId();
   const button = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [open, setOpen] = useState(false);
+  const [page, setPage] = useState(0);
   const [pinned, setPinned] = useState(false);
   const [position, setPosition] = useState<CSSProperties>({});
 
@@ -225,7 +255,7 @@ export const ForecastInformation = ({ siteName, summary }: ForecastInformationPr
       <button
         aria-controls={panelId}
         aria-expanded={open}
-        aria-label="Forecast information"
+        aria-label={label}
         className={styles.trigger}
         ref={button}
         type="button"
@@ -257,9 +287,10 @@ export const ForecastInformation = ({ siteName, summary }: ForecastInformationPr
       </button>
       {createPortal(
         <div
-          aria-label={`Forecast information for ${siteName}`}
+          aria-label={regionLabel}
           className={styles.popup}
           hidden={!open}
+          data-paginated={pages ? "true" : undefined}
           id={panelId}
           ref={panel}
           role="region"
@@ -268,7 +299,40 @@ export const ForecastInformation = ({ siteName, summary }: ForecastInformationPr
           onPointerEnter={cancelHide}
           onPointerLeave={scheduleHide}
         >
-          {open ? <ForecastInformationContent siteName={siteName} summary={summary} /> : null}
+          {open ? (
+            pages ? (
+              <>
+                <div className={styles.pageContent}>{pages[Math.min(page, pages.length - 1)]}</div>
+                {pages.length > 1 ? (
+                  <nav className={styles.pagination} aria-label={`${regionLabel} pages`}>
+                    <button
+                      type="button"
+                      disabled={page === 0}
+                      onClick={() => {
+                        setPage((p) => p - 1);
+                      }}
+                    >
+                      Previous
+                    </button>
+                    <span>
+                      {page + 1} / {pages.length}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={page >= pages.length - 1}
+                      onClick={() => {
+                        setPage((p) => p + 1);
+                      }}
+                    >
+                      Next
+                    </button>
+                  </nav>
+                ) : null}
+              </>
+            ) : (
+              children
+            )
+          ) : null}
         </div>,
         document.body,
       )}

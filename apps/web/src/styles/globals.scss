@@ -40,8 +40,8 @@ body {
   background: var(--color-background);
 }
 
-html:has([data-dashboard]),
-body:has([data-dashboard]) {
+html:has([data-dashboard], [data-detail]),
+body:has([data-dashboard], [data-detail]) {
   min-width: 0;
 }
 
@@ -106,14 +106,14 @@ p {
 }
 
 @media (max-width: 42rem) {
-  html:not(:has([data-dashboard])),
-  body:not(:has([data-dashboard])) {
+  html:not(:has([data-dashboard], [data-detail])),
+  body:not(:has([data-dashboard], [data-detail])) {
     height: auto;
     min-height: 100%;
     overflow: auto;
   }
 
-  #root:not(:has([data-dashboard])) {
+  #root:not(:has([data-dashboard], [data-detail])) {
     height: auto;
     min-height: 100dvh;
   }

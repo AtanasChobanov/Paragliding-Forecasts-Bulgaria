@@ -109,27 +109,13 @@ const AvailableOverview = ({ forecastDate, siteName, summary }: AvailableOvervie
           summary={summary}
         />
       </div>
-      {summary.metadata.mode === "mock" ? (
-        <Link
-          className={styles.detailAction}
-          to={createForecastDetailPath(summary.siteSlug, forecastDate)}
-        >
-          <span>View detailed forecast</span>
-          <ArrowIcon />
-        </Link>
-      ) : (
-        <div className={styles.detailUnavailable}>
-          <button
-            aria-describedby="sqlite-detail-reason"
-            className={styles.detailAction}
-            disabled
-            type="button"
-          >
-            View detailed forecast
-          </button>
-          <small id="sqlite-detail-reason">Forecast details are unavailable in SQLite mode.</small>
-        </div>
-      )}
+      <Link
+        className={styles.detailAction}
+        to={createForecastDetailPath(summary.siteSlug, forecastDate)}
+      >
+        <span>View detailed forecast</span>
+        <ArrowIcon />
+      </Link>
     </div>
   );
 };

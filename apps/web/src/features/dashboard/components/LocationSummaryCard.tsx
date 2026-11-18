@@ -74,15 +74,13 @@ export const LocationSummaryCard = ({ forecastDate, site, summary }: LocationSum
     <article aria-labelledby={headingId} className={styles.card}>
       <div className={styles.cardHeader}>
         {heading}
-        {summary.metadata.mode === "mock" ? (
-          <Link
-            aria-label={`View detailed forecast for ${site.name}`}
-            className={styles.cardLink}
-            to={createForecastDetailPath(site.slug, forecastDate)}
-          >
-            <ChevronIcon />
-          </Link>
-        ) : null}
+        <Link
+          aria-label={`View detailed forecast for ${site.name}`}
+          className={styles.cardLink}
+          to={createForecastDetailPath(site.slug, forecastDate)}
+        >
+          <ChevronIcon />
+        </Link>
         <ForecastInformation key={forecastDate} siteName={site.name} summary={summary} />
       </div>
       <div className={styles.primaryMetric}>

@@ -63,7 +63,7 @@ const createDetailApi = () => {
 };
 
 describe("ForecastDetailsRoute", () => {
-  it("loads the detail view, keeps all map sites available, and auto-fetches after selector changes", async () => {
+  it("loads detail without a map and fetches the exact selector values", async () => {
     const { dashboardApi, getForecastDetail } = createDetailApi();
     renderWithQueryClient(
       <MemoryRouter initialEntries={["/forecast?site=sopot&date=2026-07-18"]}>
@@ -79,10 +79,8 @@ describe("ForecastDetailsRoute", () => {
       "href",
       "/?site=sopot&date=2026-07-18",
     );
-    expect(screen.getByTestId("forecast-detail-map")).toBeVisible();
-    expect(siteSelectorSectionMock).toHaveBeenLastCalledWith(
-      expect.objectContaining({ viewportMode: "selected-site" }),
-    );
+    expect(screen.queryByTestId("forecast-detail-map")).not.toBeInTheDocument();
+    expect(siteSelectorSectionMock).not.toHaveBeenCalled();
 
     await userEvent.selectOptions(screen.getByLabelText("Location"), "zlatitsa");
     await waitFor(() => {

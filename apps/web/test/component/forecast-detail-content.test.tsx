@@ -1,90 +1,150 @@
-import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
-
+import { render, screen, within, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
 import {
   ForecastDetailSummary,
   ForecastInputsPanel,
-  PreviousRunComparison,
   TopDriversPanel,
 } from "../../src/features/forecast-details/components/ForecastDetailContent.js";
-import { createForecastResponse } from "../support/dashboard-fixtures.js";
+import { MeasuredPages } from "../../src/features/forecast-details/components/MeasuredPages.js";
+import { createForecastResponse, missingMetric } from "../support/dashboard-fixtures.js";
+
+const inputs = () => {
+  const forecast = createForecastResponse();
+  return render(
+    <ForecastInputsPanel
+      forecast={forecast}
+      selectedHour={forecast.forecastInputs.windowStartUtc}
+      onSelectHour={() => undefined}
+    />,
+  );
+};
 
 describe("forecast detail content", () => {
-  it("renders all detailed outputs, status context, inputs, drivers, and five comparison placeholders", () => {
+  it("keeps the main P100, five ordered cards and each badge to the right of its SVG", () => {
     const forecast = createForecastResponse();
-    render(
-      <>
-        <ForecastDetailSummary forecast={forecast} siteName="Sopot" />
-        <ForecastInputsPanel forecastInputs={forecast.forecastInputs} />
-        <TopDriversPanel forecast={forecast} />
-        <PreviousRunComparison />
-      </>,
-    );
-
-    expect(
-      screen.getByRole("heading", { level: 1, name: "Sopot · Saturday, 18 Jul" }),
-    ).toBeVisible();
-    expect(screen.getByText("Model confidence")).toBeVisible();
-    expect(screen.getAllByText("Conf.")).toHaveLength(5);
-    expect(screen.getAllByText("Mock data").length).toBeGreaterThanOrEqual(3);
-    expect(screen.getByRole("progressbar", { name: /100 kilometres/i })).toHaveAttribute(
-      "aria-valuenow",
-      "65",
-    );
-    expect(screen.getAllByText("Cloudbase").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText("200+ km chance").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText("300+ km chance").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText("Overdevelopment").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("Surface temperature")).toBeVisible();
-    expect(screen.getByText("Wind by altitude")).toBeVisible();
-    expect(screen.getByText("Synthetic thermal strength")).toBeVisible();
-    expect(screen.getByRole("region", { name: "Forecast input values" })).toHaveAttribute(
-      "tabindex",
-      "0",
-    );
-    const comparison = screen.getByRole("heading", {
-      name: "Compared with previous run",
-    }).parentElement;
-    if (comparison === null) {
-      throw new Error("Expected the previous-run comparison container.");
-    }
-    expect(within(comparison).getAllByRole("listitem")[0]).toHaveTextContent("Cloudbase");
-    expect(within(comparison).getAllByText("Unchanged")).toHaveLength(5);
-  });
-
-  it("preserves missing outputs and inputs without rendering a zero", () => {
-    const forecast = createForecastResponse();
-    const missingForecast = {
-      ...forecast,
-      outputs: {
-        ...forecast.outputs,
-        chance200KmPct: {
-          value: null,
-          dataStatus: "missing" as const,
-          confidence: null,
-          missingReason: "No 200 kilometre estimate is available.",
-        },
-      },
-      forecastInputs: {
-        ...forecast.forecastInputs,
-        capeJPerKg: {
-          value: null,
-          dataStatus: "missing" as const,
-          missingReason: "No CAPE input is available.",
-        },
-      },
+    forecast.outputs.chance100KmPct = { ...missingMetric };
+    forecast.outputs.chance200KmPct = {
+      value: 0.001,
+      dataStatus: "baseline",
+      confidence: { level: "high" },
     };
-
-    render(
-      <>
-        <ForecastDetailSummary forecast={missingForecast} siteName="Sopot" />
-        <ForecastInputsPanel forecastInputs={missingForecast.forecastInputs} />
-      </>,
+    render(<ForecastDetailSummary forecast={forecast} siteName="Sopot" />);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Sopot · Saturday, 18 Jul");
+    const cards = screen.getAllByRole("article");
+    expect(cards.map((card) => card.getAttribute("aria-label"))).toEqual([
+      "Cloudbase",
+      "100+ km",
+      "200+ km",
+      "300+ km",
+      "OD risk",
+    ]);
+    for (const card of cards) {
+      const header = card.firstElementChild;
+      expect(header?.firstElementChild?.querySelector("svg")).not.toBeNull();
+      expect(header?.lastElementChild).toHaveTextContent(/Mock|Baseline|Unavailable/u);
+    }
+    const third = cards[2];
+    if (!third) throw new Error("Missing card");
+    expect(within(third).getByText("<0.01%")).toBeVisible();
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    expect(screen.getByText("Model confidence").parentElement).toHaveTextContent(
+      "Confidence unavailable",
     );
-
-    expect(screen.getByText("No 200 kilometre estimate is available.")).toBeVisible();
-    expect(screen.getByText("No CAPE input is available.")).toBeVisible();
-    expect(screen.getAllByText("Unavailable").length).toBeGreaterThanOrEqual(2);
-    expect(screen.queryByText("0")).not.toBeInTheDocument();
+  });
+  it("paginates all XC groups and exposes canonical input values through information", async () => {
+    inputs();
+    expect(screen.getByLabelText("Input category")).toHaveValue("xc");
+    expect(screen.getByLabelText("XC input group")).toHaveValue("Surface temperature");
+    expect(screen.getByText("1–1 of 4")).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByText("2–2 of 4")).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: /Input information:/u }));
+    const popup = screen.getByRole("region", { name: /input$/u });
+    expect(popup).toBeVisible();
+    await userEvent.keyboard("{Escape}");
+    await userEvent.selectOptions(screen.getByLabelText("XC input group"), "Humidity");
+    expect(screen.getByText("1–1 of 3")).toBeVisible();
+    await userEvent.selectOptions(screen.getByLabelText("Input category"), "od");
+    expect(screen.getByLabelText("Input hour")).toHaveValue("2026-07-18T07:00:00Z");
+  });
+  it("clamps pagination to measured row capacity after resize", () => {
+    let available = 90;
+    const rect = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockImplementation(function (this: HTMLElement) {
+        return new DOMRect(0, 0, 200, this.hasAttribute("data-page-row") ? 30 : available);
+      });
+    render(
+      <MeasuredPages
+        items={[1, 2, 3, 4, 5, 6, 7]}
+        label="Measured"
+        maxRows={6}
+        render={(n) => <span>{n}</span>}
+      />,
+    );
+    expect(screen.getByText("1–3 of 7")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    available = 180;
+    fireEvent(window, new Event("resize"));
+    expect(screen.getByText("7–7 of 7")).toBeVisible();
+    available = 240;
+    fireEvent(window, new Event("resize"));
+    expect(screen.getByText("7–7 of 7")).toBeVisible();
+    rect.mockRestore();
+  });
+  it("uses five explanation groups, Q200 semantics, actual support and risk-specific icons", async () => {
+    const f = createForecastResponse();
+    const q = f.explanations[1],
+      p = f.explanations[2],
+      od = f.explanations[3],
+      cloud = f.explanations[4];
+    if (!q || !p || !od || !cloud) throw new Error("Fixture groups missing");
+    q.drivers = [
+      {
+        kind: "xc_contribution",
+        code: "humidity",
+        message: "Raises Q200",
+        rank: 1,
+        xcStage: "q200",
+        direction: "raises",
+        contributionLogit: 0.3,
+        inputs: [],
+      },
+    ];
+    p.drivers = [
+      {
+        kind: "pooled_conversion",
+        code: "pooled",
+        message: "Pooled conversion",
+        rank: 1,
+        supportSuccesses: 3,
+        supportTotal: 42,
+        inputs: [],
+      },
+    ];
+    od.drivers = [
+      { kind: "od_override", code: "rain", message: "Critical rain override", rank: 1, inputs: [] },
+    ];
+    cloud.drivers = [
+      {
+        kind: "cloudbase_reason",
+        code: "future_code",
+        message: "Unknown cloud reason",
+        rank: 1,
+        inputs: [],
+      },
+    ];
+    render(<TopDriversPanel forecast={f} />);
+    expect(screen.getAllByRole("tab")).toHaveLength(5);
+    await userEvent.click(screen.getByRole("tab", { name: "200+ km" }));
+    expect(screen.getByText(/Conditional step P\(200\+ \| 100\+\)/u)).toBeVisible();
+    expect(screen.getByLabelText("Raises the model estimate")).toHaveTextContent("+");
+    await userEvent.click(screen.getByRole("tab", { name: "300+ km" }));
+    expect(screen.getByText("Pooled conversion · 3/42")).toBeVisible();
+    await userEvent.click(screen.getByRole("tab", { name: "OD risk" }));
+    expect(screen.getByLabelText("Critical risk rule")).toHaveTextContent("△");
+    await userEvent.click(screen.getByRole("tab", { name: "Cloudbase" }));
+    expect(screen.getByLabelText("Cloudbase explanation")).toHaveTextContent("ⓘ");
   });
 });

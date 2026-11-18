@@ -125,7 +125,7 @@ export const formatChancePercent = (value: number): string =>
   value > 0 && value < 0.01 ? "<0.01%" : `${chanceFormatter.format(value)}%`;
 
 export const p100Confidence = (
-  metric: DashboardForecastOutputs["chance100KmPct"],
+  metric: Pick<DashboardForecastOutputs["chance100KmPct"], "confidence">,
 ): DisplayConfidence => {
   const note = metric.confidence?.note;
   return { level: metric.confidence?.level ?? "unavailable", notes: note ? [note] : [] };

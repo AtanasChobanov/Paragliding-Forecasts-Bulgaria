@@ -26,8 +26,17 @@ export const ForecastDateSelector = ({
         <span className="visually-hidden">Forecast date</span>
       </label>
       <select id="forecast-detail-date-selector" value={selectedDate} onChange={handleChange}>
+        {!days.some((day) => day.forecastDate === selectedDate) ? (
+          <option value={selectedDate}>
+            {formatForecastDateLong(selectedDate)} · Requested date
+          </option>
+        ) : null}
         {days.map((day) => (
-          <option key={day.forecastDate} value={day.forecastDate}>
+          <option
+            disabled={day.availability === "missing"}
+            key={day.forecastDate}
+            value={day.forecastDate}
+          >
             {formatForecastDateLong(day.forecastDate)}
           </option>
         ))}
