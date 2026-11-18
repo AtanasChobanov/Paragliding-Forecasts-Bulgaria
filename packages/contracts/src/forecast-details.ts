@@ -122,6 +122,13 @@ export const forecastDriverSchema = z
     ) {
       ctx.addIssue({ code: "custom", message: "Pooled conversion requires published support." });
     }
+    if (
+      (driver.scorePoints !== undefined && driver.kind !== "od_score_component") ||
+      (driver.kind !== "pooled_conversion" &&
+        (driver.supportSuccesses !== undefined || driver.supportTotal !== undefined))
+    ) {
+      ctx.addIssue({ code: "custom", message: "Driver evidence fields disagree with kind." });
+    }
   });
 
 export const forecastExplanationSchema = z
@@ -176,7 +183,8 @@ export const cloudbaseHourSchema = z
       (hour.regime === "indeterminate" && !full && !empty) ||
       (!["cumulus", "indeterminate"].includes(hour.regime) && !empty) ||
       (hour.regime === "missing" && hour.confidenceLevel !== null) ||
-      (hour.regime !== "missing" && hour.confidenceLevel === null)
+      (hour.regime !== "missing" && hour.confidenceLevel === null) ||
+      (hour.reasonCode === "potential_base_outside_profile" && !empty)
     ) {
       ctx.addIssue({ code: "custom", message: "Hourly regime, heights and confidence disagree." });
     }
@@ -280,6 +288,19 @@ export const forecastResponseSchema = z
         path: ["outputs", "cloudbase"],
         message: "Daily cloudbase does not match its own hourly maximum.",
       });
+    }
+    if (!expectedKind) {
+      const uniform = forecast.cloudbaseHours.every(
+        (h) => h.regime === forecast.cloudbaseHours[0]?.regime,
+      );
+      const regime = forecast.cloudbaseHours[0]?.regime;
+      const expected = uniform && regime !== "cumulus" ? regime : "indeterminate";
+      if (cloud.kind !== expected)
+        ctx.addIssue({
+          code: "custom",
+          path: ["outputs", "cloudbase"],
+          message: "Daily nonnumeric cloudbase disagrees with its hourly regimes.",
+        });
     }
   });
 
