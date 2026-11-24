@@ -108,6 +108,7 @@ const OutputMetric = ({
     </div>
     <div className={styles.outputConfidence}>
       <ConfidenceIndicator
+        adjacent
         compact
         shortUnavailable
         accessibleLabel={`${label} confidence`}

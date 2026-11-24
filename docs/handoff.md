@@ -89,6 +89,8 @@ immediately beside their segments rather than at the far edge. A further owner
 refinement groups probability icons/status/information on the right, with confidence
 on a second row below. Weather cards use equal body/footer tracks, keeping both
 confidence strips flush with the bottom border despite the extra AGL line.
+The owner subsequently requested compact centered weather confidence groups:
+Confidence, segments and level now sit together in each column's center.
 Compact layouts use shorter rows and preserve
 missing values and per-metric evidence. This updates the earlier detail presentation
 choice; API and model semantics are unchanged. T-025 remains Review pending owner
