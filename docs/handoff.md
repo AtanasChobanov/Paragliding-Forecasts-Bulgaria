@@ -85,12 +85,16 @@ Cloudbase and OD risk sit underneath in two equal columns. The owner then
 requested removal of the daily-maximum footer: signed site AGL now appears
 directly below MSL in smaller, normal-weight secondary text. The two weather
 columns again show a Confidence prefix. Probability confidence levels sit
-immediately beside their segments rather than at the far edge. Compact layouts use shorter rows and preserve
+immediately beside their segments rather than at the far edge. A further owner
+refinement groups probability icons/status/information on the right, with confidence
+on a second row below. Weather cards use equal body/footer tracks, keeping both
+confidence strips flush with the bottom border despite the extra AGL line.
+Compact layouts use shorter rows and preserve
 missing values and per-metric evidence. This updates the earlier detail presentation
 choice; API and model semantics are unchanged. T-025 remains Review pending owner
 visual acceptance. Reload the owner's running site to inspect the change.
 
-Verification: all 145 web tests and 28 Playwright tests passed, including the
+Verification: all 145 web tests and 29 Playwright tests passed, including the
 eight viewport/text settings and missing metrics. Web typecheck/build, root lint,
 formatting, repo check and whitespace check passed. Desktop and compact screenshots
 were inspected. Product servers and ML commands remain owner-run.

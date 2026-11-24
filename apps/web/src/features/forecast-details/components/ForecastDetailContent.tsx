@@ -180,28 +180,32 @@ export const ForecastDetailSummary = ({
                   {metric.value === null ? "Unavailable" : formatChancePercent(metric.value)}
                 </strong>
                 <span>{label} chance</span>
-                <div className={styles.outputHeader}>
-                  <span aria-hidden="true" className={styles.outputIcon}>
-                    {icon}
-                  </span>
-                  <DataStatusBadge compact short status={metric.dataStatus} />
-                </div>
-                <InformationPopover
-                  label={`${label} information`}
-                  regionLabel={`${label} evidence`}
-                  pages={informationPages(metricNotes(metric))}
-                />
               </div>
-              <div className={styles.probabilityConfidence}>
-                <span>Model confidence</span>
-                <ConfidenceIndicator
-                  compact
-                  adjacent
-                  shortUnavailable
-                  confidence={p100Confidence(metric)}
-                  label={null}
-                  accessibleLabel={`${label === "100+ km" ? "P100 model" : label} confidence`}
-                />
+              <div className={styles.probabilityEvidence}>
+                <div className={styles.probabilityMeta}>
+                  <div className={styles.outputHeader}>
+                    <span aria-hidden="true" className={styles.outputIcon}>
+                      {icon}
+                    </span>
+                    <DataStatusBadge compact short status={metric.dataStatus} />
+                  </div>
+                  <InformationPopover
+                    label={`${label} information`}
+                    regionLabel={`${label} evidence`}
+                    pages={informationPages(metricNotes(metric))}
+                  />
+                </div>
+                <div className={styles.probabilityConfidence}>
+                  <span>Model confidence</span>
+                  <ConfidenceIndicator
+                    compact
+                    adjacent
+                    shortUnavailable
+                    confidence={p100Confidence(metric)}
+                    label={null}
+                    accessibleLabel={`${label === "100+ km" ? "P100 model" : label} confidence`}
+                  />
+                </div>
               </div>
               {metric.value !== null ? (
                 <ForecastChanceProgress label={`chance of ${label} or more`} value={metric.value} />

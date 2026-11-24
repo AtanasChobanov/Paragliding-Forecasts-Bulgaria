@@ -735,3 +735,124 @@
     font-size: 0.5rem;
   }
 }
+.probabilityRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-content: center;
+}
+.probabilityHeading {
+  grid-column: 1;
+  grid-row: 1;
+}
+.probabilityEvidence {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+.probabilityMeta {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  .outputHeader {
+    width: auto;
+  }
+  --forecast-info-size: 1.1rem;
+  --forecast-info-icon: 0.95rem;
+}
+.probabilityEvidence .probabilityConfidence {
+  width: auto;
+  > div {
+    flex: 0 1 auto;
+  }
+}
+.probabilityRow > [role="progressbar"] {
+  grid-column: 1/-1;
+}
+.summaryMetrics .outputGrid {
+  overflow: hidden;
+}
+.summaryMetrics .outputMetric {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  justify-items: center;
+  padding: 0;
+  gap: 0.15rem;
+}
+.summaryMetrics .outputHeader {
+  grid-column: 1;
+  grid-row: 1;
+  padding-top: 0.25rem;
+}
+.summaryMetrics .outputLabel {
+  grid-column: 1;
+  grid-row: 2;
+}
+.summaryMetrics .outputReading {
+  grid-column: 1;
+  grid-row: 3;
+}
+.summaryMetrics .outputConfidence {
+  grid-column: 1;
+  grid-row: 4;
+  width: 100%;
+  margin: 0;
+  padding: 0.25rem;
+  border-top: 1px solid var(--color-border);
+  align-self: stretch;
+}
+@media (max-width: 69.999rem) {
+  .probabilityEvidence {
+    gap: 0;
+  }
+  .probabilityMeta {
+    --forecast-info-size: 0.7rem;
+    --forecast-info-icon: 0.65rem;
+    gap: 0.15rem;
+    .outputHeader {
+      --dashboard-caption: 0.4rem;
+      --compact-badge-height: 0.7rem;
+      --compact-badge-padding: 0.03rem 0.08rem;
+    }
+    .outputIcon svg {
+      width: 0.55rem;
+      height: 0.55rem;
+    }
+  }
+  .summaryMetrics .outputMetric {
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    gap: 0;
+  }
+  .summaryMetrics .outputHeader {
+    grid-column: 1;
+    grid-row: 1;
+    padding-top: 0;
+  }
+  .summaryMetrics .outputLabel {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .summaryMetrics .outputReading {
+    grid-column: 1/-1;
+    grid-row: 2;
+    flex-direction: row;
+    gap: 0.25rem;
+  }
+  .summaryMetrics .outputConfidence {
+    grid-column: 1/-1;
+    grid-row: 3;
+    padding: 0.06rem 0.15rem;
+  }
+}
+@media (max-width: 69.999rem) {
+  .summaryMetrics .outputReading {
+    flex-direction: column;
+    gap: 0;
+  }
+}

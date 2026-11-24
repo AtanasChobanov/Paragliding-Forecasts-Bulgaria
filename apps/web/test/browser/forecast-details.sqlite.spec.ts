@@ -236,3 +236,29 @@ for (const scenario of [
       .toEqual([]);
     await page.screenshot({ path: test.info().outputPath("missing-metrics.png") });
   });
+
+test("groups probability confidence below right metadata and aligns weather footers", async ({
+  page,
+}) => {
+  await openDetail(page);
+  for (const name of ["100+ km", "200+ km", "300+ km"]) {
+    const card = page.getByRole("article", { name, exact: true });
+    const info = await card
+      .getByRole("button", { name: `${name} information`, exact: true })
+      .boundingBox();
+    const confidence = await card.getByRole("group", { name: /confidence/i }).boundingBox();
+    expect(info).not.toBeNull();
+    expect(confidence).not.toBeNull();
+    if (info && confidence) expect(confidence.y).toBeGreaterThanOrEqual(info.y + info.height - 1);
+  }
+  const cloud = page.getByRole("article", { name: "Conditional LCL", exact: true });
+  const od = page.getByRole("article", { name: "OD risk", exact: true });
+  const left = await cloud.getByRole("group", { name: /confidence/i }).boundingBox();
+  const right = await od.getByRole("group", { name: /confidence/i }).boundingBox();
+  expect(left).not.toBeNull();
+  expect(right).not.toBeNull();
+  if (left && right) {
+    expect(Math.abs(left.y - right.y)).toBeLessThanOrEqual(1);
+    expect(Math.abs(left.y + left.height - right.y - right.height)).toBeLessThanOrEqual(1);
+  }
+});
