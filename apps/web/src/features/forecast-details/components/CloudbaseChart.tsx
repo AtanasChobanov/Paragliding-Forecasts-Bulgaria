@@ -1,6 +1,8 @@
 import type { ForecastResponse } from "@paragliding-forecasts/contracts";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { ConfidenceIndicator } from "../../dashboard/components/ConfidenceIndicator.js";
+import { formatInteger } from "../../dashboard/forecast-presentation.js";
 import { Pagination } from "../../../components/pagination/Pagination.js";
 import { DashboardPanel } from "../../../components/dashboard-panel/DashboardPanel.js";
 import {
@@ -54,12 +56,45 @@ const HourTooltip = ({
     };
   }, [onClose]);
   if (!hour) return null;
-  const pages = informationPages([
-    `${formatSofiaHour(hour.validAtUtc)} Europe/Sofia · ${cloudbaseRegimeLabel(hour)}${selectedHour === defaultCloudbaseHour(forecast) && hour.heightMslM !== null ? " · Daily maximum" : ""}. ${hour.heightMslM === null ? "No numeric height." : `${String(hour.heightMslM)} m MSL; ${String(hour.heightModelAglM)} m model AGL; ${String(hour.heightSiteAglM)} m site AGL.`} ${hour.confidenceLevel ?? "Unavailable"} confidence.`,
-    `${hour.reasonText} Code: ${hour.reasonCode}.${numericCloudbaseType(hour) === "conditional" ? " Conditional LCL is a conditional condensation level, not an estimated thermal top." : ""}`,
-    ...(hour.note ? [hour.note] : []),
-    ...(context?.cloudbaseContext.flatMap(inputInformation) ?? []),
-  ]);
+  const daily = selectedHour === defaultCloudbaseHour(forecast) && hour.heightMslM !== null;
+  const pages = [
+    <div key="height" className={styles.heightSummary}>
+      {daily ? <span className={styles.maximumBadge}>Daily maximum</span> : null}
+      {hour.heightMslM === null ? (
+        <strong className={styles.noHeight}>No numeric height.</strong>
+      ) : (
+        <>
+          <strong className={styles.mslHeight}>
+            {formatInteger(hour.heightMslM)} <span>m MSL</span>
+          </strong>
+          <div className={styles.aglHeights}>
+            <span>
+              {hour.heightSiteAglM === null ? "Unavailable" : formatInteger(hour.heightSiteAglM)} m
+              site AGL
+            </span>
+            <span>
+              {hour.heightModelAglM === null ? "Unavailable" : formatInteger(hour.heightModelAglM)}{" "}
+              m model AGL
+            </span>
+          </div>
+        </>
+      )}
+      <div className={styles.heightConfidence}>
+        <ConfidenceIndicator
+          compact
+          adjacent
+          accessibleLabel="Hourly confidence"
+          confidence={{ level: hour.confidenceLevel ?? "unavailable", notes: [] }}
+        />
+      </div>
+    </div>,
+    ...informationPages([
+      `${hour.reasonText} Code: ${hour.reasonCode}.${numericCloudbaseType(hour) === "conditional" ? " Conditional LCL is a conditional condensation level, not an estimated thermal top." : ""}`,
+      `${formatSofiaHour(hour.validAtUtc)} Europe/Sofia · ${cloudbaseRegimeLabel(hour)}`,
+      ...(hour.note ? [hour.note] : []),
+      ...(context?.cloudbaseContext.flatMap(inputInformation) ?? []),
+    ]),
+  ];
   const above = anchor.top > window.innerHeight / 2;
   return createPortal(
     <div
@@ -84,14 +119,6 @@ const HourTooltip = ({
           pages={pages.length}
           onPageChange={setPage}
         />
-        <button
-          className={styles.closeTooltip}
-          type="button"
-          aria-label="Close cloudbase tooltip"
-          onClick={onClose}
-        >
-          ×
-        </button>
       </div>
     </div>,
     document.body,

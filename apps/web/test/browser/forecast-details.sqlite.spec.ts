@@ -75,6 +75,11 @@ for (const size of sizes)
           })),
       ),
     ).toEqual([]);
+    for (const label of await page
+      .locator(".recharts-xAxis .recharts-cartesian-axis-tick-value")
+      .allTextContents()) {
+      expect(label).toMatch(/^\d{2}:00$/u);
+    }
     // Every interactive hour must align with its Recharts band, including null heights.
     expect(
       await page.evaluate(() =>
@@ -121,9 +126,7 @@ test("synchronizes hours with inputs, supports keyboard, touch-style click and m
   await hour.focus();
   await hour.press("ArrowRight");
   await expect(page.getByLabel("Input hour")).toHaveValue("2026-11-17T13:00:00Z");
-  await expect(page.getByRole("region", { name: "Cloudbase hour information" })).toContainText(
-    "15:00",
-  );
+  await expect(page.getByRole("region", { name: "Cloudbase hour information" })).toBeVisible();
   await page.keyboard.press("Home");
   await expect(page.getByLabel("Input hour")).toHaveValue("2026-11-17T08:00:00Z");
   await page.keyboard.press("End");
@@ -135,7 +138,7 @@ test("synchronizes hours with inputs, supports keyboard, touch-style click and m
   await expect(page.getByRole("region", { name: "Cloudbase hour information" })).toContainText(
     "Daily maximum",
   );
-  await page.getByRole("button", { name: "Close cloudbase tooltip" }).click();
+  await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Forecast information", exact: true }).click();
   const info = page.getByRole("region", { name: /Forecast information for/ });
   await expect(info).toContainText("GFS 16 Nov 2026 06Z");
@@ -223,6 +226,7 @@ test.describe("detail touch", () => {
     await page.getByRole("button", { name: "14:00 Sofia · Conditional LCL" }).tap();
     const tooltip = page.getByRole("region", { name: "Cloudbase hour information" });
     await expect(tooltip).toContainText("Daily maximum");
+    await page.screenshot({ path: test.info().outputPath("hour-tooltip.png") });
     await expect(tooltip.getByRole("navigation")).toHaveText(/^1 of \d+$/u);
     await tooltip.getByRole("button", { name: "Next" }).tap();
     await expect(tooltip.getByRole("navigation")).toHaveText(/^2 of \d+$/u);

@@ -232,6 +232,11 @@ references, confidence, reason/code, note and matching cloudbase context.
 Left/Right and Home/End select hours; Enter/press pins the tooltip for its
 page controls. The selected hour synchronizes with OD/cloudbase inputs.
 Tooltips use a portal to stay inside the viewport.
+Hour ticks use `HH:mm`. The first tooltip page emphasizes MSL, followed by
+secondary site/model AGL readings, the shared confidence indicator and an optional
+daily-maximum badge. Reasons, hour/regime and exact inputs remain on subsequent
+pages. There is no close button: pointer leave dismisses an unpinned tooltip;
+Escape or an outside press dismisses a pinned tooltip.
 The themed regime band uses Recharts' plot/scale hooks. The adjacent native DOM
 hour controls retain all eleven selectable slots, even without numeric heights.
 They own keyboard focus, so Recharts' parallel accessibility layer is disabled

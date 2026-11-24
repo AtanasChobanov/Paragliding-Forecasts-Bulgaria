@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ForecastResponse } from "@paragliding-forecasts/contracts";
@@ -106,6 +106,11 @@ describe("hourly cloudbase chart", () => {
     expect(screen.getByRole("region", { name: "Cloudbase hour information" })).toHaveTextContent(
       "Daily maximum",
     );
+    const popup = screen.getByRole("region", { name: "Cloudbase hour information" });
+    expect(within(popup).getByText("2,400").tagName).toBe("STRONG");
+    expect(within(popup).getByRole("group", { name: /Hourly confidence/u })).toBeVisible();
+    expect(within(popup).queryByText(/Estimated cloudbase/u)).not.toBeInTheDocument();
+    expect(within(popup).queryByRole("button", { name: /Close/u })).not.toBeInTheDocument();
     await userEvent.keyboard("{Escape}");
     expect(
       screen.queryByRole("region", { name: "Cloudbase hour information" }),

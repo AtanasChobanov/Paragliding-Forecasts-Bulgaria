@@ -222,11 +222,11 @@ export const CloudbasePlot = ({
           axisLine={false}
           tickLine={false}
           tickMargin={20}
-          minTickGap={18}
+          minTickGap={12}
           tick={{ fill: "var(--color-text-secondary)" }}
           tickFormatter={(index: number) => {
             const hour = hours[index];
-            return hour ? formatSofiaHour(hour.validAtUtc).slice(0, 2) : "";
+            return hour ? formatSofiaHour(hour.validAtUtc) : "";
           }}
         />
         <YAxis

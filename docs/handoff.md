@@ -78,6 +78,17 @@ next requested ticket on top of the branch that supplies its dependencies.
 
 ## T-025 Recharts migration — 2026-11-25
 
+Owner follow-up: X-axis ticks now show `HH:mm`, with Recharts thinning labels
+when needed. The tooltip's first page has a large primary MSL reading, secondary
+site/model AGL, the shared confidence meter and a daily-maximum badge when
+applicable. Reasons, hour/regime, notes and exact inputs remain paginated after
+the summary. The close button was removed; hover leave, outside press and Escape
+retain their previous dismissal behavior. Missing numeric values remain explicit.
+Verification: 146 web and 29 browser tests, web typecheck/build, root lint,
+formatting, repo and whitespace checks passed. The browser checks cover formatted
+ticks across all eight viewport/text settings and capture the mobile tooltip.
+Product servers and ML commands were not run.
+
 The owner approved Recharts after a read-only comparison of chart libraries.
 The hourly cloudbase plot now uses Recharts 3.11.1 for responsive sizing, SVG
 axes/grid, linear lines, segment areas and the selected-hour reference line.
