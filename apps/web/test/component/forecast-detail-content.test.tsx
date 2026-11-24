@@ -52,6 +52,20 @@ describe("forecast detail content", () => {
       screen.getByRole("group", { name: "P100 model confidence. Confidence unavailable" }),
     ).toBeVisible();
   });
+  it("places signed site AGL under MSL and restores weather confidence labels", () => {
+    const forecast = createForecastResponse();
+    const maximum = forecast.cloudbaseHours[3];
+    if (!maximum) throw new Error("Missing fixture maximum");
+    maximum.heightSiteAglM = -125;
+    render(<ForecastDetailSummary forecast={forecast} siteName="Sopot" />);
+    const cloud = screen.getByRole("article", { name: "Cloudbase" });
+    expect(within(cloud).getByText("-125 m site AGL")).toBeVisible();
+    expect(within(cloud).getByText("Confidence")).toBeVisible();
+    expect(
+      within(screen.getByRole("article", { name: "OD risk" })).getByText("Confidence"),
+    ).toBeVisible();
+    expect(screen.queryByText(/daily maximum ·/u)).not.toBeInTheDocument();
+  });
   it("paginates all XC groups and exposes canonical input values through information", async () => {
     inputs();
     expect(screen.getByLabelText("Input category")).toHaveValue("xc");

@@ -708,3 +708,30 @@
     grid-template-rows: minmax(0, 3fr) minmax(0, 1.6fr);
   }
 }
+
+.outputReading {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+}
+.secondaryHeight {
+  font-size: var(--detail-caption);
+  font-weight: 400;
+  color: var(--color-text-secondary);
+  line-height: 1.2;
+}
+@media (max-width: 69.999rem) {
+  .summaryMetrics .outputReading {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .summaryMetrics .outputConfidence {
+    --confidence-segments-width: 1rem;
+    --dashboard-caption: 0.5rem;
+  }
+  .secondaryHeight {
+    font-size: 0.5rem;
+  }
+}

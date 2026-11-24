@@ -79,11 +79,13 @@ const OutputMetric = ({
   label,
   metric,
   value,
+  secondary,
 }: {
   readonly icon: ReactNode;
   readonly label: string;
   readonly metric: Metric;
   readonly value: string;
+  readonly secondary?: string | undefined;
 }) => (
   <article aria-label={label} data-status={metric.dataStatus} className={styles.outputMetric}>
     <div className={styles.outputHeader}>
@@ -100,14 +102,17 @@ const OutputMetric = ({
         pages={informationPages(metricNotes(metric))}
       />
     </div>
-    <strong className={styles.outputValue}>{value}</strong>
+    <div className={styles.outputReading}>
+      <strong className={styles.outputValue}>{value}</strong>
+      {secondary ? <span className={styles.secondaryHeight}>{secondary}</span> : null}
+    </div>
     <div className={styles.outputConfidence}>
       <ConfidenceIndicator
         compact
         shortUnavailable
         accessibleLabel={`${label} confidence`}
         confidence={p100Confidence(metric)}
-        label={null}
+        label="Confidence"
       />
     </div>
   </article>
@@ -191,6 +196,7 @@ export const ForecastDetailSummary = ({
                 <span>Model confidence</span>
                 <ConfidenceIndicator
                   compact
+                  adjacent
                   shortUnavailable
                   confidence={p100Confidence(metric)}
                   label={null}
@@ -209,6 +215,13 @@ export const ForecastDetailSummary = ({
             label={cloud.label}
             metric={outputs.cloudbase}
             value={`${cloud.value}${cloud.unit ? ` ${cloud.unit}` : ""}`}
+            secondary={
+              "valueMslM" in outputs.cloudbase &&
+              chosen?.heightSiteAglM !== null &&
+              chosen?.heightSiteAglM !== undefined
+                ? `${formatInteger(chosen.heightSiteAglM)} m site AGL`
+                : undefined
+            }
           />
           <OutputMetric
             icon={<OverdevelopmentIcon />}
@@ -222,14 +235,6 @@ export const ForecastDetailSummary = ({
           />
         </div>
       </div>
-      {"valueMslM" in outputs.cloudbase &&
-      chosen?.heightSiteAglM !== null &&
-      chosen?.heightSiteAglM !== undefined ? (
-        <p className={styles.siteAgl}>
-          {cloud.label} daily maximum · {formatSofiaHour(chosen.validAtUtc)} ·{" "}
-          {formatInteger(chosen.heightSiteAglM)} m site AGL
-        </p>
-      ) : null}
     </section>
   );
 };

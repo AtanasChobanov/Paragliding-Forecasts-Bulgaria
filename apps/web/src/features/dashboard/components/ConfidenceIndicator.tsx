@@ -11,6 +11,7 @@ export interface ConfidenceIndicatorProps {
   /** Whether to render the supplementary confidence note. */
   readonly showNote?: boolean;
   readonly shortUnavailable?: boolean;
+  readonly adjacent?: boolean;
 }
 
 const filledSegmentCount = (level: DisplayConfidence["level"]): number => {
@@ -34,6 +35,7 @@ export const ConfidenceIndicator = ({
   label: prefix = "Confidence",
   showNote = !compact,
   shortUnavailable = false,
+  adjacent = false,
 }: ConfidenceIndicatorProps) => {
   const label = formatConfidence(confidence.level);
   const note = confidence.notes.join(" ");
@@ -43,7 +45,9 @@ export const ConfidenceIndicator = ({
   return (
     <div
       aria-label={accessibleLabel === undefined ? undefined : `${accessibleLabel}. ${label}`}
-      className={compact ? styles.compact : undefined}
+      className={[compact ? styles.compact : undefined, adjacent ? styles.adjacent : undefined]
+        .filter(Boolean)
+        .join(" ")}
       role={accessibleLabel === undefined ? undefined : "group"}
       title={note || undefined}
     >

@@ -67,3 +67,7 @@
     min-width: auto;
   }
 }
+
+.compact.adjacent .row {
+  justify-content: flex-start;
+}
