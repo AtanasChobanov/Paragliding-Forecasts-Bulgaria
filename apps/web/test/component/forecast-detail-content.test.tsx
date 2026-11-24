@@ -21,7 +21,7 @@ const inputs = () => {
 };
 
 describe("forecast detail content", () => {
-  it("keeps the main P100, five ordered cards and each badge to the right of its SVG", () => {
+  it("stacks three probability rows above cloudbase and OD with metric-specific badges", () => {
     const forecast = createForecastResponse();
     forecast.outputs.chance100KmPct = { ...missingMetric };
     forecast.outputs.chance200KmPct = {
@@ -33,21 +33,21 @@ describe("forecast detail content", () => {
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Sopot · Saturday, 18 Jul");
     const cards = screen.getAllByRole("article");
     expect(cards.map((card) => card.getAttribute("aria-label"))).toEqual([
-      "Cloudbase",
       "100+ km",
       "200+ km",
       "300+ km",
+      "Cloudbase",
       "OD risk",
     ]);
     for (const card of cards) {
-      const header = card.firstElementChild;
+      const header = card.querySelector("svg")?.parentElement?.parentElement;
       expect(header?.firstElementChild?.querySelector("svg")).not.toBeNull();
       expect(header?.lastElementChild).toHaveTextContent(/Mock|Baseline|Unavailable/u);
     }
-    const third = cards[2];
+    const third = cards[1];
     if (!third) throw new Error("Missing card");
     expect(within(third).getByText("<0.01%")).toBeVisible();
-    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("progressbar")).toHaveLength(2);
     expect(
       screen.getByRole("group", { name: "P100 model confidence. Confidence unavailable" }),
     ).toBeVisible();

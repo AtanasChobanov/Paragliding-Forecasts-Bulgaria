@@ -180,9 +180,9 @@ left, inputs and explanations stacked right. Compact layouts allocate
 28:20:24:28 to summary, inputs, explanations and chart. The detail route has no
 map, tile requests or previous-run placeholder.
 
-The summary retains the large P100 value, progress and P100-only model
-confidence. Five cards keep their own icon, adjacent compact status,
-confidence and information. Cloudbase shows metres MSL and signed site AGL
+The detail summary stacks three compact 100+/200+/300+ km probability rows,
+each with its percentage, progress bar, status, own confidence and information.
+Cloudbase and OD risk share two equal columns below those rows. Cloudbase shows metres MSL and signed site AGL
 for the selected daily maximum. Publication metadata uses the GFS cycle and
 the actual publication time in Sofia. Detail information uses compact pages;
 hover/focus opens it, press pins it, and Escape/outside press closes it.

@@ -155,73 +155,72 @@ export const ForecastDetailSummary = ({
           pages={informationPages(info)}
         />
       </div>
-      <div className={styles.primaryChance}>
-        <strong>
-          {chance100.value === null ? "Unavailable" : formatChancePercent(chance100.value)}
-        </strong>
-        <span>100+ km chance</span>
-        <div className={styles.primaryConfidence}>
-          <span>Model confidence</span>
-          <ConfidenceIndicator
-            compact
-            shortUnavailable
-            confidence={p100Confidence(chance100)}
-            label={null}
-            accessibleLabel="P100 model confidence"
+      <div aria-label="Detailed forecast outputs" className={styles.summaryMetrics}>
+        <div className={styles.probabilities}>
+          {(
+            [
+              ["100+ km", chance100, <OpportunityIcon />],
+              ["200+ km", outputs.chance200KmPct, <RouteIcon />],
+              ["300+ km", outputs.chance300KmPct, <DistanceFlagIcon />],
+            ] as const
+          ).map(([label, metric, icon]) => (
+            <article
+              aria-label={label}
+              data-status={metric.dataStatus}
+              className={styles.probabilityRow}
+              key={label}
+            >
+              <div className={styles.probabilityHeading}>
+                <strong>
+                  {metric.value === null ? "Unavailable" : formatChancePercent(metric.value)}
+                </strong>
+                <span>{label} chance</span>
+                <div className={styles.outputHeader}>
+                  <span aria-hidden="true" className={styles.outputIcon}>
+                    {icon}
+                  </span>
+                  <DataStatusBadge compact short status={metric.dataStatus} />
+                </div>
+                <InformationPopover
+                  label={`${label} information`}
+                  regionLabel={`${label} evidence`}
+                  pages={informationPages(metricNotes(metric))}
+                />
+              </div>
+              <div className={styles.probabilityConfidence}>
+                <span>Model confidence</span>
+                <ConfidenceIndicator
+                  compact
+                  shortUnavailable
+                  confidence={p100Confidence(metric)}
+                  label={null}
+                  accessibleLabel={`${label === "100+ km" ? "P100 model" : label} confidence`}
+                />
+              </div>
+              {metric.value !== null ? (
+                <ForecastChanceProgress label={`chance of ${label} or more`} value={metric.value} />
+              ) : null}
+            </article>
+          ))}
+        </div>
+        <div className={styles.outputGrid}>
+          <OutputMetric
+            icon={<CloudbaseIcon />}
+            label={cloud.label}
+            metric={outputs.cloudbase}
+            value={`${cloud.value}${cloud.unit ? ` ${cloud.unit}` : ""}`}
+          />
+          <OutputMetric
+            icon={<OverdevelopmentIcon />}
+            label="OD risk"
+            metric={outputs.overdevelopmentRisk}
+            value={
+              outputs.overdevelopmentRisk.value === null
+                ? "Unavailable"
+                : formatRisk(outputs.overdevelopmentRisk.value)
+            }
           />
         </div>
-        {chance100.value !== null ? (
-          <div className={styles.primaryProgress}>
-            <ForecastChanceProgress
-              label="chance of 100 kilometres or more"
-              value={chance100.value}
-            />
-          </div>
-        ) : null}
-      </div>
-      <div aria-label="Detailed forecast outputs" className={styles.outputGrid}>
-        <OutputMetric
-          icon={<CloudbaseIcon />}
-          label={cloud.label}
-          metric={outputs.cloudbase}
-          value={`${cloud.value}${cloud.unit ? ` ${cloud.unit}` : ""}`}
-        />
-        <OutputMetric
-          icon={<OpportunityIcon />}
-          label="100+ km"
-          metric={chance100}
-          value={chance100.value === null ? "Unavailable" : formatChancePercent(chance100.value)}
-        />
-        <OutputMetric
-          icon={<RouteIcon />}
-          label="200+ km"
-          metric={outputs.chance200KmPct}
-          value={
-            outputs.chance200KmPct.value === null
-              ? "Unavailable"
-              : formatChancePercent(outputs.chance200KmPct.value)
-          }
-        />
-        <OutputMetric
-          icon={<DistanceFlagIcon />}
-          label="300+ km"
-          metric={outputs.chance300KmPct}
-          value={
-            outputs.chance300KmPct.value === null
-              ? "Unavailable"
-              : formatChancePercent(outputs.chance300KmPct.value)
-          }
-        />
-        <OutputMetric
-          icon={<OverdevelopmentIcon />}
-          label="OD risk"
-          metric={outputs.overdevelopmentRisk}
-          value={
-            outputs.overdevelopmentRisk.value === null
-              ? "Unavailable"
-              : formatRisk(outputs.overdevelopmentRisk.value)
-          }
-        />
       </div>
       {"valueMslM" in outputs.cloudbase &&
       chosen?.heightSiteAglM !== null &&

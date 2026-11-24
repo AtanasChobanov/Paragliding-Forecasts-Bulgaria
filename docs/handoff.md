@@ -76,6 +76,22 @@ next requested ticket on top of the branch that supplies its dependencies.
   channel, and deduplication belong to T-027 through T-031. Forecast guidance
   is informational and carries source and confidence limitations.
 
+## T-025 summary presentation refinement — 2026-11-24
+
+The owner requested three compact probability rows instead of the tall five-column
+metric strip. The detail summary now stacks 100+/200+/300+ km with the previous
+percentage/progress styling and each metric's own confidence, status and information.
+Cloudbase and OD risk sit underneath in two equal columns. The daily cloudbase
+maximum/site AGL footer remains. Compact layouts use shorter rows and preserve
+missing values and per-metric evidence. This updates the earlier detail presentation
+choice; API and model semantics are unchanged. T-025 remains Review pending owner
+visual acceptance. Reload the owner's running site to inspect the change.
+
+Verification: all 144 web tests and 28 Playwright tests passed, including the
+eight viewport/text settings and missing metrics. Web typecheck/build, root lint,
+formatting, repo check and whitespace check passed. Desktop and compact screenshots
+were inspected. Product servers and ML commands remain owner-run.
+
 ## T-025 detailed forecast checkpoint — 2026-11-18
 
 The detailed forecast iteration is implemented and verified. T-025 is
