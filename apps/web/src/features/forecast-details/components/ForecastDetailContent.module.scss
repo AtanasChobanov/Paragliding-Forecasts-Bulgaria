@@ -1,3 +1,5 @@
+@use "../../../styles/mixins";
+
 .summary {
   display: flex;
   height: 100%;
@@ -144,17 +146,66 @@
   grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
   gap: 0.35rem;
 }
-.selectors select,
-.metricSelect {
-  width: 100%;
+.selectField {
+  display: grid;
   min-width: 0;
-  min-height: 1.5rem;
-  padding: 0.1rem 0.2rem;
-  border: 1px solid var(--color-border-strong);
-  border-radius: 0.3rem;
-  background: var(--color-surface-subtle);
-  color: var(--color-heading);
-  font-size: var(--detail-caption);
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+
+  &::after {
+    position: absolute;
+    right: 0.5rem;
+    width: 0.35rem;
+    height: 0.35rem;
+    transform: translateY(-0.1rem) rotate(45deg);
+    border-right: 1.5px solid var(--color-heading);
+    border-bottom: 1.5px solid var(--color-heading);
+    content: "";
+    pointer-events: none;
+  }
+
+  &:focus-within {
+    @include mixins.focus-ring;
+    outline-offset: -2px;
+  }
+
+  select {
+    appearance: none;
+    width: 100%;
+    min-width: 0;
+    min-height: calc(1.5rem - 2px);
+    padding: 0 1.2rem 0 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--color-heading);
+    font-size: var(--detail-caption);
+    font-weight: 600;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+  }
+}
+.selectIcon {
+  display: grid;
+  place-items: center;
+  padding: 0 0.35rem;
+  color: var(--color-primary);
+  pointer-events: none;
+
+  svg {
+    width: 1rem;
+    height: 1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.75;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
 }
 .measuredPages {
   display: flex;
@@ -162,6 +213,7 @@
   min-height: 0;
   flex: 1;
   flex-direction: column;
+  --pagination-control-size: 1.2rem;
 }
 .pageRows {
   flex: 1;
@@ -197,25 +249,6 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.pagination {
-  display: flex;
-  flex: 0 0 auto;
-  min-height: 1.25rem;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.3rem;
-  font-size: var(--detail-caption);
-  color: var(--color-text-secondary);
-  button {
-    padding: 0.1rem 0.35rem;
-    border: 1px solid var(--color-border-strong);
-    border-radius: 0.25rem;
-    background: var(--color-surface-subtle);
-    color: var(--color-heading);
-    font-size: inherit;
-    line-height: 1.25;
-  }
 }
 .empty {
   margin: 0.2rem 0;
@@ -323,7 +356,7 @@
     display: none;
   }
   .metricSelect {
-    display: block;
+    display: grid;
   }
 }
 @media (max-width: 42rem) {
@@ -423,9 +456,8 @@
     font-size: 0.48rem;
     line-height: 1.1;
   }
-  .selectors select,
-  .metricSelect {
-    min-height: 1.2rem;
+  .selectField select {
+    min-height: calc(1.2rem - 2px);
   }
   .panelContent {
     gap: 0.12rem;

@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Pagination } from "../../../components/pagination/Pagination.js";
 import styles from "./ForecastDetailContent.module.scss";
 
 // Measure available body space, including text zoom. No section needs a scrollbar.
@@ -51,31 +52,12 @@ export const MeasuredPages = <T,>({
           <p className={styles.empty}>No distinct driver was published</p>
         ) : null}
       </div>
-      <nav aria-label={`${label} pagination`} className={styles.pagination}>
-        <button
-          disabled={current === 0}
-          type="button"
-          onClick={() => {
-            setPage(current - 1);
-          }}
-        >
-          Previous
-        </button>
-        <span>
-          {items.length
-            ? `${String(start + 1)}–${String(Math.min(items.length, start + capacity))} of ${String(items.length)}`
-            : "0 of 0"}
-        </span>
-        <button
-          disabled={current === pages - 1}
-          type="button"
-          onClick={() => {
-            setPage(current + 1);
-          }}
-        >
-          Next
-        </button>
-      </nav>
+      <Pagination
+        label={`${label} pagination`}
+        page={current}
+        pages={pages}
+        onPageChange={setPage}
+      />
     </div>
   );
 };

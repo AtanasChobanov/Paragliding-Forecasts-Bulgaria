@@ -96,7 +96,18 @@ missing values and per-metric evidence. This updates the earlier detail presenta
 choice; API and model semantics are unchanged. T-025 remains Review pending owner
 visual acceptance. Reload the owner's running site to inspect the change.
 
-Verification: all 145 web tests and 29 Playwright tests passed, including the
+The detail inputs and compact explanation selectors now share a `DetailSelect`
+presentation with leading SVG icons, a primary border and a custom chevron,
+matching the location/date controls. One reusable `Pagination` component serves
+measured input/driver lists, information popovers and cloudbase tooltips. It uses
+styled arrow buttons and current page / total page text (`1 of 3`), including
+disabled boundary arrows and `1 of 1` when everything fits. Measured lists still
+recalculate totals from available row capacity. Native select behavior, keyboard
+access and accessible arrow names are preserved. The home dashboard is unchanged.
+The compact controls also fit at 125% text. No product servers or ML commands
+were started; browser tests used their disposable fixture servers.
+
+Verification: all 146 web tests and 29 Playwright tests passed, including the
 eight viewport/text settings and missing metrics. Web typecheck/build, root lint,
 formatting, repo check and whitespace check passed. Desktop and compact screenshots
 were inspected. Product servers and ML commands remain owner-run.

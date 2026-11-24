@@ -70,15 +70,16 @@ describe("forecast detail content", () => {
     inputs();
     expect(screen.getByLabelText("Input category")).toHaveValue("xc");
     expect(screen.getByLabelText("XC input group")).toHaveValue("Surface temperature");
-    expect(screen.getByText("1–1 of 4")).toBeVisible();
+    expect(screen.getByText("1 of 4")).toBeVisible();
     await userEvent.click(screen.getByRole("button", { name: "Next" }));
-    expect(screen.getByText("2–2 of 4")).toBeVisible();
+    expect(screen.getByText("2 of 4")).toBeVisible();
     await userEvent.click(screen.getByRole("button", { name: /Input information:/u }));
     const popup = screen.getByRole("region", { name: /input$/u });
     expect(popup).toBeVisible();
     await userEvent.keyboard("{Escape}");
     await userEvent.selectOptions(screen.getByLabelText("XC input group"), "Humidity");
-    expect(screen.getByText("1–1 of 3")).toBeVisible();
+    expect(screen.getByText("1 of 3")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
     await userEvent.selectOptions(screen.getByLabelText("Input category"), "od");
     expect(screen.getByLabelText("Input hour")).toHaveValue("2026-07-18T07:00:00Z");
   });
@@ -97,14 +98,35 @@ describe("forecast detail content", () => {
         render={(n) => <span>{n}</span>}
       />,
     );
-    expect(screen.getByText("1–3 of 7")).toBeVisible();
+    expect(screen.getByText("1 of 3")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     available = 180;
     fireEvent(window, new Event("resize"));
-    expect(screen.getByText("7–7 of 7")).toBeVisible();
+    expect(screen.getByText("2 of 2")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
     available = 240;
     fireEvent(window, new Event("resize"));
-    expect(screen.getByText("7–7 of 7")).toBeVisible();
+    expect(screen.getByText("2 of 2")).toBeVisible();
+    rect.mockRestore();
+  });
+  it("shows one of one and disables both arrows when all four rows fit", () => {
+    const rect = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockImplementation(function (this: HTMLElement) {
+        return new DOMRect(0, 0, 200, this.hasAttribute("data-page-row") ? 30 : 120);
+      });
+    render(
+      <MeasuredPages
+        items={[1, 2, 3, 4]}
+        label="Measured"
+        maxRows={6}
+        render={(n) => <span>{n}</span>}
+      />,
+    );
+    const pagination = screen.getByRole("navigation", { name: "Measured pagination" });
+    expect(pagination).toHaveTextContent(/^1 of 1$/u);
+    expect(within(pagination).getByRole("button", { name: "Previous" })).toBeDisabled();
+    expect(within(pagination).getByRole("button", { name: "Next" })).toBeDisabled();
     rect.mockRestore();
   });
   it("uses five explanation groups, Q200 semantics, actual support and risk-specific icons", async () => {

@@ -197,6 +197,12 @@ Display conversions include K to °C, Pa to hPa, kg/kg to g/kg and K/km to
 °C/km; small magnitudes use three-significant-digit scientific notation.
 Unavailable inputs preserve their reasons, including outside-OD slots at 20:00.
 
+Detail selectors share the location/date controls' primary border, leading icon
+and chevron. A shared `Pagination` component serves inputs, drivers, information
+popovers and chart tooltips: arrow buttons flank the current page and total
+(`1 of 3`), with disabled arrows at the boundaries (`1 of 1` for a single page).
+The measured lists recalculate page totals when available space changes.
+
 Explanations have five metric tabs, with the equivalent native select on
 compact layouts. Published rank/order and up to three drivers remain intact,
 with measured pagination. XC signs mean model direction relative to the

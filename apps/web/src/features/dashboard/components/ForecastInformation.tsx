@@ -12,6 +12,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { Pagination } from "../../../components/pagination/Pagination.js";
 
 import { formatConfidence, formatDataStatus, presentCloudbase } from "../forecast-presentation.js";
 import styles from "./ForecastInformation.module.scss";
@@ -304,31 +305,14 @@ export const InformationPopover = ({
             pages ? (
               <>
                 <div className={styles.pageContent}>{pages[currentPage]}</div>
-                {pages.length > 1 ? (
-                  <nav className={styles.pagination} aria-label={`${regionLabel} pages`}>
-                    <button
-                      type="button"
-                      disabled={currentPage === 0}
-                      onClick={() => {
-                        setPage(currentPage - 1);
-                      }}
-                    >
-                      Previous
-                    </button>
-                    <span>
-                      {currentPage + 1} / {pages.length}
-                    </span>
-                    <button
-                      type="button"
-                      disabled={currentPage >= pages.length - 1}
-                      onClick={() => {
-                        setPage(currentPage + 1);
-                      }}
-                    >
-                      Next
-                    </button>
-                  </nav>
-                ) : null}
+                <div className={styles.pagination}>
+                  <Pagination
+                    label={`${regionLabel} pages`}
+                    page={currentPage}
+                    pages={Math.max(1, pages.length)}
+                    onPageChange={setPage}
+                  />
+                </div>
               </>
             ) : (
               children

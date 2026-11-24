@@ -1,6 +1,7 @@
 import type { ForecastResponse } from "@paragliding-forecasts/contracts";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Pagination } from "../../../components/pagination/Pagination.js";
 import { DashboardPanel } from "../../../components/dashboard-panel/DashboardPanel.js";
 import {
   cloudbaseRegimeLabel,
@@ -82,32 +83,22 @@ const HourTooltip = ({
       }}
     >
       {pages[page]}
-      <nav aria-label="Cloudbase tooltip pages">
+      <div className={styles.tooltipControls}>
+        <Pagination
+          label="Cloudbase tooltip pages"
+          page={page}
+          pages={pages.length}
+          onPageChange={setPage}
+        />
         <button
+          className={styles.closeTooltip}
           type="button"
-          disabled={page === 0}
-          onClick={() => {
-            setPage((p) => p - 1);
-          }}
+          aria-label="Close cloudbase tooltip"
+          onClick={onClose}
         >
-          Previous
-        </button>
-        <span>
-          {page + 1} / {pages.length}
-        </span>
-        <button
-          type="button"
-          disabled={page === pages.length - 1}
-          onClick={() => {
-            setPage((p) => p + 1);
-          }}
-        >
-          Next
-        </button>
-        <button type="button" aria-label="Close cloudbase tooltip" onClick={onClose}>
           ×
         </button>
-      </nav>
+      </div>
     </div>,
     document.body,
   );

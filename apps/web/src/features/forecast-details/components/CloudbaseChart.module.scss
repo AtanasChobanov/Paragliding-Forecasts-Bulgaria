@@ -96,19 +96,31 @@
   p {
     margin: 0;
   }
+}
+.tooltipControls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+
   nav {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
-    margin-top: 0.5rem;
+    flex: 1;
   }
-  button {
-    padding: 0.15rem 0.35rem;
-    border: 1px solid var(--color-border-strong);
-    border-radius: 0.25rem;
-    color: var(--color-heading);
-    background: var(--color-surface-subtle);
+}
+.closeTooltip {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  min-height: 1.75rem;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  color: var(--color-heading);
+  background: var(--color-surface);
+
+  &:hover {
+    background: var(--color-primary-soft);
   }
 }
 @media (max-width: 42rem) {

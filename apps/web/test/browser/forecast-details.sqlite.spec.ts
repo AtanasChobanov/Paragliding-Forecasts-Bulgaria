@@ -25,6 +25,11 @@ for (const size of sizes)
     await openDetail(page);
     if (size.text) await page.addStyleTag({ content: "html { font-size: 125%; }" });
     await expect(page.getByRole("heading", { name: "Hourly cloudbase" })).toBeVisible();
+    for (const label of ["Forecast inputs pagination", "Forecast drivers pagination"]) {
+      const pagination = page.getByRole("navigation", { name: label });
+      await expect(pagination).toHaveText(/^1 of \d+$/u);
+      await expect(pagination.getByRole("button", { name: "Previous" })).toBeDisabled();
+    }
     await expect
       .poll(() =>
         page.evaluate(() => {
@@ -60,7 +65,11 @@ for (const size of sizes)
               row.getBoundingClientRect().bottom > pagination.getBoundingClientRect().top + 1
             );
           })
-          .map((row) => row.textContent),
+          .map((row) => ({
+            text: row.textContent,
+            rowBottom: row.getBoundingClientRect().bottom,
+            paginationTop: row.parentElement?.nextElementSibling?.getBoundingClientRect().top,
+          })),
       ),
     ).toEqual([]);
     const controls = page.locator("[data-detail] select, [data-detail] button, [data-detail] a");
@@ -111,7 +120,9 @@ test("synchronizes hours with inputs, supports keyboard, touch-style click and m
   await page.getByRole("button", { name: "Forecast information", exact: true }).click();
   const info = page.getByRole("region", { name: /Forecast information for/ });
   await expect(info).toContainText("GFS 16 Nov 2026 06Z");
+  await expect(info.getByRole("navigation")).toHaveText(/^1 of \d+$/u);
   await info.getByRole("button", { name: "Next" }).click();
+  await expect(info.getByRole("navigation")).toHaveText(/^2 of \d+$/u);
   await expect(info).toContainText("today-model");
   await page.keyboard.press("Escape");
   expect(tiles).toBe(0);
@@ -193,7 +204,9 @@ test.describe("detail touch", () => {
     await page.getByRole("button", { name: "14:00 Sofia · Conditional LCL" }).tap();
     const tooltip = page.getByRole("region", { name: "Cloudbase hour information" });
     await expect(tooltip).toContainText("Daily maximum");
+    await expect(tooltip.getByRole("navigation")).toHaveText(/^1 of \d+$/u);
     await tooltip.getByRole("button", { name: "Next" }).tap();
+    await expect(tooltip.getByRole("navigation")).toHaveText(/^2 of \d+$/u);
     await expect(tooltip).toContainText("Code: fixture");
     await page.getByRole("heading", { name: "Forecast inputs" }).tap();
     await expect(tooltip).toHaveCount(0);

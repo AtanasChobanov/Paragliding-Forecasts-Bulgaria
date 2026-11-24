@@ -4,7 +4,7 @@ import type {
   ForecastInputRow,
   ForecastResponse,
 } from "@paragliding-forecasts/contracts";
-import { useState, type ReactNode } from "react";
+import { useState, type ComponentProps, type ReactNode } from "react";
 
 import { DashboardPanel } from "../../../components/dashboard-panel/DashboardPanel.js";
 import {
@@ -39,6 +39,43 @@ import {
 } from "../forecast-detail-presentation.js";
 import { MeasuredPages } from "./MeasuredPages.js";
 import styles from "./ForecastDetailContent.module.scss";
+
+const DetailSelect = ({
+  icon,
+  className,
+  ...props
+}: ComponentProps<"select"> & { readonly icon: ReactNode }) => (
+  <div className={[styles.selectField, className].filter(Boolean).join(" ")}>
+    <span aria-hidden="true" className={styles.selectIcon}>
+      {icon}
+    </span>
+    <select {...props} />
+  </div>
+);
+
+const GroupIcon = () => (
+  <svg viewBox="0 0 24 24">
+    <path d="M4 6h16M4 12h16M4 18h16M8 4v4m8 2v4M8 16v4" />
+  </svg>
+);
+const HourIcon = () => (
+  <svg viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v5l3 2" />
+  </svg>
+);
+const metricIcon = (metric: string) =>
+  metric === "cloudbase" || metric === "cloud" ? (
+    <CloudbaseIcon />
+  ) : metric === "overdevelopment" || metric === "od" ? (
+    <OverdevelopmentIcon />
+  ) : metric === "p200" ? (
+    <RouteIcon />
+  ) : metric === "p300" ? (
+    <DistanceFlagIcon />
+  ) : (
+    <OpportunityIcon />
+  );
 
 type Metric = DashboardForecastOutputs[keyof DashboardForecastOutputs];
 export const informationPages = (paragraphs: readonly string[]): ReactNode[] =>
@@ -286,7 +323,8 @@ export const ForecastInputsPanel = ({
       <div className={styles.panelContent}>
         <p className={styles.panelMetadata}>{sourceLine(forecast)} · 10:00–20:00 Europe/Sofia</p>
         <div className={styles.selectors}>
-          <select
+          <DetailSelect
+            icon={metricIcon(mode)}
             aria-label="Input category"
             value={mode}
             onChange={(e) => {
@@ -296,9 +334,10 @@ export const ForecastInputsPanel = ({
             <option value="xc">XC inputs</option>
             <option value="od">OD inputs</option>
             <option value="cloud">Cloudbase context</option>
-          </select>
+          </DetailSelect>
           {mode === "xc" ? (
-            <select
+            <DetailSelect
+              icon={<GroupIcon />}
               aria-label="XC input group"
               value={group}
               onChange={(e) => {
@@ -308,9 +347,10 @@ export const ForecastInputsPanel = ({
               {groups.map((group) => (
                 <option key={group}>{group}</option>
               ))}
-            </select>
+            </DetailSelect>
           ) : (
-            <select
+            <DetailSelect
+              icon={<HourIcon />}
               aria-label="Input hour"
               value={selectedHour}
               onChange={(e) => {
@@ -322,7 +362,7 @@ export const ForecastInputsPanel = ({
                   {formatSofiaHour(hour.validAtUtc)} Sofia
                 </option>
               ))}
-            </select>
+            </DetailSelect>
           )}
         </div>
         <MeasuredPages
@@ -416,7 +456,8 @@ export const TopDriversPanel = ({ forecast }: { readonly forecast: ForecastRespo
             </button>
           ))}
         </div>
-        <select
+        <DetailSelect
+          icon={metricIcon(selected)}
           className={styles.metricSelect}
           aria-label="Explanation metric"
           value={selected}
@@ -429,7 +470,7 @@ export const TopDriversPanel = ({ forecast }: { readonly forecast: ForecastRespo
               {label}
             </option>
           ))}
-        </select>
+        </DetailSelect>
         <div className={styles.driverNote}>
           {group ? <DataStatusBadge compact short status={group.dataStatus} /> : null}
           <span>{group?.missingReason ?? note}</span>
