@@ -87,6 +87,7 @@ consequences. Temporary progress and Git state belong in
 | DEC-071     | Publish operational 06Z forecasts to SQLite and retain compact evidence | Accepted | 2026-11-17 |
 | DEC-072     | Read published SQLite forecasts on the home dashboard | Accepted | 2026-11-17 |
 | DEC-073     | Read published details and exact weather evidence in one viewport | Accepted | 2026-11-18 |
+| DEC-074     | Use Recharts for the hourly cloudbase plot | Accepted | 2026-11-25 |
 
 ## Individual decisions
 
@@ -3257,6 +3258,35 @@ session caching until manual reload, including keyboard and touch information.
 **Related files:** [T-025 implementation plan](Т-025-implementation-plan.md),
 [HTTP API](../apps/api/README.md), [contracts](../packages/contracts/README.md),
 [web dashboard](../apps/web/README.md).
+
+### DEC-074 - Use Recharts for the hourly cloudbase plot
+
+**Status:** Accepted by the owner after reviewing chart-library alternatives.
+
+**Date:** 2026-11-25
+
+**Supersedes:** The hand-built chart-rendering choice in the T-025 implementation
+plan. DEC-073's data, segmentation, viewport and interaction requirements remain
+in force.
+
+**Decision:** Add MIT-licensed Recharts 3.x and its React-aligned `react-is` peer
+only to the web workspace. Use `ResponsiveContainer`, `ComposedChart`, axes,
+linear lines/areas and a reference line for the detail graph. Load the plot on
+demand so the home route does not load the chart library.
+Use a Recharts-scoped root npm override for `react-is`: npm otherwise resolves
+the hoisted chart to the older test-tool peer despite the web's direct dependency.
+
+Keep separate series/gradients for contiguous numeric segments, explicit nulls,
+conditional LCL styling, isolated points, signed AGL in information and the
+estimated-first daily maximum. Do not introduce curved interpolation, synthetic
+heights or animated intermediate values. Recharts plot/scale hooks place the
+themed regime band. Native DOM hour controls and the existing paginated React
+portal tooltip retain keyboard, hover, pin, touch and hour/input synchronization,
+including all-null hours. Disable the parallel Recharts accessibility layer to
+keep one roving focus path through those controls.
+
+**Related files:** [web dashboard](../apps/web/README.md),
+[CloudbasePlot](../apps/web/src/features/forecast-details/components/CloudbasePlot.tsx).
 
 ## Open decisions
 

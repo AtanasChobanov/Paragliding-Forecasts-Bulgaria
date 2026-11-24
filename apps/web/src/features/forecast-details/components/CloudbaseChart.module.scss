@@ -52,15 +52,17 @@
   text {
     font-family: inherit;
     font-size: 10px;
-    fill: var(--color-text-secondary);
   }
-}
-.grid {
-  stroke: var(--color-border);
-  stroke-width: 0.5;
 }
 .noHeights {
   font-size: clamp(8px, 2vw, 12px) !important;
+}
+.loading {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  font-size: var(--detail-caption);
+  color: var(--color-text-secondary);
 }
 .hourControls {
   position: absolute;

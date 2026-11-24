@@ -213,7 +213,12 @@ information or uncertainty symbols. Full driver text and ordered exact inputs
 remain accessible in information pages. Missing SQL equivalents point to the
 retained ML artifact, including the full T-022 model column.
 
-The responsive SVG chart uses eleven actual Sofia hours and linear segments.
+The responsive SVG chart uses Recharts (`ComposedChart`, `ResponsiveContainer`,
+axes, lines and areas), loaded on demand for the detail plot. Recharts and its
+`react-is` peer are web workspace dependencies; keep `react-is` aligned with React.
+The root npm override is scoped to Recharts' peer so npm cannot resolve it to
+the older `react-is` used by test tooling. Update that override with React.
+It uses eleven actual Sofia hours and linear segments.
 Solid primary lines/circles denote estimated cloudbase; dashed warning
 lines/diamonds denote conditional LCL. Each contiguous numeric segment gets
 its own fading gradient. Blue, other cloud, uncertain and missing hours use
@@ -227,6 +232,11 @@ references, confidence, reason/code, note and matching cloudbase context.
 Left/Right and Home/End select hours; Enter/press pins the tooltip for its
 page controls. The selected hour synchronizes with OD/cloudbase inputs.
 Tooltips use a portal to stay inside the viewport.
+The themed regime band uses Recharts' plot/scale hooks. The adjacent native DOM
+hour controls retain all eleven selectable slots, even without numeric heights.
+They own keyboard focus, so Recharts' parallel accessibility layer is disabled
+to avoid duplicate navigation. The tooltip keeps the shared React pagination.
+Line/area animations are disabled to preserve the published values during selection.
 
 Catalog, days and detail have independent errors and explicit Retry controls.
 Detail requests are keyed by slug/date and checked for correlation. Changing

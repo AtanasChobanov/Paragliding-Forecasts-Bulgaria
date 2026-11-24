@@ -47,7 +47,10 @@ before picking an available date. One deduplicated multi-site summary request
 supplies the overview and comparison cards. The page caches these results
 until manual reload. The detail route owns the single-site/date request in
 both SQLite and mock modes. It paginates exact inputs/explanations and plots published hourly
-cloudbase regimes without a map or browser-side model calculation.
+cloudbase regimes without a map or browser-side model calculation. The detail plot
+uses Recharts for responsive SVG axes, lines and areas, loaded on demand. The
+web app retains the domain-specific regime band, native hour controls and paginated
+information overlay; chart dependencies do not cross the browser boundary.
 
 ## Express API
 

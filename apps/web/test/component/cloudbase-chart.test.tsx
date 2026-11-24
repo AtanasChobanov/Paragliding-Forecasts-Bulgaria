@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ForecastResponse } from "@paragliding-forecasts/contracts";
 import { CloudbaseChart } from "../../src/features/forecast-details/components/CloudbaseChart.js";
 import {
@@ -16,7 +16,17 @@ const Wrapper = ({ forecast }: { readonly forecast: ForecastResponse }) => {
 };
 
 describe("hourly cloudbase chart", () => {
-  it("breaks lines and gradients at regime changes and missing hours", () => {
+  beforeEach(() => {
+    // JSDOM has no layout; exercise the real Recharts render at a known plot size.
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.classList.contains("recharts-responsive-container")
+        ? new DOMRect(0, 0, 1000, 180)
+        : new DOMRect();
+    });
+  });
+  it("breaks lines and gradients at regime changes and missing hours", async () => {
     const f = createForecastResponse();
     f.cloudbaseHours = f.cloudbaseHours.map((h, i) => ({
       ...h,
@@ -33,14 +43,21 @@ describe("hourly cloudbase chart", () => {
     ]);
     expect(cloudbaseScale(f.cloudbaseHours)).toEqual({ min: 0, max: 3000 });
     const { container } = render(<Wrapper forecast={f} />);
-    expect(container.querySelectorAll("polyline")).toHaveLength(3);
+    await waitFor(() => {
+      expect(container.querySelectorAll(".recharts-line-curve")).toHaveLength(3);
+    });
+    for (const path of container.querySelectorAll(".recharts-line-curve")) {
+      const d = path.getAttribute("d") ?? "";
+      expect(d.match(/M/gu)).toHaveLength(1);
+      expect(d).not.toMatch(/[CQ]/u);
+    }
     expect(container.querySelectorAll("[data-gradient-segment]")).toHaveLength(3);
     expect(container.querySelectorAll('[data-numeric-marker="conditional"]')).toHaveLength(5);
     expect(screen.getByLabelText("Cloudbase legend")).toHaveTextContent("Conditional LCL");
   });
   it.each(["blue", "missing", "indeterminate"] as const)(
     "keeps all eleven interactive %s hours without numeric zero heights",
-    (regime) => {
+    async (regime) => {
       const f = createForecastResponse();
       f.cloudbaseHours = f.cloudbaseHours.map((h) => ({
         ...h,
@@ -51,12 +68,19 @@ describe("hourly cloudbase chart", () => {
         confidenceLevel: regime === "missing" ? null : "low",
       }));
       const { container } = render(<Wrapper forecast={f} />);
-      expect(container.querySelectorAll("polyline")).toHaveLength(0);
+      expect(await screen.findByText("No numeric cloudbase heights published")).toBeVisible();
+      expect(container.querySelectorAll(".recharts-line-curve")).toHaveLength(0);
       expect(container.querySelectorAll("[data-numeric-marker]")).toHaveLength(0);
-      expect(screen.getByText("No numeric cloudbase heights published")).toBeVisible();
       expect(
         screen.getByRole("group", { name: "Select cloudbase hour" }).querySelectorAll("button"),
       ).toHaveLength(11);
+      const last = screen.getAllByRole("button").at(-1);
+      if (!last) throw new Error("Missing hour controls");
+      await userEvent.click(last);
+      expect(last).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByRole("region", { name: "Cloudbase hour information" })).toHaveTextContent(
+        "No numeric height.",
+      );
     },
   );
   it("marks a single numeric hour without a gradient bridge and retains signed site AGL", async () => {
@@ -69,8 +93,10 @@ describe("hourly cloudbase chart", () => {
       heightSiteAglM: i === 3 ? -200 : null,
     }));
     const { container } = render(<Wrapper forecast={f} />);
-    expect(container.querySelectorAll("polyline")).toHaveLength(0);
-    expect(container.querySelectorAll("[data-numeric-marker]")).toHaveLength(1);
+    await waitFor(() => {
+      expect(container.querySelectorAll("[data-numeric-marker]")).toHaveLength(1);
+    });
+    expect(container.querySelectorAll("[data-gradient-segment]")).toHaveLength(0);
     await userEvent.click(
       screen.getByRole("button", { name: "13:00 Sofia · Estimated cloudbase" }),
     );

@@ -76,6 +76,40 @@ next requested ticket on top of the branch that supplies its dependencies.
   channel, and deduplication belong to T-027 through T-031. Forecast guidance
   is informational and carries source and confidence limitations.
 
+## T-025 Recharts migration — 2026-11-25
+
+The owner approved Recharts after a read-only comparison of chart libraries.
+The hourly cloudbase plot now uses Recharts 3.11.1 for responsive sizing, SVG
+axes/grid, linear lines, segment areas and the selected-hour reference line.
+`CloudbasePlot` is loaded on demand; the home page does not load Recharts.
+The web workspace owns Recharts and an exact `react-is` 19.2.8 dependency,
+matching React. A root override scoped to Recharts prevents npm from selecting
+the older test-tool peer; `npm ls react-is` verifies both remain correctly
+resolved. See DEC-074 and the updated implementation plan/web README.
+
+Each contiguous estimated/conditional segment retains its own gradient, line
+style and markers; isolated points and the estimated-first daily maximum remain.
+There is no interpolation across missing hours or regime changes. The themed
+regime band uses Recharts plot/scale hooks. The adjacent DOM controls preserve
+one roving keyboard focus path, all eleven hours (including all-null days),
+hover/click/touch, Home/End and synchronization with hourly inputs. The existing
+paginated React portal tooltip retains heights, signed AGL, confidence and exact
+context. Recharts' parallel keyboard layer and line/area animations are disabled.
+The main summary and API/model semantics are unchanged.
+
+Verification: 146 web tests and 29 Playwright tests passed. Tests exercise real
+Recharts paths/markers/gradients, null-hour selection, isolated/negative heights,
+keyboard and touch, and hour-control/band alignment at all eight viewport/text
+settings. Web typecheck/build, root lint, formatting, repo and whitespace checks
+passed. Desktop, compact 125% and mixed-regime screenshots were inspected.
+The build produces a separate chart chunk (~415 kB minified / 120 kB gzip);
+the existing >500 kB main-chunk advisory remains. A repository-wide npm audit
+reported 25 advisories in existing dependency locations; none of the newly added
+package locations were flagged. Unrelated dependency upgrades were not attempted.
+T-025 remains Review pending owner visual acceptance. Reload the owner's running
+site to inspect it. Product servers and ML commands remain owner-run; Playwright
+used disposable fixture servers.
+
 ## T-025 summary presentation refinement — 2026-11-24
 
 The owner requested three compact probability rows instead of the tall five-column

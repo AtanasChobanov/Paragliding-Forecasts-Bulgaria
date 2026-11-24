@@ -1,5 +1,7 @@
 import type { CloudbaseHour } from "@paragliding-forecasts/contracts";
 
+export const cloudbasePlotInsets = { left: 44, right: 10 };
+
 export const numericCloudbaseType = (hour: CloudbaseHour) =>
   hour.heightMslM === null
     ? null

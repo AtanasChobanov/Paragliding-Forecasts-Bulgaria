@@ -3,6 +3,9 @@ const path = "/forecast?site=sofia-vitosha-kominite&date=2026-11-17";
 const openDetail = async (page: Page) => {
   await page.goto(path);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await expect(
+    page.getByRole("img", { name: "Hourly cloudbase heights in metres MSL" }),
+  ).toBeVisible();
   await page.evaluate(async () => {
     await document.fonts.ready;
   });
@@ -70,6 +73,22 @@ for (const size of sizes)
             rowBottom: row.getBoundingClientRect().bottom,
             paginationTop: row.parentElement?.nextElementSibling?.getBoundingClientRect().top,
           })),
+      ),
+    ).toEqual([]);
+    // Every interactive hour must align with its Recharts band, including null heights.
+    expect(
+      await page.evaluate(() =>
+        Array.from(document.querySelectorAll<HTMLElement>("[data-chart-hour]"))
+          .filter((button) => {
+            const band = document.querySelector(
+              `[data-chart-regime-hour="${button.dataset.chartHour ?? ""}"] rect`,
+            );
+            if (!band) return true;
+            const control = button.getBoundingClientRect(),
+              rect = band.getBoundingClientRect();
+            return Math.abs(control.x + control.width / 2 - rect.x - rect.width / 2) > 1;
+          })
+          .map((button) => button.dataset.chartHour),
       ),
     ).toEqual([]);
     const controls = page.locator("[data-detail] select, [data-detail] button, [data-detail] a");
