@@ -52,7 +52,7 @@ describe("forecast detail content", () => {
       screen.getByRole("group", { name: "P100 model confidence. Confidence unavailable" }),
     ).toBeVisible();
   });
-  it("keeps signed site/model AGL and height guidance in cloudbase information", async () => {
+  it("keeps signed site/model AGL without general guidance in cloudbase information", async () => {
     const forecast = createForecastResponse();
     const maximum = forecast.cloudbaseHours[3];
     if (!maximum) throw new Error("Missing fixture maximum");
@@ -64,8 +64,8 @@ describe("forecast detail content", () => {
     const popup = screen.getByRole("region", { name: "Cloudbase evidence" });
     expect(within(popup).getByText("-125 m")).toBeVisible();
     expect(popup).toHaveTextContent("Model AGL");
-    expect(popup).toHaveTextContent("Height references");
-    expect(popup).toHaveTextContent("Cloud formation");
+    expect(popup).not.toHaveTextContent("Height references");
+    expect(popup).not.toHaveTextContent("Cloud formation");
     await userEvent.keyboard("{Escape}");
     expect(within(cloud).getByText("Confidence")).toBeVisible();
     expect(
@@ -109,6 +109,10 @@ describe("forecast detail content", () => {
     await userEvent.click(screen.getByRole("button", { name: /Input information:/u }));
     const popup = screen.getByRole("region", { name: /input$/u });
     expect(popup).toBeVisible();
+    expect(within(popup).queryByRole("navigation")).not.toBeInTheDocument();
+    expect(popup).toHaveTextContent("Exact source value");
+    expect(popup).toHaveTextContent("Statistic");
+    expect(popup).not.toHaveTextContent("Air temperature 2 m mean");
     await userEvent.keyboard("{Escape}");
     await userEvent.selectOptions(screen.getByLabelText("XC input group"), "Humidity");
     expect(screen.getByText("1 of 3")).toBeVisible();

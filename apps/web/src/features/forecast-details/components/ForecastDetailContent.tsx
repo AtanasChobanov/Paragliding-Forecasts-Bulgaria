@@ -1,6 +1,5 @@
 import type {
   DashboardForecastOutputs,
-  ForecastDriver,
   ForecastInputRow,
   ForecastResponse,
 } from "@paragliding-forecasts/contracts";
@@ -37,6 +36,7 @@ import {
   publicationLine,
   sourceLine,
 } from "../forecast-detail-presentation.js";
+import { InputEvidence, driverEvidencePages } from "./ForecastEvidence.js";
 import { MeasuredPages } from "./MeasuredPages.js";
 import styles from "./ForecastDetailContent.module.scss";
 
@@ -339,30 +339,6 @@ export const ForecastDetailSummary = ({
                     </section>
                   </div>
                 ) : null}
-                <div className={styles.metricInformation}>
-                  <section>
-                    <h4>Height references</h4>
-                    <dl className={styles.heightDefinitions}>
-                      <dt>MSL</dt>
-                      <dd>Height above mean sea level.</dd>
-                      <dt>Model AGL</dt>
-                      <dd>Height above the model terrain.</dd>
-                      <dt>Site AGL</dt>
-                      <dd>Height above the launch. Negative values are below the launch.</dd>
-                    </dl>
-                  </section>
-                  <section>
-                    <h4>Cloud formation</h4>
-                    <p>
-                      Blue means no model support for local cumulus formation. It provides no usable
-                      thermal top or guarantee of clear skies.
-                    </p>
-                    <p>
-                      Conditional LCL is a conditional condensation level, not an estimated thermal
-                      top.
-                    </p>
-                  </section>
-                </div>
               </>
             }
           />
@@ -390,8 +366,10 @@ const InputRow = ({ row }: { readonly row: ForecastInputRow }) => (
     <InformationPopover
       label={`Input information: ${row.label}`}
       regionLabel={`${row.label} input`}
-      pages={informationPages(inputInformation(row))}
-    />
+      fitViewport
+    >
+      <InputEvidence row={row} omitDisplayedValue />
+    </InformationPopover>
   </div>
 );
 
@@ -487,30 +465,6 @@ const metricLabels = {
   cloudbase: "Cloudbase",
 } as const;
 type MetricCode = keyof typeof metricLabels;
-const driverInformation = (driver: ForecastDriver) => [
-  driver.message,
-  `Published code: ${driver.code}. Rank: ${String(driver.rank)}.`,
-  ...(driver.contributionLogit !== undefined
-    ? [
-        `Contribution ${String(driver.contributionLogit)} logits relative to the training reference; not percentage points or a causal effect.`,
-      ]
-    : []),
-  ...(driver.scorePoints !== undefined
-    ? [`Risk score component: ${String(driver.scorePoints)} points.`]
-    : []),
-  ...(driver.kind === "pooled_conversion"
-    ? [
-        `P300 = P200 × ${String(driver.supportSuccesses)}/${String(driver.supportTotal)}. Published pooled conversion support.`,
-      ]
-    : []),
-  ...driver.inputs.flatMap((input) => [
-    `${input.inputKey}${input.validAtUtc ? ` · ${input.validAtUtc}${input.intervalEndUtc ? ` – ${input.intervalEndUtc}` : ""}` : ""}`,
-    ...(input.field
-      ? inputInformation(input.field)
-      : [input.unavailableReason ?? "Exact input is retained in the ML artifact"]),
-  ]),
-];
-
 export const TopDriversPanel = ({ forecast }: { readonly forecast: ForecastResponse }) => {
   const [selected, setSelected] = useState<MetricCode>("p100");
   const group = forecast.explanations.find((group) => group.metricCode === selected);
@@ -579,15 +533,31 @@ export const TopDriversPanel = ({ forecast }: { readonly forecast: ForecastRespo
           <InformationPopover
             label="Explanation limitations"
             regionLabel="Explanation limitations"
-            pages={informationPages(
-              [
-                note,
-                group?.confidenceNote ?? "",
-                group?.limitationsNote ?? "",
-                group?.missingReason ?? "",
-              ].filter(Boolean),
-            )}
-          />
+            fitViewport
+          >
+            <div className={styles.metricInformation}>
+              <h3>About this explanation</h3>
+              <p>{note}</p>
+              {group?.confidenceNote ? (
+                <section>
+                  <h4>Evidence</h4>
+                  <p>{readableEvidence(group.confidenceNote)}</p>
+                </section>
+              ) : null}
+              {group?.limitationsNote ? (
+                <section>
+                  <h4>Limitations</h4>
+                  <p>{readableEvidence(group.limitationsNote)}</p>
+                </section>
+              ) : null}
+              {group?.missingReason ? (
+                <section>
+                  <h4>Availability</h4>
+                  <p>{readableEvidence(group.missingReason)}</p>
+                </section>
+              ) : null}
+            </div>
+          </InformationPopover>
         </div>
         <MeasuredPages
           key={selected}
@@ -614,7 +584,10 @@ export const TopDriversPanel = ({ forecast }: { readonly forecast: ForecastRespo
                 <InformationPopover
                   label={`Driver information: ${driver.code}`}
                   regionLabel={`${driver.code} driver`}
-                  pages={informationPages(driverInformation(driver))}
+                  fitViewport
+                  {...(driver.inputs.length > 3
+                    ? { pages: driverEvidencePages(driver) }
+                    : { children: driverEvidencePages(driver)[0] })}
                 />
               </div>
             );

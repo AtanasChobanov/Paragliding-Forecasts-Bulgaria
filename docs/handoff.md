@@ -78,6 +78,21 @@ next requested ticket on top of the branch that supplies its dependencies.
 
 ## T-025 Recharts migration — 2026-11-25
 
+Latest information refinement: shared height-reference/cloud-formation guidance is
+now in an information button after the Hourly cloudbase time range. Cloudbase
+result information still contains its matching site/model AGL readings. Inputs
+use a single labeled metadata view without repeating the row name or rounded
+value; canonical numbers remain when they add precision or different units.
+Statistics, quality, source records, true intervals and layer bounds are retained.
+Why this result now groups explanation/calculation fields and exact inputs with
+headings and definition lists. Up to three linked inputs stay with the calculation;
+larger sets use meaningful pages grouped by topic, with viewport-aware scrolling
+and repositioning. Explanation limitations use one structured view. List pagination
+and the hourly point tooltip are unchanged. Home is unchanged.
+Verification: 150 web tests and 30 browser tests, web typecheck/build, root lint,
+formatting/repo and whitespace checks passed. Product servers and ML commands
+were not run; browser tests used disposable fixture servers.
+
 Latest owner refinement: height-reference and cloud-formation guidance now lives
 in the cloudbase result's information, not the general metadata popover. The
 cloudbase card shows only MSL; matching site/model AGL readings (including signed

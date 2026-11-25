@@ -237,7 +237,7 @@ export const InformationPopover = ({
       window.removeEventListener("resize", positionPanel);
       window.removeEventListener("scroll", positionPanel, true);
     };
-  }, [open, fitViewport]);
+  }, [open, fitViewport, currentPage]);
 
   useEffect(() => {
     if (!open) {
@@ -316,6 +316,7 @@ export const InformationPopover = ({
           className={styles.popup}
           hidden={!open}
           data-paginated={pages ? "true" : undefined}
+          data-fit-viewport={fitViewport || undefined}
           id={panelId}
           ref={panel}
           role="region"

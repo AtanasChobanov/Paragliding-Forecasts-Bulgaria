@@ -190,14 +190,19 @@ the actual publication time in Sofia. Detail information uses compact pages;
 hover/focus opens it, press pins it, and Escape/outside press closes it.
 The summary's common information uses the home dashboard's labeled metadata
 layout, without per-metric evidence. Height-reference and cloud-formation
-explanations live in the cloudbase information alongside its AGL readings. Each
+explanations live in the information button beside the Hourly cloudbase time range;
+the cloudbase result information retains its matching site/model AGL readings. Each
 output metric shows its explanation and limitations together, with readable descriptions of published flags and no
-duplicate status/confidence prefix or pagination. Input/driver and hourly chart
-information retain their existing pagination. Home information is unchanged.
+duplicate status/confidence prefix or pagination. Hourly chart information retains
+its existing pagination. Home information is unchanged.
 
 Inputs default to `XC inputs / Surface temperature`. All 67 policy fields are
 reachable through group selectors and measured pagination (one through six
-rows). OD/cloudbase modes use a synchronized hour selector. Canonical values,
+rows). OD/cloudbase modes use a synchronized hour selector. Input information
+uses one labeled metadata view without repeating the row name or displayed value.
+Exact canonical values appear only when they add precision or use a different unit.
+Quality, statistics, source records, true intervals and layer bounds remain available.
+Canonical values,
 quality, provenance and true intervals remain available in row information.
 Display conversions include K to °C, Pa to hPa, kg/kg to g/kg and K/km to
 °C/km; small magnitudes use three-significant-digit scientific notation.
@@ -216,7 +221,11 @@ training reference, not causal effects or percentage points. P200 describes
 `P(200+ | 100+)`; P300 shows stored pooled support. OD overrides use a warning
 symbol and score components show risk points. Cloudbase reasons use neutral
 information or uncertainty symbols. Full driver text and ordered exact inputs
-remain accessible in information pages. Missing SQL equivalents point to the
+remain accessible in structured information: short drivers combine their calculation
+and up to three inputs in one view; longer evidence separates the calculation
+from inputs grouped by topic. Metadata fields are not split into individual pages.
+Long groups can use the viewport and scroll; popup position updates between pages.
+Missing SQL equivalents point to the
 retained ML artifact, including the full T-022 model column.
 
 The responsive SVG chart uses Recharts (`ComposedChart`, `ResponsiveContainer`,

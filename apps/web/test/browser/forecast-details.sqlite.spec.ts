@@ -152,10 +152,40 @@ test("synchronizes hours with inputs, supports keyboard, touch-style click and m
   const cloudInfo = page.getByRole("region", { name: "Conditional LCL evidence" });
   await expect(cloudInfo).toContainText("-120 m");
   await expect(cloudInfo).toContainText("Model AGL");
-  await expect(cloudInfo).toContainText("Height references");
-  await expect(cloudInfo).toContainText("Cloud formation");
+  await expect(cloudInfo).not.toContainText("Height references");
+  await expect(cloudInfo).not.toContainText("Cloud formation");
   await page.screenshot({ path: test.info().outputPath("cloudbase-information.png") });
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Hourly cloudbase information", exact: true }).click();
+  const guide = page.getByRole("region", { name: "Hourly cloudbase guide" });
+  await expect(guide).toContainText("Height references");
+  await expect(guide).toContainText("Cloud formation");
+  await expect(guide.getByRole("navigation")).toHaveCount(0);
+  await page.screenshot({ path: test.info().outputPath("hourly-cloudbase-guide.png") });
   expect(tiles).toBe(0);
+});
+
+test("formats input and driver evidence into labeled sections", async ({ page }) => {
+  await openDetail(page);
+  await page
+    .getByRole("button", { name: /^Input information:/u })
+    .first()
+    .click();
+  const input = page.getByRole("region", { name: / input$/u });
+  await expect(input.getByRole("navigation")).toHaveCount(0);
+  await expect(input).toContainText("Statistic");
+  await expect(input).toContainText("Source record");
+  await expect(input).not.toContainText("Air temperature 2 m mean");
+  await page.screenshot({ path: test.info().outputPath("input-evidence.png") });
+  await page.keyboard.press("Escape");
+  await page
+    .getByRole("button", { name: /^Driver information:/u })
+    .first()
+    .click();
+  const driver = page.getByRole("region", { name: / driver$/u });
+  await expect(driver.getByRole("heading", { name: "Calculation details" })).toBeVisible();
+  await expect(driver).toContainText("Model contribution");
+  await page.screenshot({ path: test.info().outputPath("driver-evidence.png") });
 });
 
 test("keeps explicit dates, disabled missing slots and dashboard return selection", async ({

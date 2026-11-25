@@ -158,3 +158,11 @@
     gap: 0.15rem 0.5rem;
   }
 }
+
+.chartAccessory {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  --forecast-info-size: 1.1rem;
+  --forecast-info-icon: 0.9rem;
+}

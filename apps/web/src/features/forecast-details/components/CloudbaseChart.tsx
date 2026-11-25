@@ -3,6 +3,8 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ConfidenceIndicator } from "../../dashboard/components/ConfidenceIndicator.js";
 import { formatInteger } from "../../dashboard/forecast-presentation.js";
+import { InformationPopover } from "../../dashboard/components/ForecastInformation.js";
+import { CloudbaseGuidance } from "./CloudbaseGuidance.js";
 import { Pagination } from "../../../components/pagination/Pagination.js";
 import { DashboardPanel } from "../../../components/dashboard-panel/DashboardPanel.js";
 import {
@@ -154,7 +156,18 @@ export const CloudbaseChart = ({
       className={styles.panel}
       headingId="hourly-cloudbase-heading"
       title="Hourly cloudbase"
-      accessory={<span className={styles.zone}>10:00–20:00 Europe/Sofia · m MSL</span>}
+      accessory={
+        <div className={styles.chartAccessory}>
+          <span className={styles.zone}>10:00–20:00 Europe/Sofia · m MSL</span>
+          <InformationPopover
+            label="Hourly cloudbase information"
+            regionLabel="Hourly cloudbase guide"
+            fitViewport
+          >
+            <CloudbaseGuidance />
+          </InformationPopover>
+        </div>
+      }
     >
       <div className={styles.chartContent}>
         <div aria-label="Cloudbase legend" className={styles.legend}>
