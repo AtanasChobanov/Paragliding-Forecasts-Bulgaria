@@ -3197,8 +3197,7 @@ hours or more after publication under a per-run lock and durable intent and
 receipt. Compact evidence remains available for predictions. The historical
 cold archive workflow continues under DEC-066.
 
-**Related files:** [T-025 implementation plan](Т-025-implementation-plan.md)
-and [operational workflow](../services/ml/README.md#publish-and-retain-operational-forecasts-t-025).
+**Related files:** [operational workflow](../services/ml/README.md#publish-and-retain-operational-forecasts-t-025).
 
 ### DEC-072 - Read published SQLite forecasts on the home dashboard
 
@@ -3218,8 +3217,8 @@ new summary and days response schemas. The local API and browser adopt these
 schemas together. The home route selects only published dates and refreshes on
 page reload. Explicit mock mode serves the demo and current detail route.
 
-**Related files:** [T-025 implementation plan](Т-025-implementation-plan.md),
-[HTTP API](../apps/api/README.md), [web dashboard](../apps/web/README.md).
+**Related files:** [HTTP API](../apps/api/README.md),
+[web dashboard](../apps/web/README.md).
 
 ### DEC-073 - Read published details and exact weather evidence in one viewport
 
@@ -3256,8 +3255,7 @@ one viewport. Remove the detail map and previous-run placeholder. Preserve
 exact valid direct dates, availability-aware selectors, explicit Retry and
 session caching until manual reload, including keyboard and touch information.
 
-**Related files:** [T-025 implementation plan](Т-025-implementation-plan.md),
-[HTTP API](../apps/api/README.md), [contracts](../packages/contracts/README.md),
+**Related files:** [HTTP API](../apps/api/README.md), [contracts](../packages/contracts/README.md),
 [web dashboard](../apps/web/README.md).
 
 ### DEC-074 - Use Recharts for the hourly cloudbase plot

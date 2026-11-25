@@ -2,8 +2,10 @@
 
 ## Where to resume
 
-**Owner instruction:** Do not commit further work until the owner explicitly
-says it is ready for a commit. Current presentation refinements remain uncommitted.
+**Owner acceptance — 2026-11-26:** T-025 is complete. The owner committed the
+final presentation corrections in `8c39cb0` and authorized the implementation-plan
+deletion and completion documentation commit. The requested PR description is a
+local, uncommitted draft; do not include it in a commit or open/push a PR implicitly.
 
 T-020 through T-023 are Done. The current local branch is
 `feature/T-025-UI-data-integration`, with the T-024 baseline available.
@@ -25,10 +27,10 @@ next requested ticket on top of the branch that supplies its dependencies.
   available threshold, separate grouped contributions for P100 and conditional
   Q200, and a pooled 300+ conversion note. Contributions describe model
   calculations relative to the training reference.
-  The [T-025 implementation plan](Т-025-implementation-plan.md) now covers
-  the final detailed forecast iteration, including SQLite weather inputs,
-  metric-specific explanations, the viewport layout and hourly cloudbase
-  regimes. The accepted home dashboard is the starting point. The completed ML phase provides
+  The completed detail page includes SQLite weather inputs, metric-specific
+  explanations, the viewport layout and hourly cloudbase regimes. Accepted
+  behavior is recorded in DEC-071 through DEC-075 and the API/web/contracts
+  READMEs; the finished implementation plan has been removed. The completed ML phase provides
   `forecast-publish` with the 16:00 Sofia source cutoff and one-shot
   `forecast-prune` for eligible GRIB files at least 48 hours after publication.
   The SQLite schema, transactional batch writer and `forecast-publish`
@@ -65,8 +67,8 @@ next requested ticket on top of the branch that supplies its dependencies.
   whitespace checks passed. HTTP tests require local sockets and passed
   outside the sandbox. Prune's 48-hour boundary and interrupted cleanup
   were tested with disposable inputs.
-  T-025 is in Review pending owner acceptance of the final detail page.
-  Resume at the 2026-11-18 detail checkpoint below.
+  T-025 is Done after owner acceptance and the final verification recorded
+  in the 2026-11-26 completion checkpoint below.
 - **T-026 independent backtest.** Use the frozen XC model on the untouched
   **2025 source season**. The cohort reserves 242 site-days on 131 target
   dates. Inventory retained weather first. DEC-066 deferred 2025 acquisition
@@ -78,6 +80,47 @@ next requested ticket on top of the branch that supplies its dependencies.
 - **Later alerts.** DEC-065 and DEC-066 set the prior-evening timing. Thresholds,
   channel, and deduplication belong to T-027 through T-031. Forecast guidance
   is informational and carries source and confidence limitations.
+
+## T-025 completion checkpoint — 2026-11-26
+
+The owner accepted the final detail page and requested a PR description for
+`feature/T-025-UI-data-integration` into
+`feature/T-024-baseline-overdevelopment-risk`. T-025 is now Done; T-024 remains
+Review. Do not start T-026 without a new request.
+
+The completed implementation plan was deleted, and its Markdown links were
+replaced with the durable workflow/decision documentation. The local PR draft
+is `docs/T-025-pr-description.md`, intentionally uncommitted for the owner to
+copy and delete. No remote PR, push or merge was requested.
+
+Final verification on the committed product code (`8c39cb0`):
+
+- `npm run test`: 314 tests passed (38 database, 27 contracts, 98 API, 151 web).
+- `npm run test:browser`: all 31 Playwright tests passed, including the six
+  desktop/mobile sizes and the two 125% text settings described below.
+- `uv run --project services/ml --locked pytest`: 734 tests passed.
+- Root typecheck, lint, format check, build, repo check, database `db:check`,
+  Ruff lint and Ruff format check passed. Documentation and whitespace checks
+  were repeated after the plan removal.
+
+HTTP/browser checks used disposable fixture servers and databases. No product
+API/web server, ingestion, prediction, publication or pruning command was run
+for this completion check. The existing Vite main-chunk size advisory remains.
+Coverage was not rerun; the previously documented database coverage threshold
+failure remains a separate limitation. Aged live GRIB deletion has no later
+owner acceptance recorded here; boundary/deletion/resume behavior is covered
+by disposable tests, while the owner-run check below verified younger-run skips.
+
+Final presentation uses bounded scrolling instead of pagination, 35vh anchored
+information popovers, shared left-aligned 60%/40% evidence columns and rounded
+presentation values. Hourly evidence retains quality, statistic, source record
+ID and actual intervals. Home overview and Other locations information show
+common publication metadata; detailed metric explanations stay on the detail
+page. These changes are included in `8c39cb0`.
+
+The following entries are historical checkpoints. Their references to
+uncommitted work and pending acceptance describe the state at that time;
+the completion checkpoint above supersedes them.
 
 ## T-025 Recharts migration — 2026-11-25
 
