@@ -107,6 +107,7 @@ const AvailableOverview = ({ forecastDate, siteName, summary }: AvailableOvervie
           key={`${String(summary.siteId)}:${forecastDate}`}
           siteName={siteName}
           summary={summary}
+          metadataOnly
         />
       </div>
       <Link

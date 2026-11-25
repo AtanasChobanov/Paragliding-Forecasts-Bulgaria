@@ -109,7 +109,7 @@ describe("hourly cloudbase chart", () => {
     const popup = screen.getByRole("region", { name: "Cloudbase hour information" });
     expect(within(popup).getByText("2,400").tagName).toBe("STRONG");
     expect(within(popup).getByRole("group", { name: /Hourly confidence/u })).toBeVisible();
-    expect(within(popup).queryByText(/Estimated cloudbase/u)).not.toBeInTheDocument();
+    expect(within(popup).queryByRole("navigation")).not.toBeInTheDocument();
     expect(within(popup).queryByRole("button", { name: /Close/u })).not.toBeInTheDocument();
     await userEvent.keyboard("{Escape}");
     expect(

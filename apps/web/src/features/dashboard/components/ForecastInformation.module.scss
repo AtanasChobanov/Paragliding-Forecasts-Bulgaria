@@ -78,26 +78,14 @@
   }
 }
 
-.popup[data-paginated] {
-  overflow: hidden;
-  font-size: clamp(0.72rem, 1vw, 0.82rem);
-}
-
-.pageContent {
-  min-height: 0;
-  white-space: pre-line;
-}
-
-.pagination {
-  margin-top: 0.6rem;
-}
-
 .generalNotes {
   margin-top: 0.75rem;
   padding-top: 0.65rem;
   border-top: 1px solid var(--color-border);
 }
 
-.popup[data-paginated][data-fit-viewport] {
-  overflow: auto;
+.popup[data-fit-viewport] {
+  max-height: 35vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
 }

@@ -1,5 +1,4 @@
 import type { ForecastDriver, ForecastInputRow } from "@paragliding-forecasts/contracts";
-import type { ReactNode } from "react";
 import { formatInputValue } from "../forecast-detail-presentation.js";
 import styles from "./ForecastDetailContent.module.scss";
 
@@ -15,12 +14,24 @@ const timestamp = (value: string) =>
     hourCycle: "h23",
   }).format(new Date(value))} Sofia`;
 
+const intervalTime = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Europe/Sofia",
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
 export const InputEvidence = ({
   row,
   omitDisplayedValue = false,
+  presentation = false,
 }: {
   readonly row: ForecastInputRow;
   readonly omitDisplayedValue?: boolean;
+  readonly presentation?: boolean;
 }) => (
   <dl className={styles.evidenceFields}>
     {row.value === null ? (
@@ -31,24 +42,28 @@ export const InputEvidence = ({
     ) : !omitDisplayedValue ||
       formatInputValue(row).replaceAll(",", "") !== `${String(row.value)} ${row.unit}` ? (
       <>
-        <dt>Exact source value</dt>
-        <dd>
-          {String(row.value)} {row.unit}
-        </dd>
+        <dt>{presentation ? "Value" : "Exact source value"}</dt>
+        <dd>{presentation ? formatInputValue(row) : `${String(row.value)} ${row.unit}`}</dd>
       </>
     ) : null}
     <dt>Statistic</dt>
     <dd>{readable(row.statistic)}</dd>
     <dt>Quality</dt>
     <dd>{readable(row.qualityState)}</dd>
-    <dt>Source record</dt>
+    <dt>Source record ID</dt>
     <dd>{row.provenanceId ?? "Not retained"}</dd>
     {row.intervalStartUtc ? (
       <>
         <dt>Interval</dt>
         <dd>
-          {timestamp(row.intervalStartUtc)} –{" "}
-          {row.intervalEndUtc ? timestamp(row.intervalEndUtc) : "Unavailable"}
+          {presentation && row.intervalEndUtc ? (
+            `${intervalTime.formatRange(new Date(row.intervalStartUtc), new Date(row.intervalEndUtc))} Sofia`
+          ) : (
+            <>
+              {timestamp(row.intervalStartUtc)} –{" "}
+              {row.intervalEndUtc ? timestamp(row.intervalEndUtc) : "Unavailable"}
+            </>
+          )}
         </dd>
       </>
     ) : null}
@@ -64,30 +79,19 @@ export const InputEvidence = ({
 );
 
 const DriverInputs = ({ inputs }: { readonly inputs: ForecastDriver["inputs"] }) => (
-  <div className={styles.evidenceInputs}>
+  <dl className={styles.evidenceFields}>
     {inputs.map((input, index) => (
-      <section key={`${input.inputKey}-${String(index)}`}>
-        <h4>{input.field?.label ?? readable(input.inputKey)}</h4>
-        {input.validAtUtc ? (
-          <p className={styles.evidenceTime}>
-            {timestamp(input.validAtUtc)}
-            {input.intervalEndUtc ? ` – ${timestamp(input.intervalEndUtc)}` : ""}
-          </p>
-        ) : null}
-        {input.field ? (
-          <InputEvidence row={input.field} />
-        ) : (
-          <p>{input.unavailableReason ?? "Exact input is retained in the ML artifact."}</p>
-        )}
-        {!input.field && input.provenanceId !== undefined ? (
-          <p>Source record: {input.provenanceId}</p>
-        ) : null}
-      </section>
+      <div className={styles.driverInputValue} key={`${input.inputKey}-${String(index)}`}>
+        <dt>{input.field?.label ?? readable(input.inputKey)}</dt>
+        <dd title={input.field?.missingReason ?? input.unavailableReason}>
+          {input.field?.value != null ? formatInputValue(input.field) : "Unavailable"}
+        </dd>
+      </div>
     ))}
-  </div>
+  </dl>
 );
 
-export const driverEvidencePages = (driver: ForecastDriver): ReactNode[] => {
+export const DriverEvidence = ({ driver }: { readonly driver: ForecastDriver }) => {
   const overview = (
     <div key="explanation" className={styles.metricInformation}>
       <h3>Why this result</h3>
@@ -134,7 +138,7 @@ export const driverEvidencePages = (driver: ForecastDriver): ReactNode[] => {
           </p>
         ) : null}
       </section>
-      {driver.inputs.length <= 3 && driver.inputs.length > 0 ? (
+      {driver.inputs.length <= 8 && driver.inputs.length > 0 ? (
         <section>
           <h4>Published inputs</h4>
           <DriverInputs inputs={driver.inputs} />
@@ -142,19 +146,21 @@ export const driverEvidencePages = (driver: ForecastDriver): ReactNode[] => {
       ) : null}
     </div>
   );
-  if (driver.inputs.length <= 3) return [overview];
+  if (driver.inputs.length <= 8) return overview;
   const groups = new Map<string, ForecastDriver["inputs"]>();
   for (const input of driver.inputs) {
     const key = input.field?.group ?? "Other published inputs";
     groups.set(key, [...(groups.get(key) ?? []), input]);
   }
-  return [
-    overview,
-    ...Array.from(groups, ([group, inputs]) => (
-      <div key={group} className={styles.metricInformation}>
-        <h3>{group}</h3>
-        <DriverInputs inputs={inputs} />
-      </div>
-    )),
-  ];
+  return (
+    <>
+      {overview}
+      {Array.from(groups, ([group, inputs]) => (
+        <div key={group} className={styles.metricInformation}>
+          <h3>{group}</h3>
+          <DriverInputs inputs={inputs} />
+        </div>
+      ))}
+    </>
+  );
 };

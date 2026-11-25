@@ -5,7 +5,6 @@ import { ConfidenceIndicator } from "../../dashboard/components/ConfidenceIndica
 import { formatInteger } from "../../dashboard/forecast-presentation.js";
 import { InformationPopover } from "../../dashboard/components/ForecastInformation.js";
 import { CloudbaseGuidance } from "./CloudbaseGuidance.js";
-import { Pagination } from "../../../components/pagination/Pagination.js";
 import { DashboardPanel } from "../../../components/dashboard-panel/DashboardPanel.js";
 import {
   cloudbasePlotInsets,
@@ -13,7 +12,7 @@ import {
   numericCloudbaseType,
 } from "../cloudbase-chart.js";
 import { defaultCloudbaseHour, formatSofiaHour } from "../forecast-detail-presentation.js";
-import { informationPages, inputInformation } from "./ForecastDetailContent.js";
+import { InputEvidence } from "./ForecastEvidence.js";
 import styles from "./CloudbaseChart.module.scss";
 
 const LazyCloudbasePlot = lazy(async () => {
@@ -32,7 +31,6 @@ const HourTooltip = ({
   readonly anchor: DOMRect;
   readonly onClose: () => void;
 }) => {
-  const [page, setPage] = useState(0);
   const panel = useRef<HTMLDivElement>(null);
   const hour = forecast.cloudbaseHours.find((hour) => hour.validAtUtc === selectedHour);
   const context = forecast.forecastInputs.hourlyContext.find(
@@ -59,7 +57,7 @@ const HourTooltip = ({
   }, [onClose]);
   if (!hour) return null;
   const daily = selectedHour === defaultCloudbaseHour(forecast) && hour.heightMslM !== null;
-  const pages = [
+  const summary = (
     <div key="height" className={styles.heightSummary}>
       {daily ? <span className={styles.maximumBadge}>Daily maximum</span> : null}
       {hour.heightMslM === null ? (
@@ -89,14 +87,9 @@ const HourTooltip = ({
           confidence={{ level: hour.confidenceLevel ?? "unavailable", notes: [] }}
         />
       </div>
-    </div>,
-    ...informationPages([
-      `${hour.reasonText} Code: ${hour.reasonCode}.${numericCloudbaseType(hour) === "conditional" ? " Conditional LCL is a conditional condensation level, not an estimated thermal top." : ""}`,
-      `${formatSofiaHour(hour.validAtUtc)} Europe/Sofia · ${cloudbaseRegimeLabel(hour)}`,
-      ...(hour.note ? [hour.note] : []),
-      ...(context?.cloudbaseContext.flatMap(inputInformation) ?? []),
-    ]),
-  ];
+    </div>
+  );
+  const heightLimit = window.innerHeight * 0.35;
   const above = anchor.top > window.innerHeight / 2;
   return createPortal(
     <div
@@ -109,18 +102,43 @@ const HourTooltip = ({
           8,
           Math.min(anchor.left, window.innerWidth - Math.min(390, window.innerWidth - 16) - 8),
         ),
-        top: above ? anchor.top - 8 : anchor.bottom + 8,
-        transform: above ? "translateY(-100%)" : undefined,
+        top: Math.max(
+          8,
+          Math.min(
+            above ? anchor.top - heightLimit - 8 : anchor.bottom + 8,
+            window.innerHeight - heightLimit - 8,
+          ),
+        ),
+        maxHeight: heightLimit,
       }}
     >
-      {pages[page]}
-      <div className={styles.tooltipControls}>
-        <Pagination
-          label="Cloudbase tooltip pages"
-          page={page}
-          pages={pages.length}
-          onPageChange={setPage}
-        />
+      {summary}
+      <div className={styles.hourDetails}>
+        <section>
+          <h4>Formation evidence</h4>
+          <p>{hour.reasonText}</p>
+          <p>
+            {formatSofiaHour(hour.validAtUtc)} Europe/Sofia · {cloudbaseRegimeLabel(hour)}
+          </p>
+          <p>Reason reference: {hour.reasonCode}</p>
+          {numericCloudbaseType(hour) === "conditional" ? (
+            <p>
+              Conditional LCL is a conditional condensation level, not an estimated thermal top.
+            </p>
+          ) : null}
+          {hour.note ? <p>{hour.note}</p> : null}
+        </section>
+        {context?.cloudbaseContext.length ? (
+          <section>
+            <h4>Weather inputs</h4>
+            {context.cloudbaseContext.map((row) => (
+              <section key={row.key}>
+                <h4>{row.label}</h4>
+                <InputEvidence row={row} presentation />
+              </section>
+            ))}
+          </section>
+        ) : null}
       </div>
     </div>,
     document.body,

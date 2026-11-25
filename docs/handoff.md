@@ -2,6 +2,9 @@
 
 ## Where to resume
 
+**Owner instruction:** Do not commit further work until the owner explicitly
+says it is ready for a commit. Current presentation refinements remain uncommitted.
+
 T-020 through T-023 are Done. The current local branch is
 `feature/T-025-UI-data-integration`, with the T-024 baseline available.
 The 2026-11-11 environment repair did not implement T-025 or change ticket statuses.
@@ -77,6 +80,89 @@ next requested ticket on top of the branch that supplies its dependencies.
   is informational and carries source and confidence limitations.
 
 ## T-025 Recharts migration — 2026-11-25
+
+2026-11-26 owner refinement (uncommitted): Other locations information now also
+shows only common source/publication/model metadata, matching overview. Per-metric
+notes remain in the detail page. No commit made.
+
+Pagination cleanup audit (2026-11-26, uncommitted): confirmed the Pagination
+component/styles and MeasuredPages files are deleted. No pagination imports,
+page state, capacity logic or pagination CSS remain in web source. Removed the
+stale data-page-row browser selector and paginated-tooltip test wording; updated
+obsolete instructions in the implementation plan. Negative assertions verifying
+absence of pagination, explanatory documentation and historical decisions remain.
+Verified: 151 web tests, web typecheck/build, root lint, formatting/repo and
+whitespace checks passed. No product servers or ML commands were run. No commit made.
+
+2026-11-26 owner refinement (uncommitted): the home overview information now
+shows only common publication/source/model metadata. Per-output probability,
+cloudbase and OD details remain on the detail page; other location cards are
+unchanged. No commit made.
+
+2026-11-26 owner refinement (uncommitted): cloudbase and OD result cards show
+the value before the label/information button, including compact layouts. Four
+targeted browser checks (desktop/mobile/125% text and footer alignment), formatting
+and whitespace checks passed. No commit made.
+
+Latest column correction: all input/evidence popovers now use one shared 60%/40%
+label/value layout at every screen width, including hourly chart metadata.
+Values in the right column are left-aligned (the owner reverted the right-alignment trial).
+The hourly and narrow-screen ratio overrides and default definition-value margins
+were removed. Two targeted browser tests verify actual column proportions;
+formatting and whitespace checks passed. No commit made.
+
+Latest hourly evidence refinement (uncommitted): weather values inside the hourly
+chart tooltip use presentation rounding/conversions while statistic, quality,
+source record ID and other metadata remain visible. The latest owner correction sets label/value columns to 60%/40%
+in this tooltip. Intl range formatting avoids repeated dates in same-day intervals
+and retains dates across day boundaries, with Sofia local times. Verified: 151 web
+tests, two targeted browser tests, typecheck, lint, formatting and whitespace checks
+passed. No product servers or ML commands were run. No commit made.
+
+Latest anchoring fix (uncommitted): detail information popovers remain next to
+the triggering icon, above or below according to available space. Long content
+no longer moves the box to the viewport's top edge. The maximum stays 35vh,
+further limited by space on the chosen side; content scrolls within that box.
+This supersedes the earlier viewport-top fallback. Verified: 150 web tests,
+three targeted browser tests (including anchor position before/after scrolling),
+typecheck, lint, formatting and whitespace checks passed. No commit was made.
+
+Latest uncommitted refinement: detail popovers and hourly tooltips are capped at
+35vh, with no fixed pixel cap (latest owner correction). The cap applies to all
+detail result popovers as well. The 35vh change passed typecheck, formatting,
+whitespace checks and two targeted browser scroll/touch tests. Why this result input values now reuse the same
+presentation rounding and unit conversions as Forecast inputs. Verified: 150 web
+tests, 31 browser tests, web typecheck/build, lint, formatting, repo and whitespace
+checks passed. No product servers or ML commands were run. No commit made.
+
+Current uncommitted scrolling refinement (supersedes pagination notes below):
+the owner requested removal of pagination throughout the detail page. Inputs and
+Why this result now use `ScrollableList` with every row mounted and internal
+vertical overflow. All detail popovers and the hourly tooltip show continuous
+structured content, bounded to 420 px / 70% viewport height, with scrolling.
+The pagination component, measured page capacity and word-count splitting are
+removed. Driver topics remain headings within one scrollable view. Name/value
+columns reserve 60%/40% on wide screens and 45%/55% on narrow screens, with intact
+numeric values. Home remains unchanged. DEC-075 and the plan/README record the
+owner-approved interaction change. Source record ID and compact driver input
+pairs from the preceding uncommitted refinement are retained. No commit made.
+Verification: all 150 web tests and 31 Playwright tests passed, including all eight
+viewport/text settings, keyboard-focusable list scrolling, last-row reachability,
+continuous hourly information and long names/whole numeric values at 125% text.
+Web typecheck/build, root lint, formatting/repo and whitespace checks passed.
+Long-evidence, compact-page and hourly-tooltip screenshots were inspected.
+An interrupted test run left two verified fixture API processes; only those test
+processes were stopped before the successful rerun. Product servers and ML
+commands were not run. T-025 remains Review pending owner visual acceptance.
+
+Current uncommitted refinement: Why this result input evidence now lists only
+input names and exact canonical values/units, with explicit Unavailable states.
+Statistics, quality, record IDs, timestamps and layer details remain in Forecast
+inputs, not repeated in drivers. Its label is now Source record ID. Up to eight
+compact pairs stay with the driver calculation; larger sets retain topic pages.
+Verification: 150 web tests, 30 browser tests, web typecheck/build, root lint,
+formatting/repo and whitespace checks passed. No product servers or ML commands
+were run. No commit was made, per the owner's new instruction.
 
 Latest information refinement: shared height-reference/cloud-formation guidance is
 now in an information button after the Hourly cloudbase time range. Cloudbase

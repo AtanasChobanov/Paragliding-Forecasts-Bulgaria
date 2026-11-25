@@ -1,3 +1,4 @@
+import type { ForecastResponse } from "@paragliding-forecasts/contracts";
 import { expect, test, type Page } from "@playwright/test";
 const path = "/forecast?site=sofia-vitosha-kominite&date=2026-11-17";
 const openDetail = async (page: Page) => {
@@ -28,10 +29,20 @@ for (const size of sizes)
     await openDetail(page);
     if (size.text) await page.addStyleTag({ content: "html { font-size: 125%; }" });
     await expect(page.getByRole("heading", { name: "Hourly cloudbase" })).toBeVisible();
-    for (const label of ["Forecast inputs pagination", "Forecast drivers pagination"]) {
-      const pagination = page.getByRole("navigation", { name: label });
-      await expect(pagination).toHaveText(/^1 of \d+$/u);
-      await expect(pagination.getByRole("button", { name: "Previous" })).toBeDisabled();
+    await expect(page.getByRole("navigation", { name: /pagination|pages/u })).toHaveCount(0);
+    for (const label of ["Forecast inputs list", "Forecast drivers list"]) {
+      const list = page.getByRole("region", { name: label });
+      await expect(list).toHaveCSS("overflow-y", "auto");
+      await list.evaluate((el) => {
+        el.scrollTop = el.scrollHeight;
+      });
+      const bounds = await list.boundingBox();
+      const last = await list.locator("[data-list-row]").last().boundingBox();
+      if (bounds && last)
+        expect(last.y + last.height).toBeLessThanOrEqual(bounds.y + bounds.height + 1);
+      await list.evaluate((el) => {
+        el.scrollTop = 0;
+      });
     }
     await expect
       .poll(() =>
@@ -40,7 +51,7 @@ for (const size of sizes)
             document.documentElement,
             document.body,
             ...document.querySelectorAll<HTMLElement>(
-              "[data-detail], [data-detail] section, [data-detail] article, [data-detail] nav, [data-detail] [data-page-row]",
+              "[data-detail], [data-detail] section, [data-detail] article, [data-detail] nav",
             ),
           ];
           return elements
@@ -58,23 +69,6 @@ for (const size of sizes)
         }),
       )
       .toEqual([]);
-    expect(
-      await page.evaluate(() =>
-        Array.from(document.querySelectorAll<HTMLElement>("[data-page-row]"))
-          .filter((row) => {
-            const pagination = row.parentElement?.nextElementSibling;
-            return (
-              pagination instanceof HTMLElement &&
-              row.getBoundingClientRect().bottom > pagination.getBoundingClientRect().top + 1
-            );
-          })
-          .map((row) => ({
-            text: row.textContent,
-            rowBottom: row.getBoundingClientRect().bottom,
-            paginationTop: row.parentElement?.nextElementSibling?.getBoundingClientRect().top,
-          })),
-      ),
-    ).toEqual([]);
     for (const label of await page
       .locator(".recharts-xAxis .recharts-cartesian-axis-tick-value")
       .allTextContents()) {
@@ -99,6 +93,16 @@ for (const size of sizes)
     const controls = page.locator("[data-detail] select, [data-detail] button, [data-detail] a");
     for (const control of await controls.all()) {
       if (!(await control.isVisible())) continue;
+      if (
+        await control.evaluate((el) => {
+          const list = el.closest("[data-scroll-list]");
+          if (!list) return false;
+          const rect = el.getBoundingClientRect(),
+            clip = list.getBoundingClientRect();
+          return rect.top < clip.top || rect.bottom > clip.bottom;
+        })
+      )
+        continue;
       const box = await control.boundingBox();
       expect(box).not.toBeNull();
       if (box) {
@@ -113,7 +117,7 @@ for (const size of sizes)
     await expect(page.getByText("Compared with previous run")).toHaveCount(0);
   });
 
-test("synchronizes hours with inputs, supports keyboard, touch-style click and metadata pages", async ({
+test("synchronizes hours with inputs, supports keyboard, touch-style click and metadata", async ({
   page,
 }) => {
   let tiles = 0;
@@ -174,7 +178,7 @@ test("formats input and driver evidence into labeled sections", async ({ page })
   const input = page.getByRole("region", { name: / input$/u });
   await expect(input.getByRole("navigation")).toHaveCount(0);
   await expect(input).toContainText("Statistic");
-  await expect(input).toContainText("Source record");
+  await expect(input).toContainText("Source record ID");
   await expect(input).not.toContainText("Air temperature 2 m mean");
   await page.screenshot({ path: test.info().outputPath("input-evidence.png") });
   await page.keyboard.press("Escape");
@@ -185,7 +189,72 @@ test("formats input and driver evidence into labeled sections", async ({ page })
   const driver = page.getByRole("region", { name: / driver$/u });
   await expect(driver.getByRole("heading", { name: "Calculation details" })).toBeVisible();
   await expect(driver).toContainText("Model contribution");
+  await expect(driver).not.toContainText("Statistic");
+  await expect(driver).not.toContainText("Quality");
+  await expect(driver).not.toContainText("Source record");
   await page.screenshot({ path: test.info().outputPath("driver-evidence.png") });
+});
+
+test("keeps long evidence names and exact values readable in a bounded scrolling popup", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route("**/api/v1/forecasts?*", async (route) => {
+    const response = await route.fetch();
+    const forecast = (await response.json()) as ForecastResponse;
+    const driver = forecast.explanations[0]?.drivers[0],
+      field = forecast.forecastInputs.xcFeatures[0];
+    if (!driver || !field) throw new Error("Missing evidence fixture");
+    driver.inputs = Array.from({ length: 18 }, (_, i) => ({
+      inputKey: field.key,
+      field: {
+        ...field,
+        label: `Wind direction mean · 1500–3000 m above site · from north ${String(i)}`,
+        group: "Layer 1500–3000 m above site",
+        value: 14.272110047004254,
+        unit: "m/s",
+      },
+    }));
+    await route.fulfill({ response, json: forecast });
+  });
+  await openDetail(page);
+  await page.addStyleTag({ content: "html { font-size: 125%; }" });
+  const trigger = page.getByRole("button", { name: /^Driver information:/u }).first();
+  await trigger.click();
+  const popup = page.getByRole("region", { name: / driver$/u });
+  await expect(popup.getByRole("navigation")).toHaveCount(0);
+  const dimensions = await popup.evaluate((el) => ({
+    height: el.getBoundingClientRect().height,
+    client: el.clientHeight,
+    scroll: el.scrollHeight,
+    width: el.clientWidth,
+    scrollWidth: el.scrollWidth,
+  }));
+  const buttonBounds = await trigger.boundingBox(),
+    popupBounds = await popup.boundingBox();
+  if (!buttonBounds || !popupBounds) throw new Error("Missing popover anchor");
+  expect(
+    Math.min(
+      Math.abs(popupBounds.y + popupBounds.height - buttonBounds.y + 8),
+      Math.abs(popupBounds.y - buttonBounds.y - buttonBounds.height - 8),
+    ),
+  ).toBeLessThanOrEqual(1);
+  expect(dimensions.height).toBeLessThanOrEqual(844 * 0.35 + 1);
+  expect(dimensions.scroll).toBeGreaterThan(dimensions.client);
+  expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.width + 1);
+  await popup.evaluate((el) => {
+    el.scrollTop = el.scrollHeight;
+  });
+  const afterScroll = await popup.boundingBox();
+  expect(afterScroll?.y).toBe(popupBounds.y);
+  const pair = popup.locator("dl > div").last();
+  const name = await pair.locator("dt").boundingBox(),
+    value = await pair.locator("dd").boundingBox();
+  if (!name || !value) throw new Error("Missing evidence columns");
+  expect(Math.abs(name.width / (name.width + value.width) - 0.6)).toBeLessThan(0.01);
+  await expect(pair.locator("dd")).toHaveText("14.27 m/s");
+  await expect(pair.locator("dd")).toBeInViewport();
+  await page.screenshot({ path: test.info().outputPath("long-scrolling-evidence.png") });
 });
 
 test("keeps explicit dates, disabled missing slots and dashboard return selection", async ({
@@ -257,19 +326,27 @@ test("retries a 5xx detail error and never refreshes cached requests on focus or
 
 test.describe("detail touch", () => {
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
-  test("opens a chart hour by tap and dismisses its paginated tooltip outside", async ({
+  test("opens a chart hour by tap and dismisses its scrolling tooltip outside", async ({
     page,
   }) => {
     await openDetail(page);
     await page.getByRole("button", { name: "14:00 Sofia · Conditional LCL" }).tap();
     const tooltip = page.getByRole("region", { name: "Cloudbase hour information" });
     await expect(tooltip).toContainText("Daily maximum");
+    await expect(tooltip).toContainText("Quality");
+    await expect(tooltip).toContainText("Source record ID");
+    await expect(tooltip).not.toContainText("Exact source value");
+    const fields = tooltip.locator("dl").first();
+    const widths = await fields.evaluate((el) => ({
+      label: el.querySelector("dt")?.getBoundingClientRect().width ?? 0,
+      value: el.querySelector("dd")?.getBoundingClientRect().width ?? 0,
+    }));
+    expect(Math.abs(widths.label / (widths.label + widths.value) - 0.6)).toBeLessThan(0.01);
     await page.screenshot({ path: test.info().outputPath("hour-tooltip.png") });
-    await expect(tooltip.getByRole("navigation")).toHaveText(/^1 of \d+$/u);
-    await tooltip.getByRole("button", { name: "Next" }).tap();
-    await expect(tooltip.getByRole("navigation")).toHaveText(/^2 of \d+$/u);
-    await expect(tooltip).toContainText("Code: fixture");
-    await page.getByRole("heading", { name: "Forecast inputs" }).tap();
+    await expect(tooltip.getByRole("navigation")).toHaveCount(0);
+    await expect(tooltip).toHaveCSS("overflow-y", "auto");
+    await expect(tooltip).toContainText("Reason reference: fixture");
+    await page.getByText("XC Forecast", { exact: true }).tap();
     await expect(tooltip).toHaveCount(0);
   });
 });

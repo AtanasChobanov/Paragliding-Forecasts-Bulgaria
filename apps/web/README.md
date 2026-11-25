@@ -186,22 +186,22 @@ Cloudbase and OD risk share two equal columns below those rows. Cloudbase shows
 metres MSL for the selected daily maximum. Its information contains the matching signed site/model AGL values; no AGL row appears in the card.
 Probability confidence levels follow their meter immediately; the weather cards
 retain their Confidence prefix. Publication metadata uses the GFS cycle and
-the actual publication time in Sofia. Detail information uses compact pages;
+the actual publication time in Sofia. Detail information uses bounded scrolling popovers;
 hover/focus opens it, press pins it, and Escape/outside press closes it.
 The summary's common information uses the home dashboard's labeled metadata
 layout, without per-metric evidence. Height-reference and cloud-formation
 explanations live in the information button beside the Hourly cloudbase time range;
 the cloudbase result information retains its matching site/model AGL readings. Each
 output metric shows its explanation and limitations together, with readable descriptions of published flags and no
-duplicate status/confidence prefix or pagination. Hourly chart information retains
-its existing pagination. Home information is unchanged.
+duplicate status/confidence prefix or pagination. Hourly chart information uses
+the same bounded scrolling approach. Home overview information contains common source/publication/model metadata only;
+metric explanations remain on the detail page. Other-location information also contains only common metadata.
 
 Inputs default to `XC inputs / Surface temperature`. All 67 policy fields are
-reachable through group selectors and measured pagination (one through six
-rows). OD/cloudbase modes use a synchronized hour selector. Input information
+reachable through group selectors and keyboard-focusable scrolling lists. OD/cloudbase modes use a synchronized hour selector. Input information
 uses one labeled metadata view without repeating the row name or displayed value.
 Exact canonical values appear only when they add precision or use a different unit.
-Quality, statistics, source records, true intervals and layer bounds remain available.
+Quality, statistics, source record IDs, true intervals and layer bounds remain available.
 Canonical values,
 quality, provenance and true intervals remain available in row information.
 Display conversions include K to °C, Pa to hPa, kg/kg to g/kg and K/km to
@@ -209,22 +209,22 @@ Display conversions include K to °C, Pa to hPa, kg/kg to g/kg and K/km to
 Unavailable inputs preserve their reasons, including outside-OD slots at 20:00.
 
 Detail selectors share the location/date controls' primary border, leading icon
-and chevron. A shared `Pagination` component serves inputs, drivers, information
-popovers and chart tooltips: arrow buttons flank the current page and total
-(`1 of 3`), with disabled arrows at the boundaries (`1 of 1` for a single page).
-The measured lists recalculate page totals when available space changes.
+and chevron. A shared `ScrollableList` renders every matching input/driver row
+inside the available panel body with vertical overflow when needed. There is no
+pagination component. The page and section shells remain within the viewport.
 
 Explanations have five metric tabs, with the equivalent native select on
 compact layouts. Published rank/order and up to three drivers remain intact,
-with measured pagination. XC signs mean model direction relative to the
+inside a scrolling list. XC signs mean model direction relative to the
 training reference, not causal effects or percentage points. P200 describes
 `P(200+ | 100+)`; P300 shows stored pooled support. OD overrides use a warning
 symbol and score components show risk points. Cloudbase reasons use neutral
 information or uncertainty symbols. Full driver text and ordered exact inputs
-remain accessible in structured information: short drivers combine their calculation
-and up to three inputs in one view; longer evidence separates the calculation
-from inputs grouped by topic. Metadata fields are not split into individual pages.
-Long groups can use the viewport and scroll; popup position updates between pages.
+remain accessible in structured, scrolling information. Short input lists stay
+with the calculation; longer lists retain topic headings in the same continuous
+view. Driver inputs contain only names and presentation-rounded values/units. Statistics,
+quality, source record IDs and interval metadata stay in Forecast inputs.
+Detail popovers are capped at 35vh and scroll when needed. Input name/value columns are 60%/40% on all screen sizes; values are left-aligned.
 Missing SQL equivalents point to the
 retained ML artifact, including the full T-022 model column.
 
@@ -242,20 +242,23 @@ numeric type. Isolated numeric hours retain a marker. The daily maximum
 outline follows estimated-first selection. No numeric hours produces an
 explicit explanation rather than a zero-height curve or a thermal-top claim.
 
-Hover/focus/press an hour for a paginated tooltip with all three height
+Hover/focus/press an hour for a scrolling tooltip with all three height
 references, confidence, reason/code, note and matching cloudbase context.
-Left/Right and Home/End select hours; Enter/press pins the tooltip for its
-page controls. The selected hour synchronizes with OD/cloudbase inputs.
+Left/Right and Home/End select hours; Enter/press pins the tooltip for
+reading and scrolling its content. The selected hour synchronizes with OD/cloudbase inputs.
 Tooltips use a portal to stay inside the viewport.
-Hour ticks use `HH:mm`. The first tooltip page emphasizes MSL, followed by
+Hour ticks use `HH:mm`. The tooltip starts with MSL, followed by
 secondary site/model AGL readings, the shared confidence indicator and an optional
-daily-maximum badge. Reasons, hour/regime and exact inputs remain on subsequent
-pages. There is no close button: pointer leave dismisses an unpinned tooltip;
+daily-maximum badge. Reasons, hour/regime and exact inputs follow in the same
+scrollable content. There is no close button: pointer leave dismisses an unpinned tooltip;
 Escape or an outside press dismisses a pinned tooltip.
 The themed regime band uses Recharts' plot/scale hooks. The adjacent native DOM
 hour controls retain all eleven selectable slots, even without numeric heights.
 They own keyboard focus, so Recharts' parallel accessibility layer is disabled
-to avoid duplicate navigation. The tooltip keeps the shared React pagination.
+to avoid duplicate navigation. The tooltip has no pagination controls. Hourly weather values use the shared
+presentation rounding/unit conversions while retaining statistic, quality, source
+record ID and interval metadata. These metadata tables use the shared 60%/40% label/value layout.
+Intervals share one date when possible, with both local times and the Sofia zone.
 Line/area animations are disabled to preserve the published values during selection.
 
 Catalog, days and detail have independent errors and explicit Retry controls.

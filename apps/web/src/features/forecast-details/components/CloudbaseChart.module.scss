@@ -95,18 +95,25 @@
   line-height: 1.4;
   overflow-wrap: anywhere;
   white-space: pre-line;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
   p {
     margin: 0;
   }
 }
-.tooltipControls {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-
-  nav {
-    flex: 1;
+.hourDetails {
+  section {
+    margin-top: 0.6rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--color-border);
+  }
+  h4 {
+    margin: 0 0 0.3rem;
+    font-size: inherit;
+  }
+  p + p {
+    margin-top: 0.3rem;
   }
 }
 .heightSummary {

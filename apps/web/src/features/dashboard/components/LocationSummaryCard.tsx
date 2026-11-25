@@ -81,7 +81,12 @@ export const LocationSummaryCard = ({ forecastDate, site, summary }: LocationSum
         >
           <ChevronIcon />
         </Link>
-        <ForecastInformation key={forecastDate} siteName={site.name} summary={summary} />
+        <ForecastInformation
+          key={forecastDate}
+          siteName={site.name}
+          summary={summary}
+          metadataOnly
+        />
       </div>
       <div className={styles.primaryMetric}>
         <div

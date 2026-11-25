@@ -207,18 +207,19 @@
     stroke-linejoin: round;
   }
 }
-.measuredPages {
-  display: flex;
-  min-width: 0;
-  min-height: 0;
-  flex: 1;
-  flex-direction: column;
-  --pagination-control-size: 1.2rem;
-}
-.pageRows {
+.scrollableList {
   flex: 1;
   min-height: 0;
   min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
+  padding-right: 0.2rem;
+  &:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: -2px;
+  }
 }
 .inputRow,
 .driverRow {
@@ -814,11 +815,11 @@
 }
 .summaryMetrics .outputLabel {
   grid-column: 1;
-  grid-row: 2;
+  grid-row: 3;
 }
 .summaryMetrics .outputReading {
   grid-column: 1;
-  grid-row: 3;
+  grid-row: 2;
 }
 .summaryMetrics .outputConfidence {
   grid-column: 1;
@@ -858,12 +859,12 @@
     padding-top: 0;
   }
   .summaryMetrics .outputLabel {
-    grid-column: 2;
-    grid-row: 1;
-  }
-  .summaryMetrics .outputReading {
     grid-column: 1/-1;
     grid-row: 2;
+  }
+  .summaryMetrics .outputReading {
+    grid-column: 2;
+    grid-row: 1;
     flex-direction: row;
     gap: 0.25rem;
   }
@@ -917,16 +918,24 @@
 
 .evidenceFields {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  margin: 0;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
   gap: 0.35rem 0.8rem;
+  dt {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
   dd {
+    text-align: left;
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: normal;
     color: var(--color-text-secondary);
   }
 }
-.evidenceInputs > section {
-  margin-top: 0.65rem;
-  padding-top: 0.55rem;
-  border-top: 1px solid var(--color-border);
+.driverInputValue {
+  display: contents;
 }
 .evidenceTime {
   margin: 0.3rem 0 !important;

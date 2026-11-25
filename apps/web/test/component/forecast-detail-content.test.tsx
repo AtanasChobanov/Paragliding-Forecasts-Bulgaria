@@ -1,12 +1,12 @@
-import { render, screen, within, fireEvent } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   ForecastDetailSummary,
   ForecastInputsPanel,
   TopDriversPanel,
 } from "../../src/features/forecast-details/components/ForecastDetailContent.js";
-import { MeasuredPages } from "../../src/features/forecast-details/components/MeasuredPages.js";
+import { ScrollableList } from "../../src/features/forecast-details/components/ScrollableList.js";
 import { createForecastResponse, missingMetric } from "../support/dashboard-fixtures.js";
 
 const inputs = () => {
@@ -99,14 +99,14 @@ describe("forecast detail content", () => {
     expect(popup).not.toHaveTextContent("Synthetic demonstration value.");
     expect(within(popup).queryByRole("navigation")).not.toBeInTheDocument();
   });
-  it("paginates all XC groups and exposes canonical input values through information", async () => {
+  it("renders all rows in XC groups and exposes canonical input values through information", async () => {
     inputs();
     expect(screen.getByLabelText("Input category")).toHaveValue("xc");
     expect(screen.getByLabelText("XC input group")).toHaveValue("Surface temperature");
-    expect(screen.getByText("1 of 4")).toBeVisible();
-    await userEvent.click(screen.getByRole("button", { name: "Next" }));
-    expect(screen.getByText("2 of 4")).toBeVisible();
-    await userEvent.click(screen.getByRole("button", { name: /Input information:/u }));
+    expect(screen.getAllByRole("button", { name: /Input information:/u })).toHaveLength(4);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Input information: Air temperature 2 m mean" }),
+    );
     const popup = screen.getByRole("region", { name: /input$/u });
     expect(popup).toBeVisible();
     expect(within(popup).queryByRole("navigation")).not.toBeInTheDocument();
@@ -115,56 +115,28 @@ describe("forecast detail content", () => {
     expect(popup).not.toHaveTextContent("Air temperature 2 m mean");
     await userEvent.keyboard("{Escape}");
     await userEvent.selectOptions(screen.getByLabelText("XC input group"), "Humidity");
-    expect(screen.getByText("1 of 3")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
+    expect(screen.getAllByRole("button", { name: /Input information:/u })).toHaveLength(3);
     await userEvent.selectOptions(screen.getByLabelText("Input category"), "od");
     expect(screen.getByLabelText("Input hour")).toHaveValue("2026-07-18T07:00:00Z");
   });
-  it("clamps pagination to measured row capacity after resize", () => {
-    let available = 90;
-    const rect = vi
-      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
-      .mockImplementation(function (this: HTMLElement) {
-        return new DOMRect(0, 0, 200, this.hasAttribute("data-page-row") ? 30 : available);
-      });
+  it("keeps every list row in one keyboard-focusable scroll region", async () => {
     render(
-      <MeasuredPages
+      <ScrollableList
         items={[1, 2, 3, 4, 5, 6, 7]}
-        label="Measured"
-        maxRows={6}
-        render={(n) => <span>{n}</span>}
+        label="Inputs"
+        render={(n) => <span>Row {n}</span>}
       />,
     );
-    expect(screen.getByText("1 of 3")).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    available = 180;
-    fireEvent(window, new Event("resize"));
-    expect(screen.getByText("2 of 2")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
-    available = 240;
-    fireEvent(window, new Event("resize"));
-    expect(screen.getByText("2 of 2")).toBeVisible();
-    rect.mockRestore();
+    const list = screen.getByRole("region", { name: "Inputs list" });
+    expect(list.querySelectorAll("[data-list-row]")).toHaveLength(7);
+    await userEvent.tab();
+    expect(list).toHaveFocus();
+    expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
   });
-  it("shows one of one and disables both arrows when all four rows fit", () => {
-    const rect = vi
-      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
-      .mockImplementation(function (this: HTMLElement) {
-        return new DOMRect(0, 0, 200, this.hasAttribute("data-page-row") ? 30 : 120);
-      });
-    render(
-      <MeasuredPages
-        items={[1, 2, 3, 4]}
-        label="Measured"
-        maxRows={6}
-        render={(n) => <span>{n}</span>}
-      />,
-    );
-    const pagination = screen.getByRole("navigation", { name: "Measured pagination" });
-    expect(pagination).toHaveTextContent(/^1 of 1$/u);
-    expect(within(pagination).getByRole("button", { name: "Previous" })).toBeDisabled();
-    expect(within(pagination).getByRole("button", { name: "Next" })).toBeDisabled();
-    rect.mockRestore();
+  it("retains an explicit empty state without pagination controls", () => {
+    render(<ScrollableList items={[]} label="Drivers" render={() => null} />);
+    expect(screen.getByText("No distinct driver was published")).toBeVisible();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
   it("uses five explanation groups, Q200 semantics, actual support and risk-specific icons", async () => {
     const f = createForecastResponse();

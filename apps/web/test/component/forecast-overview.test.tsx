@@ -68,7 +68,16 @@ describe("ForecastOverview", () => {
     expect(screen.getByText("mock-v2")).toBeVisible();
     expect(screen.getByText("t-003-t-005-mock-provider")).toBeVisible();
     expect(screen.getByText(/17 Jul 2026.*23:00 EEST/)).toBeVisible();
-    expect(within(popup).getAllByText("Synthetic demonstration value.")).toHaveLength(5);
+    expect(within(popup).queryByText("Synthetic demonstration value.")).not.toBeInTheDocument();
+    for (const label of [
+      "100+ km chance",
+      "200+ km chance",
+      "300+ km chance",
+      "Cloudbase",
+      "OD risk",
+    ]) {
+      expect(within(popup).queryByText(label)).not.toBeInTheDocument();
+    }
     fireEvent.keyDown(info, { key: "Escape" });
     expect(info).toHaveAttribute("aria-expanded", "false");
     expect(screen.getByRole("link", { name: "View detailed forecast" })).toHaveAttribute(

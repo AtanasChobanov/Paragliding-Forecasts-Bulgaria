@@ -12,7 +12,6 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { Pagination } from "../../../components/pagination/Pagination.js";
 
 import { formatConfidence, formatDataStatus, presentCloudbase } from "../forecast-presentation.js";
 import styles from "./ForecastInformation.module.scss";
@@ -20,7 +19,6 @@ import styles from "./ForecastInformation.module.scss";
 interface ForecastInformationProps {
   readonly siteName: string;
   readonly summary: AvailableForecastSummary;
-  readonly pages?: readonly ReactNode[];
   readonly metadataOnly?: boolean;
   readonly children?: ReactNode;
 }
@@ -135,14 +133,13 @@ const ForecastInformationContent = ({
 export const ForecastInformation = ({
   siteName,
   summary,
-  pages,
   metadataOnly = false,
   children,
 }: ForecastInformationProps) => (
   <InformationPopover
     label="Forecast information"
     regionLabel={`Forecast information for ${siteName}`}
-    {...(pages ? { pages } : {})}
+    fitViewport={metadataOnly}
   >
     <ForecastInformationContent siteName={siteName} summary={summary} metadataOnly={metadataOnly} />
     {children ? <div className={styles.generalNotes}>{children}</div> : null}
@@ -153,13 +150,11 @@ export const InformationPopover = ({
   fitViewport = false,
   label,
   regionLabel,
-  pages,
   children,
 }: {
   readonly fitViewport?: boolean;
   readonly label: string;
   readonly regionLabel: string;
-  readonly pages?: readonly ReactNode[];
   readonly children?: ReactNode;
 }) => {
   const panelId = useId();
@@ -167,8 +162,6 @@ export const InformationPopover = ({
   const panel = useRef<HTMLDivElement>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [open, setOpen] = useState(false);
-  const [page, setPage] = useState(0);
-  const currentPage = Math.min(page, Math.max(0, (pages?.length ?? 1) - 1));
   const [pinned, setPinned] = useState(false);
   const [position, setPosition] = useState<CSSProperties>({});
 
@@ -215,17 +208,21 @@ export const InformationPopover = ({
       const below = window.innerHeight - anchor.bottom - 2 * inset;
       const above = anchor.top - 2 * inset;
       const placeAbove = above > below;
-      const useViewport = fitViewport && panel.current.scrollHeight + 2 > Math.max(above, below);
+      const heightLimit = window.innerHeight * 0.35;
       setPosition({
         left: Math.max(
           inset,
           Math.min(anchor.left, viewportWidth - panel.current.offsetWidth - inset),
         ),
-        top: useViewport ? inset : placeAbove ? anchor.top - inset : anchor.bottom + inset,
-        transform: !useViewport && placeAbove ? "translateY(-100%)" : undefined,
+        top: placeAbove ? anchor.top - inset : anchor.bottom + inset,
+        transform: placeAbove ? "translateY(-100%)" : undefined,
         maxHeight: Math.max(
           0,
-          useViewport ? window.innerHeight - 2 * inset : placeAbove ? above : below,
+          fitViewport
+            ? Math.min(heightLimit, placeAbove ? above : below)
+            : placeAbove
+              ? above
+              : below,
         ),
       });
     };
@@ -237,7 +234,7 @@ export const InformationPopover = ({
       window.removeEventListener("resize", positionPanel);
       window.removeEventListener("scroll", positionPanel, true);
     };
-  }, [open, fitViewport, currentPage]);
+  }, [open, fitViewport]);
 
   useEffect(() => {
     if (!open) {
@@ -315,7 +312,6 @@ export const InformationPopover = ({
           aria-label={regionLabel}
           className={styles.popup}
           hidden={!open}
-          data-paginated={pages ? "true" : undefined}
           data-fit-viewport={fitViewport || undefined}
           id={panelId}
           ref={panel}
@@ -325,23 +321,7 @@ export const InformationPopover = ({
           onPointerEnter={cancelHide}
           onPointerLeave={scheduleHide}
         >
-          {open ? (
-            pages ? (
-              <>
-                <div className={styles.pageContent}>{pages[currentPage]}</div>
-                <div className={styles.pagination}>
-                  <Pagination
-                    label={`${regionLabel} pages`}
-                    page={currentPage}
-                    pages={Math.max(1, pages.length)}
-                    onPageChange={setPage}
-                  />
-                </div>
-              </>
-            ) : (
-              children
-            )
-          ) : null}
+          {open ? children : null}
         </div>,
         document.body,
       )}

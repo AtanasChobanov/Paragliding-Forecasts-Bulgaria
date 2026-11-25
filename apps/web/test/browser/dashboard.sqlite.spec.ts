@@ -192,7 +192,16 @@ test("shows SQLite values and keeps unavailable dates out of selection", async (
   const panel = page.getByRole("region", { name: "Forecast information for Zlatitsa" });
   await expect(panel).toContainText("From previous issue");
   await expect(panel).toContainText("late-import");
-  await expect(panel).toContainText("High confidence");
+  await expect(panel).not.toContainText("High confidence");
+  for (const label of [
+    "100+ km chance",
+    "200+ km chance",
+    "300+ km chance",
+    "Cloudbase",
+    "OD risk",
+  ]) {
+    await expect(panel.getByText(label, { exact: true })).toHaveCount(0);
+  }
   await page.keyboard.press("Escape");
   await expect(panel).toBeHidden();
 

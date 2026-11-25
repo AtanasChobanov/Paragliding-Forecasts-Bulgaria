@@ -88,6 +88,7 @@ consequences. Temporary progress and Git state belong in
 | DEC-072     | Read published SQLite forecasts on the home dashboard | Accepted | 2026-11-17 |
 | DEC-073     | Read published details and exact weather evidence in one viewport | Accepted | 2026-11-18 |
 | DEC-074     | Use Recharts for the hourly cloudbase plot | Accepted | 2026-11-25 |
+| DEC-075     | Replace detail pagination with bounded scrolling | Accepted | 2026-11-25 |
 
 ## Individual decisions
 
@@ -3287,6 +3288,24 @@ keep one roving focus path through those controls.
 
 **Related files:** [web dashboard](../apps/web/README.md),
 [CloudbasePlot](../apps/web/src/features/forecast-details/components/CloudbasePlot.tsx).
+
+### DEC-075 - Replace detail pagination with bounded scrolling
+
+**Status:** Accepted by explicit owner request.
+
+**Date:** 2026-11-25
+
+**Supersedes:** The detail pagination choices in DEC-073/DEC-074 and the T-025
+implementation plan. Data provenance, units, missing states, regime rendering
+and keyboard/touch requirements remain unchanged.
+
+**Decision:** Remove pagination controls and page-slicing logic. Render every
+matching input/driver row in a keyboard-focusable, vertically scrolling list.
+Keep the page and section shells within the fixed viewport. Detail information
+popovers, including the hourly chart tooltip, show continuous structured content
+with a 35vh cap and vertical overflow. Keep topic headings
+for longer driver input lists. Use a shared 60%/40% name/value layout on all screen sizes; numeric values must not split into digits.
+Home presentation remains unchanged. No new dependency is required.
 
 ## Open decisions
 

@@ -36,8 +36,8 @@ import {
   publicationLine,
   sourceLine,
 } from "../forecast-detail-presentation.js";
-import { InputEvidence, driverEvidencePages } from "./ForecastEvidence.js";
-import { MeasuredPages } from "./MeasuredPages.js";
+import { InputEvidence, DriverEvidence } from "./ForecastEvidence.js";
+import { ScrollableList } from "./ScrollableList.js";
 import styles from "./ForecastDetailContent.module.scss";
 
 const DetailSelect = ({
@@ -78,21 +78,6 @@ const metricIcon = (metric: string) =>
   );
 
 type Metric = DashboardForecastOutputs[keyof DashboardForecastOutputs];
-export const informationPages = (paragraphs: readonly string[]): ReactNode[] =>
-  paragraphs.flatMap((paragraph) => {
-    const words = paragraph.split(/\s+/u);
-    const pages: string[] = [];
-    let chunk = "";
-    for (const word of words) {
-      if (chunk.length + word.length > 230 && chunk) {
-        pages.push(chunk);
-        chunk = "";
-      }
-      chunk += `${chunk ? " " : ""}${word}`;
-    }
-    if (chunk) pages.push(chunk);
-    return pages.map((text, i) => <p key={`${text.slice(0, 20)}-${String(i)}`}>{text}</p>);
-  });
 const limitationLabels: Readonly<Record<string, string>> = {
   uncalibrated_baseline: "This baseline has not been calibrated against observations.",
   not_observationally_calibrated:
@@ -167,17 +152,6 @@ const MetricInformation = ({
   );
 };
 
-export const inputInformation = (row: ForecastInputRow): string[] => [
-  row.label,
-  row.value === null
-    ? (row.missingReason ?? "Unavailable")
-    : `${String(row.value)} ${row.unit} (canonical) · ${formatInputValue(row)}`,
-  `Statistic: ${row.statistic}. Quality: ${row.qualityState}. Provenance: ${String(row.provenanceId ?? "not retained")}.`,
-  ...(row.intervalStartUtc
-    ? [`Exact interval: ${row.intervalStartUtc} – ${row.intervalEndUtc ?? ""}`]
-    : []),
-];
-
 const OutputMetric = ({
   icon,
   label,
@@ -198,10 +172,13 @@ const OutputMetric = ({
       </span>
       <DataStatusBadge compact short status={metric.dataStatus} />
     </div>
+    <div className={styles.outputReading}>
+      <strong className={styles.outputValue}>{value}</strong>
+    </div>
     <div className={styles.outputLabel}>
       <span>{label}</span>
       <InformationPopover
-        fitViewport={Boolean(information)}
+        fitViewport
         label={`${label} information`}
         regionLabel={`${label} evidence`}
       >
@@ -209,9 +186,6 @@ const OutputMetric = ({
           {information}
         </MetricInformation>
       </InformationPopover>
-    </div>
-    <div className={styles.outputReading}>
-      <strong className={styles.outputValue}>{value}</strong>
     </div>
     <div className={styles.outputConfidence}>
       <ConfidenceIndicator
@@ -286,6 +260,7 @@ export const ForecastDetailSummary = ({
                     <DataStatusBadge compact short status={metric.dataStatus} />
                   </div>
                   <InformationPopover
+                    fitViewport
                     label={`${label} information`}
                     regionLabel={`${label} evidence`}
                   >
@@ -445,11 +420,10 @@ export const ForecastInputsPanel = ({
             </DetailSelect>
           )}
         </div>
-        <MeasuredPages
+        <ScrollableList
           key={`${mode}-${group}`}
           items={rows}
           label="Forecast inputs"
-          maxRows={6}
           render={(row) => <InputRow row={row} />}
         />
       </div>
@@ -559,11 +533,10 @@ export const TopDriversPanel = ({ forecast }: { readonly forecast: ForecastRespo
             </div>
           </InformationPopover>
         </div>
-        <MeasuredPages
+        <ScrollableList
           key={selected}
           items={group?.drivers ?? []}
           label="Forecast drivers"
-          maxRows={3}
           render={(driver) => {
             const presentation = presentDriver(driver);
             return (
@@ -585,10 +558,9 @@ export const TopDriversPanel = ({ forecast }: { readonly forecast: ForecastRespo
                   label={`Driver information: ${driver.code}`}
                   regionLabel={`${driver.code} driver`}
                   fitViewport
-                  {...(driver.inputs.length > 3
-                    ? { pages: driverEvidencePages(driver) }
-                    : { children: driverEvidencePages(driver)[0] })}
-                />
+                >
+                  <DriverEvidence driver={driver} />
+                </InformationPopover>
               </div>
             );
           }}
