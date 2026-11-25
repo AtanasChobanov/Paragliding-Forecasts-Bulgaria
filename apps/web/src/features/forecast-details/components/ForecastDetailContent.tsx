@@ -93,12 +93,76 @@ export const informationPages = (paragraphs: readonly string[]): ReactNode[] =>
     if (chunk) pages.push(chunk);
     return pages.map((text, i) => <p key={`${text.slice(0, 20)}-${String(i)}`}>{text}</p>);
   });
-const metricNotes = (metric: Metric) =>
-  [
-    `${metric.dataStatus} · ${metric.confidence?.level ?? "Unavailable"} confidence`,
-    metric.dataStatus === "missing" ? metric.missingReason : (metric.confidence.note ?? ""),
-    metric.limitationsNote ?? "",
-  ].filter(Boolean);
+const limitationLabels: Readonly<Record<string, string>> = {
+  uncalibrated_baseline: "This baseline has not been calibrated against observations.",
+  not_observationally_calibrated:
+    "This risk estimate has not been calibrated against observations.",
+  model_column_not_terrain_corrected: "The atmospheric profile is not corrected for local terrain.",
+  model_site_terrain_mismatch: "The model terrain elevation differs from the launch elevation.",
+  potential_base_below_site: "The potential cloud base is below the launch elevation.",
+  lcl_applicability_uncertain:
+    "The condensation-level estimate may not apply to the predicted cloud conditions.",
+  sensitivity_variant_unavailable: "Some alternative parcel calculations were unavailable.",
+  sensitive_to_parcel_assumptions:
+    "The result is sensitive to the assumed properties of the rising air parcel.",
+  incomplete_cloud_regime_coverage: "Cloud formation could not be determined for every hour.",
+  incomplete_weather_evidence: "Some weather evidence is missing.",
+};
+const readableEvidence = (text: string) =>
+  limitationLabels[text.trim()] ??
+  text
+    .trim()
+    .replace(
+      /\b[a-z]+(?:_[a-z]+)+\b/gu,
+      (code) => limitationLabels[code] ?? code.replaceAll("_", " "),
+    );
+const MetricInformation = ({
+  metric,
+  label,
+}: {
+  readonly metric: Metric;
+  readonly label: string;
+}) => {
+  const note = metric.dataStatus === "missing" ? metric.confidenceNote : metric.confidence.note;
+  const limitations = [
+    ...new Set(
+      (metric.limitationsNote ?? "")
+        .split(";")
+        .map((part) => part.trim())
+        .filter(Boolean),
+    ),
+  ];
+  return (
+    <div className={styles.metricInformation}>
+      <h3>{label}</h3>
+      {metric.dataStatus === "missing" ? (
+        <section>
+          <h4>Availability</h4>
+          <p>{readableEvidence(metric.missingReason)}</p>
+        </section>
+      ) : null}
+      {note ? (
+        <section>
+          <h4>About this estimate</h4>
+          <p>{readableEvidence(note)}</p>
+        </section>
+      ) : null}
+      {limitations.length ? (
+        <section>
+          <h4>Limitations</h4>
+          <ul>
+            {limitations.map((text) => (
+              <li key={text}>{readableEvidence(text)}</li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      {!note && !limitations.length && metric.dataStatus !== "missing" ? (
+        <p>No additional explanation was published.</p>
+      ) : null}
+    </div>
+  );
+};
 
 export const inputInformation = (row: ForecastInputRow): string[] => [
   row.label,
@@ -133,11 +197,9 @@ const OutputMetric = ({
     </div>
     <div className={styles.outputLabel}>
       <span>{label}</span>
-      <InformationPopover
-        label={`${label} information`}
-        regionLabel={`${label} evidence`}
-        pages={informationPages(metricNotes(metric))}
-      />
+      <InformationPopover label={`${label} information`} regionLabel={`${label} evidence`}>
+        <MetricInformation metric={metric} label={label} />
+      </InformationPopover>
     </div>
     <div className={styles.outputReading}>
       <strong className={styles.outputValue}>{value}</strong>
@@ -168,17 +230,6 @@ export const ForecastDetailSummary = ({
   const chosen = forecast.cloudbaseHours.find(
     (hour) => hour.validAtUtc === defaultCloudbaseHour(forecast),
   );
-  const metadata = forecast.metadata;
-  const info = [
-    publicationLine(forecast),
-    metadata.mode === "sqlite" ? `XC model: ${metadata.xcModelId}` : `Mock: ${metadata.version}`,
-    metadata.mode === "sqlite"
-      ? `Cloudbase: ${metadata.cloudbaseMethodVersion}. OD: ${metadata.overdevelopmentPolicyVersion}. Horizon D+${String(metadata.horizonDays)}${metadata.fromPreviousIssue ? ". From previous issue." : ""}`
-      : "Synthetic demonstration inputs and outputs.",
-    `Feature contract: ${forecast.forecastInputs.featureContractVersion}. MSL is height above mean sea level; model AGL is above model terrain; site AGL is signed height above the launch.`,
-    "Blue: no model support for local cumulus formation. It provides no usable thermal top or guarantee of clear skies. Conditional LCL is a conditional condensation level, not an estimated thermal top.",
-    ...Object.values(outputs).flatMap(metricNotes),
-  ];
   return (
     <section aria-labelledby="forecast-detail-heading" className={styles.summary}>
       <div className={styles.summaryHeading}>
@@ -194,8 +245,32 @@ export const ForecastDetailSummary = ({
         <ForecastInformation
           siteName={siteName}
           summary={{ availability: "available", ...forecast }}
-          pages={informationPages(info)}
-        />
+          metadataOnly
+        >
+          <div className={styles.metricInformation}>
+            <section>
+              <h4>Height references</h4>
+              <dl className={styles.heightDefinitions}>
+                <dt>MSL</dt>
+                <dd>Height above mean sea level.</dd>
+                <dt>Model AGL</dt>
+                <dd>Height above the model terrain.</dd>
+                <dt>Site AGL</dt>
+                <dd>Height above the launch. Negative values are below the launch.</dd>
+              </dl>
+            </section>
+            <section>
+              <h4>Cloud formation</h4>
+              <p>
+                Blue means no model support for local cumulus formation. It provides no usable
+                thermal top or guarantee of clear skies.
+              </p>
+              <p>
+                Conditional LCL is a conditional condensation level, not an estimated thermal top.
+              </p>
+            </section>
+          </div>
+        </ForecastInformation>
       </div>
       <div aria-label="Detailed forecast outputs" className={styles.summaryMetrics}>
         <div className={styles.probabilities}>
@@ -229,8 +304,9 @@ export const ForecastDetailSummary = ({
                   <InformationPopover
                     label={`${label} information`}
                     regionLabel={`${label} evidence`}
-                    pages={informationPages(metricNotes(metric))}
-                  />
+                  >
+                    <MetricInformation metric={metric} label={label} />
+                  </InformationPopover>
                 </div>
                 <div className={styles.probabilityConfidence}>
                   <span>Model confidence</span>

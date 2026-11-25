@@ -188,6 +188,12 @@ Probability confidence levels follow their meter immediately; the weather cards
 retain their Confidence prefix. Publication metadata uses the GFS cycle and
 the actual publication time in Sofia. Detail information uses compact pages;
 hover/focus opens it, press pins it, and Escape/outside press closes it.
+The summary's common information uses the home dashboard's labeled metadata
+layout, without per-metric evidence, followed by shared height-reference and
+cloud-formation explanations. Each output metric shows its explanation and
+limitations together, with readable descriptions of published flags and no
+duplicate status/confidence prefix or pagination. Input/driver and hourly chart
+information retain their existing pagination. Home information is unchanged.
 
 Inputs default to `XC inputs / Surface temperature`. All 67 policy fields are
 reachable through group selectors and measured pagination (one through six

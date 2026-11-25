@@ -21,6 +21,8 @@ interface ForecastInformationProps {
   readonly siteName: string;
   readonly summary: AvailableForecastSummary;
   readonly pages?: readonly ReactNode[];
+  readonly metadataOnly?: boolean;
+  readonly children?: ReactNode;
 }
 
 const dateTimeOptions: Intl.DateTimeFormatOptions = {
@@ -48,7 +50,11 @@ const metricNotes = (outputs: DashboardForecastOutputs) => {
   ] as const;
 };
 
-const ForecastInformationContent = ({ siteName, summary }: ForecastInformationProps) => {
+const ForecastInformationContent = ({
+  siteName,
+  summary,
+  metadataOnly = false,
+}: ForecastInformationProps) => {
   const { metadata, outputs } = summary;
   const risk = outputs.overdevelopmentRisk;
 
@@ -93,42 +99,53 @@ const ForecastInformationContent = ({ siteName, summary }: ForecastInformationPr
           </>
         )}
       </dl>
-      <dl className={styles.metrics}>
-        {metricNotes(outputs).map(([label, metric]) => (
-          <div key={label}>
-            <dt>{label}</dt>
-            <dd>
-              <strong>
-                {formatDataStatus(metric.dataStatus)} ·{" "}
-                {formatConfidence(metric.confidence?.level ?? "unavailable")}
-              </strong>
-              {metric.dataStatus === "missing" ? (
-                <>
-                  <p>{metric.missingReason}</p>
-                  {metric.confidenceNote ? <p>{metric.confidenceNote}</p> : null}
-                </>
-              ) : metric.confidence.note ? (
-                <p>{metric.confidence.note}</p>
-              ) : null}
-              {metric.limitationsNote ? <p>{metric.limitationsNote}</p> : null}
-              {label === "OD risk" && risk.dataStatus !== "missing" && risk.score !== undefined ? (
-                <p>OD score {risk.score} / 100</p>
-              ) : null}
-            </dd>
-          </div>
-        ))}
-      </dl>
+      {metadataOnly ? null : (
+        <dl className={styles.metrics}>
+          {metricNotes(outputs).map(([label, metric]) => (
+            <div key={label}>
+              <dt>{label}</dt>
+              <dd>
+                <strong>
+                  {formatDataStatus(metric.dataStatus)} ·{" "}
+                  {formatConfidence(metric.confidence?.level ?? "unavailable")}
+                </strong>
+                {metric.dataStatus === "missing" ? (
+                  <>
+                    <p>{metric.missingReason}</p>
+                    {metric.confidenceNote ? <p>{metric.confidenceNote}</p> : null}
+                  </>
+                ) : metric.confidence.note ? (
+                  <p>{metric.confidence.note}</p>
+                ) : null}
+                {metric.limitationsNote ? <p>{metric.limitationsNote}</p> : null}
+                {label === "OD risk" &&
+                risk.dataStatus !== "missing" &&
+                risk.score !== undefined ? (
+                  <p>OD score {risk.score} / 100</p>
+                ) : null}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
     </>
   );
 };
 
-export const ForecastInformation = ({ siteName, summary, pages }: ForecastInformationProps) => (
+export const ForecastInformation = ({
+  siteName,
+  summary,
+  pages,
+  metadataOnly = false,
+  children,
+}: ForecastInformationProps) => (
   <InformationPopover
     label="Forecast information"
     regionLabel={`Forecast information for ${siteName}`}
     {...(pages ? { pages } : {})}
   >
-    <ForecastInformationContent siteName={siteName} summary={summary} />
+    <ForecastInformationContent siteName={siteName} summary={summary} metadataOnly={metadataOnly} />
+    {children ? <div className={styles.generalNotes}>{children}</div> : null}
   </InformationPopover>
 );
 

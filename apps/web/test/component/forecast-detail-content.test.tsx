@@ -66,6 +66,35 @@ describe("forecast detail content", () => {
     ).toBeVisible();
     expect(screen.queryByText(/daily maximum ·/u)).not.toBeInTheDocument();
   });
+  it("shows summary metadata and readable metric evidence without pagination or repeated status", async () => {
+    const forecast = createForecastResponse();
+    forecast.outputs.cloudbase.limitationsNote =
+      "uncalibrated_baseline; model_column_not_terrain_corrected";
+    render(<ForecastDetailSummary forecast={forecast} siteName="Sopot" />);
+    for (const label of ["100+ km", "200+ km", "300+ km", "Cloudbase", "OD risk"]) {
+      await userEvent.click(
+        screen.getByRole("button", { name: `${label} information`, exact: true }),
+      );
+      const popup = screen.getByRole("region", { name: `${label} evidence` });
+      expect(within(popup).queryByRole("navigation")).not.toBeInTheDocument();
+      expect(popup).not.toHaveTextContent(/Mock ·|Baseline ·|low confidence/u);
+      if (label === "Cloudbase") {
+        expect(popup).toHaveTextContent(
+          "The atmospheric profile is not corrected for local terrain.",
+        );
+        expect(popup).not.toHaveTextContent("uncalibrated_baseline");
+      }
+      await userEvent.keyboard("{Escape}");
+    }
+    await userEvent.click(
+      screen.getByRole("button", { name: "Forecast information", exact: true }),
+    );
+    const popup = screen.getByRole("region", { name: "Forecast information for Sopot" });
+    expect(popup).toHaveTextContent("Source");
+    expect(popup).toHaveTextContent("Height references");
+    expect(popup).not.toHaveTextContent("Synthetic demonstration value.");
+    expect(within(popup).queryByRole("navigation")).not.toBeInTheDocument();
+  });
   it("paginates all XC groups and exposes canonical input values through information", async () => {
     inputs();
     expect(screen.getByLabelText("Input category")).toHaveValue("xc");

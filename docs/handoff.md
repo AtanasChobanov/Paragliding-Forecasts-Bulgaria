@@ -78,6 +78,17 @@ next requested ticket on top of the branch that supplies its dependencies.
 
 ## T-025 Recharts migration — 2026-11-25
 
+Summary information follow-up: the general popover now reuses the home metadata
+layout (source, publication, cycle, horizon, XC model, cloudbase method, OD policy),
+followed by shared height-reference/cloud-formation guidance. Per-output evidence
+is excluded. P100/P200/P300, cloudbase and OD popovers now show labeled explanation
+and limitation sections together without pagination or a repeated status/confidence
+page. Known cloudbase/OD limitation flags have explicit user-facing explanations;
+unknown codes retain their words with separators removed. Missing reasons remain
+visible. Home popovers and input/driver/hourly pagination are unchanged.
+Verification: 147 web and 29 browser tests, web typecheck/build, lint, formatting,
+repo and whitespace checks passed. Product servers and ML commands remain owner-run.
+
 Owner follow-up: X-axis ticks now show `HH:mm`, with Recharts thinning labels
 when needed. The tooltip's first page has a large primary MSL reading, secondary
 site/model AGL, the shared confidence meter and a daily-maximum badge when

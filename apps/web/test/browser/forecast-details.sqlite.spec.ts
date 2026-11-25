@@ -141,11 +141,11 @@ test("synchronizes hours with inputs, supports keyboard, touch-style click and m
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Forecast information", exact: true }).click();
   const info = page.getByRole("region", { name: /Forecast information for/ });
-  await expect(info).toContainText("GFS 16 Nov 2026 06Z");
-  await expect(info.getByRole("navigation")).toHaveText(/^1 of \d+$/u);
-  await info.getByRole("button", { name: "Next" }).click();
-  await expect(info.getByRole("navigation")).toHaveText(/^2 of \d+$/u);
+  await expect(info).toContainText("16 Nov 2026, 06:00 UTC");
+  await expect(info.getByRole("navigation")).toHaveCount(0);
   await expect(info).toContainText("today-model");
+  await expect(info).not.toContainText("Confidence");
+  await page.screenshot({ path: test.info().outputPath("summary-information.png") });
   await page.keyboard.press("Escape");
   expect(tiles).toBe(0);
 });
