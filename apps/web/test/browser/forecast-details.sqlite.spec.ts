@@ -145,8 +145,16 @@ test("synchronizes hours with inputs, supports keyboard, touch-style click and m
   await expect(info.getByRole("navigation")).toHaveCount(0);
   await expect(info).toContainText("today-model");
   await expect(info).not.toContainText("Confidence");
+  await expect(info).not.toContainText("Height references");
   await page.screenshot({ path: test.info().outputPath("summary-information.png") });
   await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Conditional LCL information", exact: true }).click();
+  const cloudInfo = page.getByRole("region", { name: "Conditional LCL evidence" });
+  await expect(cloudInfo).toContainText("-120 m");
+  await expect(cloudInfo).toContainText("Model AGL");
+  await expect(cloudInfo).toContainText("Height references");
+  await expect(cloudInfo).toContainText("Cloud formation");
+  await page.screenshot({ path: test.info().outputPath("cloudbase-information.png") });
   expect(tiles).toBe(0);
 });
 

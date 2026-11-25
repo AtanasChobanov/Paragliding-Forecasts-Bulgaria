@@ -52,14 +52,21 @@ describe("forecast detail content", () => {
       screen.getByRole("group", { name: "P100 model confidence. Confidence unavailable" }),
     ).toBeVisible();
   });
-  it("places signed site AGL under MSL and restores weather confidence labels", () => {
+  it("keeps signed site/model AGL and height guidance in cloudbase information", async () => {
     const forecast = createForecastResponse();
     const maximum = forecast.cloudbaseHours[3];
     if (!maximum) throw new Error("Missing fixture maximum");
     maximum.heightSiteAglM = -125;
     render(<ForecastDetailSummary forecast={forecast} siteName="Sopot" />);
     const cloud = screen.getByRole("article", { name: "Cloudbase" });
-    expect(within(cloud).getByText("-125 m site AGL")).toBeVisible();
+    expect(within(cloud).queryByText(/AGL/u)).not.toBeInTheDocument();
+    await userEvent.click(within(cloud).getByRole("button", { name: "Cloudbase information" }));
+    const popup = screen.getByRole("region", { name: "Cloudbase evidence" });
+    expect(within(popup).getByText("-125 m")).toBeVisible();
+    expect(popup).toHaveTextContent("Model AGL");
+    expect(popup).toHaveTextContent("Height references");
+    expect(popup).toHaveTextContent("Cloud formation");
+    await userEvent.keyboard("{Escape}");
     expect(within(cloud).getByText("Confidence")).toBeVisible();
     expect(
       within(screen.getByRole("article", { name: "OD risk" })).getByText("Confidence"),
@@ -72,9 +79,7 @@ describe("forecast detail content", () => {
       "uncalibrated_baseline; model_column_not_terrain_corrected";
     render(<ForecastDetailSummary forecast={forecast} siteName="Sopot" />);
     for (const label of ["100+ km", "200+ km", "300+ km", "Cloudbase", "OD risk"]) {
-      await userEvent.click(
-        screen.getByRole("button", { name: `${label} information`, exact: true }),
-      );
+      await userEvent.click(screen.getByRole("button", { name: `${label} information` }));
       const popup = screen.getByRole("region", { name: `${label} evidence` });
       expect(within(popup).queryByRole("navigation")).not.toBeInTheDocument();
       expect(popup).not.toHaveTextContent(/Mock ·|Baseline ·|low confidence/u);
@@ -86,12 +91,11 @@ describe("forecast detail content", () => {
       }
       await userEvent.keyboard("{Escape}");
     }
-    await userEvent.click(
-      screen.getByRole("button", { name: "Forecast information", exact: true }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: "Forecast information" }));
     const popup = screen.getByRole("region", { name: "Forecast information for Sopot" });
     expect(popup).toHaveTextContent("Source");
-    expect(popup).toHaveTextContent("Height references");
+    expect(popup).not.toHaveTextContent("Height references");
+    expect(popup).not.toHaveTextContent("Cloud formation");
     expect(popup).not.toHaveTextContent("Synthetic demonstration value.");
     expect(within(popup).queryByRole("navigation")).not.toBeInTheDocument();
   });

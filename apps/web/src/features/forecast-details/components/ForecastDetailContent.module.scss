@@ -748,12 +748,6 @@
   align-items: center;
   gap: 0.15rem;
 }
-.secondaryHeight {
-  font-size: var(--detail-caption);
-  font-weight: 400;
-  color: var(--color-text-secondary);
-  line-height: 1.2;
-}
 @media (max-width: 69.999rem) {
   .summaryMetrics .outputReading {
     grid-column: 1;
@@ -762,9 +756,6 @@
   .summaryMetrics .outputConfidence {
     --confidence-segments-width: 1rem;
     --dashboard-caption: 0.5rem;
-  }
-  .secondaryHeight {
-    font-size: 0.5rem;
   }
 }
 .probabilityRow {
@@ -810,7 +801,7 @@
 .summaryMetrics .outputMetric {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto auto auto;
   align-items: center;
   justify-items: center;
   padding: 0;
@@ -858,7 +849,7 @@
   }
   .summaryMetrics .outputMetric {
     grid-template-columns: auto 1fr;
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto auto auto;
     gap: 0;
   }
   .summaryMetrics .outputHeader {
@@ -918,4 +909,8 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 0.3rem 0.7rem;
+}
+
+.metricInformation + .metricInformation {
+  margin-top: 0.7rem;
 }

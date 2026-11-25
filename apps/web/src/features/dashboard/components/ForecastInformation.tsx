@@ -150,11 +150,13 @@ export const ForecastInformation = ({
 );
 
 export const InformationPopover = ({
+  fitViewport = false,
   label,
   regionLabel,
   pages,
   children,
 }: {
+  readonly fitViewport?: boolean;
   readonly label: string;
   readonly regionLabel: string;
   readonly pages?: readonly ReactNode[];
@@ -213,14 +215,18 @@ export const InformationPopover = ({
       const below = window.innerHeight - anchor.bottom - 2 * inset;
       const above = anchor.top - 2 * inset;
       const placeAbove = above > below;
+      const useViewport = fitViewport && panel.current.scrollHeight + 2 > Math.max(above, below);
       setPosition({
         left: Math.max(
           inset,
           Math.min(anchor.left, viewportWidth - panel.current.offsetWidth - inset),
         ),
-        top: placeAbove ? anchor.top - inset : anchor.bottom + inset,
-        transform: placeAbove ? "translateY(-100%)" : undefined,
-        maxHeight: Math.max(0, placeAbove ? above : below),
+        top: useViewport ? inset : placeAbove ? anchor.top - inset : anchor.bottom + inset,
+        transform: !useViewport && placeAbove ? "translateY(-100%)" : undefined,
+        maxHeight: Math.max(
+          0,
+          useViewport ? window.innerHeight - 2 * inset : placeAbove ? above : below,
+        ),
       });
     };
 
@@ -231,7 +237,7 @@ export const InformationPopover = ({
       window.removeEventListener("resize", positionPanel);
       window.removeEventListener("scroll", positionPanel, true);
     };
-  }, [open]);
+  }, [open, fitViewport]);
 
   useEffect(() => {
     if (!open) {

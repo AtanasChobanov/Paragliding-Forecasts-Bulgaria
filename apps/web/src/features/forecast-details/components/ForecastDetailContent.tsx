@@ -119,9 +119,11 @@ const readableEvidence = (text: string) =>
 const MetricInformation = ({
   metric,
   label,
+  children,
 }: {
   readonly metric: Metric;
   readonly label: string;
+  readonly children?: ReactNode;
 }) => {
   const note = metric.dataStatus === "missing" ? metric.confidenceNote : metric.confidence.note;
   const limitations = [
@@ -135,6 +137,7 @@ const MetricInformation = ({
   return (
     <div className={styles.metricInformation}>
       <h3>{label}</h3>
+      {children}
       {metric.dataStatus === "missing" ? (
         <section>
           <h4>Availability</h4>
@@ -180,13 +183,13 @@ const OutputMetric = ({
   label,
   metric,
   value,
-  secondary,
+  information,
 }: {
   readonly icon: ReactNode;
   readonly label: string;
   readonly metric: Metric;
   readonly value: string;
-  readonly secondary?: string | undefined;
+  readonly information?: ReactNode;
 }) => (
   <article aria-label={label} data-status={metric.dataStatus} className={styles.outputMetric}>
     <div className={styles.outputHeader}>
@@ -197,13 +200,18 @@ const OutputMetric = ({
     </div>
     <div className={styles.outputLabel}>
       <span>{label}</span>
-      <InformationPopover label={`${label} information`} regionLabel={`${label} evidence`}>
-        <MetricInformation metric={metric} label={label} />
+      <InformationPopover
+        fitViewport={Boolean(information)}
+        label={`${label} information`}
+        regionLabel={`${label} evidence`}
+      >
+        <MetricInformation metric={metric} label={label}>
+          {information}
+        </MetricInformation>
       </InformationPopover>
     </div>
     <div className={styles.outputReading}>
       <strong className={styles.outputValue}>{value}</strong>
-      {secondary ? <span className={styles.secondaryHeight}>{secondary}</span> : null}
     </div>
     <div className={styles.outputConfidence}>
       <ConfidenceIndicator
@@ -246,31 +254,7 @@ export const ForecastDetailSummary = ({
           siteName={siteName}
           summary={{ availability: "available", ...forecast }}
           metadataOnly
-        >
-          <div className={styles.metricInformation}>
-            <section>
-              <h4>Height references</h4>
-              <dl className={styles.heightDefinitions}>
-                <dt>MSL</dt>
-                <dd>Height above mean sea level.</dd>
-                <dt>Model AGL</dt>
-                <dd>Height above the model terrain.</dd>
-                <dt>Site AGL</dt>
-                <dd>Height above the launch. Negative values are below the launch.</dd>
-              </dl>
-            </section>
-            <section>
-              <h4>Cloud formation</h4>
-              <p>
-                Blue means no model support for local cumulus formation. It provides no usable
-                thermal top or guarantee of clear skies.
-              </p>
-              <p>
-                Conditional LCL is a conditional condensation level, not an estimated thermal top.
-              </p>
-            </section>
-          </div>
-        </ForecastInformation>
+        />
       </div>
       <div aria-label="Detailed forecast outputs" className={styles.summaryMetrics}>
         <div className={styles.probabilities}>
@@ -332,12 +316,54 @@ export const ForecastDetailSummary = ({
             label={cloud.label}
             metric={outputs.cloudbase}
             value={`${cloud.value}${cloud.unit ? ` ${cloud.unit}` : ""}`}
-            secondary={
-              "valueMslM" in outputs.cloudbase &&
-              chosen?.heightSiteAglM !== null &&
-              chosen?.heightSiteAglM !== undefined
-                ? `${formatInteger(chosen.heightSiteAglM)} m site AGL`
-                : undefined
+            information={
+              <>
+                {"valueMslM" in outputs.cloudbase ? (
+                  <div className={styles.metricInformation}>
+                    <section>
+                      <h4>Height above terrain</h4>
+                      <dl className={styles.heightDefinitions}>
+                        <dt>Site AGL</dt>
+                        <dd>
+                          {chosen?.heightSiteAglM == null
+                            ? "Unavailable"
+                            : `${formatInteger(chosen.heightSiteAglM)} m`}
+                        </dd>
+                        <dt>Model AGL</dt>
+                        <dd>
+                          {chosen?.heightModelAglM == null
+                            ? "Unavailable"
+                            : `${formatInteger(chosen.heightModelAglM)} m`}
+                        </dd>
+                      </dl>
+                    </section>
+                  </div>
+                ) : null}
+                <div className={styles.metricInformation}>
+                  <section>
+                    <h4>Height references</h4>
+                    <dl className={styles.heightDefinitions}>
+                      <dt>MSL</dt>
+                      <dd>Height above mean sea level.</dd>
+                      <dt>Model AGL</dt>
+                      <dd>Height above the model terrain.</dd>
+                      <dt>Site AGL</dt>
+                      <dd>Height above the launch. Negative values are below the launch.</dd>
+                    </dl>
+                  </section>
+                  <section>
+                    <h4>Cloud formation</h4>
+                    <p>
+                      Blue means no model support for local cumulus formation. It provides no usable
+                      thermal top or guarantee of clear skies.
+                    </p>
+                    <p>
+                      Conditional LCL is a conditional condensation level, not an estimated thermal
+                      top.
+                    </p>
+                  </section>
+                </div>
+              </>
             }
           />
           <OutputMetric

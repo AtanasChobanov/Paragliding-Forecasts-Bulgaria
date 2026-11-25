@@ -182,16 +182,16 @@ map, tile requests or previous-run placeholder.
 
 The detail summary stacks three compact 100+/200+/300+ km probability rows,
 each with its percentage, progress bar, status, own confidence and information.
-Cloudbase and OD risk share two equal columns below those rows. Cloudbase shows metres MSL and signed site AGL
-for the selected daily maximum, with site AGL as secondary text below MSL.
+Cloudbase and OD risk share two equal columns below those rows. Cloudbase shows
+metres MSL for the selected daily maximum. Its information contains the matching signed site/model AGL values; no AGL row appears in the card.
 Probability confidence levels follow their meter immediately; the weather cards
 retain their Confidence prefix. Publication metadata uses the GFS cycle and
 the actual publication time in Sofia. Detail information uses compact pages;
 hover/focus opens it, press pins it, and Escape/outside press closes it.
 The summary's common information uses the home dashboard's labeled metadata
-layout, without per-metric evidence, followed by shared height-reference and
-cloud-formation explanations. Each output metric shows its explanation and
-limitations together, with readable descriptions of published flags and no
+layout, without per-metric evidence. Height-reference and cloud-formation
+explanations live in the cloudbase information alongside its AGL readings. Each
+output metric shows its explanation and limitations together, with readable descriptions of published flags and no
 duplicate status/confidence prefix or pagination. Input/driver and hourly chart
 information retain their existing pagination. Home information is unchanged.
 

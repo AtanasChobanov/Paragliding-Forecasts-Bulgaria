@@ -78,6 +78,17 @@ next requested ticket on top of the branch that supplies its dependencies.
 
 ## T-025 Recharts migration — 2026-11-25
 
+Latest owner refinement: height-reference and cloud-formation guidance now lives
+in the cloudbase result's information, not the general metadata popover. The
+cloudbase card shows only MSL; matching site/model AGL readings (including signed
+site AGL) are in its information. Missing readings remain explicit. Weather-card
+body tracks use natural rows instead of a stretched reading track to compensate
+for an extra AGL line. Confidence footers remain aligned. The longer cloudbase
+popover can use the full viewport height instead of clipping to the anchor side. The hourly chart tooltip
+is unchanged. Verification: 147 web tests, 29 browser tests, web typecheck/build,
+root lint/formatting/repo and whitespace checks passed. Product servers and ML
+commands were not run.
+
 Summary information follow-up: the general popover now reuses the home metadata
 layout (source, publication, cycle, horizon, XC model, cloudbase method, OD policy),
 followed by shared height-reference/cloud-formation guidance. Per-output evidence
