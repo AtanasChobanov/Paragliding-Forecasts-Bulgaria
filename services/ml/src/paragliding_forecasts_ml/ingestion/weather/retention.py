@@ -15,7 +15,10 @@ from paragliding_forecasts_ml.storage.sqlite import (
     open_read_only_database,
 )
 
+from ...storage.file_lock import lock_weather_run
 from .artifact_audit import audit_weather_artifacts
+from .artifacts import WeatherArtifactStore
+from .operational_retention import INTENT, RECEIPT, pruned_gribs
 from .persistence import _canonical_run_graph, _graph_sha256, _load_persisted_run_rows
 from .serialization import canonical_json_bytes, sha256_file
 
@@ -205,6 +208,7 @@ def _archive_receipt(root: Path, run_key: str, destination: Path) -> tuple[dict,
     return receipt, archive_dir
 
 
+@lock_weather_run
 def archive_run(
     run_key: str, *, destination: Path, project_root: Path, database_url: str | None = None
 ) -> dict:
@@ -262,6 +266,7 @@ def archive_run(
     return {"run_key": run_key, "state": "archived_verified", "bytes": bytes_total}
 
 
+@lock_weather_run
 def evict_local(
     run_key: str, *, destination: Path, project_root: Path, database_url: str | None = None
 ) -> dict:
@@ -317,9 +322,24 @@ def evict_local(
     }
 
 
+@lock_weather_run
 def audit_compact(run_key: str, *, project_root: Path, database_url: str | None = None) -> dict:
     root = project_root.resolve()
     raw, interim, catalogue = _run_paths(root, run_key)
+    if any((raw / name).exists() or (raw / name).is_symlink() for name in (INTENT, RECEIPT)):
+        graph = _database_graph(root, run_key, database_url)
+        payloads = pruned_gribs(
+            WeatherArtifactStore(run_key, project_root=root), graph["raw_manifest_sha256"]
+        )
+        return {
+            **audit_weather_artifacts(
+                run_key, scope="effective", project_root=root, pruned_raw=payloads
+            ),
+            "scope": "compact",
+            "state": "operational_pruned",
+            "graph_sha256": graph["graph_sha256"],
+            "pruned_bytes": sum(item.byte_count for item in payloads),
+        }
     eviction = _read_record(catalogue / "eviction-receipt.json", "receipt_sha256")
     matching = list(catalogue.glob("archive-*.json"))
     receipt = next(
@@ -375,6 +395,7 @@ def audit_compact(run_key: str, *, project_root: Path, database_url: str | None 
     }
 
 
+@lock_weather_run
 def restore_run(
     run_key: str, *, destination: Path, project_root: Path, database_url: str | None = None
 ) -> dict:

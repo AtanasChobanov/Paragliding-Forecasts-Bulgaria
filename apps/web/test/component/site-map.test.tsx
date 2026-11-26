@@ -9,6 +9,7 @@ import { createSitesResponse } from "../support/dashboard-fixtures.js";
 const leafletMocks = vi.hoisted(() => ({
   fitBounds: vi.fn(),
   invalidateSize: vi.fn(),
+  getContainer: () => document.createElement("div"),
   panInside: vi.fn(),
 }));
 

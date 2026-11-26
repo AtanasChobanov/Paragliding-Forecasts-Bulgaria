@@ -13,19 +13,13 @@ export {
 export {
   chancePctMetricSchema,
   cloudbaseMslMMetricSchema,
-  convergenceSignalSchema,
-  createForecastInputMetricSchema,
   forecastDateSchema,
-  forecastInputsSchema,
   forecastOutputsSchema,
   forecastQuerySchema,
-  forecastResponseSchema,
   overdevelopmentRiskMetricSchema,
   type ForecastDate,
-  type ForecastInputs,
   type ForecastOutputs,
   type ForecastQuery,
-  type ForecastResponse,
 } from "./forecast.js";
 export {
   forecastDaySchema,
@@ -34,6 +28,9 @@ export {
   forecastSummariesQuerySchema,
   forecastSummariesResponseSchema,
   forecastSummarySchema,
+  type AvailableForecastSummary,
+  type DashboardCloudbase,
+  type DashboardForecastOutputs,
   type ForecastDay,
   type ForecastDaysQuery,
   type ForecastDaysResponse,
@@ -63,3 +60,11 @@ export {
   type SiteSlug,
   type SitesResponse,
 } from "./sites.js";
+
+export * from "./forecast-details.js";
+export { xcInputInventory } from "./xc-input-inventory.js";
+
+export {
+  forecastDetailInputsSchema as forecastInputsSchema,
+  type ForecastDetailInputs as ForecastInputs,
+} from "./forecast-details.js";

@@ -1,5 +1,5 @@
 import type { ForecastSummary, Site, SiteSlug } from "@paragliding-forecasts/contracts";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
@@ -50,9 +50,19 @@ describe("OtherLocationsSection", () => {
     const sofia = requireSite("sofia-vitosha-kominite");
     const dobrich = requireSite("dobrich-region");
     const sites = [zlatitsa, sofia, dobrich];
+    const zlatitsaSummary = summaryFor(zlatitsa);
     const summaries = new Map<SiteSlug, ForecastSummary>([
       [dobrich.slug, summaryFor(dobrich)],
-      [zlatitsa.slug, summaryFor(zlatitsa)],
+      [
+        zlatitsa.slug,
+        {
+          ...zlatitsaSummary,
+          outputs: {
+            ...zlatitsaSummary.outputs,
+            chance100KmPct: { value: 65, dataStatus: "baseline", confidence: { level: "low" } },
+          },
+        },
+      ],
       [sofia.slug, summaryFor(sofia)],
     ]);
 
@@ -66,11 +76,19 @@ describe("OtherLocationsSection", () => {
       "sofia-vitosha-kominite",
       "dobrich-region",
     ]);
-    expect(screen.getAllByText("Mock data")).toHaveLength(3);
+    expect(screen.getAllByText("Mock")).toHaveLength(2);
     expect(screen.getAllByRole("progressbar")).toHaveLength(3);
     expect(screen.getAllByText("Conf.")).toHaveLength(3);
     expect(screen.getAllByRole("link", { name: /View detailed forecast for/i })).toHaveLength(3);
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Forecast information" })).toHaveLength(3);
+    const zlatitsaCard = screen.getByRole("article", { name: "Zlatitsa" });
+    const p100 = within(zlatitsaCard).getByRole("group", { name: "100+ km chance" });
+    expect(within(p100).getByText("65%")).toBeVisible();
+    expect(within(p100).getByText("Baseline")).toBeVisible();
+    const info = within(zlatitsaCard).getByRole("button", { name: "Forecast information" });
+    expect(info.closest("a")).toBeNull();
+    fireEvent.pointerEnter(info, { pointerType: "mouse" });
+    expect(screen.getByRole("region", { name: "Forecast information for Zlatitsa" })).toBeVisible();
   });
 
   it("keeps a selected location when it is also configured as an Other card", () => {
@@ -100,9 +118,10 @@ describe("OtherLocationsSection", () => {
       />,
     );
 
-    expect(screen.getByText("Mixed data")).toBeVisible();
-    expect(screen.getAllByText("Unavailable").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("No forecast run is available for this site and date.")).toBeVisible();
+    const p100 = screen.getByRole("group", { name: "100+ km chance" });
+    expect(within(p100).getByText("Unavailable")).toBeVisible();
+    expect(p100).toHaveAttribute("title", missingMetric.missingReason);
+    expect(screen.getByText("Confidence unavailable")).toBeVisible();
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
     expect(screen.queryByText("0")).not.toBeInTheDocument();
   });
@@ -125,9 +144,6 @@ describe("OtherLocationsSection", () => {
       </MemoryRouter>,
     );
     expect(screen.getByText("No summary returned")).toBeVisible();
-    expect(
-      screen.getByText("The service response omitted this comparison location."),
-    ).toBeVisible();
     expect(within(screen.getByRole("article")).queryByText("mock-v2")).not.toBeInTheDocument();
   });
 });

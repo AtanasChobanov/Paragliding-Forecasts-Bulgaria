@@ -112,7 +112,19 @@
   color: var(--color-surface);
   font-weight: 700;
 
-  &::before {
+  &:global(.leaflet-tooltip-bottom)::before {
+    border-bottom-color: var(--color-primary);
+  }
+
+  &:global(.leaflet-tooltip-top)::before {
+    border-top-color: var(--color-primary);
+  }
+
+  &:global(.leaflet-tooltip-left)::before {
+    border-left-color: var(--color-primary);
+  }
+
+  &:global(.leaflet-tooltip-right)::before {
     border-right-color: var(--color-primary);
   }
 }
@@ -233,5 +245,37 @@
 @media (min-width: 70rem) and (max-height: 52rem) {
   .instructions {
     padding: var(--space-2) var(--space-3);
+  }
+}
+
+:global([data-dashboard]) {
+  .region,
+  .mapFrame {
+    min-height: 0;
+  }
+
+  .instructions {
+    gap: var(--dashboard-gap);
+    padding: var(--dashboard-gap) var(--dashboard-inline-space);
+    font-size: var(--dashboard-caption);
+    line-height: 1.2;
+
+    svg {
+      width: var(--dashboard-icon);
+      height: var(--dashboard-icon);
+    }
+  }
+
+  .mapState {
+    top: var(--dashboard-gap);
+    padding: var(--dashboard-gap);
+    font-size: var(--dashboard-caption);
+    line-height: 1.25;
+  }
+
+  .map :global(.leaflet-control-zoom a) {
+    width: var(--location-selector-height);
+    height: var(--location-selector-height);
+    line-height: var(--location-selector-height);
   }
 }

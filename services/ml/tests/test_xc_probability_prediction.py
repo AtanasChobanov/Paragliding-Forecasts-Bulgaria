@@ -5,8 +5,11 @@ import socket
 import sqlite3
 from collections import defaultdict
 from contextlib import closing
-from datetime import datetime
+from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
+from sqlite3 import Row, connect
+from types import SimpleNamespace
 
 import pytest
 from sklearn.linear_model import LogisticRegression
@@ -32,12 +35,22 @@ from paragliding_forecasts_ml.ingestion.weather.serialization import (
     sha256_file,
 )
 from paragliding_forecasts_ml.ingestion.weather.state import RunStateLedger
+from paragliding_forecasts_ml.predictions.cloudbase.calculation import aggregate_day
+from paragliding_forecasts_ml.predictions.cloudbase.models import Height, HourlyResult
+from paragliding_forecasts_ml.predictions.publication import store
+from paragliding_forecasts_ml.predictions.publication.weather import read_weather
 from paragliding_forecasts_ml.predictions.xc_probability import (
     cli,
     model_io,
     prediction,
     selection,
     trials,
+)
+from paragliding_forecasts_ml.predictions.xc_probability.models import (
+    AvailableMetric,
+    Confidence,
+    ConversionSupport,
+    ThresholdProbabilities,
 )
 from paragliding_forecasts_ml.predictions.xc_probability.policy import LAYER_BOUNDS, load_policy
 from paragliding_forecasts_ml.predictions.xc_probability.retained import read_retained_inputs
@@ -532,3 +545,302 @@ def test_cli_rejects_an_unknown_command_before_prediction(monkeypatch, capsys):
     captured = capsys.readouterr()
     assert captured.out == ""
     assert "invalid choice" in captured.err and "predcit" in captured.err
+
+
+MODEL = "a" * 64
+IDS = store.BundleIds("b" * 64, "c" * 64, "d" * 64)
+
+
+@pytest.fixture
+def weather_data(tmp_path, synthetic_study):
+    first = synthetic_study.rows[0].inputs
+    records = tuple(r.inputs for r in synthetic_study.rows if r.inputs.run_key == first.run_key)
+    database, _, _ = make_retained(tmp_path, records)
+    with closing(connect(database)) as db, db:
+        db.executescript("""
+            ALTER TABLE sites ADD is_active INTEGER NOT NULL DEFAULT 1;
+            ALTER TABLE weather_ingestion_runs ADD request_purpose TEXT NOT NULL DEFAULT 'operational_forecast';
+            CREATE TABLE weather_field_provenance (
+                id INTEGER PRIMARY KEY, daily_feature_snapshot_id INTEGER, daily_feature_profile_layer_id INTEGER,
+                weather_point_sample_id INTEGER, point_convection_measurement_id INTEGER,
+                point_interval_measurement_id INTEGER, field_code TEXT, field_variant TEXT, statistic_type TEXT
+            );
+            CREATE TABLE weather_point_interval_measurements (
+                id INTEGER PRIMARY KEY, weather_point_sample_id INTEGER, interval_start_utc TEXT, interval_end_utc TEXT
+            );
+        """)
+        db.execute(
+            "UPDATE weather_product_runs SET source_product_key = ?",
+            ("gfs." + first.issue_local_date.replace("-", "") + "/06/atmos",),
+        )
+        migrations = Path(__file__).resolve().parents[3] / "packages/database/drizzle"
+        [migration] = migrations.glob("*_create_prediction_publications/migration.sql")
+        db.executescript(migration.read_text())
+        db.row_factory = Row
+        return database, records, read_weather(db, first.run_key)
+
+
+def batch_for(records, weather, template):
+    rows = []
+    clouds = []
+    all_hours = []
+    inputs = []
+    od = []
+    policy, _ = load_policy()
+    spec = policy.required_features[0]
+    code = spec.feature_id
+    confidence = Confidence(note="Synthetic baseline confidence.", reason_codes=("synthetic",))
+    for record in records:
+        messages = {
+            "p100": (SimpleNamespace(text="Grouped P100 contribution."),),
+            "q200": (SimpleNamespace(text="Grouped Q200 contribution."),),
+        }
+        row = SimpleNamespace(
+            **record.model_dump(
+                include={
+                    "site_id",
+                    "site_slug",
+                    "target_local_date",
+                    "run_key",
+                    "cycle_reference_utc",
+                    "horizon_days",
+                }
+            ),
+            probabilities=ThresholdProbabilities(
+                p100=AvailableMetric(value=0.5, confidence=confidence),
+                p200=AvailableMetric(value=0.4, confidence=confidence),
+                p300=AvailableMetric(value=0.03, confidence=confidence),
+            ),
+            stage_messages=messages,
+            stage_drivers=tuple(
+                SimpleNamespace(
+                    stage=stage,
+                    top_group_ids=(spec.group_id,),
+                    groups=(
+                        SimpleNamespace(
+                            group_id=spec.group_id,
+                            direction="raises",
+                            contribution_logit=0.34,
+                            source_feature_ids=(code,),
+                        ),
+                    ),
+                )
+                for stage in ("p100", "q200")
+            ),
+            threshold_explanations={
+                "p100": SimpleNamespace(message=None),
+                "p200": SimpleNamespace(message=None),
+                "p300": SimpleNamespace(message=SimpleNamespace(text="Pooled conversion 3/42.")),
+            },
+            limitation=SimpleNamespace(text="Synthetic uncalibrated forecast."),
+        )
+        rows.append(row)
+        hours = []
+        for i, when in enumerate(weather.horizon.hours):
+            regime, reason, potential, top = {
+                0: ("cumulus", "heating_and_condensation_supported", 1200, 3500),
+                1: ("indeterminate", "positive_heating_not_established", 1300, 3500),
+                2: ("indeterminate", "potential_base_outside_profile", 3000, 2500),
+                3: ("missing", "model_profile_missing", None, None),
+            }.get(i, ("blue", "local_cumulus_formation_not_supported", 1100, 3500))
+            if row.site_id == 2:
+                regime, reason, potential, top = (
+                    "blue",
+                    "local_cumulus_formation_not_supported",
+                    1100,
+                    3500,
+                )
+            height = (
+                Height(msl_m=potential, model_agl_m=potential - 500, site_agl_m=potential - 1500)
+                if potential
+                else None
+            )
+            identity = {
+                "site_id": row.site_id,
+                "site_slug": row.site_slug,
+                "run_key": row.run_key,
+                "target_local_date": row.target_local_date,
+                "valid_at_utc": when,
+                "reference_at_utc": row.cycle_reference_utc,
+                "horizon_days": row.horizon_days,
+            }
+            inputs.append(
+                template.model_copy(
+                    update={
+                        **identity,
+                        "source_ready_at_utc": weather.ready_times[when],
+                        "sensible_interval": None,
+                        "latent_interval": None,
+                    }
+                )
+            )
+            hours.append(
+                HourlyResult(
+                    **identity,
+                    valid_at_local=when,
+                    data_status="missing" if regime == "missing" else "baseline",
+                    regime=regime,
+                    potential_base=height,
+                    estimated_cloudbase=height if regime == "cumulus" else None,
+                    confidence=None if regime == "missing" else "low",
+                    reason_codes=(reason,),
+                    limitations=("uncalibrated_baseline",),
+                    diagnostics={"profile_top_msl_m": top},
+                    input_sha256="e" * 64,
+                )
+            )
+        clouds.append(aggregate_day(hours))
+        all_hours.extend(hours)
+        od.append(
+            {
+                **vars(row),
+                "risk_level": "high",
+                "score": None,
+                "confidence": "low",
+                "data_status": "baseline",
+                "validation_status": "not_observationally_calibrated",
+                "coverage": {"complete": False},
+                "overrides": [{"code": "high_precipitation"}],
+                "reasons": [
+                    {
+                        "code": "high_precipitation",
+                        "message": "Rain in the first hour.",
+                        "evidence": {
+                            "key": "rain",
+                            "valid_at_utc": hours[0].valid_at_utc,
+                            "interval_end_utc": hours[1].valid_at_utc,
+                        },
+                    }
+                ],
+            }
+        )
+    references = [
+        {"relative_path": path, "sha256": sha}
+        for path, sha in (weather.raw_manifest, weather.feature_manifest)
+    ]
+    lineage = {
+        "persistence_input_sha256": weather.persistence_input_sha256,
+        "source_product_key": weather.source_product_key,
+        "hourly_source_ready_at_utc": list(weather.ready_times.values()),
+        "references": references,
+    }
+    conversion = ConversionSupport(
+        k=3,
+        n=42,
+        ratio=3 / 42,
+        support_state="supported",
+        study_id="a" * 64,
+        training_source_seasons=(2022, 2023, 2024),
+    )
+    xc = SimpleNamespace(
+        rows=rows,
+        inputs=tuple(record.model_copy(update={"source_lineage": lineage}) for record in records),
+        metadata=SimpleNamespace(
+            model_id=MODEL, run_keys=(weather.run_key,), conversion=conversion
+        ),
+    )
+    source = {
+        "run_key": weather.run_key,
+        "source_id": "noaa_gfs_0p25_aws_grib2",
+        "reference_at_utc": weather.horizon.cycle,
+        "target_local_date": str(weather.horizon.target_date),
+        "references": references,
+    }
+    cloud = store.CloudbaseBatch(
+        "cloudbase/2", [source], tuple(inputs), tuple(all_hours), tuple(clouds)
+    )
+    od_source = SimpleNamespace(
+        run_key=weather.run_key,
+        persistence_input_sha256=weather.persistence_input_sha256,
+        database_identity="data/local/synthetic.db",
+        references=[SimpleNamespace(model_dump=lambda ref=ref, **_: ref) for ref in references],
+    )
+    manifest = SimpleNamespace(
+        run_keys=(weather.run_key,), sources=(od_source,), policy_version="od/1"
+    )
+    return store.Batches(xc, cloud, manifest, od)
+
+
+def test_atomic_publication_mapping_and_repeat(
+    tmp_path, weather_data, cloudbase_column, monkeypatch
+):
+    database, records, weather = weather_data
+    batch = batch_for(records, weather, cloudbase_column)
+    spec = load_policy()[0].required_features[0]
+    with closing(connect(database)) as db, db:
+        db.execute(
+            "INSERT INTO weather_field_provenance (id,daily_feature_snapshot_id,field_code,field_variant,statistic_type) VALUES (10,1,?,?,?)",
+            (spec.field_code, spec.variant, spec.statistic),
+        )
+        db.execute(
+            "INSERT INTO weather_point_interval_measurements VALUES (20,102,?,?)",
+            weather.horizon.hours[:2],
+        )
+        db.execute(
+            "INSERT INTO weather_field_provenance (id,point_interval_measurement_id,field_code,field_variant) VALUES (21,20,'precipitation_amount_mm','canonical')"
+        )
+
+    def publish(model=MODEL):
+        return store.publish_date(
+            project_root=tmp_path,
+            database_url=DATABASE_URL,
+            run_key=weather.run_key,
+            model_id=model,
+            ids=IDS,
+            clock=lambda: datetime(2026, 11, 16, 14, tzinfo=UTC),
+        )
+
+    broken = replace(batch, cloudbase=replace(batch.cloudbase, hourly=batch.cloudbase.hourly[:-1]))
+    monkeypatch.setattr(store, "_read_batches", lambda *_: broken)
+    with pytest.raises(ValueError, match="eleven"):
+        publish()
+    with closing(connect(database)) as db:
+        assert all(
+            db.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0 for table in store.TABLES
+        )
+
+    monkeypatch.setattr(store, "_read_batches", lambda *_: batch)
+    first = publish()
+    assert first.id == 1 and not first.reused
+    second_id = "f" * 64
+    batch.xc.metadata.model_id = second_id
+    assert publish(second_id).id == 2
+    monkeypatch.setattr(
+        store, "_read_batches", lambda *_: pytest.fail("Recomputed an existing publication")
+    )
+    assert publish() == replace(first, reused=True)
+
+    with closing(connect(database)) as db:
+        assert db.execute("SELECT count(*) FROM predictions").fetchone() == (14,)
+        assert db.execute("SELECT count(*) FROM prediction_cloudbase_hours").fetchone() == (154,)
+        assert db.execute("SELECT count(*) FROM prediction_metric_details").fetchone() == (70,)
+        assert db.execute("PRAGMA foreign_key_check").fetchall() == []
+        hours = db.execute(
+            """SELECT regime, estimated_cloudbase_msl_m, estimated_cloudbase_site_agl_m
+               FROM prediction_cloudbase_hours WHERE prediction_id=1 ORDER BY valid_at_utc LIMIT 5"""
+        ).fetchall()
+        assert hours == [
+            ("cumulus", 1200, -300),
+            ("indeterminate", 1300, -200),
+            ("indeterminate", None, None),
+            ("missing", None, None),
+            ("blue", None, None),
+        ]
+        assert db.execute(
+            "SELECT data_status FROM prediction_metric_details WHERE prediction_id=2 AND metric_code='cloudbase'"
+        ).fetchone() == ("baseline",)
+        assert db.execute(
+            """SELECT d.metric_code, d.xc_stage, i.input_key, i.weather_field_provenance_id
+               FROM prediction_drivers AS d JOIN prediction_driver_inputs AS i
+                 ON i.prediction_driver_id=d.id
+               WHERE d.prediction_id=1 AND d.kind IN ('xc_contribution','od_override')
+               ORDER BY d.metric_code"""
+        ).fetchall() == [
+            ("overdevelopment", None, "rain", 21),
+            ("p100", "p100", spec.feature_id, 10),
+            ("p200", "q200", spec.feature_id, 10),
+        ]
+        assert db.execute(
+            """SELECT support_successes,support_total FROM prediction_drivers
+               WHERE prediction_id=1 AND kind='pooled_conversion'"""
+        ).fetchone() == (3, 42)

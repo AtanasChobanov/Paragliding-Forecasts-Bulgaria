@@ -6,7 +6,7 @@ import styles from "./ForecastDateStrip.module.scss";
 export interface ForecastDateStripProps {
   readonly days: readonly ForecastDay[];
   readonly onSelectDate: (date: ForecastDate) => void;
-  readonly selectedDate: ForecastDate;
+  readonly selectedDate: ForecastDate | undefined;
   readonly todayDate: ForecastDate;
 }
 

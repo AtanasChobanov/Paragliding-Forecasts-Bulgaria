@@ -1,5 +1,6 @@
 """Publish immutable OD batches and verify them without upstream access."""
 
+import json
 import re
 import tempfile
 from collections import Counter
@@ -122,12 +123,18 @@ def _read_bundle(directory: Path, prediction_id: str) -> tuple[Manifest, dict[st
     return manifest, payloads
 
 
-def load_prediction(prediction_id: str, *, project_root: Path) -> Manifest:
-    """Replay the saved bundle with no SQLite or weather input reads."""
+def read_prediction(prediction_id: str, *, project_root: Path) -> tuple[Manifest, list[dict]]:
+    """Return the daily records after verified standalone replay."""
     if re.fullmatch(SHA256_PATTERN, prediction_id) is None:
         raise ValueError("Expected a lowercase SHA-256 OD prediction ID.")
     directory = project_root / "data" / "processed" / "overdevelopment" / prediction_id
-    manifest, _ = _read_bundle(directory, prediction_id)
+    manifest, payloads = _read_bundle(directory, prediction_id)
+    return manifest, [json.loads(line) for line in payloads["predictions.jsonl"].splitlines()]
+
+
+def load_prediction(prediction_id: str, *, project_root: Path) -> Manifest:
+    """Replay the saved bundle with no SQLite or weather input reads."""
+    manifest, _ = read_prediction(prediction_id, project_root=project_root)
     return manifest
 
 

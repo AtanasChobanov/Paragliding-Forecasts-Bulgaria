@@ -4,6 +4,7 @@ import styles from "./DataStatusBadge.module.scss";
 
 export interface DataStatusBadgeProps {
   readonly compact?: boolean;
+  readonly short?: boolean;
   readonly status: DisplayDataStatus;
 }
 
@@ -24,12 +25,16 @@ const statusClassName = (status: DisplayDataStatus): string => {
   }
 };
 
-export const DataStatusBadge = ({ compact = false, status }: DataStatusBadgeProps) => (
+export const DataStatusBadge = ({
+  compact = false,
+  short = false,
+  status,
+}: DataStatusBadgeProps) => (
   <span
     className={[styles.badge, statusClassName(status), compact ? styles.compact : undefined]
       .filter((candidate): candidate is string => candidate !== undefined)
       .join(" ")}
   >
-    {formatDataStatus(status)}
+    {short ? formatDataStatus(status).replace(/ data$/u, "") : formatDataStatus(status)}
   </span>
 );

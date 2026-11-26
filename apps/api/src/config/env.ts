@@ -16,7 +16,8 @@ const environmentSchema = z.object({
   API_HOST: z.string().trim().min(1).default("127.0.0.1"),
   API_PORT: z.coerce.number().int().min(1).max(65_535).default(3_000),
   CORS_ORIGIN: corsOriginSchema.default("http://localhost:5173"),
-  FORECAST_DATA_MODE: z.literal("mock").default("mock"),
+  FORECAST_DATA_MODE: z.enum(["sqlite", "mock"]).default("sqlite"),
+  DATABASE_URL: z.string().default("file:./data/local/paragliding.db"),
 });
 
 export interface ApiConfig {
@@ -25,7 +26,8 @@ export interface ApiConfig {
   readonly host: string;
   readonly port: number;
   readonly corsOrigin: string;
-  readonly forecastDataMode: "mock";
+  readonly forecastDataMode: "sqlite" | "mock";
+  readonly databaseUrl: string;
 }
 
 type Environment = Readonly<Record<string, string | undefined>>;
@@ -54,5 +56,6 @@ export const parseConfig = (environment: Environment): ApiConfig => {
     port: parsed.API_PORT,
     corsOrigin: parsed.CORS_ORIGIN,
     forecastDataMode: parsed.FORECAST_DATA_MODE,
+    databaseUrl: parsed.DATABASE_URL,
   });
 };

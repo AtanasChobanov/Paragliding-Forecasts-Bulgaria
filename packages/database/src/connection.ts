@@ -12,7 +12,7 @@ export interface DatabaseConnection {
   readonly databasePath: string;
   readonly db: ReturnType<typeof drizzle>;
   readonly sqlite: DatabaseSync;
-  close(): void;
+  readonly close: () => void;
 }
 
 export const resolveDatabaseFilePath = (
@@ -52,12 +52,18 @@ export const resolveDatabaseFilePath = (
 
 export const openDatabase = (
   databaseUrl = process.env.DATABASE_URL ?? defaultDatabaseUrl,
+  { readOnly = false }: { readonly readOnly?: boolean } = {},
 ): DatabaseConnection => {
   const databasePath = resolveDatabaseFilePath(databaseUrl);
-  mkdirSync(dirname(databasePath), { recursive: true });
+  if (!readOnly) {
+    mkdirSync(dirname(databasePath), { recursive: true });
+  }
 
-  const sqlite = new DatabaseSync(databasePath);
-  sqlite.exec("PRAGMA foreign_keys = ON");
+  const sqlite = new DatabaseSync(databasePath, {
+    readOnly,
+    enableForeignKeyConstraints: true,
+    timeout: readOnly ? 5_000 : 0,
+  });
 
   return {
     databasePath,

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from ...storage.file_lock import lock_weather_run
 from ...storage.sqlite import (
     DatabaseConfigurationError,
     configured_database_url,
@@ -143,6 +144,7 @@ def _offline_services(
     }
 
 
+@lock_weather_run
 def resume_run(
     run_key: str,
     policy_path: Path | None,

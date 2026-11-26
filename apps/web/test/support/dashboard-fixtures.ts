@@ -1,3 +1,4 @@
+import { mockForecastDetail } from "../../../api/src/modules/forecasts/mock-forecast-detail.js";
 import {
   forecastDaysResponseSchema,
   forecastResponseSchema,
@@ -6,6 +7,7 @@ import {
   sitesResponseSchema,
   type Confidence,
   type ForecastDaysResponse,
+  type DashboardForecastOutputs,
   type ForecastResponse,
   type ForecastOutputs,
   type ForecastSummariesResponse,
@@ -24,11 +26,6 @@ const availableMetric = <Value>(value: Value) => ({
   confidence: mockConfidence,
 });
 
-const availableInput = <Value>(value: Value) => ({
-  value,
-  dataStatus: "mock" as const,
-});
-
 export const missingMetric = {
   value: null,
   dataStatus: "missing" as const,
@@ -43,6 +40,27 @@ export const createForecastOutputs = (): ForecastOutputs => ({
   chance300KmPct: availableMetric(12),
   overdevelopmentRisk: availableMetric("medium" as const),
 });
+
+export const createDashboardOutputs = (): DashboardForecastOutputs => {
+  const { cloudbaseMslM, ...outputs } = createForecastOutputs();
+  return {
+    ...outputs,
+    cloudbase:
+      cloudbaseMslM.dataStatus === "missing"
+        ? {
+            kind: "missing",
+            dataStatus: "missing",
+            confidence: null,
+            missingReason: cloudbaseMslM.missingReason,
+          }
+        : {
+            kind: "estimated",
+            dataStatus: cloudbaseMslM.dataStatus,
+            confidence: cloudbaseMslM.confidence,
+            valueMslM: cloudbaseMslM.value,
+          },
+  };
+};
 
 export const createSitesResponse = (): SitesResponse =>
   sitesResponseSchema.parse({
@@ -116,11 +134,12 @@ export const createForecastSummariesResponse = (): ForecastSummariesResponse =>
         siteSlug: "sopot",
         forecastDate: "2026-07-18",
         generatedAt: "2026-07-17T20:00:00.000Z",
-        provenance: {
+        metadata: {
+          mode: "mock",
           source: "t-003-t-005-mock-provider",
           version: "mock-v2",
         },
-        outputs: createForecastOutputs(),
+        outputs: createDashboardOutputs(),
       },
     ],
   });
@@ -132,51 +151,42 @@ export const createForecastDaysResponse = (): ForecastDaysResponse =>
     timeZone: "Europe/Sofia",
     todayDate: "2026-07-18",
     days: [
-      { forecastDate: "2026-07-16", chance100KmPct: availableMetric(45) },
-      { forecastDate: "2026-07-17", chance100KmPct: availableMetric(55) },
-      { forecastDate: "2026-07-18", chance100KmPct: availableMetric(65) },
-      { forecastDate: "2026-07-19", chance100KmPct: availableMetric(73) },
-      { forecastDate: "2026-07-20", chance100KmPct: missingMetric },
+      {
+        availability: "available",
+        forecastDate: "2026-07-16",
+        chance100KmPct: availableMetric(45),
+      },
+      {
+        availability: "available",
+        forecastDate: "2026-07-17",
+        chance100KmPct: availableMetric(55),
+      },
+      {
+        availability: "available",
+        forecastDate: "2026-07-18",
+        chance100KmPct: availableMetric(65),
+      },
+      {
+        availability: "available",
+        forecastDate: "2026-07-19",
+        chance100KmPct: availableMetric(73),
+      },
+      {
+        availability: "missing",
+        forecastDate: "2026-07-20",
+        chance100KmPct: missingMetric,
+        missingReason: missingMetric.missingReason,
+      },
     ],
   });
 
-export const createForecastResponse = (): ForecastResponse =>
-  forecastResponseSchema.parse({
-    siteId: 3,
-    siteSlug: "sopot",
-    forecastDate: "2026-07-18",
-    generatedAt: "2026-07-17T20:00:00.000Z",
-    provenance: {
-      source: "t-003-t-005-mock-provider",
-      version: "mock-v2",
-    },
-    outputs: createForecastOutputs(),
-    forecastInputs: {
-      provenance: {
-        source: "t-006-t-007-mock-weather-provider",
-        version: "mock-weather-v1",
-      },
-      sourceRunAt: "2026-07-17T20:00:00.000Z",
-      surfaceTemperatureC: availableInput(27.4),
-      dewPointC: availableInput(14.2),
-      boundaryLayerHeightM: availableInput(1_750),
-      thermalStrengthMps: availableInput(3.2),
-      boundaryLayerWindSpeedKmh: availableInput(18),
-      boundaryLayerWindDirectionDeg: availableInput(225),
-      windByAltitude: availableInput([{ altitudeMslM: 1_500, directionDeg: 225, speedKmh: 18 }]),
-      windShearMpsPerKm: availableInput(2.4),
-      relativeHumidityPct: availableInput(52),
-      capeJPerKg: availableInput(840),
-      cinJPerKg: availableInput(20),
-      lapseRateCPerKm: availableInput(6.5),
-      lowCloudCoverPct: availableInput(24),
-      totalCloudCoverPct: availableInput(38),
-      precipitationMm: availableInput(0),
-      surfacePressureHpa: availableInput(1_008),
-      convergenceSignal: availableInput("weak" as const),
-    },
-    topDrivers: ["Synthetic thermal strength", "Synthetic boundary-layer depth"],
-  });
+export const createForecastResponse = (): ForecastResponse => {
+  const summary = createForecastSummariesResponse().summaries[1];
+  if (summary?.availability !== "available") throw new Error("Expected fixture forecast");
+  return forecastResponseSchema.parse(
+    mockForecastDetail(summary, ["Synthetic thermal strength", "Synthetic boundary-layer depth"]),
+  );
+};
 
 export const createValidationProblem = (): ProblemDetails =>
   problemDetailsSchema.parse({

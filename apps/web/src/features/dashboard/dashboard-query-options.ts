@@ -14,6 +14,14 @@ export const dashboardQueryKeys = {
     ["forecastSummaries", date, Object.freeze([...canonicalSiteSlugs])] as const,
 };
 
+export const dashboardRefreshPolicy = {
+  gcTime: Infinity,
+  staleTime: Infinity,
+  refetchOnMount: false,
+  refetchOnReconnect: false,
+  refetchOnWindowFocus: false,
+} as const;
+
 export const createDashboardQueryOptions = (dashboardApi: DashboardApi) => ({
   sites: () =>
     queryOptions({

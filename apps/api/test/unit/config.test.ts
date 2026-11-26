@@ -10,7 +10,8 @@ describe("API configuration", () => {
       host: "127.0.0.1",
       port: 3_000,
       corsOrigin: "http://localhost:5173",
-      forecastDataMode: "mock",
+      forecastDataMode: "sqlite",
+      databaseUrl: "file:./data/local/paragliding.db",
     });
   });
 

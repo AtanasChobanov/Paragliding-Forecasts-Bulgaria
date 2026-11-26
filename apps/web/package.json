@@ -12,9 +12,9 @@
     "prebuild": "npm run contracts:build",
     "predev": "npm run contracts:build",
     "pretest": "npm run contracts:build",
-    "pretest:browser": "npm run contracts:build",
-    "pretest:browser:headed": "npm run contracts:build",
-    "pretest:browser:ui": "npm run contracts:build",
+    "pretest:browser": "npm --prefix ../.. run dependencies:build --workspace @paragliding-forecasts/api",
+    "pretest:browser:headed": "npm --prefix ../.. run dependencies:build --workspace @paragliding-forecasts/api",
+    "pretest:browser:ui": "npm --prefix ../.. run dependencies:build --workspace @paragliding-forecasts/api",
     "pretest:coverage": "npm run contracts:build",
     "pretest:watch": "npm run contracts:build",
     "pretypecheck": "npm run contracts:build",
@@ -35,8 +35,10 @@
     "leaflet": "^1.9.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "react-is": "19.2.8",
     "react-leaflet": "^5.0.0",
     "react-router-dom": "^7.18.1",
+    "recharts": "^3.11.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {

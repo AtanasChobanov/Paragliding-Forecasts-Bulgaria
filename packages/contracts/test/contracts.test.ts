@@ -8,7 +8,6 @@ import {
   siteIdSchema,
   siteSlugSchema,
   sitesResponseSchema,
-  type ForecastResponse,
 } from "../src/index.js";
 
 const confidence = {
@@ -22,53 +21,7 @@ const availableMetric = <Value>(value: Value) => ({
   confidence,
 });
 
-const availableInput = <Value>(value: Value) => ({
-  value,
-  dataStatus: "mock" as const,
-});
-
-const createForecast = (): ForecastResponse => ({
-  siteId: 3,
-  siteSlug: "sopot",
-  forecastDate: "2026-07-18",
-  generatedAt: "2026-07-17T12:00:00.000Z",
-  provenance: {
-    source: "t-002-mock-provider",
-    version: "mock-v1",
-  },
-  outputs: {
-    cloudbaseMslM: availableMetric(2_200),
-    chance100KmPct: availableMetric(60),
-    chance200KmPct: availableMetric(30),
-    chance300KmPct: availableMetric(10),
-    overdevelopmentRisk: availableMetric("medium" as const),
-  },
-  forecastInputs: {
-    provenance: {
-      source: "t-006-t-007-mock-weather-provider",
-      version: "mock-weather-v1",
-    },
-    sourceRunAt: "2026-07-17T12:00:00.000Z",
-    surfaceTemperatureC: availableInput(27.4),
-    dewPointC: availableInput(14.2),
-    boundaryLayerHeightM: availableInput(1_650),
-    thermalStrengthMps: availableInput(3.2),
-    boundaryLayerWindSpeedKmh: availableInput(18),
-    boundaryLayerWindDirectionDeg: availableInput(225),
-    windByAltitude: availableInput([{ altitudeMslM: 1_500, directionDeg: 230, speedKmh: 22 }]),
-    windShearMpsPerKm: availableInput(2.4),
-    relativeHumidityPct: availableInput(52),
-    capeJPerKg: availableInput(840),
-    cinJPerKg: availableInput(20),
-    lapseRateCPerKm: availableInput(6.5),
-    lowCloudCoverPct: availableInput(24),
-    totalCloudCoverPct: availableInput(38),
-    precipitationMm: availableInput(0),
-    surfacePressureHpa: availableInput(1_008),
-    convergenceSignal: availableInput("weak" as const),
-  },
-  topDrivers: ["Synthetic mock driver"],
-});
+import { createForecast } from "./forecast-fixture.js";
 
 describe("shared HTTP contracts", () => {
   it("accepts the canonical response payloads", () => {
@@ -143,25 +96,26 @@ describe("shared HTTP contracts", () => {
 
   it("requires missing metrics to use null and an explicit reason", () => {
     const forecast = createForecast();
-    forecast.outputs.cloudbaseMslM = {
+    forecast.outputs.chance100KmPct = {
       value: null,
       dataStatus: "missing",
       confidence: null,
-      missingReason: "No cloudbase estimate is available.",
+      missingReason: "No XC inputs.",
     };
-
+    forecast.explanations[0] = {
+      metricCode: "p100",
+      dataStatus: "missing",
+      confidenceLevel: null,
+      missingReason: "No XC inputs.",
+      drivers: [],
+    };
     expect(forecastResponseSchema.safeParse(forecast).success).toBe(true);
     expect(
       forecastResponseSchema.safeParse({
         ...forecast,
         outputs: {
           ...forecast.outputs,
-          cloudbaseMslM: {
-            value: 0,
-            dataStatus: "missing",
-            confidence: null,
-            missingReason: "No cloudbase estimate is available.",
-          },
+          chance100KmPct: { ...forecast.outputs.chance100KmPct, value: 0 },
         },
       }).success,
     ).toBe(false);

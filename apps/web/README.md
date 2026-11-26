@@ -2,27 +2,11 @@
 
 ## Status
 
-The React/Vite workspace is runnable, production-buildable, and backed by a
-validated dashboard HTTP/query foundation. The dashboard route coordinates
-canonical URL selection and the sites, days, and summaries queries inside a
-responsive visual shell with a semantic application header, stable dashboard
-panels, reusable content states, self-hosted Inter, and shared theme tokens. The
-selected overview now renders validated summary data with explicit status,
-confidence, provenance, units, and missing-data semantics. The fixed-order
-Other Locations cards retain status, units, and missing-data semantics in a
-more compact comparison treatment. The Leaflet site selector now renders all
-API coordinates with permanent labels and a synchronized native control. The
-five-day selector is rendered from exactly the five API slots. Scoped
-failure/retry presentation, request IDs, compatibility errors, live
-announcements, focus behavior, reduced motion, and narrow-layout wrapping are
-implemented and covered by automated tests. The wide desktop layout now uses
-the available viewport height as one fixed dashboard canvas: all four regions
-remain visible together and the page itself does not scroll. The header spans
-the full viewport independently, while the dashboard body uses a fluid `90vw`
-width with fractional columns and viewport-relative rows rather than a fixed
-maximum width. Compact widths retain document scrolling because the panels
-stack vertically. T-003-T-005 remain in progress until the deliberately
-deferred manual browser/visual review is completed.
+The home dashboard reads published summaries and dates through the Express
+API. Its four regions share one viewport with the header at desktop and
+compact sizes. The map and native location control use the same API catalog.
+The detailed forecast view reads the selected SQLite publication and also
+supports explicit synthetic demo mode.
 
 ## Responsibilities
 
@@ -137,63 +121,151 @@ Current variables:
 
 Standalone web `dev`, `build`, `typecheck`, Vitest, and browser-test commands
 build the shared contracts first. The combined root `dev` supervisor builds
-contracts once and then starts the raw API and web watchers.
+contracts and database workspaces before starting the API and web watchers.
 
 ## API and query behavior
 
-The browser client exposes the site catalog, batched daily summaries, and
-five-day preview endpoints. Successful JSON is parsed with the shared Zod
+The browser client exposes the site catalog, batched daily summaries,
+five-day preview and single-site/date detail endpoints. Successful JSON is parsed with the shared Zod
 response schemas. Failures remain distinguishable as network errors, validated
 HTTP Problem Details, or incompatible successful responses. TanStack Query
-forwards cancellation, treats the site catalog as static, uses five-minute
-forecast freshness, disables focus refetch, and retries only the first network
-or HTTP 5xx failure.
+forwards cancellation and retries one network or HTTP 5xx failure. Dashboard
+requests use the validated sites, days and summary results cached for the
+page session. Reload the page to pick up new publications or the next Sofia
+calendar day. Focus, reconnect and remount do not trigger background refresh.
 
 ## URL selection behavior
 
-The canonical dashboard URL is `/?site=<site-slug>&date=YYYY-MM-DD`. React
-Router search parameters are the only selected-site/date state. Missing,
-repeated, unknown, or out-of-strip values are normalized with history replace;
-deliberate site and date changes create history entries. Back, Forward, refresh,
-and pasted deep links reconstruct the same query selection.
+The canonical dashboard URL is `/?site=<site-slug>&date=YYYY-MM-DD`. The route
+chooses the minimum catalog ID for an unknown site and waits for the selected
+site's days response. A requested date stays selected when its publication is
+available. Otherwise the route chooses Today, then the nearest available
+future day, then the nearest available past day. It replaces the URL after
+validation. Deliberate site/date changes create history entries. With no
+published dates, the URL contains just the site and the map remains usable.
 
-The route explicitly selects the minimum numeric site ID as the catalog
-default, waits for the selected site's API-defined Sofia `todayDate` when the
-URL date is unusable, and handles an empty catalog. Other Locations are the
-next three catalog entries in ascending numeric ID order. Summary requests
-deduplicate those comparison entries with the currently selected site.
+Other Locations are the next three catalog entries after the minimum ID.
+A single summary request deduplicates those comparison sites and the selected
+site for the selected date.
 
 ## Forecast presentation behavior
 
-The selected overview renders 100+/200+/300+ kilometre chances, cloudbase in
-metres MSL, and overdevelopment risk. Date-only values are formatted as UTC
-calendar labels to avoid a browser-timezone day shift; generation instants are
-shown in `Europe/Sofia`. Status labels preserve `mock`, `manual`, `baseline`,
-`real`, and `missing` distinctions, while mixed metrics retain per-metric status
-and confidence context.
+Dashboard percentages display up to two decimals, with `<0.01%` for tiny
+positive values and `0%` for a stored zero. Cloudbase and conditional LCL
+display whole metres MSL. Blue, Other cloud, Uncertain and Unavailable are
+separate states. The compact confidence meters refer to the 100+ km chance.
+A missing P100 leaves the other metrics visible and omits the chance bar.
 
-Other Locations remain static comparison cards for the three catalog entries
-immediately after the minimum-ID default, ordered by numeric ID. The selected
-location is not filtered out when it is one of those cards. Missing summary
-items and missing metrics show their reasons without substituting zero. Below
-each chance bar, cloudbase and overdevelopment risk use a compact icon-and-value
-row without a metric divider, followed by the compact confidence meter. The
-full-width detailed-forecast control now links to the selected site/date, and
-every Other Locations card is a full-card link to that same route for its site
-and the active dashboard date.
+Hover over, focus or press the information button to inspect a card's issue
+metadata and each metric's status, confidence and limitations. Press to keep
+the panel open. Escape or an outside press dismisses it. SQLite shows the GFS
+cycle in UTC and the publication time in Sofia. Demo panels identify the
+mock provider and version.
 
 ## Detailed forecast view
 
-`/forecast?site=<slug>&date=YYYY-MM-DD` keeps selection in the same canonical
-URL parameters as the dashboard. Its native site/date selectors auto-fetch on
-change; there are no date-navigation arrows or confirmation control. `All sites`
-returns to the dashboard with the same selection.
+`/forecast?site=<slug>&date=YYYY-MM-DD` opens from the overview or an available
+comparison card in both SQLite and mock mode. `All sites` returns with the
+same site/date. Native selectors fetch on change. A valid direct date stays
+selected, even outside the five-day preview, and is added to the selector.
+An unpublished exact date stays visible with an empty state. Only entirely
+unpublished preview dates are disabled; missing P100 does not disable a day.
+Missing/invalid dates choose available Today, then nearest future, then nearest
+past. An empty preview does not request an arbitrary date.
 
-The desktop route is a fixed-height, no-page-scroll grid: outputs and a
-selected-site Leaflet view occupy the first row, mock forecast inputs and
-top-driver strings the second, then a static five-output `Unchanged`
-previous-run placeholder. It deliberately has no previous-run API field. On
-narrow screens the route stacks and scrolls normally. All seven confirmed-site map pins remain clickable; the detail viewport begins focused on the selected site and adds a north-up compass.
+The toolbar and content fit one viewport, including at compact sizes and
+125% text in the tested viewports. From 70rem, the main row and chart use
+70:30 of the remaining height. The main row has 1.08:0.92 columns: summary
+left, inputs and explanations stacked right. Compact layouts allocate
+28:20:24:28 to summary, inputs, explanations and chart. The detail route has no
+map, tile requests or previous-run placeholder.
+
+The detail summary stacks three compact 100+/200+/300+ km probability rows,
+each with its percentage, progress bar, status, own confidence and information.
+Cloudbase and OD risk share two equal columns below those rows. Cloudbase shows
+metres MSL for the selected daily maximum. Its information contains the matching signed site/model AGL values; no AGL row appears in the card.
+Probability confidence levels follow their meter immediately; the weather cards
+retain their Confidence prefix. Publication metadata uses the GFS cycle and
+the actual publication time in Sofia. Detail information uses bounded scrolling popovers;
+hover/focus opens it, press pins it, and Escape/outside press closes it.
+The summary's common information uses the home dashboard's labeled metadata
+layout, without per-metric evidence. Height-reference and cloud-formation
+explanations live in the information button beside the Hourly cloudbase time range;
+the cloudbase result information retains its matching site/model AGL readings. Each
+output metric shows its explanation and limitations together, with readable descriptions of published flags and no
+duplicate status/confidence prefix or pagination. Hourly chart information uses
+the same bounded scrolling approach. Home overview information contains common source/publication/model metadata only;
+metric explanations remain on the detail page. Other-location information also contains only common metadata.
+
+Inputs default to `XC inputs / Surface temperature`. All 67 policy fields are
+reachable through group selectors and keyboard-focusable scrolling lists. OD/cloudbase modes use a synchronized hour selector. Input information
+uses one labeled metadata view without repeating the row name or displayed value.
+Exact canonical values appear only when they add precision or use a different unit.
+Quality, statistics, source record IDs, true intervals and layer bounds remain available.
+Canonical values,
+quality, provenance and true intervals remain available in row information.
+Display conversions include K to °C, Pa to hPa, kg/kg to g/kg and K/km to
+°C/km; small magnitudes use three-significant-digit scientific notation.
+Unavailable inputs preserve their reasons, including outside-OD slots at 20:00.
+
+Detail selectors share the location/date controls' primary border, leading icon
+and chevron. A shared `ScrollableList` renders every matching input/driver row
+inside the available panel body with vertical overflow when needed. There is no
+pagination component. The page and section shells remain within the viewport.
+
+Explanations have five metric tabs, with the equivalent native select on
+compact layouts. Published rank/order and up to three drivers remain intact,
+inside a scrolling list. XC signs mean model direction relative to the
+training reference, not causal effects or percentage points. P200 describes
+`P(200+ | 100+)`; P300 shows stored pooled support. OD overrides use a warning
+symbol and score components show risk points. Cloudbase reasons use neutral
+information or uncertainty symbols. Full driver text and ordered exact inputs
+remain accessible in structured, scrolling information. Short input lists stay
+with the calculation; longer lists retain topic headings in the same continuous
+view. Driver inputs contain only names and presentation-rounded values/units. Statistics,
+quality, source record IDs and interval metadata stay in Forecast inputs.
+Detail popovers are capped at 35vh and scroll when needed. Input name/value columns are 60%/40% on all screen sizes; values are left-aligned.
+Missing SQL equivalents point to the
+retained ML artifact, including the full T-022 model column.
+
+The responsive SVG chart uses Recharts (`ComposedChart`, `ResponsiveContainer`,
+axes, lines and areas), loaded on demand for the detail plot. Recharts and its
+`react-is` peer are web workspace dependencies; keep `react-is` aligned with React.
+The root npm override is scoped to Recharts' peer so npm cannot resolve it to
+the older `react-is` used by test tooling. Update that override with React.
+It uses eleven actual Sofia hours and linear segments.
+Solid primary lines/circles denote estimated cloudbase; dashed warning
+lines/diamonds denote conditional LCL. Each contiguous numeric segment gets
+its own fading gradient. Blue, other cloud, uncertain and missing hours use
+separate text/markers in a regime band. Lines never bridge gaps or changes of
+numeric type. Isolated numeric hours retain a marker. The daily maximum
+outline follows estimated-first selection. No numeric hours produces an
+explicit explanation rather than a zero-height curve or a thermal-top claim.
+
+Hover/focus/press an hour for a scrolling tooltip with all three height
+references, confidence, reason/code, note and matching cloudbase context.
+Left/Right and Home/End select hours; Enter/press pins the tooltip for
+reading and scrolling its content. The selected hour synchronizes with OD/cloudbase inputs.
+Tooltips use a portal to stay inside the viewport.
+Hour ticks use `HH:mm`. The tooltip starts with MSL, followed by
+secondary site/model AGL readings, the shared confidence indicator and an optional
+daily-maximum badge. Reasons, hour/regime and exact inputs follow in the same
+scrollable content. There is no close button: pointer leave dismisses an unpinned tooltip;
+Escape or an outside press dismisses a pinned tooltip.
+The themed regime band uses Recharts' plot/scale hooks. The adjacent native DOM
+hour controls retain all eleven selectable slots, even without numeric heights.
+They own keyboard focus, so Recharts' parallel accessibility layer is disabled
+to avoid duplicate navigation. The tooltip has no pagination controls. Hourly weather values use the shared
+presentation rounding/unit conversions while retaining statistic, quality, source
+record ID and interval metadata. These metadata tables use the shared 60%/40% label/value layout.
+Intervals share one date when possible, with both local times and the Sofia zone.
+Line/area animations are disabled to preserve the published values during selection.
+
+Catalog, days and detail have independent errors and explicit Retry controls.
+Detail requests are keyed by slug/date and checked for correlation. Changing
+site/date clears old evidence and resets panel selections; returning to a
+cached date reuses it. No polling or automatic refetch occurs on focus,
+reconnect or cached remount. Reload the page for new publications.
 
 ## Map behavior and network dependency
 
@@ -223,28 +295,19 @@ formatted from numeric date-only parts in UTC so local timezone conversion
 cannot move a Sofia calendar date. The strip deliberately omits a separate year
 heading and weekday row; non-today cards show only day and month.
 
-Each card exposes its ISO date as the control name and an explicit accessible
-description for the 100+ kilometre chance, data status, and confidence. Missing
-metrics remain in their original position, stay selectable, and show the API
-reason as unavailable rather than zero. The responsive grid changes from five
-columns to two and then one without adding horizontal page overflow.
+Each card exposes its ISO date and an accessible description for P100.
+Availability refers to the whole publication. Slots without a publication
+stay visible as disabled buttons. A published slot with missing P100 can be
+selected to read the remaining metrics.
 
 ## Error and accessibility behavior
 
-Sites, summaries, days, and tiles own independent states. A sites failure keeps
-the stable four-panel shell; a days failure leaves the selected summary usable;
-a summaries failure leaves the selector/map and date strip usable; a tile
-failure does not become an API error. Retry controls are rendered only for
-retryable network and HTTP 5xx failures. HTTP Problem Details request IDs are
-shown for support, while malformed or mismatched successful payloads are named
-as dashboard/API compatibility errors and are never rendered as trusted data.
-
-The page uses one `h1`, semantic labelled sections, scoped `aria-busy`, one
-polite selection announcement, native select/buttons, visible focus rings,
-approximately 44-pixel controls, explicit units/status text, and reduced-motion
-handling. The date cards expose API today separately from URL selection. One
-shared summaries failure creates one alert and one restrained comparison-region
-explanation rather than duplicate alert spam.
+A sites failure keeps the four-panel shell. Days must load before the home
+route requests a summary. A summaries failure leaves the map, location selector
+and date strip usable. Compatibility errors identify invalid service
+responses and network and HTTP 5xx errors offer Retry where applicable.
+The page uses semantic sections, native controls, visible focus rings,
+accessible date descriptions and a polite selection announcement.
 
 ## Validation and testing
 
@@ -252,12 +315,10 @@ The repository-level `build`, `typecheck`, `lint`, `format:check`, `test`,
 `test:coverage`, and `repo:check` commands include this workspace. Web coverage
 enforces at least 80% statements, lines, and functions plus 75% branches across
 all maintained `src/**/*.{ts,tsx}` files, including files a test never imports.
-`test:browser` is intentionally separate because it needs a Playwright Chromium
-binary and starts the real local API and Vite processes on ports `3000` and
-`5173`; both ports must be free. The browser-test configuration pins its API
-host/port, web port, CORS origin, API base URL, mock data mode, and test runtime
-environment explicitly, so local `.env` overrides cannot redirect the managed
-test processes away from those readiness-checked origins.
+`test:browser` needs Playwright Chromium and starts fixture API processes on
+`3300` and `3301`, with Vite on `5373` and `5374`. The fixtures use explicit
+environment values and a fixed Sofia date. The SQLite fixture migrates and
+seeds a disposable database. Tests intercept tile requests.
 
 Automated coverage includes:
 
@@ -281,12 +342,13 @@ Automated coverage includes:
 - Integration tests for sites/days/summaries retry recovery, request IDs,
   compatibility failures, independent-region preservation, stale-selection
   prevention, keyboard date activation, and polite selection announcements.
-- Playwright Chromium smoke tests that load the real dashboard, assert all five
-  required forecast outputs and mock status, then navigate to the detailed
-  forecast and assert its five outputs, inputs, drivers, and `All sites` return.
+- Playwright Chromium tests for SQLite outputs, missing slots, issue metadata,
+  responsive layout and selected Leaflet labels. Both runtime modes cover detail navigation. SQLite detail tests also cover
+  the eight viewport/text settings, mixed regimes, keyboard/touch, hourly
+  synchronization, independent Retry and manual refresh behavior.
 
 Playwright runs headlessly by default. `test:browser:headed` shows Chromium and
-`test:browser:ui` offers interactive debugging. Failure-only traces and
+`test:browser:ui` offers interactive debugging. Failure traces and detail verification
 screenshots are written to ignored test-artifact folders; no visual baselines or
 pixel comparisons are maintained. OSM tiles are deliberately blocked in this
 suite, so core local forecast behaviour does not depend on the public tile

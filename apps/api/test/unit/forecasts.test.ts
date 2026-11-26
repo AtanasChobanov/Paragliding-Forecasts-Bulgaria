@@ -24,31 +24,25 @@ describe("detailed forecast service", () => {
     });
 
     expect(forecastResponseSchema.safeParse(forecast).success).toBe(true);
+    expect(forecast.forecastInputs.xcFeatures).toHaveLength(67);
+    expect(forecast.explanations[0]?.drivers[0]?.message).toBe("Synthetic thermal strength");
     expect(forecast).toMatchObject({
       siteId: 3,
       siteSlug: "sopot",
       forecastDate: "2026-07-18",
       generatedAt: FIXED_NOW.toISOString(),
-      provenance: {
+      metadata: {
+        mode: "mock",
         source: "t-003-t-005-mock-provider",
         version: "mock-v2",
       },
       outputs: {
-        cloudbaseMslM: { value: 2_500, dataStatus: "mock" },
+        cloudbase: { kind: "estimated", valueMslM: 2_500, dataStatus: "mock" },
         chance100KmPct: { value: 73, dataStatus: "mock" },
         chance200KmPct: { value: 39, dataStatus: "mock" },
         chance300KmPct: { value: 13, dataStatus: "mock" },
         overdevelopmentRisk: { value: "medium", dataStatus: "mock" },
       },
-      forecastInputs: {
-        provenance: {
-          source: "t-006-t-007-mock-weather-provider",
-          version: "mock-weather-v1",
-        },
-        surfaceTemperatureC: { value: 28.2, dataStatus: "mock" },
-        capeJPerKg: { value: 685, dataStatus: "mock" },
-      },
-      topDrivers: ["Synthetic thermal strength", "Synthetic boundary-layer depth"],
     });
   });
 

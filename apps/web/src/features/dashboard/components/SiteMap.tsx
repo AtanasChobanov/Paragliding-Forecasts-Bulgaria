@@ -1,5 +1,11 @@
 import type { Site, SiteSlug } from "@paragliding-forecasts/contracts";
-import { divIcon, latLngBounds, type LeafletEventHandlerFnMap, type LatLngBounds } from "leaflet";
+import {
+  divIcon,
+  latLngBounds,
+  type LeafletEventHandlerFnMap,
+  type LatLngBounds,
+  type FitBoundsOptions,
+} from "leaflet";
 import { useEffect, useMemo, useState } from "react";
 import { MapContainer, Marker, TileLayer, Tooltip, useMap } from "react-leaflet";
 
@@ -16,6 +22,14 @@ export interface SiteMapProps {
 
 export const createSiteBounds = (sites: readonly Site[]): LatLngBounds =>
   latLngBounds(sites.map((site) => [site.latitude, site.longitude]));
+
+// Vitosha's label extends west of the catalog bounds. The easternmost
+// location's label points inward, so it only needs room for its pin.
+const allSitesPadding = {
+  paddingTopLeft: [86, 58],
+  paddingBottomRight: [26, 20],
+} satisfies FitBoundsOptions;
+const selectedSitePadding = { padding: [28, 28] } satisfies FitBoundsOptions;
 
 const usePrefersReducedMotion = (): boolean => {
   const [reducedMotion, setReducedMotion] = useState(
@@ -56,12 +70,25 @@ const MapViewportController = ({
     .join("|");
 
   useEffect(() => {
-    map.fitBounds(createSiteBounds(viewportMode === "selected-site" ? [selectedSite] : sites), {
-      animate: false,
-      maxZoom: viewportMode === "selected-site" ? 10 : 8,
-      padding: [28, 28],
-    });
-    map.invalidateSize();
+    const selectedOnly = viewportMode === "selected-site";
+    const bounds = createSiteBounds(selectedOnly ? [selectedSite] : sites);
+    const fit = () => {
+      map.invalidateSize({ pan: false });
+      map.fitBounds(bounds, {
+        animate: false,
+        maxZoom: selectedOnly ? 10 : 8,
+        ...(selectedOnly ? selectedSitePadding : allSitesPadding),
+      });
+    };
+    fit();
+
+    if (!selectedOnly && typeof ResizeObserver !== "undefined") {
+      const observer = new ResizeObserver(fit);
+      observer.observe(map.getContainer());
+      return () => {
+        observer.disconnect();
+      };
+    }
   }, [map, selectedSite, siteSignature, sites, viewportMode]);
 
   useEffect(() => {
@@ -72,7 +99,7 @@ const MapViewportController = ({
     map.panInside([selectedSite.latitude, selectedSite.longitude], {
       animate: !reducedMotion,
       duration: reducedMotion ? 0 : 0.25,
-      padding: [44, 44],
+      ...allSitesPadding,
     });
   }, [map, reducedMotion, selectedSite.latitude, selectedSite.longitude, viewportMode]);
 
@@ -170,11 +197,15 @@ export const SiteMap = ({
         <MapContainer
           attributionControl
           bounds={bounds}
-          boundsOptions={{ maxZoom: 8, padding: [28, 28] }}
+          boundsOptions={{
+            maxZoom: 8,
+            ...(viewportMode === "all-sites" ? allSitesPadding : selectedSitePadding),
+          }}
           className={styles.map ?? ""}
           keyboard={false}
           maxZoom={12}
-          minZoom={6}
+          minZoom={viewportMode === "all-sites" ? 1 : 6}
+          zoomSnap={viewportMode === "all-sites" ? 0.25 : 1}
           scrollWheelZoom={false}
           zoomControl
         >

@@ -4,21 +4,107 @@ from __future__ import annotations
 
 import json
 import platform
+import re
 import tempfile
 from collections import Counter, defaultdict
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from importlib.metadata import version
 from pathlib import Path
 from statistics import mean
 
+from ...ingestion.atmosphere.contracts import SHA256_PATTERN, validate_utc_timestamp
 from ...ingestion.weather.serialization import canonical_json_bytes, pretty_json_bytes, sha256_bytes
 from .calculation import aggregate_day, calculate_hour
 from .inputs import read_inputs
+from .models import DailyResult, HourlyInput, HourlyResult
 from .policy import METHOD_VERSION, POLICY, SCHEMA_VERSION
+
+PAYLOAD_NAMES = {"policy.json", "inputs.jsonl", "hourly.jsonl", "daily.jsonl", "report.md"}
+
+
+@dataclass(frozen=True)
+class CloudbaseBatch:
+    method_version: str
+    sources: list[dict]
+    inputs: tuple[HourlyInput, ...]
+    hourly: tuple[HourlyResult, ...]
+    daily: tuple[DailyResult, ...]
 
 
 def _jsonl(records) -> bytes:
     return b"".join(canonical_json_bytes(record) for record in records)
+
+
+def load_prediction(artifact_id: str, *, project_root: Path) -> CloudbaseBatch:
+    """Read a version-2 bundle and verify its manifest, records and daily aggregation."""
+    if re.fullmatch(SHA256_PATTERN, artifact_id) is None:
+        raise ValueError("Expected a lowercase SHA-256 cloudbase artifact ID.")
+    directory = project_root / "data" / "processed" / "cloudbase" / artifact_id
+    if directory.is_symlink() or not directory.is_dir():
+        raise ValueError("Cloudbase artifact must be a regular local directory.")
+    files = {path.name: path for path in directory.iterdir()}
+    if set(files) != {*PAYLOAD_NAMES, "manifest.json"} or any(
+        path.is_symlink() or not path.is_file() for path in files.values()
+    ):
+        raise ValueError("Cloudbase artifact file inventory differs from its contract.")
+    manifest = json.loads(files.pop("manifest.json").read_bytes())
+    validate_utc_timestamp(manifest.pop("created_at_utc", ""))
+    if (
+        manifest.pop("artifact_id", None) != artifact_id
+        or sha256_bytes(canonical_json_bytes(manifest)) != artifact_id
+        or manifest.get("schema_version") != SCHEMA_VERSION
+        or manifest.get("method_version") != METHOD_VERSION
+        or manifest.get("policy_version") != POLICY.version
+        or manifest.get("validation_status") != POLICY.validation_status
+        or set(manifest.get("files", {})) != PAYLOAD_NAMES
+    ):
+        raise ValueError("Cloudbase artifact identity or contract differs.")
+    payloads = {name: path.read_bytes() for name, path in files.items()}
+    if any(
+        manifest["files"][name] != {"sha256": sha256_bytes(payload), "byte_count": len(payload)}
+        for name, payload in payloads.items()
+    ) or payloads["policy.json"] != pretty_json_bytes(POLICY.as_dict()):
+        raise ValueError("Cloudbase artifact payload or policy changed.")
+    inputs = tuple(
+        HourlyInput.model_validate_json(line) for line in payloads["inputs.jsonl"].splitlines()
+    )
+    hourly = tuple(
+        HourlyResult.model_validate_json(line) for line in payloads["hourly.jsonl"].splitlines()
+    )
+    daily = tuple(
+        DailyResult.model_validate_json(line) for line in payloads["daily.jsonl"].splitlines()
+    )
+    if not hourly or len(inputs) != len(hourly):
+        raise ValueError("Cloudbase inputs and output counts differ.")
+    grouped = defaultdict(list)
+    for source, hour in zip(inputs, hourly, strict=True):
+        if hour.input_sha256 != sha256_bytes(canonical_json_bytes(source)) or any(
+            getattr(source, key) != getattr(hour, key)
+            for key in (
+                "run_key",
+                "site_id",
+                "site_slug",
+                "target_local_date",
+                "valid_at_utc",
+                "reference_at_utc",
+                "horizon_days",
+            )
+        ):
+            raise ValueError("Cloudbase hour does not match its saved input.")
+        grouped[(hour.run_key, hour.site_id)].append(hour)
+    run_keys = sorted({key for key, _ in grouped})
+    if (
+        daily != tuple(aggregate_day(grouped[key]) for key in sorted(grouped))
+        or manifest.get("hourly_count") != len(hourly)
+        or manifest.get("daily_count") != len(daily)
+        or manifest.get("daily_state_counts") != Counter(day.summary_state for day in daily)
+        or manifest.get("regime_counts") != Counter(hour.regime for hour in hourly)
+        or manifest.get("run_keys") != run_keys
+        or [source.get("run_key") for source in manifest.get("sources", [])] != run_keys
+    ):
+        raise ValueError("Cloudbase daily aggregation or source manifest differs.")
+    return CloudbaseBatch(METHOD_VERSION, manifest["sources"], inputs, hourly, daily)
 
 
 def _report(hourly, daily) -> str:
@@ -124,7 +210,9 @@ def _publish(directory: Path, files: dict[str, bytes], identity: dict) -> None:
         (staging / "manifest.json").write_bytes(pretty_json_bytes(manifest))
         try:
             staging.rename(directory)
-        except FileExistsError:
+        except OSError:
+            if not directory.exists():
+                raise
             verify_existing()
 
 

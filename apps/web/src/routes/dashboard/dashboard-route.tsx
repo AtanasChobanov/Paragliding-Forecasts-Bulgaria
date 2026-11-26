@@ -1,4 +1,9 @@
-import { type ForecastDate, type Site, type SiteSlug } from "@paragliding-forecasts/contracts";
+import {
+  type ForecastDate,
+  type ForecastDaysResponse,
+  type Site,
+  type SiteSlug,
+} from "@paragliding-forecasts/contracts";
 import { useQuery } from "@tanstack/react-query";
 import { type ReactNode, useCallback, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -14,12 +19,14 @@ import {
 import { OtherLocationsSection } from "../../features/dashboard/components/OtherLocationsSection.js";
 import { SiteSelectorSection } from "../../features/dashboard/components/SiteSelectorSection.js";
 import { presentDashboardError } from "../../features/dashboard/dashboard-error-presentation.js";
-import { createDashboardQueryOptions } from "../../features/dashboard/dashboard-query-options.js";
+import {
+  createDashboardQueryOptions,
+  dashboardRefreshPolicy,
+} from "../../features/dashboard/dashboard-query-options.js";
 import {
   createCanonicalDashboardSearch,
   dashboardSearchesMatch,
   parseDashboardSearch,
-  resolveSelectedDate,
   resolveSelectedSite,
   type DashboardSearchSelection,
 } from "../../features/dashboard/dashboard-search-params.js";
@@ -37,7 +44,6 @@ export interface DashboardRouteProps {
 interface SummaryDashboardProps {
   readonly canonicalSummarySiteSlugs: readonly SiteSlug[];
   readonly dashboardApi: DashboardApi;
-  readonly datesBusy: boolean;
   readonly datesContent: ReactNode;
   readonly forecastDate: ForecastDate;
   readonly locationSelector: ReactNode;
@@ -48,7 +54,6 @@ interface SummaryDashboardProps {
 const SummaryDashboard = ({
   canonicalSummarySiteSlugs,
   dashboardApi,
-  datesBusy,
   datesContent,
   forecastDate,
   locationSelector,
@@ -56,9 +61,10 @@ const SummaryDashboard = ({
   selectedSite,
 }: SummaryDashboardProps) => {
   const queryOptions = useMemo(() => createDashboardQueryOptions(dashboardApi), [dashboardApi]);
-  const summariesQuery = useQuery(
-    queryOptions.forecastSummaries(forecastDate, canonicalSummarySiteSlugs),
-  );
+  const summariesQuery = useQuery({
+    ...queryOptions.forecastSummaries(forecastDate, canonicalSummarySiteSlugs),
+    ...dashboardRefreshPolicy,
+  });
   const summariesBySlug = useMemo(
     () =>
       summariesQuery.data === undefined
@@ -128,7 +134,6 @@ const SummaryDashboard = ({
   return (
     <DashboardShell
       announcement={`Selected ${selectedSite.name} for ${forecastDate}.`}
-      datesBusy={datesBusy}
       forecastDates={datesContent}
       locationSelector={locationSelector}
       otherBusy={summariesQuery.isPending}
@@ -146,6 +151,19 @@ interface ResolvedDashboardProps {
   readonly sites: readonly Site[];
 }
 
+const selectAvailableDate = (
+  selection: DashboardSearchSelection,
+  response: ForecastDaysResponse,
+): ForecastDate | undefined => {
+  const available = response.days.filter((day) => day.availability === "available");
+  const requested = selection.date.kind === "valid" ? selection.date.value : undefined;
+  return (
+    available.find((day) => day.forecastDate === requested)?.forecastDate ??
+    available.find((day) => day.forecastDate >= response.todayDate)?.forecastDate ??
+    available.at(-1)?.forecastDate
+  );
+};
+
 const ResolvedDashboard = ({
   dashboardApi,
   searchSelection,
@@ -154,8 +172,13 @@ const ResolvedDashboard = ({
 }: ResolvedDashboardProps) => {
   const [searchParameters, setSearchParameters] = useSearchParams();
   const queryOptions = useMemo(() => createDashboardQueryOptions(dashboardApi), [dashboardApi]);
-  const forecastDaysQuery = useQuery(queryOptions.forecastDays(selectedSite.slug));
-  const selectedDate = resolveSelectedDate(searchSelection, forecastDaysQuery.data);
+  const forecastDaysQuery = useQuery({
+    ...queryOptions.forecastDays(selectedSite.slug),
+    ...dashboardRefreshPolicy,
+  });
+  const dates = forecastDaysQuery.isSuccess ? forecastDaysQuery.data : undefined;
+  const selectedDate =
+    dates === undefined ? undefined : selectAvailableDate(searchSelection, dates);
   const canonicalSummarySiteSlugs = useMemo(
     () => createCanonicalSummarySiteSlugs(sites, selectedSite),
     [selectedSite, sites],
@@ -163,12 +186,15 @@ const ResolvedDashboard = ({
   const otherLocationSites = useMemo(() => selectOtherLocationSites(sites), [sites]);
 
   useEffect(() => {
+    if (dates === undefined) {
+      return;
+    }
     const canonicalSearch = createCanonicalDashboardSearch(selectedSite.slug, selectedDate);
 
     if (!dashboardSearchesMatch(searchParameters, canonicalSearch)) {
       setSearchParameters(canonicalSearch, { replace: true });
     }
-  }, [searchParameters, selectedDate, selectedSite.slug, setSearchParameters]);
+  }, [dates, searchParameters, selectedDate, selectedSite.slug, setSearchParameters]);
 
   const selectSite = useCallback(
     (siteSlug: SiteSlug) => {
@@ -187,11 +213,14 @@ const ResolvedDashboard = ({
 
   const selectDate = useCallback(
     (date: ForecastDate) => {
-      if (date !== selectedDate) {
+      if (
+        date !== selectedDate &&
+        dates?.days.some((day) => day.forecastDate === date && day.availability === "available")
+      ) {
         setSearchParameters(createCanonicalDashboardSearch(selectedSite.slug, date));
       }
     },
-    [selectedDate, selectedSite.slug, setSearchParameters],
+    [dates, selectedDate, selectedSite.slug, setSearchParameters],
   );
 
   const locationSelector = (
@@ -211,7 +240,7 @@ const ResolvedDashboard = ({
       retryLabel="Retry forecast dates"
       requestTitle="Forecast dates failed"
     />
-  ) : selectedDate === undefined ? null : (
+  ) : (
     <ForecastDateStrip
       days={forecastDaysQuery.data.days}
       onSelectDate={selectDate}
@@ -221,27 +250,36 @@ const ResolvedDashboard = ({
   );
 
   if (selectedDate === undefined) {
+    const allDatesMissing = dates !== undefined;
     return (
       <DashboardShell
-        announcement={`Selected ${selectedSite.name}. Waiting for forecast dates.`}
+        announcement={`Selected ${selectedSite.name}.`}
         datesBusy={forecastDaysQuery.isPending}
         forecastDates={datesContent}
         locationSelector={locationSelector}
         otherLocations={
           <ContentState
-            message="Selecting a valid forecast date is still in progress."
+            message="Comparison forecasts require an available date."
             title="Waiting for a date"
             variant="info"
           />
         }
         overview={
-          <ContentState
-            message="Waiting for the selected location's forecast dates."
-            title="Waiting for forecast dates"
-            variant="loading"
-          />
+          allDatesMissing ? (
+            <ContentState
+              message={`No published forecast for ${selectedSite.name} in this five-day window.`}
+              title="Forecast unavailable"
+              variant="empty"
+            />
+          ) : (
+            <ContentState
+              message="Forecasts load after the location's dates."
+              title="Waiting for forecast dates"
+              variant={forecastDaysQuery.isError ? "info" : "loading"}
+            />
+          )
         }
-        overviewBusy
+        overviewBusy={forecastDaysQuery.isPending}
       />
     );
   }
@@ -250,7 +288,6 @@ const ResolvedDashboard = ({
     <SummaryDashboard
       canonicalSummarySiteSlugs={canonicalSummarySiteSlugs}
       dashboardApi={dashboardApi}
-      datesBusy={forecastDaysQuery.isPending}
       datesContent={datesContent}
       forecastDate={selectedDate}
       locationSelector={locationSelector}
@@ -267,7 +304,7 @@ const waitingForSites = (message: string) => (
 export const DashboardRoute = ({ dashboardApi }: DashboardRouteProps) => {
   const [searchParameters] = useSearchParams();
   const queryOptions = useMemo(() => createDashboardQueryOptions(dashboardApi), [dashboardApi]);
-  const sitesQuery = useQuery(queryOptions.sites());
+  const sitesQuery = useQuery({ ...queryOptions.sites(), ...dashboardRefreshPolicy });
   const searchSelection = useMemo(() => parseDashboardSearch(searchParameters), [searchParameters]);
   const selectedSite = useMemo(
     () => resolveSelectedSite(searchSelection, sitesQuery.data?.sites ?? []),

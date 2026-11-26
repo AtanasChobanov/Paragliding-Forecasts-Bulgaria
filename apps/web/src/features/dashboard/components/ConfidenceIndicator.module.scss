@@ -4,7 +4,8 @@
   align-items: center;
   gap: var(--space-2);
   color: var(--color-text-secondary);
-  font-size: 0.8rem;
+  font-size: var(--dashboard-caption, 0.8rem);
+  line-height: 1.25;
 }
 
 .prefix {
@@ -14,8 +15,9 @@
 .segments {
   display: grid;
   width: 7.5rem;
+  min-width: 0;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.3rem;
+  gap: var(--confidence-segments-gap, 0.3rem);
 
   span {
     height: 0.38rem;
@@ -29,9 +31,13 @@
 }
 
 .label {
-  min-width: 4rem;
+  min-width: 0;
+  overflow-wrap: normal;
   color: var(--color-text-secondary);
-  text-transform: capitalize;
+}
+
+.segments + .label {
+  white-space: nowrap;
 }
 
 .note {
@@ -49,15 +55,19 @@
 .compact {
   .row {
     justify-content: space-between;
-    gap: var(--space-1);
-    font-size: 0.7rem;
+    gap: var(--confidence-gap, var(--space-1));
+    font-size: var(--dashboard-caption, 0.7rem);
   }
 
   .segments {
-    width: 4.75rem;
+    width: var(--confidence-segments-width, 4.75rem);
   }
 
   .label {
     min-width: auto;
   }
+}
+
+.compact.adjacent .row {
+  justify-content: flex-start;
 }

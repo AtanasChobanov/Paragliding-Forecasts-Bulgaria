@@ -21,7 +21,14 @@
 }
 
 @include mixins.compact {
-  .app {
+  .app:has([data-dashboard], [data-detail]) {
+    --compact-header-padding: clamp(0.35rem, 2vw, 0.75rem);
+    --compact-header-gap: clamp(0.35rem, 2vw, 0.75rem);
+    --compact-header-brand: clamp(1.05rem, 5.3vw, 1.3rem);
+    --compact-header-section: clamp(0.83rem, 4.5vw, 1.05rem);
+  }
+
+  .app:not(:has([data-dashboard], [data-detail])) {
     height: auto;
     min-height: 100dvh;
     overflow: visible;
@@ -29,6 +36,9 @@
 
   .frame {
     width: 100%;
+  }
+
+  .frame:not(:has([data-dashboard], [data-detail])) {
     height: auto;
     min-height: 0;
     margin: 0;

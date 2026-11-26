@@ -1,3 +1,4 @@
+import { requirePublishedValue } from "../../src/modules/forecasts/require-published-value.js";
 import { forecastResponseSchema, problemDetailsSchema } from "@paragliding-forecasts/contracts";
 import request from "supertest";
 import { describe, expect, it } from "vitest";
@@ -14,26 +15,21 @@ describe("GET /api/v1/forecasts", () => {
 
     expect(forecast).toMatchObject({ siteId: 3, siteSlug: "sopot" });
     expect(forecast.generatedAt).toBe(FIXED_NOW.toISOString());
-    expect(forecast.provenance).toEqual({
+    expect(forecast.metadata).toEqual({
       source: "t-003-t-005-mock-provider",
       version: "mock-v2",
+      mode: "mock",
     });
     expect(forecast.outputs).toMatchObject({
-      cloudbaseMslM: { value: 2_500, dataStatus: "mock" },
+      cloudbase: { kind: "estimated", valueMslM: 2_500, dataStatus: "mock" },
       chance100KmPct: { value: 73, dataStatus: "mock" },
       chance200KmPct: { value: 39, dataStatus: "mock" },
       chance300KmPct: { value: 13, dataStatus: "mock" },
       overdevelopmentRisk: { value: "medium", dataStatus: "mock" },
     });
-    expect(forecast.forecastInputs).toMatchObject({
-      provenance: {
-        source: "t-006-t-007-mock-weather-provider",
-        version: "mock-weather-v1",
-      },
-      surfaceTemperatureC: { value: 28.2, dataStatus: "mock" },
-      capeJPerKg: { value: 685, dataStatus: "mock" },
-    });
-    expect(forecast.topDrivers.length).toBeGreaterThan(0);
+    expect(forecast.forecastInputs.xcFeatures).toHaveLength(67);
+    expect(forecast.cloudbaseHours).toHaveLength(11);
+    expect(requirePublishedValue(forecast.explanations[0]).drivers.length).toBeGreaterThan(0);
     expect(forecast).not.toHaveProperty("qualityNotes");
   });
 

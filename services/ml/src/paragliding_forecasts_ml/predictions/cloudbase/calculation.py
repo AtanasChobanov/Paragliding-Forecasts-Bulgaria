@@ -223,6 +223,18 @@ def calculate_hour(hour: HourlyInput, policy: CloudbasePolicy = POLICY) -> Hourl
     )
 
 
+def conditional_base(hour: HourlyResult) -> Height | None:
+    """Return the bounded indeterminate-hour LCL used by the daily maximum."""
+    if (
+        hour.regime == "indeterminate"
+        and hour.potential_base is not None
+        and "potential_base_outside_profile" not in hour.reason_codes
+        and hour.potential_base.msl_m <= hour.diagnostics.get("profile_top_msl_m", float("inf"))
+    ):
+        return hour.potential_base
+    return None
+
+
 def aggregate_day(hours: list[HourlyResult]) -> DailyResult:
     if not hours:
         raise ValueError("Daily aggregation requires the eleven explicit hours.")
@@ -250,14 +262,7 @@ def aggregate_day(hours: list[HourlyResult]) -> DailyResult:
     )
     maximum = candidates[0] if candidates else None
     potential_candidates = sorted(
-        (
-            h
-            for h in hours
-            if h.regime == "indeterminate"
-            and h.potential_base is not None
-            and "potential_base_outside_profile" not in h.reason_codes
-            and h.potential_base.msl_m <= h.diagnostics.get("profile_top_msl_m", float("inf"))
-        ),
+        (h for h in hours if conditional_base(h) is not None),
         key=lambda h: (-h.potential_base.msl_m, h.valid_at_utc),
     )
     potential = potential_candidates[0] if potential_candidates else None

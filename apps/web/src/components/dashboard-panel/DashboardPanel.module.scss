@@ -17,13 +17,13 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: clamp(0.5rem, 1vw, 1rem);
-  margin-bottom: clamp(0.4rem, 0.9vh, 0.75rem);
+  margin-bottom: var(--dashboard-gap, clamp(0.4rem, 0.9vh, 0.75rem));
 
   h2,
   .title {
     margin: 0;
     color: var(--color-heading);
-    font-size: clamp(0.9rem, 1vw, 1.05rem);
+    font-size: var(--dashboard-body, clamp(0.9rem, 1vw, 1.05rem));
     font-weight: 600;
     line-height: 1.3;
   }

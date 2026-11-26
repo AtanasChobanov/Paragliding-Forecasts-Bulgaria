@@ -77,12 +77,16 @@ def test_batch_is_deterministic_deduplicated_and_language_neutral(tmp_path, fake
         HourlyResult.model_validate_json(line)
     for line in original["daily.jsonl"].splitlines():
         DailyResult.model_validate_json(line)
+    batch = service.load_prediction(result["artifact_id"], project_root=tmp_path)
+    assert len(batch.hourly) == 22 and len(batch.daily) == 2
 
 
 def test_existing_artifact_tampering_is_not_overwritten(tmp_path, fake_reader):
     result = service.build_predictions([fake_reader], project_root=tmp_path)
     path = Path(result["output_directory"]) / "hourly.jsonl"
     path.write_bytes(b"tampered\n")
+    with pytest.raises(ValueError, match="payload"):
+        service.load_prediction(result["artifact_id"], project_root=tmp_path)
     with pytest.raises(ValueError, match="differs"):
         service.build_predictions([fake_reader], project_root=tmp_path)
     assert path.read_bytes() == b"tampered\n"

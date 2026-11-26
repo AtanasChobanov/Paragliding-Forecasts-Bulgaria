@@ -27,7 +27,7 @@ describe("GET /api/v1/forecasts/days", () => {
       "2026-07-19",
     ]);
     expect(body.days.map((day) => day.chance100KmPct.value)).toEqual([55, 60, 65, 73, 62]);
-    expect(body.days.every((day) => Object.keys(day).length === 2)).toBe(true);
+    expect(body.days.every((day) => day.availability === "available")).toBe(true);
   });
 
   it("keeps a missing prediction in its fixed Sofia-calendar slot", async () => {
@@ -48,7 +48,9 @@ describe("GET /api/v1/forecasts/days", () => {
 
     expect(body.days).toHaveLength(5);
     expect(body.days[0]).toEqual({
+      availability: "missing",
       forecastDate: "2026-07-15",
+      missingReason: "No forecast exists for site 'sopot' on 2026-07-15.",
       chance100KmPct: {
         value: null,
         dataStatus: "missing",

@@ -84,6 +84,12 @@ consequences. Temporary progress and Git state belong in
 | DEC-069     | Correct joined thermal features through an immutable derived layer          | Accepted   | 2026-10-21 |
 | DEC-070     | Develop XC models chronologically and pool the sparse 300+ conversion rate | Accepted | 2026-10-31 |
 
+| DEC-071     | Publish operational 06Z forecasts to SQLite and retain compact evidence | Accepted | 2026-11-17 |
+| DEC-072     | Read published SQLite forecasts on the home dashboard | Accepted | 2026-11-17 |
+| DEC-073     | Read published details and exact weather evidence in one viewport | Accepted | 2026-11-18 |
+| DEC-074     | Use Recharts for the hourly cloudbase plot | Accepted | 2026-11-25 |
+| DEC-075     | Replace detail pagination with bounded scrolling | Accepted | 2026-11-25 |
+
 ## Individual decisions
 
 ### DEC-001 — Use one repository with bounded subprojects
@@ -1500,6 +1506,13 @@ or source identity.
 [`parser.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/parser.py),
 [`normalizer.py`](../services/ml/src/paragliding_forecasts_ml/ingestion/gfs/normalizer.py),
 [`handoff.md`](handoff.md).
+
+**Portability implementation (2026-11-11):** Keep the accepted Python bindings
+at 2.47.0. Explicitly lock `eccodeslib==2.47.3.23` on macOS/Linux so uv installs
+the native library omitted by the inherited lockfile; Windows retains its
+existing bundled bindings wheel. The parser already records the native API
+version in its artifacts and input fingerprint. See the ML environment setup
+for the native-library self-check.
 
 ### DEC-036 - Use reviewed site coordinates with bilinear points and radius evidence
 
@@ -3166,11 +3179,136 @@ Move the existing final bundle intact to retain its content ID.
 **Related files:** [`../services/ml/README.md`](../services/ml/README.md) and
 [`handoff.md`](handoff.md).
 
+### DEC-071 - Publish operational 06Z forecasts to SQLite and retain compact evidence
+
+**Status:** Accepted in the owner-approved T-025 implementation plan.
+
+**Date:** 2026-11-17
+
+**Decision:** Publish each validated GFS 06Z horizon for the selected XC model
+in one SQLite transaction. Keep six Drizzle-owned STRICT tables and the original
+immutable predictor packages. The weather run and XC model identify a
+publication. Its seven snapshots and 77 cloudbase hours retain per-metric
+confidence, limitations and eligible provenance links. The 16:00 Sofia source
+cutoff and the 20:00 delivery deadline retain their distinct meanings.
+
+A separate offline process may delete verified operational GRIB payloads 48
+hours or more after publication under a per-run lock and durable intent and
+receipt. Compact evidence remains available for predictions. The historical
+cold archive workflow continues under DEC-066.
+
+**Related files:** [operational workflow](../services/ml/README.md#publish-and-retain-operational-forecasts-t-025).
+
+### DEC-072 - Read published SQLite forecasts on the home dashboard
+
+**Status:** Accepted in the owner-approved T-025 implementation plan.
+
+**Date:** 2026-11-17
+
+**Decision:** Default the API to read-only SQLite for the active site catalog
+and home forecast publications. Rank eligible GFS 06Z cycles first, then
+publication time and IDs for the same site and exact Sofia target date.
+Expose publication availability independently from metric availability. Keep
+each selected publication's confidence, limitations, cloudbase regime,
+timestamp and model metadata together.
+
+DEC-015's dashboard routes and query parameters remain the transport for the
+new summary and days response schemas. The local API and browser adopt these
+schemas together. The home route selects only published dates and refreshes on
+page reload. Explicit mock mode serves the demo and current detail route.
+
+**Related files:** [HTTP API](../apps/api/README.md),
+[web dashboard](../apps/web/README.md).
+
+### DEC-073 - Read published details and exact weather evidence in one viewport
+
+**Status:** Accepted in the owner-approved final T-025 implementation plan.
+
+**Date:** 2026-11-18
+
+**Supersedes:** DEC-018's provisional mock detail contract and DEC-072's
+SQLite-detail-unavailable limitation. Home selection and refresh policy remain
+in force.
+
+**Decision:** Upgrade the existing local `/api/v1/forecasts` shape in API and
+browser together. Reuse summary outputs, metadata and whole-publication ranking.
+Pin one prediction before reading its inputs, drivers and hours in a short
+read-only SQLite transaction. Never substitute a metric or input from another
+publication. No Python execution or artifact-file reads occur at the API boundary.
+
+Expose the fixed 67 XC fields, exact OD intervals, available cloudbase context
+and five ranked published explanation groups. Resolve provenance against the
+owning row, field, variant, statistic and time. Missing exact SQL inputs retain
+names and artifact explanations; the full T-022 profile is not reconstructed
+from older SQL profiles. Conflicting evidence and broken published graphs fail
+with 5xx; missing values retain status and reason.
+
+Keep eleven actual 10:00–20:00 Sofia cloudbase hours, signed site AGL and
+estimated-first maxima. Draw linear segments and separate gradients only across
+adjacent hours of one numeric type. Conditional LCL remains distinct from an
+estimated cloudbase or usable thermal top. Blue has no numeric height or
+clear-sky guarantee. Confidence remains the metric's recorded evidence; the
+shared main meter refers only to P100.
+
+Fit the toolbar, summary, paginated input/explanation panels and SVG chart in
+one viewport. Remove the detail map and previous-run placeholder. Preserve
+exact valid direct dates, availability-aware selectors, explicit Retry and
+session caching until manual reload, including keyboard and touch information.
+
+**Related files:** [HTTP API](../apps/api/README.md), [contracts](../packages/contracts/README.md),
+[web dashboard](../apps/web/README.md).
+
+### DEC-074 - Use Recharts for the hourly cloudbase plot
+
+**Status:** Accepted by the owner after reviewing chart-library alternatives.
+
+**Date:** 2026-11-25
+
+**Supersedes:** The hand-built chart-rendering choice in the T-025 implementation
+plan. DEC-073's data, segmentation, viewport and interaction requirements remain
+in force.
+
+**Decision:** Add MIT-licensed Recharts 3.x and its React-aligned `react-is` peer
+only to the web workspace. Use `ResponsiveContainer`, `ComposedChart`, axes,
+linear lines/areas and a reference line for the detail graph. Load the plot on
+demand so the home route does not load the chart library.
+Use a Recharts-scoped root npm override for `react-is`: npm otherwise resolves
+the hoisted chart to the older test-tool peer despite the web's direct dependency.
+
+Keep separate series/gradients for contiguous numeric segments, explicit nulls,
+conditional LCL styling, isolated points, signed AGL in information and the
+estimated-first daily maximum. Do not introduce curved interpolation, synthetic
+heights or animated intermediate values. Recharts plot/scale hooks place the
+themed regime band. Native DOM hour controls and the existing paginated React
+portal tooltip retain keyboard, hover, pin, touch and hour/input synchronization,
+including all-null hours. Disable the parallel Recharts accessibility layer to
+keep one roving focus path through those controls.
+
+**Related files:** [web dashboard](../apps/web/README.md),
+[CloudbasePlot](../apps/web/src/features/forecast-details/components/CloudbasePlot.tsx).
+
+### DEC-075 - Replace detail pagination with bounded scrolling
+
+**Status:** Accepted by explicit owner request.
+
+**Date:** 2026-11-25
+
+**Supersedes:** The detail pagination choices in DEC-073/DEC-074 and the T-025
+implementation plan. Data provenance, units, missing states, regime rendering
+and keyboard/touch requirements remain unchanged.
+
+**Decision:** Remove pagination controls and page-slicing logic. Render every
+matching input/driver row in a keyboard-focusable, vertically scrolling list.
+Keep the page and section shells within the fixed viewport. Detail information
+popovers, including the hourly chart tooltip, show continuous structured content
+with a 35vh cap and vertical overflow. Keep topic headings
+for longer driver input lists. Use a shared 60%/40% name/value layout on all screen sizes; numeric values must not split into digits.
+Home presentation remains unchanged. No new dependency is required.
+
 ## Open decisions
 
 | Question                                                                                                                  | Options / constraints                                                                                                                                                                                                                                              | Resolve by                                                               |
 | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
-| How should batch predictions be stored and served by the forecast adapter?                                              | T-025 owns OD output integration with the forecast API and UI. The choice of a persisted prediction schema and storage mechanism remains open. Public units, status and provenance must be mapped deliberately.                                                     | Before connecting real predictions to the API.                          |
 | What are the final coordinates, aliases, and catchment radii for each site?                                               | Current map points are provisional; Pastrina and the Dobrich regional model need particular confirmation.                                                                                                                                                          | T-009.                                                                   |
 | What retention, attribution, licensing, and rate limits apply beyond the current XCContest browser workflow?              | T-013 has a project-owner-confirmed ordinary low-volume UI workflow; do not extend it to bulk/commercial use or SkyNomad without explicit terms.                                                                                                                   | Before broader collection or product use.                                |
 | What final production attribution, retention, and archive-operation wording is required for the selected weather sources? | T-018 uses direct NOAA GFS. T-038 may add CDS ERA5 only after its evidence gate; preserve source/permission evidence and the applicable Copernicus/ECMWF attribution if it does. Confirm final product wording and retention operations before commercial release. | Before a commercial release.                                             |

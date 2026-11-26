@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import type { ForecastDate, ForecastResponse, SiteSlug } from "@paragliding-forecasts/contracts";
 
+import { dashboardRefreshPolicy } from "../dashboard/dashboard-query-options.js";
 import { DashboardCompatibilityError } from "../dashboard/dashboard-compatibility-error.js";
 import type { DashboardApi } from "../../services/api/dashboard-api.js";
 
@@ -28,6 +29,7 @@ export const createForecastDetailQueryOptions = (
   forecastDate: ForecastDate,
 ) =>
   queryOptions({
+    ...dashboardRefreshPolicy,
     queryKey: forecastDetailQueryKey(siteSlug, forecastDate),
     queryFn: async ({ signal }) =>
       assertForecastDetailCorrelation(
